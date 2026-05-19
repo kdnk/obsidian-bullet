@@ -48,6 +48,10 @@
   background-repeat: no-repeat;
 }
 
+body.is-mobile .outliner-plugin-list-line {
+  margin-top: 2.7em;
+}
+
 .outliner-plugin-better-bullets .outliner-plugin-list-line {
   margin-top: 1.4em;
 }
