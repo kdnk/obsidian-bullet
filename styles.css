@@ -35,14 +35,16 @@
   position: absolute;
   width: 5px;
   --outliner-guide-offset-x: 2px;
+  --outliner-guide-width: 1px;
+  --outliner-guide-color: var(--text-faint);
   margin-top: 1em;
   z-index: 1;
   cursor: pointer;
   background: transparent;
   background-image: linear-gradient(
     to right,
-    var(--text-faint) 1px,
-    transparent 1px
+    var(--outliner-guide-color) var(--outliner-guide-width),
+    transparent var(--outliner-guide-width)
   );
   background-position-x: var(--outliner-guide-offset-x);
   background-repeat: no-repeat;
@@ -63,7 +65,8 @@ body.is-mobile .outliner-plugin-list-line {
 }
 
 .outliner-plugin-list-line:hover {
-  background: var(--text-faint);
+  --outliner-guide-width: 4px;
+  --outliner-guide-color: var(--text-muted);
 }
 
 .outliner-plugin-vertical-lines
