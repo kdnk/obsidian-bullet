@@ -26,7 +26,7 @@ const DEFAULT_SETTINGS: SettingsObject = {
   betterVimO: true,
   betterTab: true,
   selectAll: true,
-  listLines: false,
+  listLines: true,
   listLineAction: "toggle-folding",
   dnd: true,
   previousRelease: null,
