@@ -32,3 +32,4 @@
 - #590: ArrowUp recovery now also covers root-level list items when visual cursor movement lands in CSS-added top padding before the list content.
 - #591: Parser-based commands now keep working when root list items share leading whitespace and when sibling items mix spaces and tabs for indentation instead of failing the entire list parse.
 - #592: Move list up/down hotkeys are registered in the editor scope so Cmd/Ctrl+Shift+ArrowUp/Down works reliably again.
+- #593: Pressing Enter on an existing note line now continues that note line instead of starting a new bullet, so table-like text under list items can keep multiple plain rows.
