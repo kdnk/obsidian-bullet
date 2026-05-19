@@ -34,7 +34,7 @@
   pointer-events: auto;
   position: absolute;
   width: 5px;
-  margin-left: 1.6ch;
+  --outliner-guide-offset-x: 2px;
   margin-top: 1em;
   z-index: 1;
   cursor: pointer;
@@ -44,12 +44,8 @@
     var(--text-faint) 1px,
     transparent 1px
   );
-  background-position-x: 2px;
+  background-position-x: var(--outliner-guide-offset-x);
   background-repeat: no-repeat;
-}
-
-.outliner-plugin-list-line-checkbox {
-  margin-left: 2.9ch;
 }
 
 body.is-mobile .outliner-plugin-list-line {

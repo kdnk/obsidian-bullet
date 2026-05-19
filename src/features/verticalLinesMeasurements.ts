@@ -24,6 +24,10 @@ export function getVerticalLineLeft(
   return Math.floor(coords.right - rootLeft);
 }
 
+export function getVerticalLineLeftFromX(rootX: number, currentX: number) {
+  return Math.floor(currentX - rootX);
+}
+
 export function getVerticalLineRootLeft(
   contentLeft: number,
   coords: Pick<DOMRect, "left">,

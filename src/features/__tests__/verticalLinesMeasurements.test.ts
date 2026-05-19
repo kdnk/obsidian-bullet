@@ -1,5 +1,6 @@
 import {
   getVerticalLineLeft,
+  getVerticalLineLeftFromX,
   getVerticalLineRootLeft,
   getVerticalLinesContentLeft,
 } from "../verticalLinesMeasurements";
@@ -80,5 +81,9 @@ describe("getVerticalLinesContentLeft", () => {
     expect(getVerticalLineRootLeft(188, { left: 240 } as DOMRect, false)).toBe(
       240,
     );
+  });
+
+  test("measures vertical lines from explicit guide positions", () => {
+    expect(getVerticalLineLeftFromX(240, 285)).toBe(45);
   });
 });

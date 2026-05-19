@@ -9,8 +9,7 @@ import {
 
 import { Feature } from "./Feature";
 import {
-  getVerticalLineLeft,
-  getVerticalLineRootLeft,
+  getVerticalLineLeftFromX,
   getVerticalLinesContentLeft,
 } from "./verticalLinesMeasurements";
 
@@ -25,7 +24,9 @@ const VERTICAL_LINES_BODY_CLASS = "outliner-plugin-vertical-lines";
 interface LineData {
   top: number;
   left: number;
+  width: number;
   height: string;
+  guideOffsetX: number;
   list: List;
 }
 
@@ -140,7 +141,10 @@ class VerticalLinesPluginValue implements PluginValue {
     return null;
   }
 
-  private recursive(list: List, parentCtx: { rootLeft?: number } = {}) {
+  private recursive(
+    list: List,
+    parentCtx: { rootLeft?: number; rootPadding?: number } = {},
+  ) {
     const children = list.getChildren();
 
     if (children.length === 0) {
@@ -176,14 +180,17 @@ class VerticalLinesPluginValue implements PluginValue {
     }
 
     const coords = this.view.coordsAtPos(fromOffset, 1);
+    const line = this.getLineElementAt(fromOffset);
+    const currentPadding = this.getLinePaddingStart(line);
+    const currentX = this.getGuideX(list, line, fromOffset, coords);
     if (parentCtx.rootLeft === undefined) {
-      parentCtx.rootLeft = getVerticalLineRootLeft(
-        this.contentLeft,
-        coords,
-        list.hasCheckbox(),
-      );
+      parentCtx.rootLeft = currentX;
+      parentCtx.rootPadding = currentPadding ?? 0;
     }
-    const left = getVerticalLineLeft(parentCtx.rootLeft, coords);
+    const left =
+      currentPadding === null
+        ? getVerticalLineLeftFromX(parentCtx.rootLeft, currentX)
+        : currentPadding - parentCtx.rootPadding;
 
     const top =
       visibleFrom > 0 && fromOffset < visibleFrom
@@ -205,7 +212,9 @@ class VerticalLinesPluginValue implements PluginValue {
       this.lines.push({
         top,
         left,
+        width: Math.max(5, this.getGuideOffsetX(list, currentX, left) + 3),
         height: `calc(${height}px ${hasNextSibling ? "- 1.5em" : "- 2em"})`,
+        guideOffsetX: this.getGuideOffsetX(list, currentX, left),
         list,
       });
     }
@@ -305,13 +314,11 @@ class VerticalLinesPluginValue implements PluginValue {
 
       const l = this.lines[i];
       const e = this.lineElements[i];
-      e.classList.toggle(
-        "outliner-plugin-list-line-checkbox",
-        l.list.hasCheckbox(),
-      );
       e.style.top = l.top + "px";
       e.style.left = l.left + "px";
+      e.style.width = l.width + "px";
       e.style.height = l.height;
+      e.style.setProperty("--outliner-guide-offset-x", `${l.guideOffsetX}px`);
       e.style.display = "block";
     }
 
@@ -319,6 +326,7 @@ class VerticalLinesPluginValue implements PluginValue {
       const e = this.lineElements[i];
       e.style.top = "0px";
       e.style.left = "0px";
+      e.style.width = "5px";
       e.style.height = "0px";
       e.style.display = "none";
     }
@@ -329,6 +337,63 @@ class VerticalLinesPluginValue implements PluginValue {
     this.view.scrollDOM.removeEventListener("scroll", this.onScroll);
     this.view.dom.removeChild(this.scroller);
     clearTimeout(this.scheduled);
+  }
+
+  private getGuideX(
+    list: List,
+    line: HTMLElement | null,
+    fromOffset: number,
+    coords: Pick<DOMRect, "right">,
+  ) {
+    if (!list.hasCheckbox()) {
+      return coords.right;
+    }
+
+    const checkbox = line?.querySelector(".task-list-item-checkbox");
+    if (checkbox instanceof HTMLElement) {
+      const rect = checkbox.getBoundingClientRect();
+      return (
+        rect.left -
+        this.view.scrollDOM.getBoundingClientRect().left +
+        this.view.scrollDOM.scrollLeft +
+        rect.width / 2
+      );
+    }
+
+    return coords.right;
+  }
+
+  private getGuideOffsetX(list: List, currentX: number, left: number) {
+    const fineTune = list.hasCheckbox() ? -1 : 3;
+    return currentX - this.contentLeft - left + fineTune;
+  }
+
+  private getLinePaddingStart(line: HTMLElement | null): number | null {
+    if (!line) {
+      return null;
+    }
+
+    const padding = line.style.paddingInlineStart || line.style.paddingLeft;
+    if (padding) {
+      return Number.parseFloat(padding);
+    }
+
+    const computedPadding = window.getComputedStyle(line).paddingInlineStart;
+    return computedPadding ? Number.parseFloat(computedPadding) : null;
+  }
+
+  private getLineElementAt(offset: number): HTMLElement | null {
+    const domAtPos = this.view.domAtPos(offset);
+    let node: Node | null = domAtPos.node;
+
+    while (node) {
+      if (node instanceof HTMLElement && node.classList.contains("cm-line")) {
+        return node;
+      }
+      node = node.parentNode;
+    }
+
+    return null;
   }
 }
 
