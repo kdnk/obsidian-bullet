@@ -155,4 +155,23 @@ describe("parseList", () => {
     expect(logger.log).not.toHaveBeenCalled();
     expect(list).toBeTruthy();
   });
+
+  test("should preserve checkbox markup information when cursor setting excludes checkbox", () => {
+    const parser = makeParser({
+      settings: {
+        keepCursorWithinContent: "bullet-only",
+      } as Settings,
+    });
+    const editor = makeEditor({
+      text: "- [ ] parent\n  - child",
+      cursor: { line: 0, ch: 0 },
+    });
+
+    const list = parser.parse(editor as any);
+    const parent = list?.getRootList().getChildren()[0];
+
+    expect(parent).toBeTruthy();
+    expect(parent.getCheckboxLength()).toBe(0);
+    expect(parent.hasCheckbox()).toBe(true);
+  });
 });

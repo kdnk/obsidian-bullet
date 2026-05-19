@@ -1,4 +1,8 @@
-import { getVerticalLinesContentLeft } from "../verticalLinesMeasurements";
+import {
+  getVerticalLineLeft,
+  getVerticalLineRootLeft,
+  getVerticalLinesContentLeft,
+} from "../verticalLinesMeasurements";
 
 describe("getVerticalLinesContentLeft", () => {
   test("uses the rendered line position so line-number gutters are included", () => {
@@ -60,5 +64,21 @@ describe("getVerticalLinesContentLeft", () => {
     };
 
     expect(getVerticalLinesContentLeft(view)).toBe(0);
+  });
+
+  test("measures vertical lines from the content edge instead of the parent line", () => {
+    expect(getVerticalLineLeft(188, { right: 300 } as DOMRect)).toBe(112);
+  });
+
+  test("uses the content edge as the root baseline for checkbox items", () => {
+    expect(getVerticalLineRootLeft(188, { left: 240 } as DOMRect, true)).toBe(
+      188,
+    );
+  });
+
+  test("uses the rendered line position as the root baseline for regular bullets", () => {
+    expect(getVerticalLineRootLeft(188, { left: 240 } as DOMRect, false)).toBe(
+      240,
+    );
   });
 });

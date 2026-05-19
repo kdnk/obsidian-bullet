@@ -171,6 +171,7 @@ export class CreateNewItem implements Operation {
       indent,
       bullet,
       prefix,
+      hasCheckbox,
       spaceAfterBullet,
       prefix + newLines.shift(),
       false,

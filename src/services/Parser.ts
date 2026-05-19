@@ -190,6 +190,7 @@ export class Parser {
       if (matches) {
         const [, indent, bullet, spaceAfterBullet] = matches;
         let [, , , , optionalCheckbox, content] = matches;
+        const hadCheckbox = optionalCheckbox.length > 0;
 
         content = optionalCheckbox + content;
         if (this.settings.keepCursorWithinContent !== "bullet-and-checkbox") {
@@ -224,6 +225,7 @@ export class Parser {
           indent,
           bullet,
           optionalCheckbox,
+          hadCheckbox,
           spaceAfterBullet,
           content,
           foldRoot,

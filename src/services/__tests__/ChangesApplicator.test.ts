@@ -22,7 +22,9 @@ describe("changesApplicator", () => {
       changes: (root) => {
         root
           .getChildren()[0]
-          .addAfterAll(new List(root, "  ", "-", "[ ]", " ", "[ ] ", false));
+          .addAfterAll(
+            new List(root, "  ", "-", "[ ]", true, " ", "[ ] ", false),
+          );
         root.replaceCursor({ line: 5, ch: 8 });
       },
     });

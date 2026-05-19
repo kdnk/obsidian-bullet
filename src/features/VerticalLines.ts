@@ -8,7 +8,11 @@ import {
 } from "@codemirror/view";
 
 import { Feature } from "./Feature";
-import { getVerticalLinesContentLeft } from "./verticalLinesMeasurements";
+import {
+  getVerticalLineLeft,
+  getVerticalLineRootLeft,
+  getVerticalLinesContentLeft,
+} from "./verticalLinesMeasurements";
 
 import { MyEditor, getEditorFromState } from "../editor";
 import { List } from "../root";
@@ -33,6 +37,7 @@ class VerticalLinesPluginValue implements PluginValue {
   private lastLine: number;
   private lines: LineData[];
   private lineElements: HTMLElement[] = [];
+  private contentLeft = 0;
 
   constructor(
     private settings: Settings,
@@ -93,6 +98,7 @@ class VerticalLinesPluginValue implements PluginValue {
 
   private calculate = () => {
     this.lines = [];
+    this.contentLeft = getVerticalLinesContentLeft(this.view);
 
     if (
       this.settings.verticalLines &&
@@ -171,9 +177,13 @@ class VerticalLinesPluginValue implements PluginValue {
 
     const coords = this.view.coordsAtPos(fromOffset, 1);
     if (parentCtx.rootLeft === undefined) {
-      parentCtx.rootLeft = coords.left;
+      parentCtx.rootLeft = getVerticalLineRootLeft(
+        this.contentLeft,
+        coords,
+        list.hasCheckbox(),
+      );
     }
-    const left = Math.floor(coords.right - parentCtx.rootLeft);
+    const left = getVerticalLineLeft(parentCtx.rootLeft, coords);
 
     const top =
       visibleFrom > 0 && fromOffset < visibleFrom
@@ -295,6 +305,10 @@ class VerticalLinesPluginValue implements PluginValue {
 
       const l = this.lines[i];
       const e = this.lineElements[i];
+      e.classList.toggle(
+        "outliner-plugin-list-line-checkbox",
+        l.list.hasCheckbox(),
+      );
       e.style.top = l.top + "px";
       e.style.left = l.left + "px";
       e.style.height = l.height;

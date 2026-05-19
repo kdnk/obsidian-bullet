@@ -17,6 +17,21 @@ export function getVerticalLinesContentLeft(view: {
   return view.contentDOM.parentElement?.offsetLeft ?? 0;
 }
 
+export function getVerticalLineLeft(
+  rootLeft: number,
+  coords: Pick<DOMRect, "right">,
+) {
+  return Math.floor(coords.right - rootLeft);
+}
+
+export function getVerticalLineRootLeft(
+  contentLeft: number,
+  coords: Pick<DOMRect, "left">,
+  hasCheckbox: boolean,
+) {
+  return hasCheckbox ? contentLeft : coords.left;
+}
+
 function isElementLike(
   value: unknown,
 ): value is Pick<HTMLElement, "getBoundingClientRect"> {

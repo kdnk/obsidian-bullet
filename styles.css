@@ -48,6 +48,10 @@
   background-repeat: no-repeat;
 }
 
+.outliner-plugin-list-line-checkbox {
+  margin-left: 2.9ch;
+}
+
 body.is-mobile .outliner-plugin-list-line {
   margin-top: 2.7em;
 }
