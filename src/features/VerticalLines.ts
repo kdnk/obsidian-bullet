@@ -345,22 +345,18 @@ class VerticalLinesPluginValue implements PluginValue {
     fromOffset: number,
     coords: Pick<DOMRect, "right">,
   ) {
-    if (!list.hasCheckbox()) {
-      return coords.right;
+    const scrollerLeft = this.view.scrollDOM.getBoundingClientRect().left;
+    const scrollLeft = this.view.scrollDOM.scrollLeft;
+
+    if (list.hasCheckbox()) {
+      const checkbox = line?.querySelector(".task-list-item-checkbox");
+      if (checkbox instanceof HTMLElement) {
+        const rect = checkbox.getBoundingClientRect();
+        return rect.left - scrollerLeft + scrollLeft + rect.width / 2;
+      }
     }
 
-    const checkbox = line?.querySelector(".task-list-item-checkbox");
-    if (checkbox instanceof HTMLElement) {
-      const rect = checkbox.getBoundingClientRect();
-      return (
-        rect.left -
-        this.view.scrollDOM.getBoundingClientRect().left +
-        this.view.scrollDOM.scrollLeft +
-        rect.width / 2
-      );
-    }
-
-    return coords.right;
+    return coords.right - scrollerLeft + scrollLeft;
   }
 
   private getGuideOffsetX(list: List, currentX: number, left: number) {
