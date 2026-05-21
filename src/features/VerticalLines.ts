@@ -15,7 +15,6 @@ import {
 
 import { MyEditor, getEditorFromState } from "../editor";
 import { List } from "../root";
-import { ObsidianSettings } from "../services/ObsidianSettings";
 import { Parser } from "../services/Parser";
 import { Settings } from "../services/Settings";
 
@@ -42,7 +41,6 @@ class VerticalLinesPluginValue implements PluginValue {
 
   constructor(
     private settings: Settings,
-    private obsidianSettings: ObsidianSettings,
     private parser: Parser,
     private view: EditorView,
   ) {
@@ -103,7 +101,6 @@ class VerticalLinesPluginValue implements PluginValue {
 
     if (
       this.settings.verticalLines &&
-      this.obsidianSettings.isDefaultThemeEnabled() &&
       this.view.viewportLineBlocks.length > 0 &&
       this.view.visibleRanges.length > 0
     ) {
@@ -399,7 +396,6 @@ export class VerticalLines implements Feature {
   constructor(
     private plugin: Plugin,
     private settings: Settings,
-    private obsidianSettings: ObsidianSettings,
     private parser: Parser,
   ) {}
 
@@ -412,12 +408,7 @@ export class VerticalLines implements Feature {
     this.plugin.registerEditorExtension(
       ViewPlugin.define(
         (view) =>
-          new VerticalLinesPluginValue(
-            this.settings,
-            this.obsidianSettings,
-            this.parser,
-            view,
-          ),
+          new VerticalLinesPluginValue(this.settings, this.parser, view),
       ),
     );
   }
@@ -428,9 +419,7 @@ export class VerticalLines implements Feature {
   }
 
   private updateBodyClass = () => {
-    const shouldExists =
-      this.obsidianSettings.isDefaultThemeEnabled() &&
-      this.settings.verticalLines;
+    const shouldExists = this.settings.verticalLines;
     const exists = document.body.classList.contains(VERTICAL_LINES_BODY_CLASS);
 
     if (shouldExists && !exists) {

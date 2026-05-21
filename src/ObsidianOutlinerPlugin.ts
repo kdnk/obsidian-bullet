@@ -156,12 +156,7 @@ export default class ObsidianOutlinerPlugin extends Plugin {
       new BetterListsStyles(this.settings, this.obsidianSettings),
 
       // features based on settings.verticalLines
-      new VerticalLines(
-        this,
-        this.settings,
-        this.obsidianSettings,
-        this.parser,
-      ),
+      new VerticalLines(this, this.settings, this.parser),
 
       // features based on settings.dragAndDrop
       new DragAndDrop(
