@@ -8,7 +8,7 @@
 - ite|m 3
 ```
 
-- execute: `obsidian-outliner-plus:move-list-item-up`
+- execute: `outliner-plus:move-list-item-up`
 - assertState:
 
 ```md

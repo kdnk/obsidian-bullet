@@ -7,7 +7,7 @@
   - two
 ```
 
-- execute: `obsidian-outliner-plus:fold`
+- execute: `outliner-plus:fold`
 - assertState:
 
 ```md
