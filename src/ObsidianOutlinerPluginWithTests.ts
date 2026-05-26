@@ -6,8 +6,8 @@ import { EditorView } from "@codemirror/view";
 import ObsidianOutlinerPlugin from "./ObsidianOutlinerPlugin";
 import { MyEditor, MyEditorPosition } from "./editor";
 import { EditorSelectionsBehaviourOverride } from "./features/EditorSelectionsBehaviourOverride";
-import { getTestPlatformWsUrl } from "./testPlatform";
 import { KeepCursorWithinListContent } from "./operations/KeepCursorWithinListContent";
+import { getTestPlatformWsUrl } from "./testPlatform";
 
 const keysMap: { [key: string]: number } = {
   Backspace: 8,
