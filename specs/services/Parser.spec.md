@@ -10,7 +10,7 @@
  
 ```
 
-- execute: `outliner-plus:move-list-item-up`
+- execute: `bullet:move-list-item-up`
 - assertState:
 
 ```md

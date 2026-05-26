@@ -1,4 +1,4 @@
-# outliner-plus:select-list-content should select list item content
+# bullet:select-list-content should select list item content
 
 - applyState:
 
@@ -7,7 +7,7 @@
   - two|
 ```
 
-- execute: `outliner-plus:select-list-content`
+- execute: `bullet:select-list-content`
 - assertState:
 
 ```md
@@ -15,7 +15,7 @@
   - |two|
 ```
 
-# outliner-plus:select-list-content should select the whole list on second invoke
+# bullet:select-list-content should select the whole list on second invoke
 
 - applyState:
 
@@ -26,8 +26,8 @@ a
 b
 ```
 
-- execute: `outliner-plus:select-list-content`
-- execute: `outliner-plus:select-list-content`
+- execute: `bullet:select-list-content`
+- execute: `bullet:select-list-content`
 - assertState:
 
 ```md
@@ -37,7 +37,7 @@ a
 b
 ```
 
-# outliner-plus:insert-note-line should create a note line
+# bullet:insert-note-line should create a note line
 
 - applyState:
 
@@ -46,7 +46,7 @@ b
   - two
 ```
 
-- execute: `outliner-plus:insert-note-line`
+- execute: `bullet:insert-note-line`
 - assertState:
 
 ```md
@@ -55,7 +55,7 @@ b
   - two
 ```
 
-# outliner-plus:insert-note-line should split an existing note line
+# bullet:insert-note-line should split an existing note line
 
 - applyState:
 
@@ -64,7 +64,7 @@ b
   no|te
 ```
 
-- execute: `outliner-plus:insert-note-line`
+- execute: `bullet:insert-note-line`
 - assertState:
 
 ```md
