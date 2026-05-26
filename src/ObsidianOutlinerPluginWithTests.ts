@@ -274,18 +274,23 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
       state = this.parseState(state);
     }
 
-    this.runWithoutSelectionAdjustments(() => {
+    this.beginSuppressingSelectionAdjustments();
+
+    try {
       this.editor.setValue("");
       this.editor.setValue(state.value);
       this.editor.setSelections(state.selections);
-    });
+      // TODO: recursive bottom-top folding, because it's impossible to fold inside already folded range
+      for (const l of state.folds) {
+        this.editor.fold(l);
+      }
 
-    // TODO: recursive bottom-top folding, because it's impossible to fold inside already folded range
-    for (const l of state.folds) {
-      this.editor.fold(l);
+      await this.waitForStateToApply(state);
+      await this.wait(0);
+    } finally {
+      this.endSuppressingSelectionAdjustments();
     }
 
-    await this.waitForStateToApply(state);
     await this.waitForSelectionAdjustmentsToSettle();
   }
 
@@ -296,15 +301,22 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
     await this.waitForSelectionAdjustmentsToSettle();
   }
 
-  private runWithoutSelectionAdjustments(cb: () => void) {
+  private beginSuppressingSelectionAdjustments() {
     for (const feature of (this as any).features || []) {
       if (feature instanceof EditorSelectionsBehaviourOverride) {
-        feature.runWithoutSelectionAdjustments(cb);
+        feature.beginSuppressingSelectionAdjustments();
         return;
       }
     }
+  }
 
-    cb();
+  private endSuppressingSelectionAdjustments() {
+    for (const feature of (this as any).features || []) {
+      if (feature instanceof EditorSelectionsBehaviourOverride) {
+        feature.endSuppressingSelectionAdjustments();
+        return;
+      }
+    }
   }
 
   private async waitForStateToApply(state: State) {

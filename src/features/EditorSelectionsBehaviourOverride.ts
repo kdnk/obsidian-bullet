@@ -93,12 +93,12 @@ export class EditorSelectionsBehaviourOverride implements Feature {
     return this.pendingSelectionAdjustment !== null;
   }
 
-  runWithoutSelectionAdjustments<T>(cb: () => T): T {
+  beginSuppressingSelectionAdjustments() {
     this.suppressSelectionAdjustments++;
+  }
 
-    try {
-      return cb();
-    } finally {
+  endSuppressingSelectionAdjustments() {
+    if (this.suppressSelectionAdjustments > 0) {
       this.suppressSelectionAdjustments--;
     }
   }
