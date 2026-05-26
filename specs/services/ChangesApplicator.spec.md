@@ -8,7 +8,7 @@
 - three|
 ```
 
-- execute: `outliner-plus:move-list-item-up`
+- execute: `bullet:move-list-item-up`
 - assertState:
 
 ```md
@@ -52,7 +52,7 @@
   - five
 ```
 
-- execute: `outliner-plus:fold`
+- execute: `bullet:fold`
 - keydown: `ArrowUp`
 - assertState:
 
@@ -64,7 +64,7 @@
   - five
 ```
 
-- execute: `outliner-plus:fold`
+- execute: `bullet:fold`
 - keydown: `ArrowDown`
 - keydown: `Cmd-ArrowRight`
 - assertState:
@@ -77,7 +77,7 @@
   - five|
 ```
 
-- execute: `outliner-plus:move-list-item-up`
+- execute: `bullet:move-list-item-up`
 - assertState:
 
 ```md

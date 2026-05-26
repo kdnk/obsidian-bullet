@@ -7,7 +7,7 @@
   - two
 ```
 
-- execute: `outliner-plus:fold`
+- execute: `bullet:fold`
 - assertState:
 
 ```md
