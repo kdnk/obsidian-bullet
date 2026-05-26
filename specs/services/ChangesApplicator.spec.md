@@ -8,7 +8,7 @@
 - three|
 ```
 
-- execute: `obsidian-outliner:move-list-item-up`
+- execute: `obsidian-outliner-plus:move-list-item-up`
 - assertState:
 
 ```md
@@ -52,7 +52,7 @@
   - five
 ```
 
-- execute: `obsidian-outliner:fold`
+- execute: `obsidian-outliner-plus:fold`
 - keydown: `ArrowUp`
 - assertState:
 
@@ -64,7 +64,7 @@
   - five
 ```
 
-- execute: `obsidian-outliner:fold`
+- execute: `obsidian-outliner-plus:fold`
 - keydown: `ArrowDown`
 - keydown: `Cmd-ArrowRight`
 - assertState:
@@ -77,7 +77,7 @@
   - five|
 ```
 
-- execute: `obsidian-outliner:move-list-item-up`
+- execute: `obsidian-outliner-plus:move-list-item-up`
 - assertState:
 
 ```md

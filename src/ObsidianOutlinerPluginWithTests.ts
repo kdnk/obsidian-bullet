@@ -6,6 +6,8 @@ import { EditorView } from "@codemirror/view";
 import ObsidianOutlinerPlugin from "./ObsidianOutlinerPlugin";
 import { MyEditor, MyEditorPosition } from "./editor";
 import { EditorSelectionsBehaviourOverride } from "./features/EditorSelectionsBehaviourOverride";
+import { getTestPlatformWsUrl } from "./testPlatform";
+import { KeepCursorWithinListContent } from "./operations/KeepCursorWithinListContent";
 
 const keysMap: { [key: string]: number } = {
   Backspace: 8,
@@ -107,8 +109,8 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
     document.execCommand("insertText", false, text);
   }
 
-  async load() {
-    await super.load();
+  async onload() {
+    await super.onload();
 
     (window as any).ObsidianOutlinerPlugin = this;
 
@@ -158,7 +160,7 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
   }
 
   async connect() {
-    const ws = new WebSocket("ws://127.0.0.1:8080/");
+    const ws = new WebSocket(getTestPlatformWsUrl());
     await this.prepareForTests();
     ws.send("ready");
 
@@ -296,7 +298,18 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
 
   private async adjustSelection() {
     await this.wait(0);
-    this.editor.dispatchCurrentSingleSelectionTransaction();
+
+    if ((this.settings as any).keepCursorWithinContent !== "never") {
+      const root = (this as any).parser.parse(this.editor);
+
+      if (root) {
+        (this as any).operationPerformer.eval(
+          root,
+          new KeepCursorWithinListContent(root),
+          this.editor,
+        );
+      }
+    }
 
     await this.waitForSelectionAdjustmentsToSettle();
   }

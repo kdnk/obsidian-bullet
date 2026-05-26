@@ -2,6 +2,14 @@ const { TestEnvironment } = require("jest-environment-node");
 const WebSocket = require("ws");
 
 let idSeq = 1;
+const DEFAULT_TEST_PLATFORM_WS_PORT = "8080";
+
+function getTestPlatformWsUrl() {
+  const port =
+    process.env.TEST_PLATFORM_WS_PORT || DEFAULT_TEST_PLATFORM_WS_PORT;
+
+  return `ws://127.0.0.1:${port}/`;
+}
 
 module.exports = class CustomEnvironment extends TestEnvironment {
   async setup() {
@@ -29,7 +37,7 @@ module.exports = class CustomEnvironment extends TestEnvironment {
   }
 
   async initWs() {
-    this.ws = new WebSocket("ws://127.0.0.1:8080");
+    this.ws = new WebSocket(getTestPlatformWsUrl());
 
     await new Promise((resolve) => this.ws.on("open", resolve));
 

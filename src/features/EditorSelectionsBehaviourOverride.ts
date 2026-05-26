@@ -86,6 +86,7 @@ export class EditorSelectionsBehaviourOverride implements Feature {
   resetState() {
     this.lastKey = null;
     this.skipSelectionAdjustments = false;
+    this.suppressSelectionAdjustments = 0;
     this.clearPendingSelectionAdjustment();
   }
 
