@@ -1,104 +1,49 @@
-import inquirer from "inquirer";
-import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 
-function increaseVersion(version, releaseType) {
-  const v = version.split(".").map((p) => Number(p));
-
-  if (releaseType === "major") {
-    v[0]++;
-    v[1] = 0;
-    v[2] = 0;
-  } else if (releaseType === "minor") {
-    v[1]++;
-    v[2] = 0;
-  } else if (releaseType === "patch") {
-    v[2]++;
-  } else {
-    throw new Error();
-  }
-
-  return v.join(".");
+function readJson(path) {
+  return JSON.parse(readFileSync(path, "utf8"));
 }
 
-async function main() {
-  const manifestFile = JSON.parse(readFileSync("manifest.json"));
+function writeJson(path, value) {
+  writeFileSync(path, JSON.stringify(value, null, 2) + "\n");
+}
 
-  console.log(`Current version ${manifestFile.version}`);
-  console.log(`Current minAppVersion ${manifestFile.minAppVersion}`);
+function parseMinAppVersionArg() {
+  const minAppVersionArg = process.argv.find((arg) =>
+    arg.startsWith("--min-app-version="),
+  );
 
-  const { releaseType, minAppVersion } = await inquirer.prompt([
-    {
-      type: "list",
-      name: "releaseType",
-      message: "Release type:",
-      choices: [
-        {
-          name: "major (Some major changes that have, or could lead to, breaking changes)",
-          value: "major",
-        },
-        {
-          name: "minor (Some notable changes without breaking changes)",
-          value: "minor",
-        },
-        {
-          name: "patch (Some changes, but without new features)",
-          value: "patch",
-        },
-      ],
-    },
-    {
-      type: "input",
-      name: "minAppVersion",
-      message: "Minimum supported version of Obsidian:",
-      default: manifestFile.minAppVersion,
-    },
-  ]);
+  if (!minAppVersionArg) {
+    return process.env.MIN_APP_VERSION;
+  }
 
-  const newVersion = increaseVersion(manifestFile.version, releaseType);
+  return minAppVersionArg.slice("--min-app-version=".length);
+}
 
-  manifestFile.version = newVersion;
+function main() {
+  const packageFile = readJson("package.json");
+  const manifestFile = readJson("manifest.json");
+  const versionsFile = readJson("versions.json");
+  const previousVersions = Object.fromEntries(
+    Object.entries(versionsFile).filter(
+      ([version]) => version !== packageFile.version,
+    ),
+  );
+  const minAppVersion =
+    parseMinAppVersionArg() ?? manifestFile.minAppVersion;
+
+  manifestFile.version = packageFile.version;
   manifestFile.minAppVersion = minAppVersion;
-  writeFileSync("manifest.json", JSON.stringify(manifestFile, null, 2) + "\n");
+  writeJson("manifest.json", manifestFile);
 
-  const packageLockFile = JSON.parse(readFileSync("package-lock.json"));
-  packageLockFile.version = newVersion;
-  packageLockFile.packages[""].version = newVersion;
-  writeFileSync(
-    "package-lock.json",
-    JSON.stringify(packageLockFile, null, 2) + "\n",
-  );
-
-  const packageFile = JSON.parse(readFileSync("package.json"));
-  packageFile.version = newVersion;
-  writeFileSync("package.json", JSON.stringify(packageFile, null, 2) + "\n");
-
-  const versionsFile = JSON.parse(readFileSync("versions.json"));
-  const newVersionsFile = {
-    [newVersion]: minAppVersion,
-    ...versionsFile,
-  };
-  writeFileSync(
-    "versions.json",
-    JSON.stringify(newVersionsFile, null, 2) + "\n",
-  );
-
-  spawnSync(
-    "git",
-    [
-      "add",
-      "manifest.json",
-      "package-lock.json",
-      "package.json",
-      "versions.json",
-    ],
-    {
-      stdio: "inherit",
-    },
-  );
-  spawnSync("git", ["commit", "-m", newVersion], {
-    stdio: "inherit",
+  writeJson("versions.json", {
+    [packageFile.version]: minAppVersion,
+    ...previousVersions,
   });
+
+  console.log(
+    `Synced manifest.json and versions.json to ${packageFile.version} (minAppVersion: ${minAppVersion})`,
+  );
 }
 
 main();
