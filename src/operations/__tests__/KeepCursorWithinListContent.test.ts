@@ -107,6 +107,26 @@ test("should not do anything if cursor is already within content", () => {
   expect(root.getCursor().ch).toBe(5); // Unchanged
 });
 
+test("should move cursor after the bullet but before a custom checkbox in bullet-only mode", () => {
+  const root = makeRoot({
+    editor: makeEditor({
+      text: "- [!] custom task",
+      cursor: { line: 0, ch: 0 },
+    }),
+    settings: {
+      ...makeSettings(),
+      keepCursorWithinContent: "bullet-only",
+    } as ReturnType<typeof makeSettings>,
+  });
+
+  const op = new KeepCursorWithinListContent(root);
+  op.perform();
+
+  expect(op.shouldStopPropagation()).toBe(true);
+  expect(op.shouldUpdate()).toBe(true);
+  expect(root.getCursor()).toStrictEqual({ line: 0, ch: 2 });
+});
+
 test("should not do anything if there are multiple cursors", () => {
   const editor = makeEditor({
     text: "- item 1\n  - item 1.1\n  - item 1.2\n- item 2",

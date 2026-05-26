@@ -7,6 +7,7 @@ const debug = require("debug")("jest-obsidian");
 const promisify = require("util").promisify;
 const levelup = require("levelup");
 const leveldown = require("leveldown");
+const { getTestPluginId, getVaultPluginDir } = require("./test-config");
 
 const KILL_CMD =
   process.platform === "darwin"
@@ -107,7 +108,7 @@ async function prepareVault() {
 
   const vaultConfigFilePath = `${VAULT_DIR}/.obsidian/app.json`;
   const vaultCommunityPluginsConfigFilePath = `${VAULT_DIR}/.obsidian/community-plugins.json`;
-  const vaultPluginDir = `${VAULT_DIR}/.obsidian/plugins/obsidian-outliner`;
+  const vaultPluginDir = getVaultPluginDir(VAULT_DIR);
 
   if (!fs.existsSync(vaultConfigFilePath)) {
     debug("  Running Obsidian for 90 seconds to setup vault");
@@ -132,7 +133,7 @@ async function prepareVault() {
   debug(`  Saving ${vaultCommunityPluginsConfigFilePath}`);
   fs.writeFileSync(
     vaultCommunityPluginsConfigFilePath,
-    JSON.stringify(["obsidian-outliner"]),
+    JSON.stringify([getTestPluginId()]),
   );
 
   debug(`  Disabling Safe Mode`);
@@ -168,8 +169,9 @@ module.exports = async () => {
   await prepareVault();
 
   global.wss = new WebSocket.Server({
-    port: 8080,
+    port: 0,
   });
+  process.env.TEST_PLATFORM_WS_PORT = String(global.wss.address().port);
 
   debug(`Running "${OBSIDIAN_APP_CMD[0]}"`);
   const obsidian = cp.exec(OBSIDIAN_APP_CMD.join(" "), {

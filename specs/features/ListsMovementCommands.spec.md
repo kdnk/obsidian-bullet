@@ -1,4 +1,4 @@
-# obsidian-outliner:move-list-item-down should move line down
+# obsidian-outliner-plus:move-list-item-down should move line down
 
 - applyState:
 
@@ -7,7 +7,7 @@
 - two
 ```
 
-- execute: `obsidian-outliner:move-list-item-down`
+- execute: `obsidian-outliner-plus:move-list-item-down`
 - assertState:
 
 ```md
@@ -15,7 +15,7 @@
 - one|
 ```
 
-# obsidian-outliner:move-list-item-down should move children down
+# obsidian-outliner-plus:move-list-item-down should move children down
 
 - applyState:
 
@@ -25,7 +25,7 @@
 - two
 ```
 
-- execute: `obsidian-outliner:move-list-item-down`
+- execute: `obsidian-outliner-plus:move-list-item-down`
 - assertState:
 
 ```md
@@ -34,7 +34,7 @@
   - one one
 ```
 
-# obsidian-outliner:move-list-item-up should move line up
+# obsidian-outliner-plus:move-list-item-up should move line up
 
 - applyState:
 
@@ -43,7 +43,7 @@
 - two|
 ```
 
-- execute: `obsidian-outliner:move-list-item-up`
+- execute: `obsidian-outliner-plus:move-list-item-up`
 - assertState:
 
 ```md
@@ -51,7 +51,7 @@
 - one
 ```
 
-# obsidian-outliner:move-list-item-up should move children up
+# obsidian-outliner-plus:move-list-item-up should move children up
 
 - applyState:
 
@@ -61,7 +61,7 @@
   - one one
 ```
 
-- execute: `obsidian-outliner:move-list-item-up`
+- execute: `obsidian-outliner-plus:move-list-item-up`
 - assertState:
 
 ```md
@@ -70,7 +70,7 @@
 - two
 ```
 
-# obsidian-outliner:indent-list should indent line
+# obsidian-outliner-plus:indent-list should indent line
 
 - applyState:
 
@@ -79,7 +79,7 @@
 - qwe|
 ```
 
-- execute: `obsidian-outliner:indent-list`
+- execute: `obsidian-outliner-plus:indent-list`
 - assertState:
 
 ```md
@@ -87,7 +87,7 @@
   - qwe|
 ```
 
-# obsidian-outliner:indent-list should indent children
+# obsidian-outliner-plus:indent-list should indent children
 
 - applyState:
 
@@ -97,7 +97,7 @@
   - qwe
 ```
 
-- execute: `obsidian-outliner:indent-list`
+- execute: `obsidian-outliner-plus:indent-list`
 - assertState:
 
 ```md
@@ -106,7 +106,7 @@
     - qwe
 ```
 
-# obsidian-outliner:indent-list should not indent line if it's no parent
+# obsidian-outliner-plus:indent-list should not indent line if it's no parent
 
 - applyState:
 
@@ -115,7 +115,7 @@
   - qwe|
 ```
 
-- execute: `obsidian-outliner:indent-list`
+- execute: `obsidian-outliner-plus:indent-list`
 - assertState:
 
 ```md
@@ -123,7 +123,7 @@
   - qwe|
 ```
 
-# obsidian-outliner:indent-list should keep cursor at the same text position
+# obsidian-outliner-plus:indent-list should keep cursor at the same text position
 
 - applyState:
 
@@ -133,7 +133,7 @@
   - q|we
 ```
 
-- execute: `obsidian-outliner:indent-list`
+- execute: `obsidian-outliner-plus:indent-list`
 - assertState:
 
 ```md
@@ -142,7 +142,7 @@
     - q|we
 ```
 
-# obsidian-outliner:indent-list should keep numeration
+# obsidian-outliner-plus:indent-list should keep numeration
 
 - applyState:
 
@@ -153,7 +153,7 @@
   3. four
 ```
 
-- execute: `obsidian-outliner:indent-list`
+- execute: `obsidian-outliner-plus:indent-list`
 - assertState:
 
 ```md
@@ -163,7 +163,7 @@
   2. four
 ```
 
-# obsidian-outliner:outdent-list should outdent line
+# obsidian-outliner-plus:outdent-list should outdent line
 
 - applyState:
 
@@ -172,7 +172,7 @@
   - qwe|
 ```
 
-- execute: `obsidian-outliner:outdent-list`
+- execute: `obsidian-outliner-plus:outdent-list`
 - assertState:
 
 ```md
@@ -180,7 +180,7 @@
 - qwe|
 ```
 
-# obsidian-outliner:outdent-list should outdent children
+# obsidian-outliner-plus:outdent-list should outdent children
 
 - applyState:
 
@@ -190,7 +190,7 @@
     - qwe
 ```
 
-- execute: `obsidian-outliner:outdent-list`
+- execute: `obsidian-outliner-plus:outdent-list`
 - assertState:
 
 ```md
@@ -199,7 +199,7 @@
   - qwe
 ```
 
-# obsidian-outliner:outdent-list should outdent in case #144
+# obsidian-outliner-plus:outdent-list should outdent in case #144
 
 - applyState:
 
@@ -211,7 +211,7 @@
   - qwe|
 ```
 
-- execute: `obsidian-outliner:outdent-list`
+- execute: `obsidian-outliner-plus:outdent-list`
 - assertState:
 
 ```md
