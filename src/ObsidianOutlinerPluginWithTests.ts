@@ -290,9 +290,11 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
 
   private async adjustSelection() {
     await this.wait(0);
+    this.debugSelectionState("before-adjustSelection");
     this.editor.dispatchCurrentSingleSelectionTransaction();
 
     await this.waitForSelectionAdjustmentsToSettle();
+    this.debugSelectionState("after-adjustSelection");
   }
 
   private runWithoutSelectionAdjustments(cb: () => void) {
@@ -304,6 +306,25 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
     }
 
     cb();
+  }
+
+  private debugSelectionState(label: string) {
+    const selections = this.editor.listSelections();
+    const line = this.editor.getLine(selections[0]?.head?.line || 0);
+
+    if (!line.includes("[!]")) {
+      return;
+    }
+
+    console.log(
+      "[selection-debug]",
+      JSON.stringify({
+        label,
+        line,
+        selections,
+        keepCursorWithinContent: this.settings.keepCursorWithinContent,
+      }),
+    );
   }
 
   async waitForIdle() {
