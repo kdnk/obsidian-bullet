@@ -2,8 +2,11 @@ name: Release Obsidian plugin
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "*"
+  workflow_dispatch:
 
 env:
   OBSIDIAN_VERSION: "1.11.7"
@@ -16,28 +19,85 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Plan release
+        id: plan
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            tag="${GITHUB_REF_NAME}"
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+            if gh release view "$tag" >/dev/null 2>&1; then
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+              echo "reason=release already exists for $tag" >> "$GITHUB_OUTPUT"
+            else
+              echo "should_release=true" >> "$GITHUB_OUTPUT"
+              echo "reason=tag push" >> "$GITHUB_OUTPUT"
+            fi
+
+            exit 0
+          fi
+
+          version="$(node -p "require('./package.json').version")"
+          tag="v$version"
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "reason=release already exists for $tag" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! git rev-parse HEAD^ >/dev/null 2>&1; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "reason=no previous commit to compare version bump" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          previous_version="$(
+            git show HEAD^:package.json | node -e "let s=''; process.stdin.on('data', (d) => s += d); process.stdin.on('end', () => console.log(JSON.parse(s).version));"
+          )"
+
+          if [[ "$previous_version" == "$version" ]]; then
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            echo "reason=package version unchanged" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+          echo "reason=version bump from $previous_version to $version" >> "$GITHUB_OUTPUT"
+
       - name: Install Obsidian
+        if: steps.plan.outputs.should_release == 'true'
         run: |
           sudo apt update
           sudo apt install flatpak dbus-x11 xvfb
           flatpak remote-add --user flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y flathub md.obsidian.Obsidian
 
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Setup Node.js
+        if: steps.plan.outputs.should_release == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
+        if: steps.plan.outputs.should_release == 'true'
         run: npm ci
 
       - name: Lint
+        if: steps.plan.outputs.should_release == 'true'
         run: npm run lint
 
       - name: Test
+        if: steps.plan.outputs.should_release == 'true'
         run: |
           npm run build-with-tests
           Xvfb -ac :0 -screen 0 1280x1024x16 &
@@ -46,16 +106,23 @@ jobs:
           npm test
 
       - name: Build plugin
+        if: steps.plan.outputs.should_release == 'true'
         run: npm run build
 
+      - name: Skip release
+        if: steps.plan.outputs.should_release != 'true'
+        run: |
+          echo "Skipping release: ${{ steps.plan.outputs.reason }}"
+
       - name: Create release
+        if: steps.plan.outputs.should_release == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tag="${GITHUB_REF#refs/tags/}"
+          tag="${{ steps.plan.outputs.tag }}"
 
           gh release create "$tag" \
-            --verify-tag \
+            --target "${GITHUB_SHA}" \
             --title="$tag" \
             dist/main.js#main.js \
             manifest.json \
