@@ -273,7 +273,7 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
 
     this.editor.setValue("");
     this.editor.setValue(state.value);
-    this.ensureSelectionTransaction(state.selections);
+    await this.ensureSelectionTransaction(state.selections);
     this.editor.setSelections(state.selections);
 
     // TODO: recursive bottom-top folding, because it's impossible to fold inside already folded range
@@ -282,26 +282,23 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
     }
 
     await this.waitForSelectionAdjustmentsToSettle();
-    this.applyCurrentSelectionAdjustments();
-    await this.waitForSelectionAdjustmentsToSettle();
   }
 
-  private ensureSelectionTransaction(selections: State["selections"]) {
+  private async ensureSelectionTransaction(selections: State["selections"]) {
     const currentSelections = this.editor.listSelections();
 
     if (JSON.stringify(currentSelections) !== JSON.stringify(selections)) {
       return;
     }
 
-    const lastLine = this.editor.lastLine();
-    const lastCh = this.editor.getLine(lastLine).length;
+    const temporarySelection = this.getTemporarySelection(selections);
 
-    this.editor.setSelections([
-      {
-        anchor: { line: lastLine, ch: lastCh },
-        head: { line: lastLine, ch: lastCh },
-      },
-    ]);
+    if (!temporarySelection) {
+      return;
+    }
+
+    this.editor.setSelections([temporarySelection]);
+    await this.wait(0);
   }
 
   async waitForIdle() {
@@ -341,12 +338,28 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
     return false;
   }
 
-  private applyCurrentSelectionAdjustments() {
-    for (const feature of (this as any).features || []) {
-      if (feature instanceof EditorSelectionsBehaviourOverride) {
-        feature.applySelectionAdjustmentsNow(this.editor);
-      }
+  private getTemporarySelection(selections: State["selections"]) {
+    const firstLineSelection = {
+      anchor: { line: 0, ch: 0 },
+      head: { line: 0, ch: 0 },
+    };
+
+    if (JSON.stringify(firstLineSelection) !== JSON.stringify(selections[0])) {
+      return firstLineSelection;
     }
+
+    const lastLine = this.editor.lastLine();
+    const lastCh = this.editor.getLine(lastLine).length;
+    const lastLineSelection = {
+      anchor: { line: lastLine, ch: lastCh },
+      head: { line: lastLine, ch: lastCh },
+    };
+
+    if (JSON.stringify(lastLineSelection) !== JSON.stringify(selections[0])) {
+      return lastLineSelection;
+    }
+
+    return null;
   }
 
   getCurrentState(): State {
