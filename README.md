@@ -26,7 +26,7 @@ You can activate this plugin within Obsidian by doing the following:
 
 ### Manual installation
 
-Download `main.js`, `manifest.json`, `styles.css` from the [latest release](https://github.com/kdnk/obsidian-outliner/releases/latest) and put them into `<vault>/.obsidian/plugins/obsidian-outliner-plus` folder.
+Download `main.js`, `manifest.json`, `styles.css` from the [latest release](https://github.com/kdnk/obsidian-outliner/releases/latest) and put them into `<vault>/.obsidian/plugins/outliner-plus` folder.
 
 ## How to use
 

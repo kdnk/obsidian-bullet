@@ -1,4 +1,4 @@
-# obsidian-outliner-plus:select-list-content should select list item content
+# outliner-plus:select-list-content should select list item content
 
 - applyState:
 
@@ -7,7 +7,7 @@
   - two|
 ```
 
-- execute: `obsidian-outliner-plus:select-list-content`
+- execute: `outliner-plus:select-list-content`
 - assertState:
 
 ```md
@@ -15,7 +15,7 @@
   - |two|
 ```
 
-# obsidian-outliner-plus:select-list-content should select the whole list on second invoke
+# outliner-plus:select-list-content should select the whole list on second invoke
 
 - applyState:
 
@@ -26,8 +26,8 @@ a
 b
 ```
 
-- execute: `obsidian-outliner-plus:select-list-content`
-- execute: `obsidian-outliner-plus:select-list-content`
+- execute: `outliner-plus:select-list-content`
+- execute: `outliner-plus:select-list-content`
 - assertState:
 
 ```md
@@ -37,7 +37,7 @@ a
 b
 ```
 
-# obsidian-outliner-plus:insert-note-line should create a note line
+# outliner-plus:insert-note-line should create a note line
 
 - applyState:
 
@@ -46,7 +46,7 @@ b
   - two
 ```
 
-- execute: `obsidian-outliner-plus:insert-note-line`
+- execute: `outliner-plus:insert-note-line`
 - assertState:
 
 ```md
@@ -55,7 +55,7 @@ b
   - two
 ```
 
-# obsidian-outliner-plus:insert-note-line should split an existing note line
+# outliner-plus:insert-note-line should split an existing note line
 
 - applyState:
 
@@ -64,7 +64,7 @@ b
   no|te
 ```
 
-- execute: `obsidian-outliner-plus:insert-note-line`
+- execute: `outliner-plus:insert-note-line`
 - assertState:
 
 ```md
