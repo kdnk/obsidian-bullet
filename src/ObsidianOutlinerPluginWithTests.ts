@@ -281,9 +281,7 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
       this.editor.fold(l);
     }
 
-    // Selection adjustments are scheduled via setTimeout(0), so tests need to
-    // wait long enough for the editor transaction and the follow-up cursor fix.
-    await this.wait(25);
+    await this.waitForSelectionAdjustmentsToSettle();
   }
 
   private ensureSelectionTransaction(selections: State["selections"]) {
@@ -305,9 +303,40 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
   }
 
   async waitForIdle() {
-    // Give editor transactions and deferred selection adjustments time to
-    // settle in the same process where the timers are scheduled.
-    await this.wait(50);
+    await this.waitForSelectionAdjustmentsToSettle();
+  }
+
+  private async waitForSelectionAdjustmentsToSettle() {
+    // Cursor corrections run in deferred timers, and some test cases schedule
+    // multiple editor transactions back-to-back. Wait until they fully drain.
+    for (let i = 0; i < 20; i++) {
+      await this.wait(0);
+
+      if (this.hasPendingSelectionAdjustments()) {
+        continue;
+      }
+
+      await this.wait(0);
+
+      if (!this.hasPendingSelectionAdjustments()) {
+        return;
+      }
+    }
+
+    await this.wait(25);
+  }
+
+  private hasPendingSelectionAdjustments() {
+    for (const feature of (this as any).features || []) {
+      if (
+        feature instanceof EditorSelectionsBehaviourOverride &&
+        feature.hasPendingSelectionAdjustment()
+      ) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   getCurrentState(): State {

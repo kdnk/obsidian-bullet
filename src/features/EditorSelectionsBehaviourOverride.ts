@@ -59,6 +59,9 @@ export function shouldSkipSelectionAdjustmentsForMousedown(e: MouseEvent) {
 export class EditorSelectionsBehaviourOverride implements Feature {
   private lastKey: string | null = null;
   private skipSelectionAdjustments = false;
+  private pendingSelectionAdjustment: ReturnType<typeof setTimeout> | null =
+    null;
+  private selectionAdjustmentVersion = 0;
 
   constructor(
     private plugin: Plugin,
@@ -82,6 +85,11 @@ export class EditorSelectionsBehaviourOverride implements Feature {
   resetState() {
     this.lastKey = null;
     this.skipSelectionAdjustments = false;
+    this.clearPendingSelectionAdjustment();
+  }
+
+  hasPendingSelectionAdjustment() {
+    return this.pendingSelectionAdjustment !== null;
   }
 
   private transactionExtender = (tr: Transaction): null => {
@@ -100,7 +108,16 @@ export class EditorSelectionsBehaviourOverride implements Feature {
       return null;
     }
 
-    setTimeout(() => {
+    this.clearPendingSelectionAdjustment();
+    const version = ++this.selectionAdjustmentVersion;
+
+    this.pendingSelectionAdjustment = setTimeout(() => {
+      this.pendingSelectionAdjustment = null;
+
+      if (version !== this.selectionAdjustmentVersion) {
+        return;
+      }
+
       this.handleSelectionsChanges(
         editor,
         previousCursor,
@@ -189,6 +206,15 @@ export class EditorSelectionsBehaviourOverride implements Feature {
       shouldSkipSelectionAdjustmentsForMousedown(e);
     this.lastKey = null;
   };
+
+  private clearPendingSelectionAdjustment() {
+    if (this.pendingSelectionAdjustment !== null) {
+      clearTimeout(this.pendingSelectionAdjustment);
+      this.pendingSelectionAdjustment = null;
+    }
+
+    this.selectionAdjustmentVersion++;
+  }
 
   private getSingleCursor(state: EditorState): MyEditorPosition | null {
     const ranges = state.selection.ranges;
