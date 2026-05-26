@@ -274,9 +274,11 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
       state = this.parseState(state);
     }
 
-    this.editor.setValue("");
-    this.editor.setValue(state.value);
-    this.editor.setSelections(state.selections);
+    this.runWithoutSelectionAdjustments(() => {
+      this.editor.setValue("");
+      this.editor.setValue(state.value);
+      this.editor.setSelections(state.selections);
+    });
 
     // TODO: recursive bottom-top folding, because it's impossible to fold inside already folded range
     for (const l of state.folds) {
@@ -291,6 +293,17 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
     this.editor.dispatchCurrentSingleSelectionTransaction();
 
     await this.waitForSelectionAdjustmentsToSettle();
+  }
+
+  private runWithoutSelectionAdjustments(cb: () => void) {
+    for (const feature of (this as any).features || []) {
+      if (feature instanceof EditorSelectionsBehaviourOverride) {
+        feature.runWithoutSelectionAdjustments(cb);
+        return;
+      }
+    }
+
+    cb();
   }
 
   async waitForIdle() {

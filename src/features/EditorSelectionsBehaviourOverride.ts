@@ -59,6 +59,7 @@ export function shouldSkipSelectionAdjustmentsForMousedown(e: MouseEvent) {
 export class EditorSelectionsBehaviourOverride implements Feature {
   private lastKey: string | null = null;
   private skipSelectionAdjustments = false;
+  private suppressSelectionAdjustments = 0;
   private pendingSelectionAdjustment: ReturnType<typeof setTimeout> | null =
     null;
   private selectionAdjustmentVersion = 0;
@@ -92,8 +93,22 @@ export class EditorSelectionsBehaviourOverride implements Feature {
     return this.pendingSelectionAdjustment !== null;
   }
 
+  runWithoutSelectionAdjustments<T>(cb: () => T): T {
+    this.suppressSelectionAdjustments++;
+
+    try {
+      return cb();
+    } finally {
+      this.suppressSelectionAdjustments--;
+    }
+  }
+
   private transactionExtender = (tr: Transaction): null => {
-    if (this.settings.keepCursorWithinContent === "never" || !tr.selection) {
+    if (
+      this.suppressSelectionAdjustments > 0 ||
+      this.settings.keepCursorWithinContent === "never" ||
+      !tr.selection
+    ) {
       return null;
     }
 
