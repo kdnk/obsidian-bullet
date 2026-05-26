@@ -195,7 +195,7 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
             await this.waitForIdle();
             break;
           case "adjustSelection":
-            this.adjustSelection();
+            await this.adjustSelection();
             break;
           case "resetSettings":
             this.resetSettings();
@@ -286,12 +286,16 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
     await this.waitForSelectionAdjustmentsToSettle();
   }
 
-  private adjustSelection() {
+  private async adjustSelection() {
+    await this.wait(0);
+
     for (const feature of (this as any).features || []) {
       if (feature instanceof EditorSelectionsBehaviourOverride) {
         feature.applySelectionAdjustmentsForCurrentState(this.editor);
       }
     }
+
+    await this.waitForSelectionAdjustmentsToSettle();
   }
 
   async waitForIdle() {
