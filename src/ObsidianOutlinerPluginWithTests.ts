@@ -288,12 +288,7 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
 
   private async adjustSelection() {
     await this.wait(0);
-
-    for (const feature of (this as any).features || []) {
-      if (feature instanceof EditorSelectionsBehaviourOverride) {
-        feature.applySelectionAdjustmentsForCurrentState(this.editor);
-      }
-    }
+    this.editor.dispatchCurrentSingleSelectionTransaction();
 
     await this.waitForSelectionAdjustmentsToSettle();
   }

@@ -111,6 +111,17 @@ export class MyEditor {
     this.e.setSelections(selections);
   }
 
+  dispatchCurrentSingleSelectionTransaction(): void {
+    const selection = this.view.state.selection.main;
+
+    this.view.dispatch({
+      selection: {
+        anchor: selection.anchor,
+        head: selection.head,
+      },
+    });
+  }
+
   setValue(text: string): void {
     this.e.setValue(text);
   }
