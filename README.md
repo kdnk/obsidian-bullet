@@ -147,19 +147,3 @@ Open DevTools (Command+Option+I or Control+Shift+I) to copy the debug logs.
 | Setting    | Default value |
 |------------|:-------------:|
 | Debug mode |    `false`    |
-
-## Pricing
-
-This plugin is free for everyone.
-
-### Patrons & Supporters
-
-I want to say thank you to the people who support me, I really appreciate it!
-
-- [Lucas D](https://twitter.com/lucasdreier)
-- Philipp K.
-- [Daniel B.](https://github.com/danieltomasz)
-- Mat Rhein ([@mat_rhein7](http://twitter.com/mat_rhein7))
-- [Ollie Lovell](https://www.ollielovell.com/)
-- Faiz MK ([@faizkhuzaimah](https://twitter.com/faizkhuzaimah))
-- more patrons and anonymous supporters
