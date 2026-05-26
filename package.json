@@ -1,5 +1,5 @@
 {
-  "name": "obsidian-outliner",
+  "name": "obsidian-outliner-plus",
   "version": "5.0.25",
   "description": "Work with your lists like in Workflowy or RoamResearch.",
   "main": "dist/main.js",
@@ -13,7 +13,7 @@
     "version": "node release.mjs && git add manifest.json versions.json",
     "prepare": "husky"
   },
-  "author": "Viacheslav Slinko",
+  "author": "Kodai Nakamura",
   "license": "MIT",
   "devDependencies": {
     "@babel/core": "^7.29.0",
