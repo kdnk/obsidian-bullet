@@ -2,6 +2,8 @@
 
 **Work with your lists like in Workflowy or RoamResearch**
 
+This plugin is forked from [vslinko/obsidian-outliner](https://github.com/vslinko/obsidian-outliner).
+
 📦 [Latest release](https://github.com/kdnk/obsidian-outliner/releases/latest)<br>
 🐛 [Report issues](https://github.com/kdnk/obsidian-outliner/issues)
 
