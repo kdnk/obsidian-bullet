@@ -314,6 +314,8 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
       }
     }
 
+    this.editor.dispatchCurrentSingleSelectionTransaction();
+
     await this.waitForSelectionAdjustmentsToSettle();
   }
 
