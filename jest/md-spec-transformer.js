@@ -109,6 +109,14 @@ function parseDrop(l) {
   };
 }
 
+function parseAdjustSelection(l) {
+  l.nextNotEmpty();
+
+  return {
+    type: "adjustSelection",
+  };
+}
+
 function parseInsertText(l) {
   const text = l.line.replace(/- insertText: `([^`]+)`/, "$1");
 
@@ -170,6 +178,8 @@ function parseAction(l) {
     return parseMove(l);
   } else if (l.line.startsWith("- drop")) {
     return parseDrop(l);
+  } else if (l.line.startsWith("- adjustSelection")) {
+    return parseAdjustSelection(l);
   }
 
   throw new Error(`parseAction: Unknown action "${l.line}"`);
@@ -281,6 +291,9 @@ module.exports.process = function process(sourceText, sourcePath, options) {
           break;
         case "drop":
           code += "    await drop();\n";
+          break;
+        case "adjustSelection":
+          code += "    await adjustSelection();\n";
           break;
         case "assertState":
           code += `    await waitForIdle();\n`;

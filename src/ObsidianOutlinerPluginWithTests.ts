@@ -194,6 +194,9 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
           case "waitForIdle":
             await this.waitForIdle();
             break;
+          case "adjustSelection":
+            this.adjustSelection();
+            break;
           case "resetSettings":
             this.resetSettings();
             break;
@@ -208,7 +211,7 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
             break;
         }
       } catch (e) {
-        error = String(e);
+        error = e instanceof Error ? e.stack || e.message : JSON.stringify(e);
       }
 
       ws.send(JSON.stringify({ id, data: result, error }));
@@ -273,11 +276,7 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
 
     this.editor.setValue("");
     this.editor.setValue(state.value);
-    if (this.shouldForceSelectionTransaction(state.selections)) {
-      this.editor.dispatchSelectionTransaction(state.selections);
-    } else {
-      this.editor.setSelections(state.selections);
-    }
+    this.editor.setSelections(state.selections);
 
     // TODO: recursive bottom-top folding, because it's impossible to fold inside already folded range
     for (const l of state.folds) {
@@ -287,10 +286,12 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
     await this.waitForSelectionAdjustmentsToSettle();
   }
 
-  private shouldForceSelectionTransaction(selections: State["selections"]) {
-    const currentSelections = this.editor.listSelections();
-
-    return JSON.stringify(currentSelections) === JSON.stringify(selections);
+  private adjustSelection() {
+    for (const feature of (this as any).features || []) {
+      if (feature instanceof EditorSelectionsBehaviourOverride) {
+        feature.applySelectionAdjustmentsForCurrentState(this.editor);
+      }
+    }
   }
 
   async waitForIdle() {
