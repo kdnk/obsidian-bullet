@@ -299,7 +299,11 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
   private async adjustSelection() {
     await this.wait(0);
 
-    if ((this.settings as any).keepCursorWithinContent !== "never") {
+    const stickCursor = (this.settings as any).getValues().stickCursor;
+    const shouldAdjustCursor =
+      stickCursor !== false && stickCursor !== "never";
+
+    if (shouldAdjustCursor) {
       const root = (this as any).parser.parse(this.editor);
 
       if (root) {
