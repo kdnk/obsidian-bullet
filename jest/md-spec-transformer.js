@@ -283,8 +283,7 @@ module.exports.process = function process(sourceText, sourcePath, options) {
           code += "    await drop();\n";
           break;
         case "assertState":
-          code += `    // Waiting for all operations to be applied\n`;
-          code += `    await new Promise((resolve) => setTimeout(resolve, 10));\n`;
+          code += `    await waitForIdle();\n`;
           code += `    await expect(await getCurrentState()).toEqualEditorState(${s(
             action.state.lines
           )});\n`;

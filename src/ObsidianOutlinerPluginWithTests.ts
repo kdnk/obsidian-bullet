@@ -184,6 +184,9 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
           case "drop":
             this.drop();
             break;
+          case "waitForIdle":
+            await this.waitForIdle();
+            break;
           case "resetSettings":
             this.resetSettings();
             break;
@@ -273,6 +276,12 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
     // Selection adjustments are scheduled via setTimeout(0), so tests need to
     // wait long enough for the editor transaction and the follow-up cursor fix.
     await this.wait(25);
+  }
+
+  async waitForIdle() {
+    // Give editor transactions and deferred selection adjustments time to
+    // settle in the same process where the timers are scheduled.
+    await this.wait(50);
   }
 
   getCurrentState(): State {
