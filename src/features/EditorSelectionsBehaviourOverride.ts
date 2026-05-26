@@ -92,6 +92,15 @@ export class EditorSelectionsBehaviourOverride implements Feature {
     return this.pendingSelectionAdjustment !== null;
   }
 
+  applySelectionAdjustmentsNow(editor: MyEditor) {
+    this.handleSelectionsChanges(
+      editor,
+      null,
+      editor.getAllFoldedLines(),
+      null,
+    );
+  }
+
   private transactionExtender = (tr: Transaction): null => {
     if (this.settings.keepCursorWithinContent === "never" || !tr.selection) {
       return null;

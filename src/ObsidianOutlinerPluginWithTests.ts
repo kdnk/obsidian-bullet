@@ -282,6 +282,8 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
     }
 
     await this.waitForSelectionAdjustmentsToSettle();
+    this.applyCurrentSelectionAdjustments();
+    await this.waitForSelectionAdjustmentsToSettle();
   }
 
   private ensureSelectionTransaction(selections: State["selections"]) {
@@ -337,6 +339,14 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
     }
 
     return false;
+  }
+
+  private applyCurrentSelectionAdjustments() {
+    for (const feature of (this as any).features || []) {
+      if (feature instanceof EditorSelectionsBehaviourOverride) {
+        feature.applySelectionAdjustmentsNow(this.editor);
+      }
+    }
   }
 
   getCurrentState(): State {
