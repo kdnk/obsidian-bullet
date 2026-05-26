@@ -285,16 +285,15 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
       this.editor.fold(l);
     }
 
+    await this.waitForStateToApply(state);
     await this.waitForSelectionAdjustmentsToSettle();
   }
 
   private async adjustSelection() {
     await this.wait(0);
-    this.debugSelectionState("before-adjustSelection");
     this.editor.dispatchCurrentSingleSelectionTransaction();
 
     await this.waitForSelectionAdjustmentsToSettle();
-    this.debugSelectionState("after-adjustSelection");
   }
 
   private runWithoutSelectionAdjustments(cb: () => void) {
@@ -308,23 +307,24 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
     cb();
   }
 
-  private debugSelectionState(label: string) {
-    const selections = this.editor.listSelections();
-    const line = this.editor.getLine(selections[0]?.head?.line || 0);
+  private async waitForStateToApply(state: State) {
+    for (let i = 0; i < 20; i++) {
+      await this.wait(0);
 
-    if (!line.includes("[!]")) {
-      return;
+      const hasExpectedValue = this.editor.getValue() === state.value;
+      const hasExpectedSelections =
+        JSON.stringify(this.editor.listSelections()) ===
+        JSON.stringify(state.selections);
+      const hasExpectedFolds =
+        JSON.stringify(this.editor.getAllFoldedLines()) ===
+        JSON.stringify(state.folds);
+
+      if (hasExpectedValue && hasExpectedSelections && hasExpectedFolds) {
+        return;
+      }
     }
 
-    console.log(
-      "[selection-debug]",
-      JSON.stringify({
-        label,
-        line,
-        selections,
-        keepCursorWithinContent: this.settings.keepCursorWithinContent,
-      }),
-    );
+    await this.wait(25);
   }
 
   async waitForIdle() {

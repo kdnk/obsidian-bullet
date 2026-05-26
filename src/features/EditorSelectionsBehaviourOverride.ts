@@ -151,22 +151,6 @@ export class EditorSelectionsBehaviourOverride implements Feature {
     pressedKey: string | null,
   ) => {
     const root = this.parser.parse(editor);
-    const currentLine = editor.getLine(editor.getCursor().line);
-
-    if (currentLine.includes("[!]")) {
-      console.log(
-        "[selection-debug]",
-        JSON.stringify({
-          label: "handleSelectionsChanges:start",
-          currentLine,
-          previousCursor,
-          currentCursor: editor.getCursor(),
-          selections: editor.listSelections(),
-          keepCursorWithinContent: this.settings.keepCursorWithinContent,
-          pressedKey,
-        }),
-      );
-    }
 
     if (!root) {
       return;
@@ -225,18 +209,6 @@ export class EditorSelectionsBehaviourOverride implements Feature {
       new KeepCursorWithinListContent(root),
       editor,
     );
-
-    if (currentLine.includes("[!]")) {
-      console.log(
-        "[selection-debug]",
-        JSON.stringify({
-          label: "handleSelectionsChanges:end",
-          currentLine,
-          currentCursor: editor.getCursor(),
-          selections: editor.listSelections(),
-        }),
-      );
-    }
   };
 
   private handleKeyDown = (e: KeyboardEvent) => {
