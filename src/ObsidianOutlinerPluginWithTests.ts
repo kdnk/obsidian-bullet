@@ -270,7 +270,9 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
       this.editor.fold(l);
     }
 
-    await this.wait(10);
+    // Selection adjustments are scheduled via setTimeout(0), so tests need to
+    // wait long enough for the editor transaction and the follow-up cursor fix.
+    await this.wait(25);
   }
 
   getCurrentState(): State {
