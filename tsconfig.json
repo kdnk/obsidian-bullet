@@ -13,4 +13,5 @@
     "outDir": "dist",
   },
   "include": ["jest/**/*.ts", "src/**/*.ts"],
+  "exclude": ["src/__tests__/**/*.ts"],
 }
