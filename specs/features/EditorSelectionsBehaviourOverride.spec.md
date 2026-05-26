@@ -69,6 +69,7 @@
 |- [!] one
 ```
 
+- adjustSelection
 - assertState:
 
 ```md
@@ -90,6 +91,7 @@
 |- one
 ```
 
+- adjustSelection
 - assertState:
 
 ```md

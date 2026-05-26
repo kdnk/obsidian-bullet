@@ -6,7 +6,7 @@ import {
   foldedRanges,
   unfoldEffect,
 } from "@codemirror/language";
-import { EditorSelection, EditorState } from "@codemirror/state";
+import { EditorState } from "@codemirror/state";
 import { EditorView, runScopeHandlers } from "@codemirror/view";
 
 export class MyEditorPosition {
@@ -109,17 +109,6 @@ export class MyEditor {
 
   setSelections(selections: MyEditorSelection[]): void {
     this.e.setSelections(selections);
-  }
-
-  dispatchSelectionTransaction(selections: MyEditorSelection[]): void {
-    this.view.dispatch({
-      selection: EditorSelection.create(
-        selections.map((selection) => ({
-          anchor: this.posToOffset(selection.anchor),
-          head: this.posToOffset(selection.head),
-        })),
-      ),
-    });
   }
 
   setValue(text: string): void {

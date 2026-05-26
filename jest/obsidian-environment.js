@@ -21,6 +21,7 @@ module.exports = class CustomEnvironment extends TestEnvironment {
     this.createCommand("move");
     this.createCommand("drop");
     this.createCommand("waitForIdle");
+    this.createCommand("adjustSelection");
   }
 
   createCommand(type) {
