@@ -306,15 +306,24 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
       const root = (this as any).parser.parse(this.editor);
 
       if (root) {
-        (this as any).operationPerformer.eval(
-          root,
-          new KeepCursorWithinListContent(root),
-          this.editor,
-        );
-      }
-    }
+        const op = new KeepCursorWithinListContent(root);
+        (this as any).operationPerformer.eval(root, op, this.editor);
 
-    this.editor.dispatchCurrentSingleSelectionTransaction();
+        // Force the target selection through the CodeMirror view directly so
+        // that the assertion below observes the adjusted cursor regardless of
+        // whether Obsidian's Editor.setSelections propagated synchronously.
+        const selections = root.getSelections();
+        if (selections.length === 1) {
+          this.editor.dispatchSingleSelectionTransaction(selections[0]);
+        } else {
+          this.editor.dispatchCurrentSingleSelectionTransaction();
+        }
+      } else {
+        this.editor.dispatchCurrentSingleSelectionTransaction();
+      }
+    } else {
+      this.editor.dispatchCurrentSingleSelectionTransaction();
+    }
 
     await this.waitForSelectionAdjustmentsToSettle();
   }

@@ -122,6 +122,15 @@ export class MyEditor {
     });
   }
 
+  dispatchSingleSelectionTransaction(selection: MyEditorSelection): void {
+    this.view.dispatch({
+      selection: {
+        anchor: this.e.posToOffset(selection.anchor),
+        head: this.e.posToOffset(selection.head),
+      },
+    });
+  }
+
   setValue(text: string): void {
     this.e.setValue(text);
   }
