@@ -5,6 +5,7 @@ import { EditorView } from "@codemirror/view";
 
 import ObsidianOutlinerPlugin from "./ObsidianOutlinerPlugin";
 import { MyEditor, MyEditorPosition } from "./editor";
+import { EditorSelectionsBehaviourOverride } from "./features/EditorSelectionsBehaviourOverride";
 
 const keysMap: { [key: string]: number } = {
   Backspace: 8,
@@ -37,6 +38,12 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
   resetSettings() {
     this.settings.reset();
     this.settings.previousRelease = "999.999.999";
+
+    for (const feature of (this as any).features || []) {
+      if (feature instanceof EditorSelectionsBehaviourOverride) {
+        feature.resetState();
+      }
+    }
 
     const vault = this.app.vault as any;
     if (typeof vault.setConfig === "function") {
@@ -266,6 +273,7 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
 
     this.editor.setValue("");
     this.editor.setValue(state.value);
+    this.ensureSelectionTransaction(state.selections);
     this.editor.setSelections(state.selections);
 
     // TODO: recursive bottom-top folding, because it's impossible to fold inside already folded range
@@ -276,6 +284,24 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
     // Selection adjustments are scheduled via setTimeout(0), so tests need to
     // wait long enough for the editor transaction and the follow-up cursor fix.
     await this.wait(25);
+  }
+
+  private ensureSelectionTransaction(selections: State["selections"]) {
+    const currentSelections = this.editor.listSelections();
+
+    if (JSON.stringify(currentSelections) !== JSON.stringify(selections)) {
+      return;
+    }
+
+    const lastLine = this.editor.lastLine();
+    const lastCh = this.editor.getLine(lastLine).length;
+
+    this.editor.setSelections([
+      {
+        anchor: { line: lastLine, ch: lastCh },
+        head: { line: lastLine, ch: lastCh },
+      },
+    ]);
   }
 
   async waitForIdle() {

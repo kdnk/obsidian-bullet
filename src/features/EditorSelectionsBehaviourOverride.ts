@@ -79,6 +79,11 @@ export class EditorSelectionsBehaviourOverride implements Feature {
 
   async unload() {}
 
+  resetState() {
+    this.lastKey = null;
+    this.skipSelectionAdjustments = false;
+  }
+
   private transactionExtender = (tr: Transaction): null => {
     if (this.settings.keepCursorWithinContent === "never" || !tr.selection) {
       return null;
