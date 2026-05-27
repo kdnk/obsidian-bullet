@@ -6,6 +6,7 @@ import { Feature } from "./Feature";
 
 import { MyEditor } from "../editor";
 import { SelectAllContent } from "../operations/SelectAllContent";
+import { Position } from "../root";
 import { IMEDetector } from "../services/IMEDetector";
 import { OperationPerformer } from "../services/OperationPerformer";
 import { Settings } from "../services/Settings";
@@ -13,6 +14,8 @@ import { createEditorCallback } from "../utils/createEditorCallback";
 import { createKeymapRunCallback } from "../utils/createKeymapRunCallback";
 
 export class CtrlAAndCmdABehaviourOverride implements Feature {
+  private cycleCursor: Position | null = null;
+
   constructor(
     private plugin: Plugin,
     private settings: Settings,
@@ -52,10 +55,15 @@ export class CtrlAAndCmdABehaviourOverride implements Feature {
   };
 
   private run = (editor: MyEditor) => {
-    return this.operationPerformer.perform(
-      (root) => new SelectAllContent(root),
-      editor,
-    );
+    let operation: SelectAllContent | null = null;
+    const result = this.operationPerformer.perform((root) => {
+      operation = new SelectAllContent(root, this.cycleCursor);
+      return operation;
+    }, editor);
+
+    this.cycleCursor = operation?.getCycleCursor() ?? null;
+
+    return result;
   };
 
   private selectListContent = (editor: MyEditor) => {

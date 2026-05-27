@@ -1,5 +1,17 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
+import { Position } from "../../root";
 import { SelectAllContent } from "../SelectAllContent";
+
+function performSelectAllCycle(root: ReturnType<typeof makeRoot>) {
+  let cycleCursor: Position | null = null;
+
+  return () => {
+    const op = new SelectAllContent(root, cycleCursor);
+    const result = op.perform();
+    cycleCursor = op.getCycleCursor();
+    return { op, result };
+  };
+}
 
 describe("SelectAllContent operation", () => {
   test("when performed the first time, should select the whole line under cursor; when performed the second time, should select all sub-bullets of the cursor line if it is a parent-bullet", () => {
@@ -121,13 +133,66 @@ describe("SelectAllContent operation", () => {
     expect(root.getSelection().head.ch).toBe(14);
   });
 
-  test("should not do anything if selection already spans whole document", () => {
+  test("should cycle parent item selection from content to subtree to root list and back to content", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- item 1\n- item 2\n    - item 2.1\n    - item 2.2\n- item 3\n",
+        cursor: { line: 1, ch: 2 },
+      }),
+      settings: makeSettings(),
+    });
+    const perform = performSelectAllCycle(root);
+
+    perform();
+    expect(root.getSelection().anchor).toEqual({ line: 1, ch: 2 });
+    expect(root.getSelection().head).toEqual({ line: 1, ch: 8 });
+
+    perform();
+    expect(root.getSelection().anchor).toEqual({ line: 1, ch: 2 });
+    expect(root.getSelection().head).toEqual({ line: 3, ch: 14 });
+
+    perform();
+    expect(root.getSelection().anchor).toEqual({ line: 0, ch: 0 });
+    expect(root.getSelection().head).toEqual({ line: 4, ch: 8 });
+
+    const { op, result } = perform();
+    expect(result).toBe(true);
+    expect(op.shouldStopPropagation()).toBe(true);
+    expect(root.getSelection().anchor).toEqual({ line: 1, ch: 2 });
+    expect(root.getSelection().head).toEqual({ line: 1, ch: 8 });
+  });
+
+  test("should cycle leaf item selection from content to root list and back to content", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- item 1\n- item 2\n    - item 2.1\n    - item 2.2\n- item 3\n",
+        cursor: { line: 4, ch: 2 },
+      }),
+      settings: makeSettings(),
+    });
+    const perform = performSelectAllCycle(root);
+
+    perform();
+    expect(root.getSelection().anchor).toEqual({ line: 4, ch: 2 });
+    expect(root.getSelection().head).toEqual({ line: 4, ch: 8 });
+
+    perform();
+    expect(root.getSelection().anchor).toEqual({ line: 0, ch: 0 });
+    expect(root.getSelection().head).toEqual({ line: 4, ch: 8 });
+
+    const { op, result } = perform();
+    expect(result).toBe(true);
+    expect(op.shouldStopPropagation()).toBe(true);
+    expect(root.getSelection().anchor).toEqual({ line: 4, ch: 2 });
+    expect(root.getSelection().head).toEqual({ line: 4, ch: 8 });
+  });
+
+  test("should cycle root-list selection back to the current item content", () => {
     const editor = makeEditor({
       text: "- item 1\n- item 2\n",
-      cursor: { line: 0, ch: 0 },
+      cursor: { line: 1, ch: 5 },
     });
 
-    // Mock selection already spanning the entire document
     editor.listSelections = () => [
       { anchor: { line: 0, ch: 0 }, head: { line: 1, ch: 8 } },
     ];
@@ -137,12 +202,62 @@ describe("SelectAllContent operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new SelectAllContent(root);
+    const op = new SelectAllContent(root, { line: 1, ch: 2 });
     const result = op.perform();
 
-    // Should return false, indicating no action taken
-    expect(result).toBe(false);
-    expect(op.shouldUpdate()).toBe(false);
+    expect(result).toBe(true);
+    expect(op.shouldUpdate()).toBe(true);
+    expect(op.shouldStopPropagation()).toBe(true);
+    expect(root.getSelection().anchor).toEqual({ line: 1, ch: 2 });
+    expect(root.getSelection().head).toEqual({ line: 1, ch: 8 });
+  });
+
+  test("should cycle checkbox item back to content without selecting checkbox markup", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- [ ] task 1\n- [ ] task 2 with longer text\n",
+        cursor: { line: 1, ch: 10 },
+      }),
+      settings: makeSettings(),
+    });
+    const perform = performSelectAllCycle(root);
+
+    perform();
+    expect(root.getSelection().anchor).toEqual({ line: 1, ch: 6 });
+    expect(root.getSelection().head).toEqual({ line: 1, ch: 29 });
+
+    perform();
+    expect(root.getSelection().anchor).toEqual({ line: 0, ch: 0 });
+    expect(root.getSelection().head).toEqual({ line: 1, ch: 29 });
+
+    const { op } = perform();
+    expect(op.shouldStopPropagation()).toBe(true);
+    expect(root.getSelection().anchor).toEqual({ line: 1, ch: 6 });
+    expect(root.getSelection().head).toEqual({ line: 1, ch: 29 });
+  });
+
+  test("should cycle note-line item back to its content range", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- item 1\n  note for item 1\n  another note\n- item 2\n",
+        cursor: { line: 0, ch: 5 },
+      }),
+      settings: makeSettings(),
+    });
+    const perform = performSelectAllCycle(root);
+
+    perform();
+    expect(root.getSelection().anchor).toEqual({ line: 0, ch: 2 });
+    expect(root.getSelection().head).toEqual({ line: 2, ch: 14 });
+
+    perform();
+    expect(root.getSelection().anchor).toEqual({ line: 0, ch: 0 });
+    expect(root.getSelection().head).toEqual({ line: 3, ch: 8 });
+
+    const { op } = perform();
+    expect(op.shouldStopPropagation()).toBe(true);
+    expect(root.getSelection().anchor).toEqual({ line: 0, ch: 2 });
+    expect(root.getSelection().head).toEqual({ line: 2, ch: 14 });
   });
 
   test("should properly handle empty list items", () => {

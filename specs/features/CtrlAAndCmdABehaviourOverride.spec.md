@@ -191,3 +191,97 @@ a
   - two|
 b
 ```
+
+# cmd-a should cycle parent item selection through content subtree root list and content
+
+- platform: `darwin`
+- applyState:
+
+```md
+- item 1
+- item 2|
+  - item 2.1
+  - item 2.2
+- item 3
+```
+
+- keydown: `Cmd-KeyA`
+- keydown: `Cmd-KeyA`
+- keydown: `Cmd-KeyA`
+- keydown: `Cmd-KeyA`
+- assertState:
+
+```md
+- item 1
+- |item 2|
+  - item 2.1
+  - item 2.2
+- item 3
+```
+
+# ctrl-a should cycle parent item selection through content subtree root list and content
+
+- platform: `linux`
+- applyState:
+
+```md
+- item 1
+- item 2|
+  - item 2.1
+  - item 2.2
+- item 3
+```
+
+- keydown: `Ctrl-KeyA`
+- keydown: `Ctrl-KeyA`
+- keydown: `Ctrl-KeyA`
+- keydown: `Ctrl-KeyA`
+- assertState:
+
+```md
+- item 1
+- |item 2|
+  - item 2.1
+  - item 2.2
+- item 3
+```
+
+# cmd-a should cycle checkbox item without selecting checkbox markup
+
+- platform: `darwin`
+- applyState:
+
+```md
+- [ ] task 1
+- [ ] task 2|
+```
+
+- keydown: `Cmd-KeyA`
+- keydown: `Cmd-KeyA`
+- keydown: `Cmd-KeyA`
+- assertState:
+
+```md
+- [ ] task 1
+- [ ] |task 2|
+```
+
+# ctrl-a should cycle checkbox item without selecting checkbox markup
+
+- platform: `linux`
+- applyState:
+
+```md
+- [ ] task 1
+- [ ] task 2|
+```
+
+- keydown: `Ctrl-KeyA`
+- keydown: `Ctrl-KeyA`
+- keydown: `Ctrl-KeyA`
+- assertState:
+
+```md
+- [ ] task 1
+- [ ] |task 2|
+```

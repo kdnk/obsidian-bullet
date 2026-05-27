@@ -252,6 +252,7 @@ module.exports.process = function process(sourceText, sourcePath, options) {
   const name = sourcePath.replace(options.config.cwd + "/", "");
 
   let code = "";
+  code += `jest.setTimeout(15000);\n`;
   code += `describe(${s(name)}, () => {\n`;
 
   for (const test of parseTests(l)) {

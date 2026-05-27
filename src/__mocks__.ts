@@ -42,6 +42,7 @@ export function makeLogger(): Logger {
 export function makeSettings(): Settings {
   const settings: any = {
     stickCursor: "bullet-and-checkbox",
+    keepCursorWithinContent: "bullet-and-checkbox",
   };
   return settings;
 }

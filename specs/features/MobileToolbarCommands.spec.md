@@ -37,6 +37,51 @@ a
 b
 ```
 
+# bullet:select-list-content should cycle parent item through content subtree root list and content
+
+- applyState:
+
+```md
+- item 1
+- item 2|
+  - item 2.1
+  - item 2.2
+- item 3
+```
+
+- execute: `bullet:select-list-content`
+- execute: `bullet:select-list-content`
+- execute: `bullet:select-list-content`
+- execute: `bullet:select-list-content`
+- assertState:
+
+```md
+- item 1
+- |item 2|
+  - item 2.1
+  - item 2.2
+- item 3
+```
+
+# bullet:select-list-content should cycle checkbox item without selecting checkbox markup
+
+- applyState:
+
+```md
+- [ ] task 1
+- [ ] task 2|
+```
+
+- execute: `bullet:select-list-content`
+- execute: `bullet:select-list-content`
+- execute: `bullet:select-list-content`
+- assertState:
+
+```md
+- [ ] task 1
+- [ ] |task 2|
+```
+
 # bullet:insert-note-line should create a note line
 
 - applyState:

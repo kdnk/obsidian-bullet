@@ -1,12 +1,16 @@
 import { Operation } from "./Operation";
 
-import { Root, maxPos, minPos } from "../root";
+import { Position, Root, maxPos, minPos } from "../root";
 
 export class SelectAllContent implements Operation {
   private stopPropagation = false;
   private updated = false;
+  private nextCycleCursor: Position | null = null;
 
-  constructor(private root: Root) {}
+  constructor(
+    private root: Root,
+    private cycleCursor: Position | null = null,
+  ) {}
 
   shouldStopPropagation() {
     return this.stopPropagation;
@@ -14,6 +18,10 @@ export class SelectAllContent implements Operation {
 
   shouldUpdate() {
     return this.updated;
+  }
+
+  getCycleCursor() {
+    return this.nextCycleCursor;
   }
 
   perform() {
@@ -25,7 +33,6 @@ export class SelectAllContent implements Operation {
 
     const selection = root.getSelections()[0];
     const [rootStart, rootEnd] = root.getContentRange();
-
     const selectionFrom = minPos(selection.anchor, selection.head);
     const selectionTo = maxPos(selection.anchor, selection.head);
 
@@ -36,64 +43,83 @@ export class SelectAllContent implements Operation {
       return false;
     }
 
-    if (
-      selectionFrom.line === rootStart.line &&
-      selectionFrom.ch === rootStart.ch &&
-      selectionTo.line === rootEnd.line &&
-      selectionTo.ch === rootEnd.ch
-    ) {
+    const isRootSelection = this.sameRange(
+      selectionFrom,
+      selectionTo,
+      rootStart,
+      rootEnd,
+    );
+    const targetCursor = isRootSelection
+      ? (this.cycleCursor ?? root.getCursor())
+      : selectionFrom;
+    const list = root.getListUnderLine(targetCursor.line);
+
+    if (!list) {
       return false;
     }
 
-    const list = root.getListUnderCursor();
     const contentStart = list.getFirstLineContentStartAfterCheckbox();
     const contentEnd = list.getLastLineContentEnd();
-    const listUnderSelectionFrom = root.getListUnderLine(selectionFrom.line);
-    const listStart =
-      listUnderSelectionFrom.getFirstLineContentStartAfterCheckbox();
-    const listEnd = listUnderSelectionFrom.getContentEndIncludingChildren();
+    const subtreeEnd = list.getContentEndIncludingChildren();
 
     this.stopPropagation = true;
     this.updated = true;
+    this.nextCycleCursor = contentStart;
 
-    if (
-      selectionFrom.line === contentStart.line &&
-      selectionFrom.ch === contentStart.ch &&
-      selectionTo.line === contentEnd.line &&
-      selectionTo.ch === contentEnd.ch
+    if (isRootSelection) {
+      root.replaceSelections([{ anchor: contentStart, head: contentEnd }]);
+    } else if (
+      this.sameRange(selectionFrom, selectionTo, contentStart, contentEnd)
     ) {
       if (list.getChildren().length) {
-        // select sub lists
-        root.replaceSelections([
-          { anchor: contentStart, head: list.getContentEndIncludingChildren() },
-        ]);
+        root.replaceSelections([{ anchor: contentStart, head: subtreeEnd }]);
       } else {
-        // select whole list
         root.replaceSelections([{ anchor: rootStart, head: rootEnd }]);
       }
     } else if (
-      listStart.ch == selectionFrom.ch &&
-      listEnd.line == selectionTo.line &&
-      listEnd.ch == selectionTo.ch
+      this.sameRange(selectionFrom, selectionTo, contentStart, subtreeEnd)
     ) {
-      // select whole list
       root.replaceSelections([{ anchor: rootStart, head: rootEnd }]);
     } else if (
-      (selectionFrom.line > contentStart.line ||
-        (selectionFrom.line == contentStart.line &&
-          selectionFrom.ch >= contentStart.ch)) &&
-      (selectionTo.line < contentEnd.line ||
-        (selectionTo.line == contentEnd.line &&
-          selectionTo.ch <= contentEnd.ch))
+      this.containsRange(selectionFrom, selectionTo, contentStart, contentEnd)
     ) {
-      // select whole line
       root.replaceSelections([{ anchor: contentStart, head: contentEnd }]);
     } else {
       this.stopPropagation = false;
       this.updated = false;
+      this.nextCycleCursor = null;
       return false;
     }
 
     return true;
+  }
+
+  private sameRange(
+    actualFrom: Position,
+    actualTo: Position,
+    expectedFrom: Position,
+    expectedTo: Position,
+  ) {
+    return (
+      actualFrom.line === expectedFrom.line &&
+      actualFrom.ch === expectedFrom.ch &&
+      actualTo.line === expectedTo.line &&
+      actualTo.ch === expectedTo.ch
+    );
+  }
+
+  private containsRange(
+    selectionFrom: Position,
+    selectionTo: Position,
+    rangeFrom: Position,
+    rangeTo: Position,
+  ) {
+    return (
+      (selectionFrom.line > rangeFrom.line ||
+        (selectionFrom.line === rangeFrom.line &&
+          selectionFrom.ch >= rangeFrom.ch)) &&
+      (selectionTo.line < rangeTo.line ||
+        (selectionTo.line === rangeTo.line && selectionTo.ch <= rangeTo.ch))
+    );
   }
 }
