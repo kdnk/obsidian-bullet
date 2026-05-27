@@ -1,5 +1,4 @@
 const cp = require("child_process");
-const mkdirp = require("mkdirp");
 const path = require("path");
 const fs = require("fs");
 const WebSocket = require("ws");
@@ -68,7 +67,7 @@ async function prepareObsidian() {
 
   if (!fs.existsSync(OBSIDIAN_CONFIG_PATH)) {
     debug(`  Creating ${OBSIDIAN_CONFIG_PATH}`);
-    mkdirp.sync(OBSIDIAN_CONFIG_DIR);
+    fs.mkdirSync(OBSIDIAN_CONFIG_DIR, { recursive: true });
     fs.writeFileSync(
       OBSIDIAN_CONFIG_PATH,
       '{"vaults":{},"updateDisabled":true}',
@@ -103,7 +102,7 @@ async function prepareObsidian() {
 async function prepareVault() {
   debug(`Prepare vault`);
 
-  mkdirp.sync(VAULT_DIR);
+  fs.mkdirSync(VAULT_DIR, { recursive: true });
   fs.writeFileSync(VAULT_DIR + "/test.md", "");
 
   const vaultConfigFilePath = `${VAULT_DIR}/.obsidian/app.json`;
@@ -137,7 +136,7 @@ async function prepareVault() {
   );
 
   debug(`  Disabling Safe Mode`);
-  mkdirp.sync(OBSIDIAN_LOCAL_STORAGE_PATH);
+  fs.mkdirSync(OBSIDIAN_LOCAL_STORAGE_PATH, { recursive: true });
   const localStorage = levelup(leveldown(OBSIDIAN_LOCAL_STORAGE_PATH));
   const key = Buffer.from(
     "5f6170703a2f2f6f6273696469616e2e6d640001656e61626c652d706c7567696e2d35613135343733313236303931313131",
@@ -147,7 +146,7 @@ async function prepareVault() {
   await promisify(localStorage.put.bind(localStorage))(key, value);
   await promisify(localStorage.close.bind(localStorage))();
 
-  mkdirp.sync(vaultPluginDir);
+  fs.mkdirSync(vaultPluginDir, { recursive: true });
 
   debug(`  Copying ${vaultPluginDir}/main.js`);
   fs.copyFileSync("dist/main.js", `${vaultPluginDir}/main.js`);
