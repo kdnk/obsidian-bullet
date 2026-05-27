@@ -187,6 +187,31 @@ describe("SelectAllContent operation", () => {
     expect(root.getSelection().head).toEqual({ line: 4, ch: 8 });
   });
 
+  test("should cycle nested item selection to its parent subtree instead of unrelated root siblings", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- parent 1\n  - child 1.1\n- parent 2\n  - child 2.1\n  - child 2.2\n- parent 3",
+        cursor: { line: 3, ch: 13 },
+      }),
+      settings: makeSettings(),
+    });
+    const perform = performSelectAllCycle(root);
+
+    perform();
+    expect(root.getSelection().anchor).toEqual({ line: 3, ch: 4 });
+    expect(root.getSelection().head).toEqual({ line: 3, ch: 13 });
+
+    perform();
+    expect(root.getSelection().anchor).toEqual({ line: 2, ch: 0 });
+    expect(root.getSelection().head).toEqual({ line: 4, ch: 13 });
+
+    const { op, result } = perform();
+    expect(result).toBe(true);
+    expect(op.shouldStopPropagation()).toBe(true);
+    expect(root.getSelection().anchor).toEqual({ line: 3, ch: 4 });
+    expect(root.getSelection().head).toEqual({ line: 3, ch: 13 });
+  });
+
   test("should cycle root-list selection back to the current item content", () => {
     const editor = makeEditor({
       text: "- item 1\n- item 2\n",

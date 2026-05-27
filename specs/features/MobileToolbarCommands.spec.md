@@ -63,6 +63,32 @@ b
 - item 3
 ```
 
+# bullet:select-list-content should select only the parent subtree from a nested item
+
+- applyState:
+
+```md
+- parent 1
+  - child 1.1
+- parent 2
+  - child 2.1|
+  - child 2.2
+- parent 3
+```
+
+- execute: `bullet:select-list-content`
+- execute: `bullet:select-list-content`
+- assertState:
+
+```md
+- parent 1
+  - child 1.1
+|- parent 2
+  - child 2.1
+  - child 2.2|
+- parent 3
+```
+
 # bullet:select-list-content should cycle checkbox item without selecting checkbox markup
 
 - applyState:

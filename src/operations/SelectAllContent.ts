@@ -1,6 +1,6 @@
 import { Operation } from "./Operation";
 
-import { Position, Root, maxPos, minPos } from "../root";
+import { List, Position, Root, maxPos, minPos } from "../root";
 
 export class SelectAllContent implements Operation {
   private stopPropagation = false;
@@ -43,16 +43,12 @@ export class SelectAllContent implements Operation {
       return false;
     }
 
-    const isRootSelection = this.sameRange(
+    const list = this.getCycleListForSelection(
       selectionFrom,
       selectionTo,
       rootStart,
       rootEnd,
     );
-    const targetCursor = isRootSelection
-      ? (this.cycleCursor ?? root.getCursor())
-      : selectionFrom;
-    const list = root.getListUnderLine(targetCursor.line);
 
     if (!list) {
       return false;
@@ -61,12 +57,26 @@ export class SelectAllContent implements Operation {
     const contentStart = list.getFirstLineContentStartAfterCheckbox();
     const contentEnd = list.getLastLineContentEnd();
     const subtreeEnd = list.getContentEndIncludingChildren();
+    const [scopeStart, scopeEnd] = this.getExpansionScopeRange(
+      list,
+      rootStart,
+      rootEnd,
+    );
+    const isRootSelection = this.sameRange(
+      selectionFrom,
+      selectionTo,
+      rootStart,
+      rootEnd,
+    );
 
     this.stopPropagation = true;
     this.updated = true;
     this.nextCycleCursor = contentStart;
 
-    if (isRootSelection) {
+    if (
+      isRootSelection ||
+      this.sameRange(selectionFrom, selectionTo, scopeStart, scopeEnd)
+    ) {
       root.replaceSelections([{ anchor: contentStart, head: contentEnd }]);
     } else if (
       this.sameRange(selectionFrom, selectionTo, contentStart, contentEnd)
@@ -74,12 +84,12 @@ export class SelectAllContent implements Operation {
       if (list.getChildren().length) {
         root.replaceSelections([{ anchor: contentStart, head: subtreeEnd }]);
       } else {
-        root.replaceSelections([{ anchor: rootStart, head: rootEnd }]);
+        root.replaceSelections([{ anchor: scopeStart, head: scopeEnd }]);
       }
     } else if (
       this.sameRange(selectionFrom, selectionTo, contentStart, subtreeEnd)
     ) {
-      root.replaceSelections([{ anchor: rootStart, head: rootEnd }]);
+      root.replaceSelections([{ anchor: scopeStart, head: scopeEnd }]);
     } else if (
       this.containsRange(selectionFrom, selectionTo, contentStart, contentEnd)
     ) {
@@ -92,6 +102,74 @@ export class SelectAllContent implements Operation {
     }
 
     return true;
+  }
+
+  private getExpansionScopeRange(
+    list: List,
+    rootStart: Position,
+    rootEnd: Position,
+  ): [Position, Position] {
+    const parent = list.getParent();
+
+    if (parent && parent.getParent()) {
+      return [
+        { line: parent.getFirstLineContentStart().line, ch: 0 },
+        parent.getContentEndIncludingChildren(),
+      ];
+    }
+
+    return [rootStart, rootEnd];
+  }
+
+  private getCycleListForSelection(
+    selectionFrom: Position,
+    selectionTo: Position,
+    rootStart: Position,
+    rootEnd: Position,
+  ) {
+    const cycleList = this.cycleCursor
+      ? this.root.getListUnderLine(this.cycleCursor.line)
+      : null;
+
+    if (
+      cycleList &&
+      this.selectionBelongsToList(
+        selectionFrom,
+        selectionTo,
+        cycleList,
+        rootStart,
+        rootEnd,
+      )
+    ) {
+      return cycleList;
+    }
+
+    return this.root.getListUnderLine(selectionFrom.line);
+  }
+
+  private selectionBelongsToList(
+    selectionFrom: Position,
+    selectionTo: Position,
+    list: List,
+    rootStart: Position,
+    rootEnd: Position,
+  ) {
+    const contentStart = list.getFirstLineContentStartAfterCheckbox();
+    const contentEnd = list.getLastLineContentEnd();
+    const subtreeEnd = list.getContentEndIncludingChildren();
+    const [scopeStart, scopeEnd] = this.getExpansionScopeRange(
+      list,
+      rootStart,
+      rootEnd,
+    );
+
+    return (
+      this.sameRange(selectionFrom, selectionTo, rootStart, rootEnd) ||
+      this.sameRange(selectionFrom, selectionTo, contentStart, contentEnd) ||
+      this.sameRange(selectionFrom, selectionTo, contentStart, subtreeEnd) ||
+      this.sameRange(selectionFrom, selectionTo, scopeStart, scopeEnd) ||
+      this.containsRange(selectionFrom, selectionTo, contentStart, contentEnd)
+    );
   }
 
   private sameRange(

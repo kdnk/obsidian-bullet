@@ -246,6 +246,60 @@ b
 - item 3
 ```
 
+# cmd-a should select only the parent subtree from a nested item
+
+- platform: `darwin`
+- applyState:
+
+```md
+- parent 1
+  - child 1.1
+- parent 2
+  - child 2.1|
+  - child 2.2
+- parent 3
+```
+
+- keydown: `Cmd-KeyA`
+- keydown: `Cmd-KeyA`
+- assertState:
+
+```md
+- parent 1
+  - child 1.1
+|- parent 2
+  - child 2.1
+  - child 2.2|
+- parent 3
+```
+
+# ctrl-a should select only the parent subtree from a nested item
+
+- platform: `linux`
+- applyState:
+
+```md
+- parent 1
+  - child 1.1
+- parent 2
+  - child 2.1|
+  - child 2.2
+- parent 3
+```
+
+- keydown: `Ctrl-KeyA`
+- keydown: `Ctrl-KeyA`
+- assertState:
+
+```md
+- parent 1
+  - child 1.1
+|- parent 2
+  - child 2.1
+  - child 2.2|
+- parent 3
+```
+
 # cmd-a should cycle checkbox item without selecting checkbox markup
 
 - platform: `darwin`
