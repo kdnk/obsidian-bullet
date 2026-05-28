@@ -1,8 +1,11 @@
 import {
+  getVerticalLineHeight,
   getVerticalLineLeft,
   getVerticalLineLeftFromX,
   getVerticalLineRootLeft,
+  getVerticalLineTop,
   getVerticalLinesContentLeft,
+  measureVerticalGuide,
 } from "../verticalLinesMeasurements";
 
 describe("getVerticalLinesContentLeft", () => {
@@ -85,5 +88,69 @@ describe("getVerticalLinesContentLeft", () => {
 
   test("measures vertical lines from explicit guide positions", () => {
     expect(getVerticalLineLeftFromX(240, 285)).toBe(45);
+  });
+
+  test("centers the clickable area around Obsidian inline list guides", () => {
+    const contentLeft = 32;
+    const rootX = 44;
+    const rootPadding = 28;
+
+    expect(
+      measureVerticalGuide({
+        contentLeft,
+        currentX: rootX,
+        currentPadding: 28,
+        rootX,
+        rootPadding,
+        hasCheckbox: false,
+      }),
+    ).toEqual({ left: 6, width: 18, guideOffsetX: 9 });
+
+    expect(
+      measureVerticalGuide({
+        contentLeft,
+        currentX: 80,
+        currentPadding: 64,
+        rootX,
+        rootPadding,
+        hasCheckbox: false,
+      }),
+    ).toEqual({ left: 42, width: 18, guideOffsetX: 9 });
+
+    expect(
+      measureVerticalGuide({
+        contentLeft,
+        currentX: 116,
+        currentPadding: 100,
+        rootX,
+        rootPadding,
+        hasCheckbox: false,
+      }),
+    ).toEqual({ left: 78, width: 18, guideOffsetX: 9 });
+  });
+
+  test("falls back to guide coordinates when line padding is unavailable", () => {
+    expect(
+      measureVerticalGuide({
+        contentLeft: 32,
+        currentX: 116,
+        currentPadding: null,
+        rootX: 44,
+        rootPadding: 0,
+        hasCheckbox: false,
+      }),
+    ).toEqual({ left: 78, width: 18, guideOffsetX: 9 });
+  });
+
+  test("clips the line top when the list starts above the visible range", () => {
+    expect(getVerticalLineTop(true, 84)).toBe(-20);
+    expect(getVerticalLineTop(false, 84)).toBe(84);
+  });
+
+  test("names the height trimming for lines with and without visible siblings", () => {
+    expect(getVerticalLineHeight(131.875, true)).toBe(
+      "calc(131.875px - 1.5em)",
+    );
+    expect(getVerticalLineHeight(52.75, false)).toBe("calc(52.75px - 2em)");
   });
 });

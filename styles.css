@@ -41,13 +41,17 @@
   z-index: 1;
   cursor: pointer;
   background: transparent;
-  background-image: linear-gradient(
-    to right,
-    var(--outliner-guide-color) var(--outliner-guide-width),
-    transparent var(--outliner-guide-width)
-  );
-  background-position-x: var(--outliner-guide-offset-x);
-  background-repeat: no-repeat;
+}
+
+.outliner-plugin-list-line::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--outliner-guide-offset-x);
+  width: var(--outliner-guide-width);
+  transform: translateX(-50%);
+  background: var(--outliner-guide-color);
 }
 
 body.is-mobile .outliner-plugin-list-line {
