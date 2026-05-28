@@ -4,7 +4,7 @@ import { MarkdownView } from "obsidian";
 import { EditorView } from "@codemirror/view";
 
 import ObsidianOutlinerPlugin from "./ObsidianOutlinerPlugin";
-import { MyEditor, MyEditorPosition } from "./editor";
+import { MyEditor, MyEditorPosition, MyEditorSelection } from "./editor";
 import { EditorSelectionsBehaviourOverride } from "./features/EditorSelectionsBehaviourOverride";
 import { KeepCursorWithinListContent } from "./operations/KeepCursorWithinListContent";
 import { getTestPlatformWsUrl } from "./testPlatform";
@@ -301,6 +301,7 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
 
     const stickCursor = (this.settings as any).getValues().stickCursor;
     const shouldAdjustCursor = stickCursor !== false && stickCursor !== "never";
+    let targetSelections: MyEditorSelection[] | null = null;
 
     if (shouldAdjustCursor) {
       const root = (this as any).parser.parse(this.editor);
@@ -309,15 +310,7 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
         const op = new KeepCursorWithinListContent(root);
         (this as any).operationPerformer.eval(root, op, this.editor);
 
-        // Force the target selection through the CodeMirror view directly so
-        // that the assertion below observes the adjusted cursor regardless of
-        // whether Obsidian's Editor.setSelections propagated synchronously.
-        const selections = root.getSelections();
-        if (selections.length === 1) {
-          this.editor.dispatchSingleSelectionTransaction(selections[0]);
-        } else {
-          this.editor.dispatchCurrentSingleSelectionTransaction();
-        }
+        targetSelections = root.getSelections();
       } else {
         this.editor.dispatchCurrentSingleSelectionTransaction();
       }
@@ -325,7 +318,32 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
       this.editor.dispatchCurrentSingleSelectionTransaction();
     }
 
+    if (targetSelections) {
+      await this.forceSelectionsToApply(targetSelections);
+    }
+
     await this.waitForSelectionAdjustmentsToSettle();
+  }
+
+  private async forceSelectionsToApply(selections: MyEditorSelection[]) {
+    for (let i = 0; i < 5; i++) {
+      this.editor.setSelections(selections);
+
+      if (selections.length === 1) {
+        this.editor.dispatchSingleSelectionTransaction(selections[0]);
+      } else {
+        this.editor.dispatchCurrentSingleSelectionTransaction();
+      }
+
+      await this.wait(0);
+
+      if (
+        JSON.stringify(this.editor.listSelections()) ===
+        JSON.stringify(selections)
+      ) {
+        return;
+      }
+    }
   }
 
   private beginSuppressingSelectionAdjustments() {
