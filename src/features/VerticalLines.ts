@@ -9,9 +9,12 @@ import {
 
 import { Feature } from "./Feature";
 import {
-  getVerticalLineLeftFromX,
+  getVerticalLineHeight,
+  getVerticalLineTop,
   getVerticalLinesContentLeft,
+  measureVerticalGuide,
 } from "./verticalLinesMeasurements";
+import { createAnimationFrameScheduler } from "./verticalLinesScheduling";
 
 import { MyEditor, getEditorFromState } from "../editor";
 import { List } from "../root";
@@ -19,6 +22,7 @@ import { Parser } from "../services/Parser";
 import { Settings } from "../services/Settings";
 
 const VERTICAL_LINES_BODY_CLASS = "outliner-plugin-vertical-lines";
+const CONTENT_TOP_OFFSET = 24;
 
 interface LineData {
   top: number;
@@ -30,7 +34,6 @@ interface LineData {
 }
 
 class VerticalLinesPluginValue implements PluginValue {
-  private scheduled: ReturnType<typeof setTimeout>;
   private scroller: HTMLElement;
   private contentContainer: HTMLElement;
   private editor: MyEditor;
@@ -38,16 +41,21 @@ class VerticalLinesPluginValue implements PluginValue {
   private lines: LineData[];
   private lineElements: HTMLElement[] = [];
   private contentLeft = 0;
+  private scheduler: ReturnType<typeof createAnimationFrameScheduler>;
+  private resizeObserver?: ResizeObserver;
+  private mutationObserver?: MutationObserver;
 
   constructor(
     private settings: Settings,
     private parser: Parser,
     private view: EditorView,
   ) {
+    this.scheduler = createAnimationFrameScheduler(this.calculate);
     this.view.scrollDOM.addEventListener("scroll", this.onScroll);
     this.settings.onChange(this.scheduleRecalculate);
 
     this.prepareDom();
+    this.observeLayoutChanges();
     this.waitForEditor();
   }
 
@@ -74,14 +82,51 @@ class VerticalLinesPluginValue implements PluginValue {
     this.view.dom.appendChild(this.scroller);
   }
 
+  private observeLayoutChanges() {
+    if (typeof ResizeObserver === "function") {
+      this.resizeObserver = new ResizeObserver(this.scheduleRecalculate);
+      this.resizeObserver.observe(this.view.scrollDOM);
+      this.resizeObserver.observe(this.view.contentDOM);
+
+      const contentContainer = this.view.contentDOM.parentElement;
+      if (contentContainer) {
+        this.resizeObserver.observe(contentContainer);
+
+        if (contentContainer.parentElement) {
+          this.resizeObserver.observe(contentContainer.parentElement);
+        }
+      }
+    }
+
+    if (typeof MutationObserver === "function") {
+      this.mutationObserver = new MutationObserver(this.scheduleRecalculate);
+      this.mutationObserver.observe(this.view.contentDOM, {
+        attributes: true,
+        childList: true,
+        subtree: true,
+        attributeFilter: ["class", "style"],
+      });
+
+      const contentContainer = this.view.contentDOM.parentElement;
+      const sizer = contentContainer?.parentElement;
+      if (sizer) {
+        this.mutationObserver.observe(sizer, {
+          attributes: true,
+          childList: true,
+          subtree: false,
+          attributeFilter: ["class", "style"],
+        });
+      }
+    }
+  }
+
   private onScroll = (e: Event) => {
     const { scrollLeft, scrollTop } = e.target as HTMLElement;
     this.scroller.scrollTo(scrollLeft, scrollTop);
   };
 
   private scheduleRecalculate = () => {
-    clearTimeout(this.scheduled);
-    this.scheduled = setTimeout(this.calculate, 0);
+    this.scheduler.schedule();
   };
 
   update(update: ViewUpdate) {
@@ -177,6 +222,10 @@ class VerticalLinesPluginValue implements PluginValue {
     }
 
     const coords = this.view.coordsAtPos(fromOffset, 1);
+    if (!coords) {
+      return;
+    }
+
     const line = this.getLineElementAt(fromOffset);
     const currentPadding = this.getLinePaddingStart(line);
     const currentX = this.getGuideX(list, line, fromOffset, coords);
@@ -184,15 +233,19 @@ class VerticalLinesPluginValue implements PluginValue {
       parentCtx.rootLeft = currentX;
       parentCtx.rootPadding = currentPadding ?? 0;
     }
-    const left =
-      currentPadding === null
-        ? getVerticalLineLeftFromX(parentCtx.rootLeft, currentX)
-        : currentPadding - parentCtx.rootPadding;
+    const lineLayout = measureVerticalGuide({
+      contentLeft: this.contentLeft,
+      currentX,
+      currentPadding,
+      rootX: parentCtx.rootLeft,
+      rootPadding: parentCtx.rootPadding,
+      hasCheckbox: list.hasCheckbox(),
+    });
 
-    const top =
-      visibleFrom > 0 && fromOffset < visibleFrom
-        ? -20
-        : this.view.lineBlockAt(fromOffset).top;
+    const top = getVerticalLineTop(
+      visibleFrom > 0 && fromOffset < visibleFrom,
+      this.view.lineBlockAt(fromOffset).top,
+    );
     const bottom =
       tillOffset > visibleTo
         ? this.view.lineBlockAt(visibleTo - 1).bottom
@@ -208,10 +261,10 @@ class VerticalLinesPluginValue implements PluginValue {
 
       this.lines.push({
         top,
-        left,
-        width: Math.max(5, this.getGuideOffsetX(list, currentX, left) + 3),
-        height: `calc(${height}px ${hasNextSibling ? "- 1.5em" : "- 2em"})`,
-        guideOffsetX: this.getGuideOffsetX(list, currentX, left),
+        left: lineLayout.left,
+        width: lineLayout.width,
+        height: getVerticalLineHeight(height, hasNextSibling),
+        guideOffsetX: lineLayout.guideOffsetX,
         list,
       });
     }
@@ -279,7 +332,14 @@ class VerticalLinesPluginValue implements PluginValue {
     const cmScroll = this.view.scrollDOM;
     const cmContent = this.view.contentDOM;
     const cmContentContainer = cmContent.parentElement;
+    if (!cmContentContainer) {
+      return;
+    }
+
     const cmSizer = cmContentContainer.parentElement;
+    if (!cmSizer || !(cmContent.firstElementChild instanceof HTMLElement)) {
+      return;
+    }
 
     /**
      * Obsidian can add additional elements into Content Manager.
@@ -297,7 +357,7 @@ class VerticalLinesPluginValue implements PluginValue {
     this.contentContainer.style.marginLeft =
       getVerticalLinesContentLeft(this.view) + "px";
     this.contentContainer.style.marginTop =
-      (cmContent.firstElementChild as HTMLElement).offsetTop - 24 + "px";
+      cmContent.firstElementChild.offsetTop - CONTENT_TOP_OFFSET + "px";
 
     for (let i = 0; i < this.lines.length; i++) {
       if (this.lineElements.length === i) {
@@ -333,7 +393,9 @@ class VerticalLinesPluginValue implements PluginValue {
     this.settings.removeCallback(this.scheduleRecalculate);
     this.view.scrollDOM.removeEventListener("scroll", this.onScroll);
     this.view.dom.removeChild(this.scroller);
-    clearTimeout(this.scheduled);
+    this.resizeObserver?.disconnect();
+    this.mutationObserver?.disconnect();
+    this.scheduler.cancel();
   }
 
   private getGuideX(
@@ -354,11 +416,6 @@ class VerticalLinesPluginValue implements PluginValue {
     }
 
     return coords.right - scrollerLeft + scrollLeft;
-  }
-
-  private getGuideOffsetX(list: List, currentX: number, left: number) {
-    const fineTune = list.hasCheckbox() ? -1 : 3;
-    return currentX - this.contentLeft - left + fineTune;
   }
 
   private getLinePaddingStart(line: HTMLElement | null): number | null {
