@@ -9,6 +9,10 @@ import {
 
 import { Feature } from "./Feature";
 import {
+  applyVerticalLineElementStyle,
+  getVerticalLinesMutationObserverOptions,
+} from "./verticalLinesDom";
+import {
   getVerticalLineHeight,
   getVerticalLineTop,
   getVerticalLinesContentLeft,
@@ -100,22 +104,13 @@ class VerticalLinesPluginValue implements PluginValue {
 
     if (typeof MutationObserver === "function") {
       this.mutationObserver = new MutationObserver(this.scheduleRecalculate);
-      this.mutationObserver.observe(this.view.contentDOM, {
-        attributes: true,
-        childList: true,
-        subtree: true,
-        attributeFilter: ["class", "style"],
-      });
+      const observerOptions = getVerticalLinesMutationObserverOptions();
+      this.mutationObserver.observe(this.view.contentDOM, observerOptions);
 
       const contentContainer = this.view.contentDOM.parentElement;
       const sizer = contentContainer?.parentElement;
       if (sizer) {
-        this.mutationObserver.observe(sizer, {
-          attributes: true,
-          childList: true,
-          subtree: false,
-          attributeFilter: ["class", "style"],
-        });
+        this.mutationObserver.observe(sizer, observerOptions);
       }
     }
   }
@@ -371,21 +366,26 @@ class VerticalLinesPluginValue implements PluginValue {
 
       const l = this.lines[i];
       const e = this.lineElements[i];
-      e.style.top = l.top + "px";
-      e.style.left = l.left + "px";
-      e.style.width = l.width + "px";
-      e.style.height = l.height;
-      e.style.setProperty("--outliner-guide-offset-x", `${l.guideOffsetX}px`);
-      e.style.display = "block";
+      applyVerticalLineElementStyle(e, {
+        top: l.top + "px",
+        left: l.left + "px",
+        width: l.width + "px",
+        height: l.height,
+        guideOffsetX: `${l.guideOffsetX}px`,
+        display: "block",
+      });
     }
 
     for (let i = this.lines.length; i < this.lineElements.length; i++) {
       const e = this.lineElements[i];
-      e.style.top = "0px";
-      e.style.left = "0px";
-      e.style.width = "5px";
-      e.style.height = "0px";
-      e.style.display = "none";
+      applyVerticalLineElementStyle(e, {
+        top: "0px",
+        left: "0px",
+        width: "5px",
+        height: "0px",
+        guideOffsetX: e.style.getPropertyValue("--outliner-guide-offset-x"),
+        display: "none",
+      });
     }
   }
 
