@@ -15,7 +15,7 @@ import { OperationPerformer } from "../services/OperationPerformer";
 import { Parser } from "../services/Parser";
 import { Settings } from "../services/Settings";
 
-const BODY_CLASS = "outliner-plugin-dnd";
+const BODY_CLASS = "bullet-plugin-dnd";
 
 interface DragAndDropDocumentContext {
   doc: Document;
@@ -84,9 +84,9 @@ export class DragAndDrop implements Feature {
     }
 
     const dropZonePadding = doc.createElement("div");
-    dropZonePadding.classList.add("outliner-plugin-drop-zone-padding");
+    dropZonePadding.classList.add("bullet-plugin-drop-zone-padding");
     const dropZone = doc.createElement("div");
-    dropZone.classList.add("outliner-plugin-drop-zone");
+    dropZone.classList.add("bullet-plugin-drop-zone");
     dropZone.style.display = "none";
     dropZone.appendChild(dropZonePadding);
     doc.body.appendChild(dropZone);
@@ -296,7 +296,7 @@ export class DragAndDrop implements Feature {
       effects: [dndStarted.of(lines)],
     });
 
-    this.state.doc.body.classList.add("outliner-plugin-dragging");
+    this.state.doc.body.classList.add("bullet-plugin-dragging");
   }
 
   private notifyInvalidListStructure() {
@@ -307,7 +307,7 @@ export class DragAndDrop implements Feature {
   }
 
   private unhightlightDraggingLines() {
-    this.state.doc.body.classList.remove("outliner-plugin-dragging");
+    this.state.doc.body.classList.remove("bullet-plugin-dragging");
 
     this.state.view.dispatch({
       effects: [dndEnded.of()],
@@ -575,11 +575,11 @@ const dndMoved = StateEffect.define<number | null>({
 const dndEnded = StateEffect.define<void>();
 
 const draggingLineDecoration = Decoration.line({
-  class: "outliner-plugin-dragging-line",
+  class: "bullet-plugin-dragging-line",
 });
 
 const droppingLineDecoration = Decoration.line({
-  class: "outliner-plugin-dropping-line",
+  class: "bullet-plugin-dropping-line",
 });
 
 const draggingLinesStateField = StateField.define<DecorationSet>({

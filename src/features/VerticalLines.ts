@@ -25,7 +25,7 @@ import { List } from "../root";
 import { Parser } from "../services/Parser";
 import { Settings } from "../services/Settings";
 
-const VERTICAL_LINES_BODY_CLASS = "outliner-plugin-vertical-lines";
+const VERTICAL_LINES_BODY_CLASS = "bullet-plugin-vertical-lines";
 const CONTENT_TOP_OFFSET = 24;
 
 interface LineData {
@@ -76,11 +76,11 @@ class VerticalLinesPluginValue implements PluginValue {
   private prepareDom() {
     this.contentContainer = document.createElement("div");
     this.contentContainer.classList.add(
-      "outliner-plugin-list-lines-content-container",
+      "bullet-plugin-list-lines-content-container",
     );
 
     this.scroller = document.createElement("div");
-    this.scroller.classList.add("outliner-plugin-list-lines-scroller");
+    this.scroller.classList.add("bullet-plugin-list-lines-scroller");
 
     this.scroller.appendChild(this.contentContainer);
     this.view.dom.appendChild(this.scroller);
@@ -357,7 +357,7 @@ class VerticalLinesPluginValue implements PluginValue {
     for (let i = 0; i < this.lines.length; i++) {
       if (this.lineElements.length === i) {
         const e = document.createElement("div");
-        e.classList.add("outliner-plugin-list-line");
+        e.classList.add("bullet-plugin-list-line");
         e.dataset.index = String(i);
         e.addEventListener("mousedown", this.onClick);
         this.contentContainer.appendChild(e);
@@ -383,7 +383,7 @@ class VerticalLinesPluginValue implements PluginValue {
         left: "0px",
         width: "5px",
         height: "0px",
-        guideOffsetX: e.style.getPropertyValue("--outliner-guide-offset-x"),
+        guideOffsetX: e.style.getPropertyValue("--bullet-guide-offset-x"),
         display: "none",
       });
     }

@@ -6,8 +6,8 @@ import fs from "node:fs";
 
 export default (commandLineArgs) => ({
   input: commandLineArgs.configWithTests
-    ? "src/ObsidianOutlinerPluginWithTests.ts"
-    : "src/ObsidianOutlinerPlugin.ts",
+    ? "src/ObsidianBulletPluginWithTests.ts"
+    : "src/ObsidianBulletPlugin.ts",
   output: {
     file: "dist/main.js",
     sourcemap: "inline",

@@ -113,7 +113,7 @@ export class ReleaseNotesAnnouncement implements Feature {
       return;
     }
 
-    const modalTitle = `Welcome to Obsidian Outliner ${PLUGIN_VERSION}`;
+    const modalTitle = `Welcome to Obsidian Bullet ${PLUGIN_VERSION}`;
 
     this.modal = new ReleaseNotesModal(
       this.plugin,

@@ -154,7 +154,7 @@ describe("DragAndDrop", () => {
       }
     ).addManagedDocument(popoutDocument);
 
-    expect(popoutDocument.body.classList.contains("outliner-plugin-dnd")).toBe(
+    expect(popoutDocument.body.classList.contains("bullet-plugin-dnd")).toBe(
       true,
     );
     expect(popoutDocument.appended).toHaveLength(1);
@@ -206,10 +206,10 @@ describe("DragAndDrop", () => {
       }
     ).handleSettingsChange();
 
-    expect(mainDocument.body.classList.contains("outliner-plugin-dnd")).toBe(
+    expect(mainDocument.body.classList.contains("bullet-plugin-dnd")).toBe(
       false,
     );
-    expect(popoutDocument.body.classList.contains("outliner-plugin-dnd")).toBe(
+    expect(popoutDocument.body.classList.contains("bullet-plugin-dnd")).toBe(
       false,
     );
   });

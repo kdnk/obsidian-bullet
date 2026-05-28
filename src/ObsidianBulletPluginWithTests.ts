@@ -3,7 +3,7 @@ import { MarkdownView } from "obsidian";
 
 import { EditorView } from "@codemirror/view";
 
-import ObsidianOutlinerPlugin from "./ObsidianOutlinerPlugin";
+import ObsidianBulletPlugin from "./ObsidianBulletPlugin";
 import { MyEditor, MyEditorPosition, MyEditorSelection } from "./editor";
 import { EditorSelectionsBehaviourOverride } from "./features/EditorSelectionsBehaviourOverride";
 import { KeepCursorWithinListContent } from "./operations/KeepCursorWithinListContent";
@@ -22,7 +22,7 @@ const keysMap: { [key: string]: number } = {
   KeyA: 65,
 };
 
-export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlugin {
+export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin {
   private editor: MyEditor;
 
   wait(time: number) {
@@ -112,7 +112,7 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
   async onload() {
     await super.onload();
 
-    (window as any).ObsidianOutlinerPlugin = this;
+    (window as any).ObsidianBulletPlugin = this;
 
     if (process.env.TEST_PLATFORM) {
       setTimeout(async () => {
@@ -125,7 +125,7 @@ export default class ObsidianOutlinerPluginWithTests extends ObsidianOutlinerPlu
   async onunload() {
     await super.onunload();
 
-    delete (window as any).ObsidianOutlinerPlugin;
+    delete (window as any).ObsidianBulletPlugin;
   }
 
   protected async prepareSettings() {

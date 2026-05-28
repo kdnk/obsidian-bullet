@@ -8,7 +8,7 @@ import {
   VerticalLinesAction,
 } from "../services/Settings";
 
-class ObsidianOutlinerPluginSettingTab extends PluginSettingTab {
+class ObsidianBulletPluginSettingTab extends PluginSettingTab {
   constructor(
     app: App,
     plugin: Plugin,
@@ -159,7 +159,7 @@ export class SettingsTab implements Feature {
 
   async load() {
     this.plugin.addSettingTab(
-      new ObsidianOutlinerPluginSettingTab(
+      new ObsidianBulletPluginSettingTab(
         this.plugin.app,
         this.plugin,
         this.settings,

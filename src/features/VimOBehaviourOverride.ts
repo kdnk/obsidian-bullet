@@ -161,7 +161,7 @@ export class VimOBehaviourOverride implements Feature {
     }
 
     new Notice(
-      `To fully unload obsidian-outliner plugin, please restart the app`,
+      `To fully unload obsidian-bullet plugin, please restart the app`,
       5000,
     );
   }

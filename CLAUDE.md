@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Obsidian Outliner is an Obsidian plugin that provides outliner functionality (like Workflowy or RoamResearch) with bullet/list operations, drag-and-drop, and more.
+Obsidian Bullet is an Obsidian plugin that provides outliner functionality (like Workflowy or RoamResearch) with bullet/list operations, drag-and-drop, and more.
 
 ## Commands
 
@@ -49,8 +49,8 @@ src/
 ├── services/             # Core services (Parser, ChangesApplicator, etc.)
 ├── utils/                # Utility functions
 ├── __mocks__.ts          # Test mock helpers
-├── ObsidianOutlinerPlugin.ts           # Main plugin entry
-└── ObsidianOutlinerPluginWithTests.ts  # Test variant with WebSocket server
+├── ObsidianBulletPlugin.ts           # Main plugin entry
+└── ObsidianBulletPluginWithTests.ts  # Test variant with WebSocket server
 ```
 
 ## Architecture
@@ -79,7 +79,7 @@ Each feature implements the `Feature` interface (`load()`/`unload()`). Features 
 CodeMirror extensions and editor utilities. Registers keymaps, handles checkbox rendering, and provides editor callbacks for operations.
 
 ### Entry Point
-`ObsidianOutlinerPlugin.ts` instantiates all services and features, then calls `load()` on each. The test variant `ObsidianOutlinerPluginWithTests.ts` adds a WebSocket server for the integration test harness.
+`ObsidianBulletPlugin.ts` instantiates all services and features, then calls `load()` on each. The test variant `ObsidianBulletPluginWithTests.ts` adds a WebSocket server for the integration test harness.
 
 ## Tests
 

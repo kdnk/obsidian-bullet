@@ -4,8 +4,8 @@
 
 This plugin is forked from [vslinko/obsidian-outliner](https://github.com/vslinko/obsidian-outliner).
 
-📦 [Latest release](https://github.com/kdnk/obsidian-outliner/releases/latest)<br>
-🐛 [Report issues](https://github.com/kdnk/obsidian-outliner/issues)
+📦 [Latest release](https://github.com/kdnk/obsidian-bullet/releases/latest)<br>
+🐛 [Report issues](https://github.com/kdnk/obsidian-bullet/issues)
 
 Compatible with [Obsidian Zoom plugin](https://github.com/vslinko/obsidian-zoom).
 
@@ -20,13 +20,13 @@ You can activate this plugin within Obsidian by doing the following:
 - Open Settings > Third-party plugin
 - Make sure Safe mode is off
 - Click Browse community plugins
-- Search for "Outliner Plus"
+- Search for "Bullet"
 - Click Install
 - Once installed, close the community plugins window and activate the newly installed plugin
 
 ### Manual installation
 
-Download `main.js`, `manifest.json`, `styles.css` from the [latest release](https://github.com/kdnk/obsidian-outliner/releases/latest) and put them into `<vault>/.obsidian/plugins/bullet` folder.
+Download `main.js`, `manifest.json`, `styles.css` from the [latest release](https://github.com/kdnk/obsidian-bullet/releases/latest) and put them into `<vault>/.obsidian/plugins/bullet` folder.
 
 ## How to use
 

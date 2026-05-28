@@ -25,7 +25,7 @@ export function applyVerticalLineElementStyle(
   writes += setStyleProperty(element, "height", style.height);
   writes += setStyleProperty(element, "display", style.display);
 
-  const propertyName = "--outliner-guide-offset-x";
+  const propertyName = "--bullet-guide-offset-x";
   if (element.style.getPropertyValue(propertyName) !== style.guideOffsetX) {
     element.style.setProperty(propertyName, style.guideOffsetX);
     writes += 1;

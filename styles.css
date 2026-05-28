@@ -1,20 +1,20 @@
 /* lists and bullets */
-.outliner-plugin-better-lists .cm-s-obsidian .HyperMD-list-line {
+.bullet-plugin-better-lists .cm-s-obsidian .HyperMD-list-line {
   /* padding-top: 0.4em; */
 }
 
-.outliner-plugin-better-lists .cm-formatting-list-ul {
+.bullet-plugin-better-lists .cm-formatting-list-ul {
   margin-right: 0.3em;
 }
 
-.outliner-plugin-better-lists .list-bullet::after {
+.bullet-plugin-better-lists .list-bullet::after {
   width: 0.4em;
   height: 0.4em;
   background-color: var(--text-muted);
 }
 
 /* lines */
-.outliner-plugin-list-lines-scroller {
+.bullet-plugin-list-lines-scroller {
   position: absolute;
   top: 0;
   right: 0;
@@ -26,54 +26,54 @@
   overflow: hidden;
 }
 
-.outliner-plugin-list-lines-content-container {
+.bullet-plugin-list-lines-content-container {
   position: relative;
 }
 
-.outliner-plugin-list-line {
+.bullet-plugin-list-line {
   pointer-events: auto;
   position: absolute;
   width: 5px;
-  --outliner-guide-offset-x: 2px;
-  --outliner-guide-width: 1px;
-  --outliner-guide-color: var(--text-faint);
+  --bullet-guide-offset-x: 2px;
+  --bullet-guide-width: 1px;
+  --bullet-guide-color: var(--text-faint);
   margin-top: 1em;
   z-index: 1;
   cursor: pointer;
   background: transparent;
 }
 
-.outliner-plugin-list-line::before {
+.bullet-plugin-list-line::before {
   content: "";
   position: absolute;
   top: 0;
   bottom: 0;
-  left: var(--outliner-guide-offset-x);
-  width: var(--outliner-guide-width);
+  left: var(--bullet-guide-offset-x);
+  width: var(--bullet-guide-width);
   transform: translateX(-50%);
-  background: var(--outliner-guide-color);
+  background: var(--bullet-guide-color);
 }
 
-body.is-mobile .outliner-plugin-list-line {
+body.is-mobile .bullet-plugin-list-line {
   margin-top: 2.7em;
 }
 
-.outliner-plugin-better-bullets .outliner-plugin-list-line {
+.bullet-plugin-better-bullets .bullet-plugin-list-line {
   margin-top: 1.4em;
 }
 
 .markdown-source-view.mod-cm6.is-readable-line-width
-  .outliner-plugin-list-lines-content-container {
+  .bullet-plugin-list-lines-content-container {
   max-width: 700px;
   margin: auto;
 }
 
-.outliner-plugin-list-line:hover {
-  --outliner-guide-width: 4px;
-  --outliner-guide-color: var(--text-muted);
+.bullet-plugin-list-line:hover {
+  --bullet-guide-width: 4px;
+  --bullet-guide-color: var(--text-muted);
 }
 
-.outliner-plugin-vertical-lines
+.bullet-plugin-vertical-lines
   .markdown-source-view.mod-cm6
   .cm-hmd-list-indent
   .cm-indent::before {
@@ -81,16 +81,16 @@ body.is-mobile .outliner-plugin-list-line {
 }
 
 /* drag-n-drop */
-.outliner-plugin-dropping-line {
+.bullet-plugin-dropping-line {
   background-color: hsla(var(--interactive-accent-hsl), 0.4);
 }
 
-.outliner-plugin-dragging-line {
+.bullet-plugin-dragging-line {
   opacity: 0.5;
   background-color: hsla(var(--interactive-accent-hsl), 0.2);
 }
 
-.outliner-plugin-drop-zone {
+.bullet-plugin-drop-zone {
   width: 300px;
   height: 4px;
   background: var(--color-accent);
@@ -99,18 +99,18 @@ body.is-mobile .outliner-plugin-list-line {
   pointer-events: none;
 }
 
-.outliner-plugin-drop-zone-padding {
+.bullet-plugin-drop-zone-padding {
   position: absolute;
   height: 4px;
 }
 
-body.outliner-plugin-dnd:not(.outliner-plugin-dragging) .cm-formatting-list,
-body.outliner-plugin-dnd:not(.outliner-plugin-dragging)
+body.bullet-plugin-dnd:not(.bullet-plugin-dragging) .cm-formatting-list,
+body.bullet-plugin-dnd:not(.bullet-plugin-dragging)
   .cm-fold-indicator
   .collapse-indicator {
   cursor: grab !important;
 }
 
-html body.outliner-plugin-dnd.outliner-plugin-dragging {
+html body.bullet-plugin-dnd.bullet-plugin-dragging {
   cursor: grabbing !important;
 }

@@ -1,8 +1,8 @@
-import ObsidianOutlinerPlugin from "../ObsidianOutlinerPlugin";
-import ObsidianOutlinerPluginWithTests from "../ObsidianOutlinerPluginWithTests";
+import ObsidianBulletPlugin from "../ObsidianBulletPlugin";
+import ObsidianBulletPluginWithTests from "../ObsidianBulletPluginWithTests";
 
 type TestWindow = Window & {
-  ObsidianOutlinerPlugin?: ObsidianOutlinerPluginWithTests;
+  ObsidianBulletPlugin?: ObsidianBulletPluginWithTests;
 };
 
 jest.mock(
@@ -30,9 +30,9 @@ jest.mock("../features/EditorSelectionsBehaviourOverride", () => ({
   EditorSelectionsBehaviourOverride: class EditorSelectionsBehaviourOverride {},
 }));
 
-jest.mock("../ObsidianOutlinerPlugin", () => ({
+jest.mock("../ObsidianBulletPlugin", () => ({
   __esModule: true,
-  default: class ObsidianOutlinerPlugin {
+  default: class ObsidianBulletPlugin {
     async onload() {}
 
     async onunload() {}
@@ -41,7 +41,7 @@ jest.mock("../ObsidianOutlinerPlugin", () => ({
   },
 }));
 
-describe("ObsidianOutlinerPluginWithTests", () => {
+describe("ObsidianBulletPluginWithTests", () => {
   const originalTestPlatform = process.env.TEST_PLATFORM;
 
   beforeEach(() => {
@@ -67,11 +67,11 @@ describe("ObsidianOutlinerPluginWithTests", () => {
     process.env.TEST_PLATFORM = "1";
 
     const parentOnload = jest
-      .spyOn(ObsidianOutlinerPlugin.prototype, "onload")
+      .spyOn(ObsidianBulletPlugin.prototype, "onload")
       .mockResolvedValue(undefined);
     const plugin = Object.create(
-      ObsidianOutlinerPluginWithTests.prototype,
-    ) as ObsidianOutlinerPluginWithTests;
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
     plugin.wait = jest.fn().mockResolvedValue(undefined);
     plugin.connect = jest.fn();
 
@@ -79,7 +79,7 @@ describe("ObsidianOutlinerPluginWithTests", () => {
     await jest.runAllTimersAsync();
 
     expect(parentOnload).toHaveBeenCalled();
-    expect((window as TestWindow).ObsidianOutlinerPlugin).toBe(plugin);
+    expect((window as TestWindow).ObsidianBulletPlugin).toBe(plugin);
     expect(plugin.wait).toHaveBeenCalledWith(1000);
     expect(plugin.connect).toHaveBeenCalled();
   });

@@ -32,7 +32,7 @@ declare global {
   const CHANGELOG_MD: string;
 }
 
-export default class ObsidianOutlinerPlugin extends Plugin {
+export default class ObsidianBulletPlugin extends Plugin {
   private features: Feature[];
   protected settings: Settings;
   private logger: Logger;
@@ -43,7 +43,7 @@ export default class ObsidianOutlinerPlugin extends Plugin {
   private imeDetector: IMEDetector;
 
   async onload() {
-    console.log(`Loading obsidian-outliner`);
+    console.log(`Loading obsidian-bullet`);
 
     await this.prepareSettings();
 
@@ -174,7 +174,7 @@ export default class ObsidianOutlinerPlugin extends Plugin {
   }
 
   async onunload() {
-    console.log(`Unloading obsidian-outliner`);
+    console.log(`Unloading obsidian-bullet`);
 
     await this.imeDetector.unload();
 
