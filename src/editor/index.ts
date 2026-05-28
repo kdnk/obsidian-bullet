@@ -6,7 +6,7 @@ import {
   foldedRanges,
   unfoldEffect,
 } from "@codemirror/language";
-import { EditorState } from "@codemirror/state";
+import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView, runScopeHandlers } from "@codemirror/view";
 
 export class MyEditorPosition {
@@ -109,6 +109,7 @@ export class MyEditor {
 
   setSelections(selections: MyEditorSelection[]): void {
     this.e.setSelections(selections);
+    this.dispatchSelectionsTransaction(selections);
   }
 
   dispatchCurrentSingleSelectionTransaction(): void {
@@ -123,11 +124,19 @@ export class MyEditor {
   }
 
   dispatchSingleSelectionTransaction(selection: MyEditorSelection): void {
+    this.dispatchSelectionsTransaction([selection]);
+  }
+
+  dispatchSelectionsTransaction(selections: MyEditorSelection[]): void {
+    const ranges = selections.map((selection) =>
+      EditorSelection.range(
+        this.posToDocOffset(selection.anchor),
+        this.posToDocOffset(selection.head),
+      ),
+    );
+
     this.view.dispatch({
-      selection: {
-        anchor: this.e.posToOffset(selection.anchor),
-        head: this.e.posToOffset(selection.head),
-      },
+      selection: EditorSelection.create(ranges, ranges.length - 1),
     });
   }
 
@@ -145,6 +154,12 @@ export class MyEditor {
 
   posToOffset(pos: MyEditorPosition): number {
     return this.e.posToOffset(pos);
+  }
+
+  private posToDocOffset(pos: MyEditorPosition): number {
+    const line = this.view.state.doc.line(pos.line + 1);
+
+    return Math.min(line.from + pos.ch, line.to);
   }
 
   fold(n: number): void {
