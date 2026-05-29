@@ -77,7 +77,7 @@
 - three
 ```
 
-- drag: `{"from": {"line": 5, "ch": 0}}`
+- drag: `{"from": {"line": 2, "ch": 0}}`
 - move: `{"to": {"line": 0, "ch": 0}}`
 - drop
 - assertState:

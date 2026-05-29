@@ -222,7 +222,16 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
 
   private drag(opts: { from: { line: number; ch: number } }) {
     const view: EditorView = (this.editor as any).view;
-    const coords = view.coordsAtPos(this.editor.posToOffset(opts.from));
+    this.assertValidEditorPosition(opts.from);
+
+    const offset = this.editor.posToOffset(opts.from);
+    const coords = view.coordsAtPos(offset);
+    if (!coords) {
+      throw new Error(
+        `Unable to drag from ${JSON.stringify(opts.from)}: missing editor coordinates`,
+      );
+    }
+
     const x = coords.left;
     const y = coords.top;
     const e = new MouseEvent("mousedown", {
@@ -231,14 +240,24 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
       clientX: x,
       clientY: y,
     });
-    const { node } = view.domAtPos(this.editor.posToOffset(opts.from));
+    const { node } = view.domAtPos(offset);
     let el = node instanceof HTMLElement ? node : node.parentElement;
-    while (!el.classList.contains("cm-line")) {
+    while (el && !el.classList.contains("cm-line")) {
       el = el.parentElement;
+    }
+    if (!el) {
+      throw new Error(
+        `Unable to drag from ${JSON.stringify(opts.from)}: missing line element`,
+      );
     }
     el =
       el.querySelector(".cm-formatting-list") ||
       el.querySelector(".cm-fold-indicator");
+    if (!el) {
+      throw new Error(
+        `Unable to drag from ${JSON.stringify(opts.from)}: missing draggable list marker`,
+      );
+    }
     el.dispatchEvent(e);
   }
 
@@ -248,7 +267,15 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     offsetY: number;
   }) {
     const view: EditorView = (this.editor as any).view;
+    this.assertValidEditorPosition(opts.to);
+
     const coords = view.coordsAtPos(this.editor.posToOffset(opts.to));
+    if (!coords) {
+      throw new Error(
+        `Unable to move to ${JSON.stringify(opts.to)}: missing editor coordinates`,
+      );
+    }
+
     const x = coords.left + opts.offsetX;
     const y = coords.top + opts.offsetY;
     const e = new MouseEvent("mousemove", {
@@ -263,6 +290,22 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   private drop() {
     const e = new MouseEvent("mouseup");
     document.dispatchEvent(e);
+  }
+
+  private assertValidEditorPosition(pos: MyEditorPosition) {
+    const lineCount = this.editor.getValue().split("\n").length;
+    if (pos.line < 0 || pos.line >= lineCount) {
+      throw new Error(
+        `Invalid editor position ${JSON.stringify(pos)}: line must be between 0 and ${lineCount - 1}`,
+      );
+    }
+
+    const lineLength = this.editor.getLine(pos.line).length;
+    if (pos.ch < 0 || pos.ch > lineLength) {
+      throw new Error(
+        `Invalid editor position ${JSON.stringify(pos)}: ch must be between 0 and ${lineLength}`,
+      );
+    }
   }
 
   async applyState(state: string[]): Promise<void>;
