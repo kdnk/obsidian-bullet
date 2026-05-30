@@ -1,5 +1,4 @@
 export type VerticalLinesAction = "none" | "toggle-folding";
-type StoredVerticalLinesAction = VerticalLinesAction | "zoom-in";
 export type KeepCursorWithinContent =
   | "never"
   | "bullet-only"
@@ -14,7 +13,7 @@ interface SettingsObject {
   betterTab: boolean;
   selectAll: boolean;
   listLines: boolean;
-  listLineAction: StoredVerticalLinesAction;
+  listLineAction: VerticalLinesAction;
   dnd: boolean;
   previousRelease: string | null;
 }
@@ -114,10 +113,6 @@ export class Settings {
   }
 
   get verticalLinesAction() {
-    if (this.values.listLineAction === "zoom-in") {
-      return "none";
-    }
-
     return this.values.listLineAction;
   }
 

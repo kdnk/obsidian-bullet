@@ -102,26 +102,17 @@ export class VimOBehaviourOverride implements Feature {
         }
 
         const defaultIndentChars = obsidianSettings.getDefaultIndentChars();
-        const zoomRange = editor.getZoomRange();
-        const getZoomRange = {
-          getZoomRange: () => zoomRange,
-        };
 
         const res = operationPerformer.eval(
           root,
           new CreateNewItem(
             root,
             defaultIndentChars,
-            getZoomRange,
             this.obsidianSettings.isSmartIndentListEnabled(),
             operatorArgs.after,
           ),
           editor,
         );
-
-        if (res.shouldUpdate && zoomRange) {
-          editor.tryRefreshZoom(zoomRange.from.line);
-        }
 
         if (!res.shouldStopPropagation) {
           insertPlainLine(editor, operatorArgs.after);

@@ -7,8 +7,6 @@ This plugin is forked from [vslinko/obsidian-outliner](https://github.com/vslink
 📦 [Latest release](https://github.com/kdnk/obsidian-bullet/releases/latest)<br>
 🐛 [Report issues](https://github.com/kdnk/obsidian-bullet/issues)
 
-Compatible with [Obsidian Zoom plugin](https://github.com/vslinko/obsidian-zoom).
-
 Requires Obsidian `1.12.7` or later.
 
 ## How to install

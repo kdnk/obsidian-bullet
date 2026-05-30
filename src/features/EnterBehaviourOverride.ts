@@ -100,31 +100,22 @@ export class EnterBehaviourOverride implements Feature {
 
     {
       const defaultIndentChars = this.obsidianSettings.getDefaultIndentChars();
-      const zoomRange = editor.getZoomRange();
       const documentPrefixBeforeRoot = editor.getRange(
         { line: 0, ch: 0 },
         { line: root.getContentStart().line, ch: 0 },
       );
-      const getZoomRange = {
-        getZoomRange: () => zoomRange,
-      };
 
       const res = this.operationPerformer.eval(
         root,
         new CreateNewItem(
           root,
           defaultIndentChars,
-          getZoomRange,
           this.obsidianSettings.isSmartIndentListEnabled(),
           true,
           documentPrefixBeforeRoot,
         ),
         editor,
       );
-
-      if (res.shouldUpdate && zoomRange) {
-        editor.tryRefreshZoom(zoomRange.from.line);
-      }
 
       return res;
     }

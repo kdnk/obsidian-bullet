@@ -25,10 +25,7 @@ describe("EnterBehaviourOverride", () => {
     const editor = makeEditor({
       text: "9. item\n",
       cursor: { line: 0, ch: 7 },
-    }) as ReturnType<typeof makeEditor> & {
-      getZoomRange: () => null;
-    };
-    editor.getZoomRange = () => null;
+    });
     const logger = makeLogger();
     const settings = makeSettings();
     const parser = new Parser(logger, settings);
