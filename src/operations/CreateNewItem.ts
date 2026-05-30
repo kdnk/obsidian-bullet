@@ -1,12 +1,8 @@
 import { Operation } from "./Operation";
 
-import { List, Position, Root, recalculateNumericBullets } from "../root";
+import { List, Root, recalculateNumericBullets } from "../root";
 import { checkboxRe } from "../utils/checkboxRe";
 import { isEmptyLineOrEmptyCheckbox } from "../utils/isEmptyLineOrEmptyCheckbox";
-
-export interface GetZoomRange {
-  getZoomRange(): { from: Position; to: Position } | null;
-}
 
 export class CreateNewItem implements Operation {
   private stopPropagation = false;
@@ -15,7 +11,6 @@ export class CreateNewItem implements Operation {
   constructor(
     private root: Root,
     private defaultIndentChars: string,
-    private getZoomRange: GetZoomRange,
     private numericBulletsEnabled: boolean,
     private after: boolean = true,
     private documentPrefixBeforeRoot: string = "",
@@ -138,13 +133,6 @@ export class CreateNewItem implements Operation {
       return;
     }
 
-    const zoomRange = this.getZoomRange.getZoomRange();
-    const listIsZoomingRoot = Boolean(
-      zoomRange &&
-      list.getFirstLineContentStart().line >= zoomRange.from.line &&
-      list.getLastLineContentEnd().line <= zoomRange.from.line,
-    );
-
     const hasChildren = !list.isEmpty();
     const childIsFolded = list.isFoldRoot();
     const endPos = list.getLastLineContentEnd();
@@ -153,8 +141,7 @@ export class CreateNewItem implements Operation {
       this.after && !shouldInsertUncheckedSiblingBeforeCurrentItem;
 
     const onChildLevel =
-      listIsZoomingRoot ||
-      (insertAfter && hasChildren && !childIsFolded && endOfLine);
+      insertAfter && hasChildren && !childIsFolded && endOfLine;
 
     const firstChild = list.getChildren()[0] ?? null;
     const indent = onChildLevel

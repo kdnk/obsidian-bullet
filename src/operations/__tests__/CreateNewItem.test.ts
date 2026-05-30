@@ -2,10 +2,6 @@ import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { CreateNewItem } from "../CreateNewItem";
 
 describe("CreateNewItem operation", () => {
-  const getZoomRange = {
-    getZoomRange: (): null => null,
-  };
-
   test("should create a new sibling bullet when cursor is at the end of line", () => {
     const root = makeRoot({
       editor: makeEditor({
@@ -15,7 +11,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- item 1\n- \n- item 2");
@@ -33,7 +29,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- one\n  - two\n- ");
@@ -48,7 +44,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe(
@@ -67,7 +63,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true, false);
+    const op = new CreateNewItem(root, "  ", true, false);
     op.perform();
 
     expect(root.print()).toBe(
@@ -86,7 +82,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- item 1\n- long \n- item 2");
@@ -103,7 +99,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- [ ] task 1\n- [ ] \n- [ ] task 2");
@@ -120,7 +116,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- [ ] \n- [x] checked task");
@@ -137,7 +133,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- $-[a] est$\n- ");
@@ -156,7 +152,7 @@ describe("CreateNewItem operation", () => {
       } as never,
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- [\n-  ] one");
@@ -173,7 +169,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     const lines = root.print().split("\n");
@@ -191,7 +187,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- item 1\n- \n- item 3");
@@ -206,7 +202,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- item 1\n- [ ] \n- item 3");
@@ -221,7 +217,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- item 1\n- item 2");
@@ -244,7 +240,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- item 1\n- item 2");
@@ -266,7 +262,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- item 1\n- item 2");
@@ -281,7 +277,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(op.shouldStopPropagation()).toBe(true);
@@ -297,32 +293,11 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     // Adjust the expected output to match actual behavior
     expect(root.print()).toBe("- parent\n  - \n  - child 1\n  - child 2");
-  });
-
-  test("should correctly handle zoomed lists", () => {
-    const root = makeRoot({
-      editor: makeEditor({
-        text: "- zoomed\n  - child",
-        cursor: { line: 0, ch: 8 },
-      }),
-    });
-
-    const mockZoomRange = {
-      getZoomRange: () => ({
-        from: { line: 0, ch: 0 },
-        to: { line: 1, ch: 0 },
-      }),
-    };
-
-    const op = new CreateNewItem(root, "  ", mockZoomRange, true);
-    op.perform();
-
-    expect(root.print()).toBe("- zoomed\n  - \n  - child");
   });
 
   test("should not move children when not at end of line", () => {
@@ -334,7 +309,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     // Adjust the expected output to match actual behavior
@@ -352,7 +327,7 @@ describe("CreateNewItem operation", () => {
 
     expect(root).toBeTruthy();
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true, true, "```\n");
+    const op = new CreateNewItem(root, "  ", true, true, "```\n");
     op.perform();
 
     expect(root.print()).toBe("- code line");
@@ -369,7 +344,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- item 1\n  |A|B|\n  \n- item 2");
@@ -386,7 +361,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- one\n  - two\n    notes\n    - \n    - three");
@@ -403,7 +378,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- [ ] one\n  qwe\n- [ ] ");
@@ -420,7 +395,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", getZoomRange, true);
+    const op = new CreateNewItem(root, "  ", true);
     op.perform();
 
     expect(root.print()).toBe("- [ ] one\n  q\n- [ ] we");

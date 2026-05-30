@@ -212,15 +212,7 @@ export class VerticalLinesPluginValue implements PluginValue {
       return;
     }
 
-    let { from: visibleFrom, to: visibleTo } = visibleRange;
-    const zoomRange = this.editor.getZoomRange();
-    if (zoomRange) {
-      visibleFrom = Math.max(
-        visibleFrom,
-        this.editor.posToOffset(zoomRange.from),
-      );
-      visibleTo = Math.min(visibleTo, this.editor.posToOffset(zoomRange.to));
-    }
+    const { from: visibleFrom, to: visibleTo } = visibleRange;
 
     if (fromOffset > visibleTo || tillOffset < visibleFrom) {
       return;
