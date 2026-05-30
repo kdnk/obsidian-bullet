@@ -64,8 +64,8 @@ describe("changesApplicator", () => {
       changes: (root) => {
         const list5 = root.getChildren()[1];
         const list5Parent = list5.getParent();
-        list5Parent.removeChild(list5);
-        list5Parent.addBeforeAll(list5);
+        list5Parent!.removeChild(list5);
+        list5Parent!.addBeforeAll(list5);
         root.replaceCursor({ line: 1, ch: 3 });
       },
     });

@@ -44,7 +44,7 @@ export class MoveListToDifferentPosition implements Operation {
     recalculateNumericBullets(this.root, this.numericBulletsEnabled);
   }
 
-  private calculateCursorAnchor(): CursorAnchor {
+  private calculateCursorAnchor(): CursorAnchor | null {
     const cursorLine = this.root.getCursor().line;
 
     const lines = [
@@ -62,6 +62,10 @@ export class MoveListToDifferentPosition implements Operation {
 
     const cursor = this.root.getCursor();
     const cursorList = this.root.getListUnderLine(cursor.line);
+    if (!cursorList) {
+      return null;
+    }
+
     const cursorListStart = cursorList.getFirstLineContentStart();
     const lineDiff = cursor.line - cursorListStart.line;
     const chDiff = cursor.ch - cursorListStart.ch;
@@ -70,18 +74,18 @@ export class MoveListToDifferentPosition implements Operation {
   }
 
   private moveList() {
-    this.listToMove.getParent().removeChild(this.listToMove);
+    this.listToMove.getParentOrThrow().removeChild(this.listToMove);
 
     switch (this.whereToMove) {
       case "before":
         this.placeToMove
-          .getParent()
+          .getParentOrThrow()
           .addBefore(this.placeToMove, this.listToMove);
         break;
 
       case "after":
         this.placeToMove
-          .getParent()
+          .getParentOrThrow()
           .addAfter(this.placeToMove, this.listToMove);
         break;
 
@@ -101,7 +105,7 @@ export class MoveListToDifferentPosition implements Operation {
     this.listToMove.indentContent(0, newIndent);
   }
 
-  private restoreCursor(cursorAnchor: CursorAnchor) {
+  private restoreCursor(cursorAnchor: CursorAnchor | null) {
     if (cursorAnchor) {
       const cursorListStart =
         cursorAnchor.cursorList.getFirstLineContentStart();

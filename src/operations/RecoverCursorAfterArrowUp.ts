@@ -54,7 +54,15 @@ export class RecoverCursorAfterArrowUp implements Operation {
 
     if (prev.isFolded()) {
       const foldRoot = prev.getTopFoldRoot();
-      root.replaceCursor(foldRoot.getLinesInfo()[0].to);
+      if (!foldRoot) {
+        return;
+      }
+      const firstLine = foldRoot.getLinesInfo()[0];
+      if (!firstLine) {
+        return;
+      }
+
+      root.replaceCursor(firstLine.to);
     } else {
       root.replaceCursor(prev.getLastLineContentEnd());
     }

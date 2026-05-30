@@ -51,6 +51,9 @@ export class CreateNewItem implements Operation {
     const cursor = root.getCursor();
     const lineUnderCursor = lines.find((l) => l.from.line === cursor.line);
     const lineIndex = lines.findIndex((l) => l.from.line === cursor.line);
+    if (!lineUnderCursor || lineIndex < 0) {
+      return;
+    }
 
     if (cursor.ch < lineUnderCursor.from.ch) {
       return;
@@ -84,8 +87,8 @@ export class CreateNewItem implements Operation {
         return acc;
       },
       {
-        oldLines: [],
-        newLines: [],
+        oldLines: [] as string[],
+        newLines: [] as string[],
       },
     );
 
@@ -114,7 +117,12 @@ export class CreateNewItem implements Operation {
 
     if (lineIndex > 0 && list.isEmpty() && !hasCheckbox) {
       const lineOffset = cursor.ch - lineUnderCursor.from.ch;
-      const lineText = lines[lineIndex].text;
+      const line = lines[lineIndex];
+      if (!line) {
+        return;
+      }
+
+      const lineText = line.text;
       const left = lineText.slice(0, lineOffset);
       const right = lineText.slice(lineOffset);
       const newLines = list.getLines();
@@ -124,7 +132,7 @@ export class CreateNewItem implements Operation {
 
       root.replaceCursor({
         line: cursor.line + 1,
-        ch: list.getNotesIndent().length,
+        ch: list.getNotesIndentOrThrow().length,
       });
 
       return;
@@ -148,20 +156,19 @@ export class CreateNewItem implements Operation {
       listIsZoomingRoot ||
       (insertAfter && hasChildren && !childIsFolded && endOfLine);
 
+    const firstChild = list.getChildren()[0] ?? null;
     const indent = onChildLevel
-      ? hasChildren
-        ? list.getChildren()[0].getFirstLineIndent()
+      ? firstChild
+        ? firstChild.getFirstLineIndent()
         : list.getFirstLineIndent() + this.defaultIndentChars
       : list.getFirstLineIndent();
 
     const bullet =
-      onChildLevel && hasChildren
-        ? list.getChildren()[0].getBullet()
-        : list.getBullet();
+      onChildLevel && firstChild ? firstChild.getBullet() : list.getBullet();
 
     const spaceAfterBullet =
-      onChildLevel && hasChildren
-        ? list.getChildren()[0].getSpaceAfterBullet()
+      onChildLevel && firstChild
+        ? firstChild.getSpaceAfterBullet()
         : list.getSpaceAfterBullet();
 
     const prefix = hasCheckbox ? "[ ] " : "";
@@ -173,12 +180,12 @@ export class CreateNewItem implements Operation {
       prefix,
       hasCheckbox,
       spaceAfterBullet,
-      prefix + newLines.shift(),
+      prefix + newLines.shift()!,
       false,
     );
 
     if (newLines.length > 0) {
-      newList.setNotesIndent(list.getNotesIndent());
+      newList.setNotesIndent(list.getNotesIndentOrThrow());
       for (const line of newLines) {
         newList.addLine(line);
       }
@@ -196,9 +203,9 @@ export class CreateNewItem implements Operation {
       }
 
       if (insertAfter) {
-        list.getParent().addAfter(list, newList);
+        list.getParentOrThrow().addAfter(list, newList);
       } else {
-        list.getParent().addBefore(list, newList);
+        list.getParentOrThrow().addBefore(list, newList);
       }
     }
 

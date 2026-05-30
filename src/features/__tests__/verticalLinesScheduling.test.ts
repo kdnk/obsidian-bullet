@@ -26,7 +26,8 @@ describe("createAnimationFrameScheduler", () => {
 
     expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
 
-    frame?.(0);
+    expect(frame).not.toBeNull();
+    frame!(0);
 
     expect(callback).toHaveBeenCalledTimes(1);
   });

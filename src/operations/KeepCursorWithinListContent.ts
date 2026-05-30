@@ -29,7 +29,7 @@ export class KeepCursorWithinListContent implements Operation {
     const linePrefix =
       contentStart.line === cursor.line
         ? contentStart.ch
-        : list.getNotesIndent().length;
+        : list.getNotesIndentOrThrow().length;
 
     if (cursor.ch < linePrefix) {
       this.updated = true;

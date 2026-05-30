@@ -23,7 +23,7 @@ const keysMap: { [key: string]: number } = {
 };
 
 export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin {
-  private editor: MyEditor;
+  private editor!: MyEditor;
 
   wait(time: number) {
     return new Promise((resolve) => setTimeout(resolve, time));
@@ -154,9 +154,11 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     }
     await this.wait(1000);
 
-    this.editor = new MyEditor(
-      this.app.workspace.getActiveViewOfType(MarkdownView).editor,
-    );
+    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!view) {
+      throw new Error("No active markdown view found");
+    }
+    this.editor = new MyEditor(view.editor);
   }
 
   async connect() {

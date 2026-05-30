@@ -33,14 +33,14 @@ declare global {
 }
 
 export default class ObsidianBulletPlugin extends Plugin {
-  private features: Feature[];
-  protected settings: Settings;
-  private logger: Logger;
-  private obsidianSettings: ObsidianSettings;
-  private parser: Parser;
-  private changesApplicator: ChangesApplicator;
-  private operationPerformer: OperationPerformer;
-  private imeDetector: IMEDetector;
+  private features!: Feature[];
+  protected settings!: Settings;
+  private logger!: Logger;
+  private obsidianSettings!: ObsidianSettings;
+  private parser!: Parser;
+  private changesApplicator!: ChangesApplicator;
+  private operationPerformer!: OperationPerformer;
+  private imeDetector!: IMEDetector;
 
   async onload() {
     console.log(`Loading obsidian-bullet`);

@@ -38,11 +38,11 @@ interface LineData {
 }
 
 export class VerticalLinesPluginValue implements PluginValue {
-  private scroller: HTMLElement;
-  private contentContainer: HTMLElement;
-  private editor: MyEditor;
-  private lastLine: number;
-  private lines: LineData[];
+  private scroller!: HTMLElement;
+  private contentContainer!: HTMLElement;
+  private editor!: MyEditor;
+  private lastLine = 0;
+  private lines: LineData[] = [];
   private lineElements: HTMLElement[] = [];
   private contentLeft = 0;
   private scheduler: ReturnType<typeof createAnimationFrameScheduler>;
@@ -207,9 +207,12 @@ export class VerticalLinesPluginValue implements PluginValue {
       ch: 0,
     });
 
-    let visibleFrom = this.view.visibleRanges[0].from;
-    let visibleTo =
-      this.view.visibleRanges[this.view.visibleRanges.length - 1].to;
+    const visibleRange = this.getVisibleRange();
+    if (!visibleRange) {
+      return;
+    }
+
+    let { from: visibleFrom, to: visibleTo } = visibleRange;
     const zoomRange = this.editor.getZoomRange();
     if (zoomRange) {
       visibleFrom = Math.max(
@@ -240,7 +243,7 @@ export class VerticalLinesPluginValue implements PluginValue {
       currentX,
       currentPadding,
       rootX: parentCtx.rootLeft,
-      rootPadding: parentCtx.rootPadding,
+      rootPadding: parentCtx.rootPadding ?? 0,
       hasCheckbox: list.hasCheckbox(),
     });
 
@@ -255,7 +258,7 @@ export class VerticalLinesPluginValue implements PluginValue {
     const height = bottom - top;
 
     if (height > 0 && !list.isFolded()) {
-      const nextSibling = list.getParent().getNextSiblingOf(list);
+      const nextSibling = list.getParentOrThrow().getNextSiblingOf(list);
       const hasNextSibling =
         !!nextSibling &&
         this.editor.posToOffset(nextSibling.getFirstLineContentStart()) <=
@@ -282,6 +285,9 @@ export class VerticalLinesPluginValue implements PluginValue {
     e.preventDefault();
 
     const line = this.lines[Number((e.target as HTMLElement).dataset.index)];
+    if (!line) {
+      return;
+    }
 
     switch (this.settings.verticalLinesAction) {
       case "zoom-in":
@@ -296,6 +302,9 @@ export class VerticalLinesPluginValue implements PluginValue {
 
   private zoomIn(line: LineData) {
     const editor = getEditorFromState(this.view.state);
+    if (!editor) {
+      return;
+    }
 
     editor.zoomIn(line.list.getFirstLineContentStart().line);
   }
@@ -320,6 +329,9 @@ export class VerticalLinesPluginValue implements PluginValue {
     }
 
     const editor = getEditorFromState(this.view.state);
+    if (!editor) {
+      return;
+    }
 
     for (const l of linesToToggle) {
       if (needToUnfold) {
@@ -351,7 +363,10 @@ export class VerticalLinesPluginValue implements PluginValue {
      */
     let cmSizerChildrenSumHeight = 0;
     for (let i = 0; i < cmSizer.children.length; i++) {
-      cmSizerChildrenSumHeight += cmSizer.children[i].clientHeight;
+      const child = cmSizer.children[i];
+      if (child) {
+        cmSizerChildrenSumHeight += child.clientHeight;
+      }
     }
 
     this.scroller.style.top = cmScroll.offsetTop + "px";
@@ -373,6 +388,10 @@ export class VerticalLinesPluginValue implements PluginValue {
 
       const l = this.lines[i];
       const e = this.lineElements[i];
+      if (!l || !e) {
+        continue;
+      }
+
       applyVerticalLineElementStyle(e, {
         top: l.top + "px",
         left: l.left + "px",
@@ -385,6 +404,10 @@ export class VerticalLinesPluginValue implements PluginValue {
 
     for (let i = this.lines.length; i < this.lineElements.length; i++) {
       const e = this.lineElements[i];
+      if (!e) {
+        continue;
+      }
+
       applyVerticalLineElementStyle(e, {
         top: "0px",
         left: "0px",
@@ -430,6 +453,19 @@ export class VerticalLinesPluginValue implements PluginValue {
     return coords.right - scrollerLeft + scrollLeft;
   }
 
+  private getVisibleRange(): { from: number; to: number } | null {
+    const first = this.view.visibleRanges[0];
+    const last = this.view.visibleRanges[this.view.visibleRanges.length - 1];
+    if (!first || !last) {
+      return null;
+    }
+
+    return {
+      from: first.from,
+      to: last.to,
+    };
+  }
+
   private getLinePaddingStart(line: HTMLElement | null): number | null {
     if (!line) {
       return null;
@@ -460,7 +496,7 @@ export class VerticalLinesPluginValue implements PluginValue {
 }
 
 export class VerticalLines implements Feature {
-  private updateBodyClassInterval: number;
+  private updateBodyClassInterval: number | null = null;
 
   constructor(
     private plugin: Plugin,
@@ -483,7 +519,10 @@ export class VerticalLines implements Feature {
   }
 
   async unload() {
-    clearInterval(this.updateBodyClassInterval);
+    if (this.updateBodyClassInterval !== null) {
+      clearInterval(this.updateBodyClassInterval);
+      this.updateBodyClassInterval = null;
+    }
     document.body.classList.remove(VERTICAL_LINES_BODY_CLASS);
   }
 

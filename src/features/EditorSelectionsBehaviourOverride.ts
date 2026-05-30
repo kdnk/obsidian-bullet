@@ -114,6 +114,10 @@ export class EditorSelectionsBehaviourOverride implements Feature {
     }
 
     const editor = getEditorFromState(tr.startState);
+    if (!editor) {
+      return null;
+    }
+
     const previousCursor = this.getSingleCursor(tr.startState);
     const previousFoldedLines = getFoldedLinesFromState(tr.startState);
     const pressedKey = this.lastKey;
@@ -239,12 +243,18 @@ export class EditorSelectionsBehaviourOverride implements Feature {
       return null;
     }
 
-    const { anchor, head } = ranges[0];
+    const range = ranges[0];
+    if (!range) {
+      return null;
+    }
+
+    const { anchor, head } = range;
 
     if (anchor !== head) {
       return null;
     }
 
-    return getEditorFromState(state).offsetToPos(head);
+    const editor = getEditorFromState(state);
+    return editor ? editor.offsetToPos(head) : null;
   }
 }

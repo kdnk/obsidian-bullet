@@ -30,6 +30,10 @@ export class MoveListUp implements Operation {
 
     const list = root.getListUnderCursor();
     const parent = list.getParent();
+    if (!parent) {
+      return;
+    }
+
     const grandParent = parent.getParent();
     const prev = parent.getPrevSiblingOf(list);
 

@@ -154,7 +154,7 @@ export class Parser {
       const lastLine = editor.getLine(listEndLine);
       if (lastLine.trim().length === 0) {
         const prevLine = editor.getLine(listEndLine - 1);
-        const [, prevLineIndent] = /^(\s*)/.exec(prevLine);
+        const prevLineIndent = /^(\s*)/.exec(prevLine)![1];
         if (!lastLine.startsWith(prevLineIndent)) {
           listEndLine--;
         }
@@ -206,14 +206,21 @@ export class Parser {
         }
 
         if (indentWidth > currentIndentWidth) {
+          if (!currentList) {
+            return error(`Unable to parse list: expected parent list`);
+          }
           currentParent = currentList;
           currentIndentWidth = indentWidth;
         } else if (indentWidth < currentIndentWidth) {
           while (
-            indentWidths.get(currentParent) >= indentWidth &&
+            indentWidths.get(currentParent)! >= indentWidth &&
             currentParent.getParent()
           ) {
-            currentParent = currentParent.getParent();
+            const parent = currentParent.getParent();
+            if (!parent) {
+              break;
+            }
+            currentParent = parent;
           }
           currentIndentWidth = indentWidth;
         }
@@ -243,6 +250,10 @@ export class Parser {
         const noteIndentWidth =
           this.getIndentWidth(noteIndentRaw) - baseIndentWidth;
         const listIndentWidth = indentWidths.get(currentList);
+        if (listIndentWidth === undefined) {
+          return error(`Unable to parse list: missing indent width`);
+        }
+
         const expectedNoteIndent = currentList.getNotesIndent();
         const expectedNoteIndentWidth = expectedNoteIndent
           ? this.getIndentWidth(expectedNoteIndent) - baseIndentWidth
@@ -252,7 +263,7 @@ export class Parser {
           expectedNoteIndentWidth !== null &&
           noteIndentWidth !== expectedNoteIndentWidth
         ) {
-          const expected = expectedNoteIndent
+          const expected = expectedNoteIndent!
             .replace(/ /g, "S")
             .replace(/\t/g, "T");
           const got = noteIndentRaw.replace(/ /g, "S").replace(/\t/g, "T");

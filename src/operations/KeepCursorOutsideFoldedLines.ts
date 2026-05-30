@@ -31,7 +31,16 @@ export class KeepCursorOutsideFoldedLines implements Operation {
     }
 
     const foldRoot = list.getTopFoldRoot();
-    const firstLineEnd = foldRoot.getLinesInfo()[0].to;
+    if (!foldRoot) {
+      return;
+    }
+
+    const firstLine = foldRoot.getLinesInfo()[0];
+    if (!firstLine) {
+      return;
+    }
+
+    const firstLineEnd = firstLine.to;
 
     if (cursor.line > firstLineEnd.line) {
       this.updated = true;

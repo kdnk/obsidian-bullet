@@ -57,6 +57,10 @@ export class IndentList implements Operation {
 
     const list = root.getListUnderCursor();
     const parent = list.getParent();
+    if (!parent) {
+      return;
+    }
+
     const prev = parent.getPrevSiblingOf(list);
 
     if (!prev) {
@@ -71,8 +75,11 @@ export class IndentList implements Operation {
     let indentChars = "";
 
     if (indentChars === "" && !prev.isEmpty()) {
-      indentChars = prev
-        .getChildren()[0]
+      const firstPrevChild = prev.getChildren()[0];
+      if (!firstPrevChild) {
+        return;
+      }
+      indentChars = firstPrevChild
         .getFirstLineIndent()
         .slice(prev.getFirstLineIndent().length);
     }
@@ -88,8 +95,11 @@ export class IndentList implements Operation {
     }
 
     if (indentChars === "" && !list.isEmpty()) {
-      indentChars = list
-        .getChildren()[0]
+      const firstChild = list.getChildren()[0];
+      if (!firstChild) {
+        return;
+      }
+      indentChars = firstChild
         .getFirstLineIndent()
         .slice(list.getFirstLineIndent().length);
     }

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { MyEditor } from "./editor";
+import { Root } from "./root";
 import { Logger } from "./services/Logger";
 import { Parser } from "./services/Parser";
 import { Settings } from "./services/Settings";
@@ -51,12 +52,16 @@ export function makeRoot(options: {
   editor: MyEditor;
   settings?: Settings;
   logger?: Logger;
-}) {
+}): Root {
   const { logger, editor, settings } = {
     logger: makeLogger(),
     settings: makeSettings(),
     ...options,
   };
 
-  return new Parser(logger, settings).parse(editor);
+  const root = new Parser(logger, settings).parse(editor);
+  if (!root) {
+    throw new Error("Unable to parse test root");
+  }
+  return root;
 }

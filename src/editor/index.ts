@@ -9,19 +9,23 @@ import {
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView, runScopeHandlers } from "@codemirror/view";
 
-export class MyEditorPosition {
+export interface MyEditorPosition {
   line: number;
   ch: number;
 }
 
-export class MyEditorRange {
+export interface MyEditorRange {
   from: MyEditorPosition;
   to: MyEditorPosition;
 }
 
-export class MyEditorSelection {
+export interface MyEditorSelection {
   anchor: MyEditorPosition;
   head: MyEditorPosition;
+}
+
+interface EditorWithCodeMirrorView extends Editor {
+  cm: EditorView;
 }
 
 export function getEditorFromState(state: EditorState) {
@@ -75,8 +79,7 @@ export class MyEditor {
   private view: EditorView;
 
   constructor(private e: Editor) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.view = (this.e as any).cm;
+    this.view = (this.e as unknown as EditorWithCodeMirrorView).cm;
   }
 
   getCursor(): MyEditorPosition {
