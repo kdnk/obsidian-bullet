@@ -1,3 +1,6 @@
+import { readFileSync } from "fs";
+import { join } from "path";
+
 import { ReleaseNotesAnnouncement } from "../ReleaseNotesAnnouncement";
 
 const mockRenderMarkdown = jest.fn();
@@ -21,6 +24,9 @@ jest.mock(
 
       open() {
         mockOpen();
+        if ("onOpen" in this && typeof this.onOpen === "function") {
+          this.onOpen();
+        }
       }
 
       close() {
@@ -81,5 +87,34 @@ describe("ReleaseNotesAnnouncement", () => {
 
     expect(settings.previousRelease).toBe("5.2.3");
     expect(settings.save).toHaveBeenCalled();
+  });
+
+  test("shows the consolidated v5 release notes for the current patch release", async () => {
+    Object.defineProperty(global, "PLUGIN_VERSION", {
+      configurable: true,
+      value: "5.3.4",
+    });
+    Object.defineProperty(global, "CHANGELOG_MD", {
+      configurable: true,
+      value: readFileSync(join(process.cwd(), "CHANGELOG.md"), "utf8"),
+    });
+
+    const feature = new ReleaseNotesAnnouncement(
+      { app: {}, addCommand: jest.fn() } as never,
+      {
+        previousRelease: "5.3.3",
+        save: jest.fn(),
+      } as never,
+    );
+
+    await feature.load();
+
+    expect(mockOpen).toHaveBeenCalledTimes(1);
+    expect(mockRenderMarkdown).toHaveBeenCalledWith(
+      expect.stringContaining("consolidated v5 release notes"),
+      expect.anything(),
+      "",
+      expect.anything(),
+    );
   });
 });

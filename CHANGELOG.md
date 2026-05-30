@@ -1,3 +1,62 @@
+## 5.3.4
+
+### Release Notes
+
+- Added consolidated v5 release notes to the current release entry so the
+  in-app release notes dialog shows the v5 summary when updating from 5.3.3.
+
+### v5 Highlights
+
+Obsidian Bullet v5 focuses on making list editing feel more consistent across
+desktop, mobile, Vim mode, pop-out windows, and custom themes.
+
+### Cursor Behavior
+
+- Improved cursor recovery around folded lists, checkboxes, ordered lists, and
+  the first row of a list.
+- Added an <kbd>Alt</kbd> / <kbd>Option</kbd> override for temporarily keeping
+  the cursor outside bullet and checkbox markup.
+- Preserved native document navigation shortcuts while improving list-aware
+  ArrowLeft and Vim `j` / `k` behavior.
+
+### Enter Behavior
+
+- Shift-Enter now creates note lines without bullets.
+- Enter can continue existing note lines instead of forcing a new bullet.
+- Enter preserves checkbox state when inserting above tasks.
+- Ordered-list cursor alignment was fixed around item `10` and later.
+- Enter behavior avoids fenced code blocks outside the parsed list root.
+
+### List Movement
+
+- Improved movement for irregular indentation and legacy list items.
+- Added broader regression coverage for moving, indenting, outdenting, and
+  selecting list content.
+
+### Vertical Indentation Lines
+
+- Made vertical indentation guides work better with non-default themes.
+- Improved guide alignment for bullets, checkboxes, line numbers, hover states,
+  and mobile layouts.
+- Reduced unnecessary overlay recalculation for smoother editing.
+
+### Mobile
+
+- Added mobile-friendly editor commands for list movement and indentation.
+- Fixed mobile toolbar indentation behavior.
+
+### Drag-and-Drop
+
+- Improved drag-and-drop alignment.
+- Added support for drag-and-drop in pop-out windows.
+
+### Project Maintenance
+
+- Continued the rename from the upstream Outliner project toward Bullet.
+- Updated package and repository metadata to match the current plugin identity.
+- Restored in-app release notes, aligned CI around Obsidian `1.12.7`, disabled
+  production sourcemaps, and tightened TypeScript safety checks.
+
 ## 5.3.2
 
 ### Release Notes
