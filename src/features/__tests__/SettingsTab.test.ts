@@ -99,11 +99,17 @@ describe("SettingsTab", () => {
     const tab = addSettingTab.mock.calls[0][0];
     tab.display();
 
+    const verticalLinesSetting = mockSettingsRecords.find(
+      (setting) => setting.name === "Draw vertical indentation lines",
+    );
     const actionSetting = mockSettingsRecords.find(
       (setting) =>
         setting.name === "Fold lists from vertical indentation lines",
     );
 
+    expect(verticalLinesSetting?.desc).toBe(
+      "Show guide lines that connect nested list items by indentation level.",
+    );
     expect(actionSetting?.dropdownAdded).toBe(false);
     expect(actionSetting?.toggleCallbacks).toHaveLength(1);
 
