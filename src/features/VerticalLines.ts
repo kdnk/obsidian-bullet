@@ -37,7 +37,7 @@ interface LineData {
   list: List;
 }
 
-class VerticalLinesPluginValue implements PluginValue {
+export class VerticalLinesPluginValue implements PluginValue {
   private scroller: HTMLElement;
   private contentContainer: HTMLElement;
   private editor: MyEditor;
@@ -48,6 +48,8 @@ class VerticalLinesPluginValue implements PluginValue {
   private scheduler: ReturnType<typeof createAnimationFrameScheduler>;
   private resizeObserver?: ResizeObserver;
   private mutationObserver?: MutationObserver;
+  private waitForEditorTimeout: ReturnType<typeof setTimeout> | null = null;
+  private destroyed = false;
 
   constructor(
     private settings: Settings,
@@ -64,9 +66,14 @@ class VerticalLinesPluginValue implements PluginValue {
   }
 
   private waitForEditor = () => {
+    if (this.destroyed) {
+      return;
+    }
+
+    this.waitForEditorTimeout = null;
     const editor = getEditorFromState(this.view.state);
     if (!editor) {
-      setTimeout(this.waitForEditor, 0);
+      this.waitForEditorTimeout = setTimeout(this.waitForEditor, 0);
       return;
     }
     this.editor = editor;
@@ -390,12 +397,17 @@ class VerticalLinesPluginValue implements PluginValue {
   }
 
   destroy() {
+    this.destroyed = true;
     this.settings.removeCallback(this.scheduleRecalculate);
     this.view.scrollDOM.removeEventListener("scroll", this.onScroll);
     this.view.dom.removeChild(this.scroller);
     this.resizeObserver?.disconnect();
     this.mutationObserver?.disconnect();
     this.scheduler.cancel();
+    if (this.waitForEditorTimeout !== null) {
+      clearTimeout(this.waitForEditorTimeout);
+      this.waitForEditorTimeout = null;
+    }
   }
 
   private getGuideX(

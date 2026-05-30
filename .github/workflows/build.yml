@@ -9,7 +9,7 @@ on:
       - main
 
 env:
-  OBSIDIAN_VERSION: "1.11.7"
+  OBSIDIAN_VERSION: "1.12.7"
   NODE_VERSION: 22
 
 jobs:

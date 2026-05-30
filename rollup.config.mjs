@@ -4,33 +4,39 @@ import replace from "@rollup/plugin-replace";
 import typescript from "@rollup/plugin-typescript";
 import fs from "node:fs";
 
-export default (commandLineArgs) => ({
-  input: commandLineArgs.configWithTests
-    ? "src/ObsidianBulletPluginWithTests.ts"
-    : "src/ObsidianBulletPlugin.ts",
-  output: {
-    file: "dist/main.js",
-    sourcemap: "inline",
-    format: "cjs",
-    exports: "default",
-  },
-  external: [
-    "obsidian",
-    "codemirror",
-    "@codemirror/state",
-    "@codemirror/view",
-    "@codemirror/language",
-  ],
-  plugins: [
-    replace({
-      preventAssignment: true,
-      PLUGIN_VERSION: JSON.stringify(
-        JSON.parse(fs.readFileSync("./package.json", "utf-8")).version,
-      ),
-      CHANGELOG_MD: JSON.stringify(fs.readFileSync("./CHANGELOG.md", "utf-8")),
-    }),
-    typescript(),
-    nodeResolve({ browser: true }),
-    commonjs(),
-  ],
-});
+export default (commandLineArgs) => {
+  const isWatch = Boolean(commandLineArgs.watch);
+
+  return {
+    input: commandLineArgs.configWithTests
+      ? "src/ObsidianBulletPluginWithTests.ts"
+      : "src/ObsidianBulletPlugin.ts",
+    output: {
+      file: "dist/main.js",
+      sourcemap: isWatch ? "inline" : false,
+      format: "cjs",
+      exports: "default",
+    },
+    external: [
+      "obsidian",
+      "codemirror",
+      "@codemirror/state",
+      "@codemirror/view",
+      "@codemirror/language",
+    ],
+    plugins: [
+      replace({
+        preventAssignment: true,
+        PLUGIN_VERSION: JSON.stringify(
+          JSON.parse(fs.readFileSync("./package.json", "utf-8")).version,
+        ),
+        CHANGELOG_MD: JSON.stringify(
+          fs.readFileSync("./CHANGELOG.md", "utf-8"),
+        ),
+      }),
+      typescript(),
+      nodeResolve({ browser: true }),
+      commonjs(),
+    ],
+  };
+};

@@ -19,7 +19,7 @@ function parseRanges(str: string): {
 }
 
 describe("isRangesIntersects", () => {
-  const cases = [
+  const cases: [string, boolean][] = [
     ["[--(-]--)", true],
     ["(--[-)--]", true],
     ["[--(--)--]", true],

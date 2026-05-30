@@ -35,8 +35,9 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
             "bullet-and-checkbox": "Stick cursor out of bullets and checkboxes",
           } as { [key in KeepCursorWithinContent]: string })
           .setValue(this.settings.keepCursorWithinContent)
-          .onChange(async (value: KeepCursorWithinContent) => {
-            this.settings.keepCursorWithinContent = value;
+          .onChange(async (value) => {
+            this.settings.keepCursorWithinContent =
+              value as KeepCursorWithinContent;
             await this.settings.save();
           });
       });
@@ -124,8 +125,8 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
             "toggle-folding": "Toggle Folding",
           } as { [key in VerticalLinesAction]: string })
           .setValue(this.settings.verticalLinesAction)
-          .onChange(async (value: VerticalLinesAction) => {
-            this.settings.verticalLinesAction = value;
+          .onChange(async (value) => {
+            this.settings.verticalLinesAction = value as VerticalLinesAction;
             await this.settings.save();
           });
       });
