@@ -1,10 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Settings } from "./Settings";
 
 export class Logger {
   constructor(private settings: Settings) {}
 
-  log(method: string, ...args: any[]) {
+  log(method: string, ...args: unknown[]) {
     if (!this.settings.debug) {
       return;
     }
@@ -13,6 +12,6 @@ export class Logger {
   }
 
   bind(method: string) {
-    return (...args: any[]) => this.log(method, ...args);
+    return (...args: unknown[]) => this.log(method, ...args);
   }
 }

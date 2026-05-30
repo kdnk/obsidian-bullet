@@ -52,7 +52,12 @@ export class MoveCursorToPreviousUnfoldedLine implements Operation {
     this.stopPropagation = true;
     this.updated = true;
 
-    root.replaceCursor(lines[lineNo - 1].to);
+    const previousLine = lines[lineNo - 1];
+    if (!previousLine) {
+      return;
+    }
+
+    root.replaceCursor(previousLine.to);
   }
 
   private moveCursorToPreviousUnfoldedItem(root: Root, cursor: Position) {
@@ -78,7 +83,15 @@ export class MoveCursorToPreviousUnfoldedLine implements Operation {
 
     if (prev.isFolded()) {
       const foldRoot = prev.getTopFoldRoot();
-      const firstLineEnd = foldRoot.getLinesInfo()[0].to;
+      if (!foldRoot) {
+        return;
+      }
+      const firstLine = foldRoot.getLinesInfo()[0];
+      if (!firstLine) {
+        return;
+      }
+
+      const firstLineEnd = firstLine.to;
       root.replaceCursor(firstLineEnd);
     } else {
       root.replaceCursor(prev.getLastLineContentEnd());

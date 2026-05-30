@@ -58,10 +58,10 @@ test("should move cursor to end of first line in previous folded list", () => {
 
   // Setup previous list as folded
   const prevList = root.getListUnderLine(0);
-  prevList.isFolded = () => true;
+  prevList!.isFolded = () => true;
 
   const foldRoot = prevList;
-  foldRoot.getLinesInfo = () => [
+  foldRoot!.getLinesInfo = () => [
     {
       text: "- item 1",
       from: { line: 0, ch: 0 },
@@ -69,7 +69,7 @@ test("should move cursor to end of first line in previous folded list", () => {
     },
   ];
 
-  prevList.getTopFoldRoot = () => foldRoot;
+  prevList!.getTopFoldRoot = () => foldRoot;
 
   // Setup current list for correct cursor check
   root.getListUnderCursor().getCheckboxLength = () => 0;

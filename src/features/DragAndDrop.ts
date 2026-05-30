@@ -207,11 +207,24 @@ export class DragAndDrop implements Feature {
   };
 
   private startDragging() {
+    if (!this.preStart) {
+      return;
+    }
+
     const { x, y, view } = this.preStart;
     this.preStart = null;
 
     const editor = getEditorFromState(view.state);
-    const pos = editor.offsetToPos(view.posAtCoords({ x, y }));
+    if (!editor) {
+      return;
+    }
+
+    const coordsPos = view.posAtCoords({ x, y });
+    if (coordsPos === null) {
+      return;
+    }
+
+    const pos = editor.offsetToPos(coordsPos);
     const root = this.parser.parse(editor, pos);
     if (!root) {
       this.notifyInvalidListStructure();
@@ -235,12 +248,12 @@ export class DragAndDrop implements Feature {
   }
 
   private detectAndDrawDropZone(x: number, y: number) {
-    this.state.calculateNearestDropVariant(x, y);
+    this.getState().calculateNearestDropVariant(x, y);
     this.drawDropZone();
   }
 
   private cancelDragging() {
-    this.state.dropVariant = null;
+    this.getState().dropVariant = null;
     this.stopDragging();
   }
 
@@ -252,11 +265,11 @@ export class DragAndDrop implements Feature {
   }
 
   private applyChanges() {
-    if (!this.state.dropVariant) {
+    const state = this.getState();
+    if (!state.dropVariant) {
       return;
     }
 
-    const { state } = this;
     const { dropVariant, editor, root, list } = state;
 
     const newRoot = this.parser.parse(editor, root.getContentStart());
@@ -283,7 +296,7 @@ export class DragAndDrop implements Feature {
   }
 
   private highlightDraggingLines() {
-    const { state } = this;
+    const state = this.getState();
     const { list, editor, view } = state;
 
     const lines = [];
@@ -296,7 +309,7 @@ export class DragAndDrop implements Feature {
       effects: [dndStarted.of(lines)],
     });
 
-    this.state.doc.body.classList.add("bullet-plugin-dragging");
+    state.doc.body.classList.add("bullet-plugin-dragging");
   }
 
   private notifyInvalidListStructure() {
@@ -307,16 +320,21 @@ export class DragAndDrop implements Feature {
   }
 
   private unhightlightDraggingLines() {
-    this.state.doc.body.classList.remove("bullet-plugin-dragging");
+    const state = this.getState();
+    state.doc.body.classList.remove("bullet-plugin-dragging");
 
-    this.state.view.dispatch({
+    state.view.dispatch({
       effects: [dndEnded.of()],
     });
   }
 
   private drawDropZone() {
-    const { state } = this;
+    const state = this.getState();
     const { view, editor, dropVariant } = state;
+    if (!dropVariant) {
+      return;
+    }
+
     const { dropZone, dropZonePadding, doc } = this.getDocumentContext(
       state.doc,
     );
@@ -325,12 +343,15 @@ export class DragAndDrop implements Feature {
       dropVariant.whereToMove === "inside"
         ? dropVariant.placeToMove
         : dropVariant.placeToMove.getParent();
+    if (!newParent) {
+      return;
+    }
+
     const newParentIsRootList = !newParent.getParent();
 
     {
       const width = Math.round(
-        view.contentDOM.offsetWidth -
-          (dropVariant.left - this.state.leftPadding),
+        view.contentDOM.offsetWidth - (dropVariant.left - state.leftPadding),
       );
 
       dropZone.style.display = "block";
@@ -341,7 +362,7 @@ export class DragAndDrop implements Feature {
 
     {
       const level = newParent.getLevel();
-      const indentWidth = this.state.tabWidth;
+      const indentWidth = state.tabWidth;
       const width = indentWidth * level;
       const dashPadding = 3;
       const dashWidth = indentWidth - dashPadding;
@@ -354,7 +375,7 @@ export class DragAndDrop implements Feature {
       dropZonePadding.style.backgroundImage = `url('data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%20${width}%204%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cline%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%22${width}%22%20y2%3D%220%22%20stroke%3D%22${color}%22%20stroke-width%3D%228%22%20stroke-dasharray%3D%22${dashWidth}%20${dashPadding}%22%2F%3E%3C%2Fsvg%3E')`;
     }
 
-    this.state.view.dispatch({
+    state.view.dispatch({
       effects: [
         dndMoved.of(
           newParentIsRootList
@@ -369,7 +390,8 @@ export class DragAndDrop implements Feature {
   }
 
   private hideDropZone() {
-    this.getDocumentContext(this.state.doc).dropZone.style.display = "none";
+    this.getDocumentContext(this.getState().doc).dropZone.style.display =
+      "none";
   }
 
   private getDocumentContext(doc: Document) {
@@ -379,6 +401,14 @@ export class DragAndDrop implements Feature {
     }
 
     return context;
+  }
+
+  private getState(): DragAndDropState {
+    if (!this.state) {
+      throw new Error("Missing drag-and-drop state");
+    }
+
+    return this.state;
   }
 }
 
@@ -400,7 +430,7 @@ interface DragAndDropPreStartState {
 
 class DragAndDropState {
   private dropVariants: Map<string, DropVariant> = new Map();
-  public dropVariant: DropVariant = null;
+  public dropVariant: DropVariant | null = null;
   public leftPadding = 0;
   public tabWidth = 0;
 
@@ -428,7 +458,7 @@ class DragAndDropState {
     const { view, editor } = this;
 
     const dropVariants = this.getDropVariants();
-    const possibleDropVariants = [];
+    const possibleDropVariants: DropVariant[] = [];
 
     for (const v of dropVariants) {
       const { placeToMove } = v;
@@ -462,17 +492,24 @@ class DragAndDropState {
       possibleDropVariants.push(v);
     }
 
-    const nearestLineTop = possibleDropVariants
-      .sort((a, b) => Math.abs(y - a.top) - Math.abs(y - b.top))
-      .first().top;
+    const nearestLineVariant = possibleDropVariants.sort(
+      (a, b) => Math.abs(y - a.top) - Math.abs(y - b.top),
+    )[0];
+    if (!nearestLineVariant) {
+      this.dropVariant = null;
+      return;
+    }
+
+    const nearestLineTop = nearestLineVariant.top;
 
     const variansOnNearestLine = possibleDropVariants.filter(
       (v) => Math.abs(v.top - nearestLineTop) <= 4,
     );
 
-    this.dropVariant = variansOnNearestLine
-      .sort((a, b) => Math.abs(x - a.left) - Math.abs(x - b.left))
-      .first();
+    this.dropVariant =
+      variansOnNearestLine.sort(
+        (a, b) => Math.abs(x - a.left) - Math.abs(x - b.left),
+      )[0] ?? null;
   }
 
   private addDropVariant(v: DropVariant) {
@@ -631,7 +668,7 @@ const droppingLinesStateField = StateField.define<DecorationSet>({
   provide: (f) => EditorView.decorations.from(f),
 });
 
-function getEditorViewFromHTMLElement(e: HTMLElement) {
+function getEditorViewFromHTMLElement(e: HTMLElement | null) {
   while (e && !e.classList.contains("cm-editor")) {
     e = e.parentElement;
   }
@@ -644,7 +681,7 @@ function getEditorViewFromHTMLElement(e: HTMLElement) {
 }
 
 function isClickOnBullet(e: MouseEvent) {
-  let el = e.target as HTMLElement;
+  let el = e.target as HTMLElement | null;
 
   while (el) {
     if (
@@ -661,7 +698,11 @@ function isClickOnBullet(e: MouseEvent) {
   return false;
 }
 
-function isSameRoots(a: Root, b: Root) {
+function isSameRoots(a: Root, b: Root | null) {
+  if (!b) {
+    return false;
+  }
+
   const [aStart, aEnd] = a.getContentRange();
   const [bStart, bEnd] = b.getContentRange();
 

@@ -6,7 +6,7 @@ import { Settings } from "../services/Settings";
 const BETTER_LISTS_BODY_CLASS = "bullet-plugin-better-lists";
 
 export class BetterListsStyles implements Feature {
-  private updateBodyClassInterval: number;
+  private updateBodyClassInterval: number | null = null;
 
   constructor(
     private settings: Settings,
@@ -21,7 +21,10 @@ export class BetterListsStyles implements Feature {
   }
 
   async unload() {
-    clearInterval(this.updateBodyClassInterval);
+    if (this.updateBodyClassInterval !== null) {
+      clearInterval(this.updateBodyClassInterval);
+      this.updateBodyClassInterval = null;
+    }
     document.body.classList.remove(BETTER_LISTS_BODY_CLASS);
   }
 

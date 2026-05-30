@@ -86,6 +86,12 @@ export class VimOBehaviourOverride implements Feature {
         }
 
         const view = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!view) {
+          new Notice("No active markdown view found", 5000);
+          vim.enterInsertMode(cm);
+          return;
+        }
+
         const editor = new MyEditor(view.editor);
         const root = parser.parse(editor);
 

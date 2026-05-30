@@ -38,6 +38,9 @@ export class InsertNewLineWithoutBullet implements Operation {
     }
 
     const lineUnderCursor = lines[lineIndex];
+    if (!lineUnderCursor) {
+      return;
+    }
 
     if (cursor.ch < lineUnderCursor.from.ch) {
       return;
@@ -47,7 +50,7 @@ export class InsertNewLineWithoutBullet implements Operation {
     this.updated = true;
 
     const lineOffset = cursor.ch - lineUnderCursor.from.ch;
-    const lineText = lines[lineIndex].text;
+    const lineText = lineUnderCursor.text;
     const left = lineText.slice(0, lineOffset);
     const right = lineText.slice(lineOffset);
     const newLines = list.getLines();
@@ -62,7 +65,7 @@ export class InsertNewLineWithoutBullet implements Operation {
 
     root.replaceCursor({
       line: cursor.line + 1,
-      ch: list.getNotesIndent().length,
+      ch: list.getNotesIndentOrThrow().length,
     });
   }
 

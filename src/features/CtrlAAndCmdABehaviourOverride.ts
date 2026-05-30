@@ -55,13 +55,15 @@ export class CtrlAAndCmdABehaviourOverride implements Feature {
   };
 
   private run = (editor: MyEditor) => {
-    let operation: SelectAllContent | null = null;
+    const operationRef: { current: SelectAllContent | null } = {
+      current: null,
+    };
     const result = this.operationPerformer.perform((root) => {
-      operation = new SelectAllContent(root, this.cycleCursor);
-      return operation;
+      operationRef.current = new SelectAllContent(root, this.cycleCursor);
+      return operationRef.current;
     }, editor);
 
-    this.cycleCursor = operation?.getCycleCursor() ?? null;
+    this.cycleCursor = operationRef.current?.getCycleCursor() ?? null;
 
     return result;
   };

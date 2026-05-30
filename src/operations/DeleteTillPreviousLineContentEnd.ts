@@ -93,18 +93,30 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
       this.updated = true;
 
       const parent = list.getParent();
+      if (!parent) {
+        return;
+      }
+
       const prevEnd = prev.getLastLineContentEnd();
 
       if (!prev.getNotesIndent() && list.getNotesIndent()) {
         prev.setNotesIndent(
           prev.getFirstLineIndent() +
-            list.getNotesIndent().slice(list.getFirstLineIndent().length),
+            list
+              .getNotesIndentOrThrow()
+              .slice(list.getFirstLineIndent().length),
         );
       }
 
       const oldLines = prev.getLines();
       const newLines = list.getLines();
-      oldLines[oldLines.length - 1] += newLines[0];
+      const lastOldLine = oldLines[oldLines.length - 1];
+      const firstNewLine = newLines[0];
+      if (lastOldLine === undefined || firstNewLine === undefined) {
+        return;
+      }
+
+      oldLines[oldLines.length - 1] = lastOldLine + firstNewLine;
       const resultLines = oldLines.concat(newLines.slice(1));
 
       prev.replaceLines(resultLines);

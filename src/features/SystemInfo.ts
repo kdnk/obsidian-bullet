@@ -29,8 +29,7 @@ class SystemInfoModal extends Modal {
   async onOpen() {
     this.titleEl.setText("System Information");
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const app = this.app as any as AppHiddenProps;
+    const app = this.app as unknown as AppHiddenProps;
 
     const data = {
       process: {

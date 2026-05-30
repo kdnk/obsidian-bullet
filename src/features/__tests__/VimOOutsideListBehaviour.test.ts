@@ -130,7 +130,7 @@ describe("VimOBehaviourOverride outside lists", () => {
 
       await feature.load();
 
-      const vim = global.window.CodeMirrorAdapter.Vim;
+      const vim = global.window.CodeMirrorAdapter!.Vim!;
       const action = (vim.defineAction as jest.Mock).mock.calls.find(
         ([name]) => name === "insertLineAfterBullet",
       )?.[1];
@@ -138,7 +138,7 @@ describe("VimOBehaviourOverride outside lists", () => {
       expect(action).toBeDefined();
 
       const cm = {};
-      action(cm, { after });
+      action!(cm, { after });
 
       expect(vim.handleEx).toHaveBeenCalledWith(cm, "normal! A");
       expect(parser.parse).toHaveBeenCalledTimes(1);

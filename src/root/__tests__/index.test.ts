@@ -79,7 +79,7 @@ describe("Root", () => {
       const list = root.getListUnderLine(1);
 
       expect(list).toBeDefined();
-      expect(list.print()).toBe("\t- two\n");
+      expect(list!.print()).toBe("\t- two\n");
     });
 
     test("should return list under line when line is note", () => {
@@ -93,7 +93,7 @@ describe("Root", () => {
       const list = root.getListUnderLine(3);
 
       expect(list).toBeDefined();
-      expect(list.print()).toBe("\t- two\n\t\tnote2\n");
+      expect(list!.print()).toBe("\t- two\n\t\tnote2\n");
     });
   });
 

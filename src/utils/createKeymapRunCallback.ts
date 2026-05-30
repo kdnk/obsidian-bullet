@@ -14,6 +14,9 @@ export function createKeymapRunCallback(config: {
 
   return (view: EditorView): boolean => {
     const editor = getEditorFromState(view.state);
+    if (!editor) {
+      return false;
+    }
 
     if (!check(editor)) {
       return false;

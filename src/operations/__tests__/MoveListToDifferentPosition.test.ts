@@ -11,8 +11,8 @@ describe("MoveListToDifferentPosition operation", () => {
       settings: makeSettings(),
     });
 
-    const listToMove = root.getListUnderLine(2); // item 3
-    const placeToMove = root.getListUnderLine(0); // item 1
+    const listToMove = root.getListUnderLine(2)!; // item 3
+    const placeToMove = root.getListUnderLine(0)!; // item 1
 
     const op = new MoveListToDifferentPosition(
       root,
@@ -38,8 +38,8 @@ describe("MoveListToDifferentPosition operation", () => {
       settings: makeSettings(),
     });
 
-    const listToMove = root.getListUnderLine(0); // item 1
-    const placeToMove = root.getListUnderLine(1); // item 2
+    const listToMove = root.getListUnderLine(0)!; // item 1
+    const placeToMove = root.getListUnderLine(1)!; // item 2
 
     const op = new MoveListToDifferentPosition(
       root,
@@ -63,8 +63,8 @@ describe("MoveListToDifferentPosition operation", () => {
       settings: makeSettings(),
     });
 
-    const listToMove = root.getListUnderLine(2); // item 3
-    const placeToMove = root.getListUnderLine(0); // item 1
+    const listToMove = root.getListUnderLine(2)!; // item 3
+    const placeToMove = root.getListUnderLine(0)!; // item 1
 
     const op = new MoveListToDifferentPosition(
       root,
@@ -88,8 +88,8 @@ describe("MoveListToDifferentPosition operation", () => {
       settings: makeSettings(),
     });
 
-    const listToMove = root.getListUnderLine(2); // item 2
-    const placeToMove = root.getListUnderLine(1); // item 1.1
+    const listToMove = root.getListUnderLine(2)!; // item 2
+    const placeToMove = root.getListUnderLine(1)!; // item 1.1
 
     const op = new MoveListToDifferentPosition(
       root,
@@ -113,8 +113,8 @@ describe("MoveListToDifferentPosition operation", () => {
       settings: makeSettings(),
     });
 
-    const listToMove = root.getListUnderLine(1); // item 2 with children
-    const placeToMove = root.getListUnderLine(4); // item 3
+    const listToMove = root.getListUnderLine(1)!; // item 2 with children
+    const placeToMove = root.getListUnderLine(4)!; // item 3
 
     const op = new MoveListToDifferentPosition(
       root,
@@ -140,7 +140,7 @@ describe("MoveListToDifferentPosition operation", () => {
       settings: makeSettings(),
     });
 
-    const listToMove = root.getListUnderLine(1); // item 2
+    const listToMove = root.getListUnderLine(1)!; // item 2
     const placeToMove = listToMove; // same list
 
     const op = new MoveListToDifferentPosition(
@@ -167,8 +167,8 @@ describe("MoveListToDifferentPosition operation", () => {
       settings: makeSettings(),
     });
 
-    const listToMove = root.getListUnderLine(0); // item 1
-    const placeToMove = root.getListUnderLine(2); // item 3
+    const listToMove = root.getListUnderLine(0)!; // item 1
+    const placeToMove = root.getListUnderLine(2)!; // item 3
 
     const op = new MoveListToDifferentPosition(
       root,
@@ -192,8 +192,8 @@ describe("MoveListToDifferentPosition operation", () => {
       settings: makeSettings(),
     });
 
-    const listToMove = root.getListUnderLine(2); // item 3
-    const placeToMove = root.getListUnderLine(0); // item 1
+    const listToMove = root.getListUnderLine(2)!; // item 3
+    const placeToMove = root.getListUnderLine(0)!; // item 1
 
     const op = new MoveListToDifferentPosition(
       root,

@@ -84,6 +84,14 @@ export class List {
     return this.notesIndent;
   }
 
+  getNotesIndentOrThrow(): string {
+    if (this.notesIndent === null) {
+      throw new Error("Notes indent is not available");
+    }
+
+    return this.notesIndent;
+  }
+
   setNotesIndent(notesIndent: string) {
     if (this.notesIndent !== null) {
       throw new Error(`Notes indent already provided`);
@@ -129,7 +137,9 @@ export class List {
     return this.lines.map((row, i) => {
       const line = startLine + i;
       const startCh =
-        i === 0 ? this.getContentStartCh() : this.notesIndent.length;
+        i === 0
+          ? this.getContentStartCh()
+          : this.getNotesIndentOrThrow().length;
       const endCh = startCh + row.length;
 
       return {
@@ -167,7 +177,8 @@ export class List {
     const endCh =
       this.lines.length === 1
         ? this.getContentStartCh() + this.lines[0].length
-        : this.notesIndent.length + this.lines[this.lines.length - 1].length;
+        : this.getNotesIndentOrThrow().length +
+          this.lines[this.lines.length - 1].length;
 
     return {
       line: endLine,
@@ -183,10 +194,19 @@ export class List {
     let lastChild: List = this;
 
     while (!lastChild.isEmpty()) {
-      lastChild = lastChild.getChildren().last();
+      lastChild = lastChild.getLastDirectChild();
     }
 
     return lastChild;
+  }
+
+  private getLastDirectChild(): List {
+    const child = this.children[this.children.length - 1];
+    if (!child) {
+      throw new Error("Expected list to have a child");
+    }
+
+    return child;
   }
 
   private getContentStartCh() {
@@ -210,7 +230,7 @@ export class List {
   }
 
   getTopFoldRoot() {
-    let tmp: List = this;
+    let tmp: List | null = this;
     let foldRoot: List | null = null;
     while (tmp) {
       if (tmp.isFoldRoot()) {
@@ -286,6 +306,14 @@ export class List {
     return this.parent;
   }
 
+  getParentOrThrow() {
+    if (!this.parent) {
+      throw new Error("Expected list to have a parent");
+    }
+
+    return this.parent;
+  }
+
   addBeforeAll(list: List) {
     this.children.unshift(list);
     list.parent = this;
@@ -321,7 +349,7 @@ export class List {
 
   getNextSiblingOf(list: List) {
     const i = this.children.indexOf(list);
-    return i >= 0 && i < this.children.length ? this.children[i + 1] : null;
+    return i >= 0 && i < this.children.length - 1 ? this.children[i + 1] : null;
   }
 
   isEmpty() {
@@ -335,7 +363,7 @@ export class List {
       res +=
         i === 0
           ? this.indent + this.bullet + this.spaceAfterBullet
-          : this.notesIndent;
+          : this.getNotesIndentOrThrow();
       res += this.lines[i];
       res += "\n";
     }
@@ -409,7 +437,7 @@ export class Root {
       return false;
     }
 
-    const selection = this.selections[0];
+    const selection = this.getFirstSelection();
 
     return (
       selection.anchor.line === selection.head.line &&
@@ -422,7 +450,7 @@ export class Root {
   }
 
   getSelection() {
-    const selection = this.selections[this.selections.length - 1];
+    const selection = this.getLastSelection();
 
     const from =
       selection.anchor.ch > selection.head.ch
@@ -441,7 +469,7 @@ export class Root {
   }
 
   getCursor() {
-    return { ...this.selections[this.selections.length - 1].head };
+    return { ...this.getLastSelection().head };
   }
 
   replaceCursor(cursor: Position) {
@@ -455,16 +483,38 @@ export class Root {
     this.selections = selections;
   }
 
-  getListUnderCursor(): List {
-    return this.getListUnderLine(this.getCursor().line);
-  }
-
-  getListUnderLine(line: number) {
-    if (line < this.start.line || line > this.end.line) {
-      return;
+  private getFirstSelection(): Range {
+    const selection = this.selections[0];
+    if (!selection) {
+      throw new Error("Expected at least one selection");
     }
 
-    let result: List = null;
+    return selection;
+  }
+
+  private getLastSelection(): Range {
+    const selection = this.selections[this.selections.length - 1];
+    if (!selection) {
+      throw new Error("Expected at least one selection");
+    }
+
+    return selection;
+  }
+
+  getListUnderCursor(): List {
+    const list = this.getListUnderLine(this.getCursor().line);
+    if (!list) {
+      throw new Error("Unable to find list under cursor");
+    }
+    return list;
+  }
+
+  getListUnderLine(line: number): List | null {
+    if (line < this.start.line || line > this.end.line) {
+      return null;
+    }
+
+    let result: List | null = null;
     let index: number = this.start.line;
 
     const visitArr = (ll: List[]) => {
@@ -489,7 +539,7 @@ export class Root {
     return result;
   }
 
-  getContentLinesRangeOf(list: List): [number, number] | null {
+  getContentLinesRangeOf(list: List): [number, number] {
     let result: [number, number] | null = null;
     let line: number = this.start.line;
 
@@ -512,6 +562,10 @@ export class Root {
     };
 
     visitArr(this.rootList.getChildren());
+
+    if (!result) {
+      throw new Error("Unable to find list content range");
+    }
 
     return result;
   }

@@ -30,6 +30,10 @@ export class MoveListDown implements Operation {
 
     const list = root.getListUnderCursor();
     const parent = list.getParent();
+    if (!parent) {
+      return;
+    }
+
     const grandParent = parent.getParent();
     const next = parent.getNextSiblingOf(list);
 

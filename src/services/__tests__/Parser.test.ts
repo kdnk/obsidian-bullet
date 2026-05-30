@@ -73,7 +73,7 @@ describe("parseList", () => {
         }),
       }),
     );
-    expect(list.print()).toBe(
+    expect(list!.print()).toBe(
       "- one\n  side\n\t- two\n\t\t- three\n\t\t\tnote\n\t- four",
     );
   });
@@ -94,7 +94,7 @@ describe("parseList", () => {
     const list = parser.parse(editor as any);
 
     expect(list).toBeDefined();
-    expect(list.print()).toBe("- three\n- four");
+    expect(list!.print()).toBe("- three\n- four");
   });
 
   test("should parse root items with leading whitespace", () => {
@@ -107,7 +107,7 @@ describe("parseList", () => {
     const list = parser.parse(editor as any);
 
     expect(list).toBeTruthy();
-    expect(list.print()).toBe(" - one\n - two\n     - three");
+    expect(list!.print()).toBe(" - one\n - two\n     - three");
   });
 
   test("should parse mixed spaces and tabs without failing", () => {
@@ -122,7 +122,7 @@ describe("parseList", () => {
 
     expect(list).toBeTruthy();
     expect(logger.log).not.toHaveBeenCalled();
-    expect(list.print()).toBe("- one\n  - two\n\t- three");
+    expect(list!.print()).toBe("- one\n  - two\n\t- three");
   });
 
   test("should error if note indent is not match", () => {
@@ -171,7 +171,7 @@ describe("parseList", () => {
     const parent = list?.getRootList().getChildren()[0];
 
     expect(parent).toBeTruthy();
-    expect(parent.getCheckboxLength()).toBe(0);
-    expect(parent.hasCheckbox()).toBe(true);
+    expect(parent!.getCheckboxLength()).toBe(0);
+    expect(parent!.hasCheckbox()).toBe(true);
   });
 });

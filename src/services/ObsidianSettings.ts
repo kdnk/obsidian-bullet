@@ -13,9 +13,12 @@ export interface ObsidianSmartListSettings {
   smartIndentList: boolean;
 }
 
+interface VaultWithHiddenConfig {
+  config?: object;
+}
+
 function getHiddenObsidianConfig(app: App) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (app.vault as any).config;
+  return (app.vault as unknown as VaultWithHiddenConfig).config ?? {};
 }
 
 export class ObsidianSettings {

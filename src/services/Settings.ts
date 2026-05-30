@@ -41,7 +41,7 @@ type Callback = () => void;
 
 export class Settings {
   private storage: Storage;
-  private values: SettingsObject;
+  private values: SettingsObject = { ...DEFAULT_SETTINGS };
   private callbacks: Set<Callback>;
 
   constructor(storage: Storage) {
