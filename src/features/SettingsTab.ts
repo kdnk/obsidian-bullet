@@ -104,6 +104,9 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Draw vertical indentation lines")
+      .setDesc(
+        "Show guide lines that connect nested list items by indentation level.",
+      )
       .addToggle((toggle) => {
         toggle.setValue(this.settings.verticalLines).onChange(async (value) => {
           this.settings.verticalLines = value;
