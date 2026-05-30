@@ -40,6 +40,15 @@ describe("DragAndDrop", () => {
       remove: jest.fn((value: string) => {
         values.delete(value);
       }),
+      toggle: jest.fn((value: string, force?: boolean) => {
+        if (force ?? !values.has(value)) {
+          values.add(value);
+          return true;
+        }
+
+        values.delete(value);
+        return false;
+      }),
       contains: (value: string) => values.has(value),
     };
   }
@@ -48,6 +57,7 @@ describe("DragAndDrop", () => {
     classList: {
       add: jest.Mock<void, [string]>;
       remove: jest.Mock<void, [string]>;
+      toggle: jest.Mock<boolean, [string, boolean?]>;
       contains: (value: string) => boolean;
     };
     style: Record<string, string>;
@@ -211,6 +221,124 @@ describe("DragAndDrop", () => {
     );
     expect(popoutDocument.body.classList.contains("bullet-plugin-dnd")).toBe(
       false,
+    );
+  });
+
+  test("should not start dragging until the pointer moves far enough", () => {
+    const feature = new DragAndDrop(
+      {} as never,
+      { dragAndDrop: true } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    const startDragging = jest.fn();
+    (feature as unknown as { startDragging: () => void }).startDragging =
+      startDragging;
+    (feature as unknown as { preStart: unknown }).preStart = {
+      x: 10,
+      y: 20,
+      view: {},
+      doc: {},
+    };
+
+    (
+      feature as unknown as {
+        handleMouseMove: (e: Pick<MouseEvent, "x" | "y">) => void;
+      }
+    ).handleMouseMove({ x: 13, y: 22 });
+
+    expect(startDragging).not.toHaveBeenCalled();
+  });
+
+  test("should start dragging once the pointer moves past the drag threshold", () => {
+    const feature = new DragAndDrop(
+      {} as never,
+      { dragAndDrop: true } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    const startDragging = jest.fn();
+    (feature as unknown as { startDragging: () => void }).startDragging =
+      startDragging;
+    (feature as unknown as { preStart: unknown }).preStart = {
+      x: 10,
+      y: 20,
+      view: {},
+      doc: {},
+    };
+
+    (
+      feature as unknown as {
+        handleMouseMove: (e: Pick<MouseEvent, "x" | "y">) => void;
+      }
+    ).handleMouseMove({ x: 18, y: 20 });
+
+    expect(startDragging).toHaveBeenCalledTimes(1);
+  });
+
+  test("should mark the drop zone when moving an item inside another item", () => {
+    Object.defineProperty(global, "getComputedStyle", {
+      configurable: true,
+      value: jest.fn().mockReturnValue({
+        getPropertyValue: jest.fn().mockReturnValue("#8a5cf6"),
+      }),
+    });
+
+    const feature = new DragAndDrop(
+      {} as never,
+      { dragAndDrop: true } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const doc = makeDocument();
+    const dropZone = makeElement();
+    const dropZonePadding = makeElement();
+    const parent = {
+      getLevel: jest.fn().mockReturnValue(2),
+      getParent: jest.fn().mockReturnValue(null),
+      getFirstLineContentStart: jest.fn().mockReturnValue({ line: 1, ch: 0 }),
+    };
+
+    (
+      feature as unknown as {
+        documents: Map<unknown, unknown>;
+        state: unknown;
+      }
+    ).documents.set(doc, { doc, dropZone, dropZonePadding });
+    (
+      feature as unknown as {
+        state: unknown;
+      }
+    ).state = {
+      doc,
+      view: {
+        contentDOM: { offsetWidth: 400 },
+        dispatch: jest.fn(),
+      },
+      editor: { posToOffset: jest.fn().mockReturnValue(0) },
+      dropVariant: {
+        left: 80,
+        top: 120,
+        whereToMove: "inside",
+        placeToMove: parent,
+      },
+      leftPadding: 20,
+      tabWidth: 30,
+    };
+
+    (
+      feature as unknown as {
+        drawDropZone: () => void;
+      }
+    ).drawDropZone();
+
+    expect(dropZone.classList.contains("bullet-plugin-drop-zone-inside")).toBe(
+      true,
     );
   });
 });

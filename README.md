@@ -63,10 +63,10 @@ Move lists with children wherever you want without breaking the structure. This 
 
 > **Disclaimer:** vertical indentation lines are only compatible with built-in Obsidian theme.
 
-| Setting                                |  Default value   |
-|----------------------------------------|:----------------:|
-| Draw vertical indentation lines        |      `true`      |
-| Vertical indentation line click action | `Toggle Folding` |
+| Setting                                    | Default value |
+|--------------------------------------------|:-------------:|
+| Draw vertical indentation lines            |    `true`     |
+| Fold lists from vertical indentation lines |    `true`     |
 
 ### Stick the cursor to the content
 

@@ -2,11 +2,7 @@ import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
 
 import { Feature } from "./Feature";
 
-import {
-  KeepCursorWithinContent,
-  Settings,
-  VerticalLinesAction,
-} from "../services/Settings";
+import { KeepCursorWithinContent, Settings } from "../services/Settings";
 
 class ObsidianBulletPluginSettingTab extends PluginSettingTab {
   constructor(
@@ -116,27 +112,30 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
-      .setName("Vertical indentation line click action")
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOptions({
-            none: "None",
-            "zoom-in": "Zoom In",
-            "toggle-folding": "Toggle Folding",
-          } as { [key in VerticalLinesAction]: string })
-          .setValue(this.settings.verticalLinesAction)
+      .setName("Fold lists from vertical indentation lines")
+      .setDesc("Click a vertical indentation line to fold or unfold that list.")
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.settings.verticalLinesAction === "toggle-folding")
           .onChange(async (value) => {
-            this.settings.verticalLinesAction = value as VerticalLinesAction;
+            this.settings.verticalLinesAction = value
+              ? "toggle-folding"
+              : "none";
             await this.settings.save();
           });
       });
 
-    new Setting(containerEl).setName("Drag-and-Drop").addToggle((toggle) => {
-      toggle.setValue(this.settings.dragAndDrop).onChange(async (value) => {
-        this.settings.dragAndDrop = value;
-        await this.settings.save();
+    new Setting(containerEl)
+      .setName("Drag-and-Drop")
+      .setDesc(
+        "Move list items on desktop by dragging a bullet, fold indicator, or checkbox.",
+      )
+      .addToggle((toggle) => {
+        toggle.setValue(this.settings.dragAndDrop).onChange(async (value) => {
+          this.settings.dragAndDrop = value;
+          await this.settings.save();
+        });
       });
-    });
 
     new Setting(containerEl)
       .setName("Debug mode")

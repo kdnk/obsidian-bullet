@@ -16,6 +16,7 @@ import { Parser } from "../services/Parser";
 import { Settings } from "../services/Settings";
 
 const BODY_CLASS = "bullet-plugin-dnd";
+const DRAG_START_DISTANCE_PX = 6;
 
 interface DragAndDropDocumentContext {
   doc: Document;
@@ -183,7 +184,7 @@ export class DragAndDrop implements Feature {
   };
 
   private handleMouseMove = (e: MouseEvent) => {
-    if (this.preStart) {
+    if (this.preStart && hasMovedEnoughToStartDragging(this.preStart, e)) {
       this.startDragging();
     }
     if (this.state) {
@@ -358,6 +359,10 @@ export class DragAndDrop implements Feature {
       dropZone.style.top = dropVariant.top + "px";
       dropZone.style.left = dropVariant.left + "px";
       dropZone.style.width = width + "px";
+      dropZone.classList.toggle(
+        "bullet-plugin-drop-zone-inside",
+        dropVariant.whereToMove === "inside",
+      );
     }
 
     {
@@ -715,6 +720,16 @@ function isSameRoots(a: Root, b: Root | null) {
 
 function isFeatureSupported() {
   return Platform.isDesktop;
+}
+
+function hasMovedEnoughToStartDragging(
+  start: DragAndDropPreStartState,
+  current: Pick<MouseEvent, "x" | "y">,
+) {
+  return (
+    Math.hypot(current.x - start.x, current.y - start.y) >=
+    DRAG_START_DISTANCE_PX
+  );
 }
 
 function getEventDocument(e: Event) {

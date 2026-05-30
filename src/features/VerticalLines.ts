@@ -290,24 +290,11 @@ export class VerticalLinesPluginValue implements PluginValue {
     }
 
     switch (this.settings.verticalLinesAction) {
-      case "zoom-in":
-        this.zoomIn(line);
-        break;
-
       case "toggle-folding":
         this.toggleFolding(line);
         break;
     }
   };
-
-  private zoomIn(line: LineData) {
-    const editor = getEditorFromState(this.view.state);
-    if (!editor) {
-      return;
-    }
-
-    editor.zoomIn(line.list.getFirstLineContentStart().line);
-  }
 
   private toggleFolding(line: LineData) {
     const { list } = line;
