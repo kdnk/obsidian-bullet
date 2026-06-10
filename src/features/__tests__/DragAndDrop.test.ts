@@ -146,6 +146,81 @@ describe("DragAndDrop", () => {
     expect((feature as unknown as { state: unknown }).state).toBeNull();
   });
 
+  test("should start dragging from the clicked marker instead of ambiguous coordinates", () => {
+    const editor = {
+      offsetToPos: jest.fn((offset: number) =>
+        offset === 60 ? { line: 6, ch: 0 } : { line: 5, ch: 0 },
+      ),
+    };
+    const draggedList = {
+      getFirstLineContentStart: jest.fn().mockReturnValue({ line: 6, ch: 2 }),
+      getContentEndIncludingChildren: jest
+        .fn()
+        .mockReturnValue({ line: 6, ch: 5 }),
+      getLevel: jest.fn().mockReturnValue(1),
+      isEmpty: jest.fn().mockReturnValue(true),
+    };
+    const root = {
+      getListUnderLine: jest.fn((line: number) =>
+        line === 6 ? draggedList : null,
+      ),
+      getChildren: jest.fn().mockReturnValue([draggedList]),
+    };
+    const parser = {
+      parse: jest.fn().mockReturnValue(root),
+    };
+    mockGetEditorFromState.mockReturnValue(editor);
+
+    const feature = new DragAndDrop(
+      {} as never,
+      { dragAndDrop: true } as never,
+      {} as never,
+      parser as never,
+      {} as never,
+    );
+
+    (
+      feature as unknown as {
+        preStart: unknown;
+      }
+    ).preStart = {
+      x: 10,
+      y: 20,
+      view: {
+        state: {},
+        defaultCharacterWidth: 7,
+        dom: {
+          ownerDocument: {},
+          querySelector: jest.fn((selector: string) =>
+            selector === ".cm-indent" ? { offsetWidth: 14 } : null,
+          ),
+        },
+        posAtCoords: jest.fn().mockReturnValue(50),
+        posAtDOM: jest.fn().mockReturnValue(60),
+      },
+      target: {},
+    };
+
+    jest
+      .spyOn(
+        feature as unknown as { highlightDraggingLines: () => void },
+        "highlightDraggingLines",
+      )
+      .mockImplementation(() => {});
+
+    (
+      feature as unknown as {
+        startDragging: () => void;
+      }
+    ).startDragging();
+
+    expect(parser.parse).toHaveBeenCalledWith(editor, { line: 6, ch: 0 });
+    expect(root.getListUnderLine).toHaveBeenCalledWith(6);
+    expect(
+      (feature as unknown as { state: { list: unknown } }).state.list,
+    ).toBe(draggedList);
+  });
+
   test("should create and remove drag-and-drop contexts for pop-out windows", () => {
     const settings = {
       dragAndDrop: true,
