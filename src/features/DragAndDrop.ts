@@ -178,6 +178,7 @@ export class DragAndDrop implements Feature {
     this.preStart = {
       x: e.x,
       y: e.y,
+      target: e.target instanceof Node ? e.target : null,
       view,
       doc: getEventDocument(e),
     };
@@ -212,7 +213,7 @@ export class DragAndDrop implements Feature {
       return;
     }
 
-    const { x, y, view } = this.preStart;
+    const { x, y, target, view } = this.preStart;
     this.preStart = null;
 
     const editor = getEditorFromState(view.state);
@@ -220,7 +221,7 @@ export class DragAndDrop implements Feature {
       return;
     }
 
-    const coordsPos = view.posAtCoords({ x, y });
+    const coordsPos = getDragStartOffset(view, target, x, y);
     if (coordsPos === null) {
       return;
     }
@@ -434,6 +435,7 @@ interface DropVariant {
 interface DragAndDropPreStartState {
   x: number;
   y: number;
+  target: Node | null;
   view: EditorView;
   doc: Document;
 }
@@ -735,6 +737,23 @@ function hasMovedEnoughToStartDragging(
     Math.hypot(current.x - start.x, current.y - start.y) >=
     DRAG_START_DISTANCE_PX
   );
+}
+
+function getDragStartOffset(
+  view: EditorView,
+  target: Node | null,
+  x: number,
+  y: number,
+) {
+  if (target) {
+    try {
+      return view.posAtDOM(target, 0);
+    } catch {
+      // Fall back to coordinates when CodeMirror cannot map the clicked token.
+    }
+  }
+
+  return view.posAtCoords({ x, y });
 }
 
 function getEventDocument(e: Event) {
