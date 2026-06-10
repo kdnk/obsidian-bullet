@@ -380,8 +380,13 @@ export class VerticalLinesPluginValue implements PluginValue {
     }
 
     this.scroller.setCssStyles({ top: cmScroll.offsetTop + "px" });
+    const overlayScrollHeight = Math.max(
+      cmSizerChildrenSumHeight,
+      cmScroll.scrollHeight,
+    );
+
     this.contentContainer.setCssStyles({
-      height: cmSizerChildrenSumHeight + "px",
+      height: overlayScrollHeight + "px",
       marginLeft: getVerticalLinesContentLeft(this.view) + "px",
       marginTop: firstElementChild.offsetTop - CONTENT_TOP_OFFSET + "px",
     });
