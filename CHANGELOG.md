@@ -1,3 +1,10 @@
+## 5.4.8
+
+### Release
+
+- Published the release notes removal and lint/typecheck guard as the next
+  patch release.
+
 ## 5.4.7
 
 ### Release Notes
