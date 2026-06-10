@@ -1,3 +1,11 @@
+## 5.4.3
+
+### Vertical Indentation Lines
+
+- Kept vertical indentation guides visible when CodeMirror cannot provide
+  character coordinates for a clipped visible range, falling back to the
+  rendered line padding instead.
+
 ## 5.4.2
 
 ### Vertical Indentation Lines

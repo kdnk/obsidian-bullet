@@ -240,10 +240,17 @@ export class VerticalLinesPluginValue implements PluginValue {
         ? this.view.coordsAtPos(measurementOffset, 1)
         : null);
 
-    if (coords && height > 0 && !list.isFolded()) {
-      const line = this.getLineElementAt(measurementOffset);
-      const currentPadding = this.getLinePaddingStart(line);
-      const currentX = this.getGuideX(list, line, measurementOffset, coords);
+    const line = this.getLineElementAt(measurementOffset);
+    const currentPadding = this.getLinePaddingStart(line);
+    const currentX = this.getGuideX(
+      list,
+      line,
+      measurementOffset,
+      coords,
+      currentPadding,
+    );
+
+    if (currentX !== null && height > 0 && !list.isFolded()) {
       if (parentCtx.rootLeft === undefined) {
         parentCtx.rootLeft = currentX;
         parentCtx.rootPadding = currentPadding ?? 0;
@@ -426,7 +433,8 @@ export class VerticalLinesPluginValue implements PluginValue {
     list: List,
     line: HTMLElement | null,
     fromOffset: number,
-    coords: Pick<DOMRect, "right">,
+    coords: Pick<DOMRect, "right"> | null,
+    currentPadding: number | null,
   ) {
     const scrollerLeft = this.view.scrollDOM.getBoundingClientRect().left;
     const scrollLeft = this.view.scrollDOM.scrollLeft;
@@ -439,7 +447,15 @@ export class VerticalLinesPluginValue implements PluginValue {
       }
     }
 
-    return coords.right - scrollerLeft + scrollLeft;
+    if (coords) {
+      return coords.right - scrollerLeft + scrollLeft;
+    }
+
+    if (currentPadding !== null) {
+      return this.contentLeft + currentPadding;
+    }
+
+    return null;
   }
 
   private getVisibleRange(): { from: number; to: number } | null {
