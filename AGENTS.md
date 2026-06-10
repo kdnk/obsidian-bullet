@@ -1,7 +1,6 @@
-- git の操作は、ユーザーに再確認せず `but` (GitButler) を使ってください。
-    - `but status -fv` が `Setup required: Not currently on a gitbutler/* branch.` で失敗した場合は、ユーザーに確認せず `but setup` を実行してから `but status -fv` を再試行してください。
-    - 作業開始時、PR 作成前、リリース作業前、長めの作業の区切りでは定期的に `but pull --check` を実行し、upstream に更新がある場合は `but pull --status-after` で取り込んでください。
-    - `but` が利用不能な理由を調べる場合に限り、read-only の `git` コマンド（例: `git status --short --branch`, `git branch --show-current`, `git remote -v`）を診断目的で使ってかまいません。`git` の write 操作は使わないでください。
+- git の操作は、このリポジトリでは `but` (GitButler) を使わず、通常の `git` を使ってください。
+    - 基本的にデフォルトブランチで作業し、必要な検証後にデフォルトブランチへ直接 push してください。
+    - 作業開始時、リリース作業前、長めの作業の区切りでは定期的に `git fetch` / `git pull --ff-only` で upstream を取り込んでください。
 - github の URL に直接アクセス禁止。必要な GitHub 操作は `gh` CLI を使ってください。
 - commit について
     - commit するときは、Conventional Commits に従ってください。英語で commit メッセージを書いてください。
@@ -11,8 +10,7 @@
         1. major
         2. minor
         3. patch
-    - リリース種別の回答を受けたら、現在取り組んでいるブランチをデフォルトブランチへ直接取り込んで push してください。pull request の作成は不要です。
-    - GitButler の target remote が `origin` の場合、`but merge` は使えません。その場合に限り、全テスト通過後に `git push origin <branch>:<default-branch>` でデフォルトブランチへ直接 push してください。
+    - リリース種別の回答を受けたら、デフォルトブランチへ直接 commit / push してください。pull request の作成は不要です。
     - デフォルトブランチへ取り込む前に全テストを実行し、すべて通ることを確認してください。全テストが通らない状態では取り込まないでください。
     - 取り込み後、デフォルトブランチに対して `npm version <major|minor|patch>` を実行し、新しいバージョンをリリースしてください。
 - テストについて
