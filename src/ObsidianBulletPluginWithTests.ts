@@ -439,7 +439,12 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     }
 
     if (targetSelections) {
-      await this.forceSelectionsToApply(targetSelections);
+      this.beginSuppressingSelectionAdjustments();
+      try {
+        await this.forceSelectionsToApply(targetSelections);
+      } finally {
+        this.endSuppressingSelectionAdjustments();
+      }
     }
 
     await this.waitForSelectionAdjustmentsToSettle();
