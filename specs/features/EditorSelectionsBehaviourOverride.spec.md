@@ -77,7 +77,7 @@
 - assertState:
 
 ```md
-- |[!] one
+|- [!] one
 ```
 
 # cursor should not be moved to list content if stickCursor="never"
