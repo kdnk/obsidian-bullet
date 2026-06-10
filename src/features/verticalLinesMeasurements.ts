@@ -72,7 +72,12 @@ export function getVerticalLineTop(isClipped: boolean, lineBlockTop: number) {
 export function getVerticalLineHeight(
   rawHeight: number,
   hasNextSibling: boolean,
+  isClippedAtVisibleBottom = false,
 ) {
+  if (isClippedAtVisibleBottom) {
+    return `${rawHeight}px`;
+  }
+
   return `calc(${rawHeight}px - ${
     hasNextSibling
       ? LINE_HEIGHT_WITH_NEXT_SIBLING

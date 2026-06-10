@@ -1,3 +1,10 @@
+## 5.4.1
+
+### Vertical Indentation Lines
+
+- Fixed vertical indentation guides disappearing when a long note line extends
+  beyond the visible editor range.
+
 ## 5.3.4
 
 ### Release Notes

@@ -153,4 +153,8 @@ describe("getVerticalLinesContentLeft", () => {
     );
     expect(getVerticalLineHeight(52.75, false)).toBe("calc(52.75px - 2em)");
   });
+
+  test("does not trim lines clipped by the visible range bottom", () => {
+    expect(getVerticalLineHeight(16, false, true)).toBe("16px");
+  });
 });
