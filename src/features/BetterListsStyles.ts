@@ -22,24 +22,26 @@ export class BetterListsStyles implements Feature {
 
   async unload() {
     if (this.updateBodyClassInterval !== null) {
-      clearInterval(this.updateBodyClassInterval);
+      window.clearInterval(this.updateBodyClassInterval);
       this.updateBodyClassInterval = null;
     }
-    document.body.classList.remove(BETTER_LISTS_BODY_CLASS);
+    activeDocument.body.classList.remove(BETTER_LISTS_BODY_CLASS);
   }
 
   private updateBodyClass = () => {
     const shouldExists =
       this.obsidianSettings.isDefaultThemeEnabled() &&
       this.settings.betterListsStyles;
-    const exists = document.body.classList.contains(BETTER_LISTS_BODY_CLASS);
+    const exists = activeDocument.body.classList.contains(
+      BETTER_LISTS_BODY_CLASS,
+    );
 
     if (shouldExists && !exists) {
-      document.body.classList.add(BETTER_LISTS_BODY_CLASS);
+      activeDocument.body.classList.add(BETTER_LISTS_BODY_CLASS);
     }
 
     if (!shouldExists && exists) {
-      document.body.classList.remove(BETTER_LISTS_BODY_CLASS);
+      activeDocument.body.classList.remove(BETTER_LISTS_BODY_CLASS);
     }
   };
 }

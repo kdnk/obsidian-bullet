@@ -48,7 +48,10 @@ describe("ObsidianBulletPluginWithTests", () => {
     jest.useFakeTimers();
     Object.defineProperty(global, "window", {
       configurable: true,
-      value: {},
+      value: {
+        setTimeout: global.setTimeout,
+        clearTimeout: global.clearTimeout,
+      },
     });
   });
 

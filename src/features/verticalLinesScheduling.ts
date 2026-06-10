@@ -1,6 +1,6 @@
 export function createAnimationFrameScheduler(callback: () => void) {
   let frame: number | null = null;
-  let timeout: ReturnType<typeof setTimeout> | null = null;
+  let timeout: number | null = null;
 
   const run = () => {
     frame = null;
@@ -22,7 +22,7 @@ export function createAnimationFrameScheduler(callback: () => void) {
         return;
       }
 
-      timeout = setTimeout(run, 0);
+      timeout = window.setTimeout(run, 0);
     },
 
     cancel() {
@@ -32,7 +32,7 @@ export function createAnimationFrameScheduler(callback: () => void) {
       }
 
       if (timeout !== null) {
-        clearTimeout(timeout);
+        window.clearTimeout(timeout);
         timeout = null;
       }
     },

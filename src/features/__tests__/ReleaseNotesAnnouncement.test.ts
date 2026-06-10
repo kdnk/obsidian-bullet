@@ -11,6 +11,7 @@ jest.mock(
   "obsidian",
   () => ({
     MarkdownRenderer: {
+      render: (...args: unknown[]) => mockRenderMarkdown(...args),
       renderMarkdown: (...args: unknown[]) => mockRenderMarkdown(...args),
     },
     Modal: class Modal {
@@ -111,6 +112,7 @@ describe("ReleaseNotesAnnouncement", () => {
 
     expect(mockOpen).toHaveBeenCalledTimes(1);
     expect(mockRenderMarkdown).toHaveBeenCalledWith(
+      expect.anything(),
       expect.stringContaining("consolidated v5 release notes"),
       expect.anything(),
       "",

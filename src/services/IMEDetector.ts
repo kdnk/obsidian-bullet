@@ -4,13 +4,19 @@ export class IMEDetector {
   private composition = false;
 
   async load() {
-    document.addEventListener("compositionstart", this.onCompositionStart);
-    document.addEventListener("compositionend", this.onCompositionEnd);
+    activeDocument.addEventListener(
+      "compositionstart",
+      this.onCompositionStart,
+    );
+    activeDocument.addEventListener("compositionend", this.onCompositionEnd);
   }
 
   async unload() {
-    document.removeEventListener("compositionend", this.onCompositionEnd);
-    document.removeEventListener("compositionstart", this.onCompositionStart);
+    activeDocument.removeEventListener("compositionend", this.onCompositionEnd);
+    activeDocument.removeEventListener(
+      "compositionstart",
+      this.onCompositionStart,
+    );
   }
 
   isOpened() {
