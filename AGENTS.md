@@ -12,6 +12,7 @@
         2. minor
         3. patch
     - リリース種別の回答を受けたら、現在取り組んでいるブランチに対して pull request を作成し、マージしてください。GitHub 操作は URL に直接アクセスせず `gh` CLI を使ってください。
+    - `gh pr create` が権限エラーで失敗した場合は、branch が push 済みか、`gh repo view --json viewerPermission` で権限があるかを確認し、REST API (`gh api`) と `but pr new` も試してください。それでも失敗する場合は認証・forge 権限の問題としてブロックしてください。
     - pull request をマージする前に全テストを実行し、すべて通ることを確認してください。全テストが通らない状態ではマージしないでください。
     - pull request のマージ後、デフォルトブランチに対して `npm version <major|minor|patch>` を実行し、新しいバージョンをリリースしてください。
 - テストについて
