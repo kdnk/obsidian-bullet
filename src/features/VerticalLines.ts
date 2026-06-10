@@ -42,6 +42,7 @@ export class VerticalLinesPluginValue implements PluginValue {
   private contentContainer!: HTMLElement;
   private editor!: MyEditor;
   private lastLine = 0;
+  private toLine = 0;
   private lines: LineData[] = [];
   private lineElements: HTMLElement[] = [];
   private contentLeft = 0;
@@ -153,6 +154,7 @@ export class VerticalLinesPluginValue implements PluginValue {
     ) {
       const fromLine = this.editor.offsetToPos(this.view.viewport.from).line;
       const toLine = this.editor.offsetToPos(this.view.viewport.to).line;
+      this.toLine = toLine;
       const lists = this.parser.parseRange(this.editor, fromLine, toLine);
 
       for (const list of lists) {
@@ -248,6 +250,8 @@ export class VerticalLinesPluginValue implements PluginValue {
         ? this.view.lineBlockAt(visibleTo - 1).bottom
         : this.view.lineBlockAt(tillOffset).bottom;
     const height = bottom - top;
+    const isClippedAtVisibleBottom =
+      tillOffset > visibleTo || this.isRangeClippedAtVisibleBottom(nextSibling);
 
     if (height > 0 && !list.isFolded()) {
       const nextSibling = list.getParentOrThrow().getNextSiblingOf(list);
@@ -260,7 +264,11 @@ export class VerticalLinesPluginValue implements PluginValue {
         top,
         left: lineLayout.left,
         width: lineLayout.width,
-        height: getVerticalLineHeight(height, hasNextSibling),
+        height: getVerticalLineHeight(
+          height,
+          hasNextSibling,
+          isClippedAtVisibleBottom,
+        ),
         guideOffsetX: lineLayout.guideOffsetX,
         list,
       });
@@ -443,6 +451,21 @@ export class VerticalLinesPluginValue implements PluginValue {
       from: first.from,
       to: last.to,
     };
+  }
+
+  private isRangeClippedAtVisibleBottom(nextSibling: List | null) {
+    if (nextSibling || this.lastLine !== this.toLine) {
+      return false;
+    }
+
+    const nextLine = this.toLine + 1;
+    if (nextLine > this.editor.lastLine()) {
+      return false;
+    }
+
+    return /^[ \t]*(?:[-*+]|\d+\.)( |\t)|^[ \t]+/.test(
+      this.editor.getLine(nextLine),
+    );
   }
 
   private getLinePaddingStart(line: HTMLElement | null): number | null {
