@@ -1,3 +1,11 @@
+## 5.4.4
+
+### Vertical Indentation Lines
+
+- Kept vertical indentation guides visible during mobile scrolling when
+  CodeMirror temporarily cannot provide either character coordinates or the
+  rendered line element.
+
 ## 5.4.3
 
 ### Vertical Indentation Lines

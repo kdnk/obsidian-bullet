@@ -37,6 +37,11 @@ interface LineData {
   list: List;
 }
 
+interface GuideMeasurement {
+  currentX: number;
+  currentPadding: number | null;
+}
+
 export class VerticalLinesPluginValue implements PluginValue {
   private scroller!: HTMLElement;
   private contentContainer!: HTMLElement;
@@ -46,6 +51,7 @@ export class VerticalLinesPluginValue implements PluginValue {
   private lines: LineData[] = [];
   private lineElements: HTMLElement[] = [];
   private contentLeft = 0;
+  private guideMeasurements = new Map<number, GuideMeasurement>();
   private scheduler: ReturnType<typeof createAnimationFrameScheduler>;
   private resizeObserver?: ResizeObserver;
   private mutationObserver?: MutationObserver;
@@ -249,16 +255,21 @@ export class VerticalLinesPluginValue implements PluginValue {
       coords,
       currentPadding,
     );
+    const guideMeasurement =
+      currentX === null
+        ? this.guideMeasurements.get(list.getID())
+        : { currentX, currentPadding };
 
-    if (currentX !== null && height > 0 && !list.isFolded()) {
+    if (guideMeasurement && height > 0 && !list.isFolded()) {
+      this.guideMeasurements.set(list.getID(), guideMeasurement);
       if (parentCtx.rootLeft === undefined) {
-        parentCtx.rootLeft = currentX;
-        parentCtx.rootPadding = currentPadding ?? 0;
+        parentCtx.rootLeft = guideMeasurement.currentX;
+        parentCtx.rootPadding = guideMeasurement.currentPadding ?? 0;
       }
       const lineLayout = measureVerticalGuide({
         contentLeft: this.contentLeft,
-        currentX,
-        currentPadding,
+        currentX: guideMeasurement.currentX,
+        currentPadding: guideMeasurement.currentPadding,
         rootX: parentCtx.rootLeft,
         rootPadding: parentCtx.rootPadding ?? 0,
         hasCheckbox: list.hasCheckbox(),
