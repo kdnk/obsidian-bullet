@@ -88,7 +88,7 @@ export class VerticalLinesPluginValue implements PluginValue {
   };
 
   private prepareDom() {
-    const doc = this.view.dom.ownerDocument ?? document;
+    const doc = this.view.dom.ownerDocument ?? activeDocument;
 
     this.contentContainer = doc.createElement("div");
     this.contentContainer.classList.add(
@@ -388,7 +388,7 @@ export class VerticalLinesPluginValue implements PluginValue {
 
     for (let i = 0; i < this.lines.length; i++) {
       if (this.lineElements.length === i) {
-        const e = (this.view.dom.ownerDocument ?? document).createElement(
+        const e = (this.view.dom.ownerDocument ?? activeDocument).createElement(
           "div",
         );
         e.classList.add("bullet-plugin-list-line");
@@ -534,25 +534,32 @@ export class VerticalLinesPluginValue implements PluginValue {
   }
 }
 
-function isInstanceOf<T>(
-  value: unknown,
-  type: {
-    new (): T;
-  },
-): value is T {
+interface InstanceOfCapable {
+  instanceOf<T>(type: { new (): T }): this is T;
+}
+
+function hasInstanceOf(value: unknown): value is InstanceOfCapable {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "instanceOf" in value &&
+    typeof value.instanceOf === "function"
+  );
+}
+
+function isInstanceOf<T>(value: unknown, type: { new (): T }): value is T {
   if (!value) {
     return false;
   }
 
-  if (
-    typeof value === "object" &&
-    "instanceOf" in value &&
-    typeof value.instanceOf === "function"
-  ) {
+  if (hasInstanceOf(value)) {
     return value.instanceOf(type);
   }
 
-  return value instanceof type;
+  const hasInstance = type[Symbol.hasInstance];
+  return (
+    typeof hasInstance === "function" && Boolean(hasInstance.call(type, value))
+  );
 }
 
 export class VerticalLines implements Feature {

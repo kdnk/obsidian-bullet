@@ -22,7 +22,7 @@ jest.mock(
   { virtual: true },
 );
 
-test("should keep select-all cycle anchored across separate keypresses", () => {
+test("should keep select-all cycle anchored across separate keypresses", async () => {
   const settings = makeSettings();
   const editor = makeEditor({
     text: "- item 1\n- item 2\n    - item 2.1\n    - item 2.2\n- item 3\n",
@@ -64,7 +64,7 @@ test("should keep select-all cycle anchored across separate keypresses", () => {
   );
   const featureWithRun = feature as unknown as FeatureWithRun;
 
-  feature.load();
+  await feature.load();
 
   expect(featureWithRun.run(editor).shouldStopPropagation).toBe(true);
   expect(root.getSelection().anchor).toEqual({ line: 1, ch: 2 });

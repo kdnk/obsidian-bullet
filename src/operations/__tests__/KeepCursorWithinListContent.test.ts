@@ -46,29 +46,22 @@ test("should mock getFirstLineContentStartAfterCheckbox appropriately", () => {
     settings: makeSettings(),
   });
 
-  // Mock the getFirstLineContentStartAfterCheckbox method
   const listUnderCursor = root.getListUnderCursor();
-  const originalMethod = listUnderCursor.getFirstLineContentStartAfterCheckbox;
-  listUnderCursor.getFirstLineContentStartAfterCheckbox = jest
-    .fn()
-    .mockReturnValue({
-      line: 0,
-      ch: 6,
-    });
+  const getFirstLineContentStartAfterCheckbox = jest.fn().mockReturnValue({
+    line: 0,
+    ch: 6,
+  });
+  listUnderCursor.getFirstLineContentStartAfterCheckbox =
+    getFirstLineContentStartAfterCheckbox;
 
   const op = new KeepCursorWithinListContent(root);
   op.perform();
 
-  expect(
-    listUnderCursor.getFirstLineContentStartAfterCheckbox,
-  ).toHaveBeenCalled();
+  expect(getFirstLineContentStartAfterCheckbox).toHaveBeenCalled();
   expect(op.shouldStopPropagation()).toBe(true);
   expect(op.shouldUpdate()).toBe(true);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe(6); // The mocked position after checkbox
-
-  // Restore the original method
-  listUnderCursor.getFirstLineContentStartAfterCheckbox = originalMethod;
 });
 
 test("should move cursor to the start of indented notes content if cursor is before note indent", () => {

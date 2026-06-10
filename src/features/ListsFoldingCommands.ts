@@ -18,12 +18,6 @@ export class ListsFoldingCommands implements Feature {
       icon: "chevrons-down-up",
       name: "Fold the list",
       editorCallback: createEditorCallback(this.fold),
-      hotkeys: [
-        {
-          modifiers: ["Mod"],
-          key: "ArrowUp",
-        },
-      ],
     });
 
     this.plugin.addCommand({
@@ -31,12 +25,6 @@ export class ListsFoldingCommands implements Feature {
       icon: "chevrons-up-down",
       name: "Unfold the list",
       editorCallback: createEditorCallback(this.unfold),
-      hotkeys: [
-        {
-          modifiers: ["Mod"],
-          key: "ArrowDown",
-        },
-      ],
     });
   }
 

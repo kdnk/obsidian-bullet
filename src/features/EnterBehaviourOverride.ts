@@ -54,7 +54,6 @@ export class EnterBehaviourOverride implements Feature {
       icon: "list-plus",
       name: "Insert note line",
       editorCallback: createEditorCallback(this.insertNoteLine),
-      hotkeys: [],
     });
   }
 

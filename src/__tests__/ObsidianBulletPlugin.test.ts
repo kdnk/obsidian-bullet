@@ -1,10 +1,10 @@
-import fs from "node:fs";
-import path from "node:path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 describe("ObsidianBulletPlugin wiring", () => {
   test("loads the release notes announcement feature", () => {
-    const source = fs.readFileSync(
-      path.join(__dirname, "../ObsidianBulletPlugin.ts"),
+    const source = readFileSync(
+      join(__dirname, "../ObsidianBulletPlugin.ts"),
       "utf-8",
     );
 

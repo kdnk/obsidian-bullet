@@ -18,6 +18,13 @@ function makeParser(
   return new Parser(logger, settings);
 }
 
+function getMockLog(logger: Logger) {
+  const { log } = logger as unknown as {
+    log: jest.MockedFunction<Logger["log"]>;
+  };
+  return log;
+}
+
 describe("parseList", () => {
   test("should parse list with notes and sublists", () => {
     const parser = makeParser();
@@ -33,45 +40,28 @@ describe("parseList", () => {
       cursor: { line: 0, ch: 0 },
     });
 
-    const list = parser.parse(editor as any);
+    const list = parser.parse(editor);
 
     expect(list).toBeDefined();
-    expect(list).toMatchObject(
-      expect.objectContaining({
-        rootList: expect.objectContaining({
-          children: [
-            expect.objectContaining({
-              indent: "",
-              bullet: "-",
-              notesIndent: "  ",
-              lines: ["one", "side"],
-              children: [
-                expect.objectContaining({
-                  indent: "\t",
-                  bullet: "-",
-                  notesIndent: null,
-                  lines: ["two"],
-                  children: [
-                    expect.objectContaining({
-                      indent: "\t\t",
-                      bullet: "-",
-                      notesIndent: "\t\t\t",
-                      lines: ["three", "note"],
-                    }),
-                  ],
-                }),
-                expect.objectContaining({
-                  indent: "\t",
-                  bullet: "-",
-                  notesIndent: null,
-                  lines: ["four"],
-                }),
-              ],
-            }),
-          ],
-        }),
-      }),
-    );
+    const [one] = list!.getChildren();
+    const [two, four] = one.getChildren();
+    const [three] = two.getChildren();
+    expect(one.getFirstLineIndent()).toBe("");
+    expect(one.getBullet()).toBe("-");
+    expect(one.getNotesIndent()).toBe("  ");
+    expect(one.getLines()).toStrictEqual(["one", "side"]);
+    expect(two.getFirstLineIndent()).toBe("\t");
+    expect(two.getBullet()).toBe("-");
+    expect(two.getNotesIndent()).toBeNull();
+    expect(two.getLines()).toStrictEqual(["two"]);
+    expect(three.getFirstLineIndent()).toBe("\t\t");
+    expect(three.getBullet()).toBe("-");
+    expect(three.getNotesIndent()).toBe("\t\t\t");
+    expect(three.getLines()).toStrictEqual(["three", "note"]);
+    expect(four.getFirstLineIndent()).toBe("\t");
+    expect(four.getBullet()).toBe("-");
+    expect(four.getNotesIndent()).toBeNull();
+    expect(four.getLines()).toStrictEqual(["four"]);
     expect(list!.print()).toBe(
       "- one\n  side\n\t- two\n\t\t- three\n\t\t\tnote\n\t- four",
     );
@@ -90,7 +80,7 @@ describe("parseList", () => {
       cursor: { line: 3, ch: 3 },
     });
 
-    const list = parser.parse(editor as any);
+    const list = parser.parse(editor);
 
     expect(list).toBeDefined();
     expect(list!.print()).toBe("- three\n- four");
@@ -103,7 +93,7 @@ describe("parseList", () => {
       cursor: { line: 0, ch: 0 },
     });
 
-    const list = parser.parse(editor as any);
+    const list = parser.parse(editor);
 
     expect(list).toBeTruthy();
     expect(list!.print()).toBe(" - one\n - two\n     - three");
@@ -111,31 +101,33 @@ describe("parseList", () => {
 
   test("should parse mixed spaces and tabs without failing", () => {
     const logger = makeLogger();
+    const log = getMockLog(logger);
     const parser = makeParser({ logger });
     const editor = makeEditor({
       text: "- one\n  - two\n\t- three",
       cursor: { line: 0, ch: 0 },
     });
 
-    const list = parser.parse(editor as any);
+    const list = parser.parse(editor);
 
     expect(list).toBeTruthy();
-    expect(logger.log).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
     expect(list!.print()).toBe("- one\n  - two\n\t- three");
   });
 
   test("should error if note indent is not match", () => {
     const logger = makeLogger();
+    const log = getMockLog(logger);
     const parser = makeParser({ logger });
     const editor = makeEditor({
       text: "- one\n\t- two\n  three",
       cursor: { line: 0, ch: 0 },
     });
 
-    const list = parser.parse(editor as any);
+    const list = parser.parse(editor);
 
     expect(list).toBeNull();
-    expect(logger.log).toHaveBeenCalledWith(
+    expect(log).toHaveBeenCalledWith(
       "parseList",
       `Unable to parse list: expected some indent, got no indent`,
     );
@@ -143,30 +135,29 @@ describe("parseList", () => {
 
   test("should parse list with tab just after the list", () => {
     const logger = makeLogger();
+    const log = getMockLog(logger);
     const parser = makeParser({ logger });
     const editor = makeEditor({
       text: "- one\n\t- two\n\t\n",
       cursor: { line: 0, ch: 0 },
     });
 
-    const list = parser.parse(editor as any);
+    const list = parser.parse(editor);
 
-    expect(logger.log).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
     expect(list).toBeTruthy();
   });
 
   test("should preserve checkbox markup information when cursor setting excludes checkbox", () => {
-    const parser = makeParser({
-      settings: {
-        keepCursorWithinContent: "bullet-only",
-      } as Settings,
-    });
+    const settings = makeSettings();
+    settings.keepCursorWithinContent = "bullet-only";
+    const parser = makeParser({ settings });
     const editor = makeEditor({
       text: "- [ ] parent\n  - child",
       cursor: { line: 0, ch: 0 },
     });
 
-    const list = parser.parse(editor as any);
+    const list = parser.parse(editor);
     const parent = list?.getRootList().getChildren()[0];
 
     expect(parent).toBeTruthy();

@@ -1,9 +1,9 @@
-import fs from "fs";
-import path from "path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 describe("Removed external focus integration", () => {
   test("should not expose legacy focus plugin integration", () => {
-    const root = path.join(__dirname, "../..");
+    const root = join(__dirname, "../..");
     const files = [
       "README.md",
       "src/editor/index.ts",
@@ -14,7 +14,7 @@ describe("Removed external focus integration", () => {
     ];
 
     for (const file of files) {
-      const content = fs.readFileSync(path.join(root, file), "utf8");
+      const content = readFileSync(join(root, file), "utf8");
       const oldFocusName = String.fromCharCode(90, 111, 111, 109);
       const oldFocusMethod = oldFocusName.toLowerCase();
 

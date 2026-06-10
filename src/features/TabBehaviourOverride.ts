@@ -114,7 +114,10 @@ export class TabBehaviourOverride implements Feature {
     }
 
     const feature = this;
-    const originalExec = Editor.prototype.exec;
+    const originalExec = Object.getOwnPropertyDescriptor(
+      Editor.prototype,
+      "exec",
+    )?.value as Editor["exec"];
 
     Editor.prototype.exec = function (command: EditorCommandName) {
       if (feature.handleEditorCommand(this, command)) {

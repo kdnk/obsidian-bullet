@@ -74,7 +74,7 @@ class SystemInfoModal extends Modal {
     const button = this.contentEl.createEl("button");
     button.setText("Copy and Close");
     button.onClickEvent(() => {
-      navigator.clipboard.writeText("```json\n" + text + "\n```");
+      void navigator.clipboard.writeText("```json\n" + text + "\n```");
       this.close();
     });
   }
@@ -91,12 +91,6 @@ export class SystemInfo implements Feature {
       id: "system-info",
       name: "Show System Info",
       callback: this.callback,
-      hotkeys: [
-        {
-          modifiers: ["Mod", "Shift", "Alt"],
-          key: "I",
-        },
-      ],
     });
   }
 

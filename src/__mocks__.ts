@@ -27,16 +27,16 @@ export function makeEditor(params: EditorMockParams): MyEditor {
 }
 
 export function makeLogger(): Logger {
-  const log = jest.fn();
+  const log = jest.fn<void, [string, ...unknown[]]>();
 
-  const logger = {
+  const logger: Pick<Logger, "log" | "bind"> = {
     log,
-    bind: jest
-      .fn()
-      .mockImplementation((method: string) => log.bind(null, method)),
-  } as unknown as Logger;
+    bind: (method: string) => {
+      return (...args: unknown[]) => log(method, ...args);
+    },
+  };
 
-  return logger;
+  return logger as Logger;
 }
 
 export function makeSettings(): Settings {

@@ -1,7 +1,7 @@
 import { DragAndDrop } from "../DragAndDrop";
 
-const mockNotice = jest.fn();
-const mockGetEditorFromState = jest.fn();
+const mockNotice = jest.fn<void, unknown[]>();
+const mockGetEditorFromState = jest.fn<unknown, unknown[]>();
 
 jest.mock(
   "obsidian",
@@ -20,7 +20,9 @@ jest.mock(
 jest.mock(
   "../../editor",
   () => ({
-    getEditorFromState: (...args: unknown[]) => mockGetEditorFromState(...args),
+    getEditorFromState: (...args: unknown[]) => {
+      return mockGetEditorFromState(...args);
+    },
   }),
   { virtual: true },
 );

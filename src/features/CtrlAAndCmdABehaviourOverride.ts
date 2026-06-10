@@ -42,7 +42,6 @@ export class CtrlAAndCmdABehaviourOverride implements Feature {
       icon: "list",
       name: "Select list content",
       editorCallback: createEditorCallback(this.selectListContent),
-      hotkeys: [],
     });
   }
 

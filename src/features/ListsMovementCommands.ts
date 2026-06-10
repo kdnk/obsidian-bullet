@@ -51,12 +51,6 @@ export class ListsMovementCommands implements Feature {
       icon: "arrow-up",
       name: "Move list and sublists up",
       editorCallback: createEditorCallback(this.moveListUp),
-      hotkeys: [
-        {
-          modifiers: ["Mod", "Shift"],
-          key: "ArrowUp",
-        },
-      ],
     });
 
     this.plugin.addCommand({
@@ -64,12 +58,6 @@ export class ListsMovementCommands implements Feature {
       icon: "arrow-down",
       name: "Move list and sublists down",
       editorCallback: createEditorCallback(this.moveListDown),
-      hotkeys: [
-        {
-          modifiers: ["Mod", "Shift"],
-          key: "ArrowDown",
-        },
-      ],
     });
 
     this.plugin.addCommand({
@@ -77,7 +65,6 @@ export class ListsMovementCommands implements Feature {
       icon: "indent",
       name: "Indent the list and sublists",
       editorCallback: createEditorCallback(this.indentList),
-      hotkeys: [],
     });
 
     this.plugin.addCommand({
@@ -85,7 +72,6 @@ export class ListsMovementCommands implements Feature {
       icon: "outdent",
       name: "Outdent the list and sublists",
       editorCallback: createEditorCallback(this.outdentList),
-      hotkeys: [],
     });
   }
 

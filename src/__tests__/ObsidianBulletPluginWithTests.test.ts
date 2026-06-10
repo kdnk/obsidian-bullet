@@ -75,15 +75,17 @@ describe("ObsidianBulletPluginWithTests", () => {
     const plugin = Object.create(
       ObsidianBulletPluginWithTests.prototype,
     ) as ObsidianBulletPluginWithTests;
-    plugin.wait = jest.fn().mockResolvedValue(undefined);
-    plugin.connect = jest.fn();
+    const wait = jest.fn().mockResolvedValue(undefined);
+    const connect = jest.fn();
+    plugin.wait = wait;
+    plugin.connect = connect;
 
     await plugin.onload();
     await jest.runAllTimersAsync();
 
     expect(parentOnload).toHaveBeenCalled();
     expect((window as TestWindow).ObsidianBulletPlugin).toBe(plugin);
-    expect(plugin.wait).toHaveBeenCalledWith(1000);
-    expect(plugin.connect).toHaveBeenCalled();
+    expect(wait).toHaveBeenCalledWith(1000);
+    expect(connect).toHaveBeenCalled();
   });
 });

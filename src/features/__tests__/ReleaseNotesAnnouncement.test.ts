@@ -1,11 +1,21 @@
-import { readFileSync } from "fs";
-import { join } from "path";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { ReleaseNotesAnnouncement } from "../ReleaseNotesAnnouncement";
 
-const mockRenderMarkdown = jest.fn();
+const mockRenderMarkdown = jest.fn<void, unknown[]>();
 const mockOpen = jest.fn();
 const mockClose = jest.fn();
+
+interface RegisteredCommand {
+  id: string;
+  name: string;
+  callback: () => void;
+}
+
+interface MockModal {
+  onOpen?: (this: MockModal) => void | Promise<void>;
+}
 
 jest.mock(
   "obsidian",
@@ -25,8 +35,10 @@ jest.mock(
 
       open() {
         mockOpen();
-        if ("onOpen" in this && typeof this.onOpen === "function") {
-          this.onOpen();
+        const modal = this as MockModal;
+        const onOpen = modal.onOpen;
+        if (onOpen) {
+          void onOpen.call(modal);
         }
       }
 
@@ -61,7 +73,7 @@ describe("ReleaseNotesAnnouncement", () => {
   });
 
   test("registers a command and opens release notes newer than the previous release", async () => {
-    const addCommand = jest.fn();
+    const addCommand = jest.fn<void, [RegisteredCommand]>();
     const settings = {
       previousRelease: "5.2.2",
       save: jest.fn(),
@@ -73,14 +85,13 @@ describe("ReleaseNotesAnnouncement", () => {
 
     await feature.load();
 
-    expect(addCommand).toHaveBeenCalledWith({
-      id: "show-release-notes",
-      name: "Show Release Notes",
-      callback: expect.any(Function),
-    });
+    const command = addCommand.mock.calls[0]?.[0];
+    expect(command?.id).toBe("show-release-notes");
+    expect(command?.name).toBe("Show Release Notes");
+    expect(command?.callback).toEqual(expect.any(Function));
     expect(mockOpen).toHaveBeenCalledTimes(1);
 
-    (
+    void (
       feature as unknown as {
         handleClose: () => Promise<void>;
       }

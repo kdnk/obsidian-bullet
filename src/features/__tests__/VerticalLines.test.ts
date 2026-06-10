@@ -1,11 +1,13 @@
 import { VerticalLinesPluginValue } from "../VerticalLines";
 
-const mockGetEditorFromState = jest.fn();
+const mockGetEditorFromState = jest.fn<unknown, unknown[]>();
 
 jest.mock(
   "../../editor",
   () => ({
-    getEditorFromState: (...args: unknown[]) => mockGetEditorFromState(...args),
+    getEditorFromState: (...args: unknown[]) => {
+      return mockGetEditorFromState(...args);
+    },
   }),
   { virtual: true },
 );
@@ -25,6 +27,12 @@ describe("VerticalLinesPluginValue", () => {
           .mockReturnValue({ paddingInlineStart: "28px" }),
         requestAnimationFrame: jest.fn(),
         cancelAnimationFrame: jest.fn(),
+      },
+    });
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: {
+        createElement: jest.fn(),
       },
     });
   });
@@ -66,6 +74,10 @@ describe("VerticalLinesPluginValue", () => {
           .mockReturnValueOnce(contentContainer)
           .mockReturnValueOnce(scroller),
       },
+    });
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: global.document,
     });
 
     const pluginValue = new VerticalLinesPluginValue(
@@ -124,6 +136,14 @@ describe("VerticalLinesPluginValue", () => {
           .fn()
           .mockImplementation(() => createdElements.shift()),
       },
+    });
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: global.document,
+    });
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: global.document,
     });
 
     Object.defineProperty(global, "window", {
@@ -282,6 +302,10 @@ describe("VerticalLinesPluginValue", () => {
           .mockImplementation(() => createdElements.shift()),
       },
     });
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: global.document,
+    });
 
     Object.defineProperty(global, "window", {
       configurable: true,
@@ -435,6 +459,10 @@ describe("VerticalLinesPluginValue", () => {
           .fn()
           .mockImplementation(() => createdElements.shift()),
       },
+    });
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: global.document,
     });
 
     Object.defineProperty(global, "window", {

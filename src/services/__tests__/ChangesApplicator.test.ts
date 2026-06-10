@@ -3,6 +3,15 @@ import { MyEditor } from "../../editor";
 import { List, Root } from "../../root";
 import { ChangesApplicator } from "../ChangesApplicator";
 
+type EditorAction = [string, ...unknown[]];
+
+interface ChangesApplicatorArgs {
+  actions: EditorAction[];
+  editor: MyEditor;
+  prevRoot: Root;
+  newRoot: Root;
+}
+
 describe("changesApplicator", () => {
   test("should not touch folded lists if they are not changed", () => {
     const { actions, editor, prevRoot, newRoot } = makeArgs({
@@ -90,31 +99,34 @@ describe("changesApplicator", () => {
   });
 });
 
-function makeArgs(opts: { editor: MyEditor; changes: (root: Root) => void }) {
-  const actions: any = [];
+function makeArgs(opts: {
+  editor: MyEditor;
+  changes: (root: Root) => void;
+}): ChangesApplicatorArgs {
+  const actions: EditorAction[] = [];
   const prevRoot = makeRoot({
     editor: opts.editor,
   });
   const newRoot = prevRoot.clone();
   opts.changes(newRoot);
-  const mockedEditor: MyEditor = {
-    getRange: (...args: any[]) => {
+  const mockedEditor = {
+    getRange: (...args: Parameters<MyEditor["getRange"]>) => {
       actions.push(["getRange", ...args]);
       return prevRoot.print();
     },
-    unfold: (...args: any[]) => {
+    unfold: (...args: Parameters<MyEditor["unfold"]>) => {
       actions.push(["unfold", ...args]);
     },
-    replaceRange: (...args: any[]) => {
+    replaceRange: (...args: Parameters<MyEditor["replaceRange"]>) => {
       actions.push(["replaceRange", ...args]);
     },
-    setSelections: (...args: any[]) => {
+    setSelections: (...args: Parameters<MyEditor["setSelections"]>) => {
       actions.push(["setSelections", ...args]);
     },
-    fold: (...args: any[]) => {
+    fold: (...args: Parameters<MyEditor["fold"]>) => {
       actions.push(["fold", ...args]);
     },
-  } as any;
+  } as unknown as MyEditor;
 
   return {
     actions,

@@ -141,5 +141,7 @@ function getAllChildrenReduceFn(acc: Map<number, List>, child: List) {
 }
 
 function getAllChildren(root: Root): Map<number, List> {
-  return root.getChildren().reduce(getAllChildrenReduceFn, new Map());
+  return root
+    .getChildren()
+    .reduce(getAllChildrenReduceFn, new Map<number, List>());
 }

@@ -74,6 +74,26 @@ jest.mock(
   { virtual: true },
 );
 
+interface VimActionArgs {
+  after: boolean;
+}
+
+type VimAction = (cm: unknown, args: VimActionArgs) => void;
+
+interface FakeVim {
+  defineAction: jest.Mock<void, [string, VimAction]>;
+  enterInsertMode: jest.Mock<void, [unknown]>;
+  handleEx: jest.Mock<void, [unknown, string]>;
+  mapCommand: jest.Mock<void, unknown[]>;
+}
+
+type WindowWithVim = Window &
+  typeof globalThis & {
+    CodeMirrorAdapter: {
+      Vim: FakeVim;
+    };
+  };
+
 describe("VimOBehaviourOverride outside lists", () => {
   const insertPlainLineMock = insertPlainLine as jest.MockedFunction<
     typeof insertPlainLine
@@ -91,7 +111,7 @@ describe("VimOBehaviourOverride outside lists", () => {
           mapCommand: jest.fn(),
         },
       },
-    } as never;
+    } as WindowWithVim;
   });
 
   afterEach(() => {
@@ -130,20 +150,22 @@ describe("VimOBehaviourOverride outside lists", () => {
 
       await feature.load();
 
-      const vim = global.window.CodeMirrorAdapter!.Vim!;
-      const action = (vim.defineAction as jest.Mock).mock.calls.find(
+      const vim = (global.window as WindowWithVim).CodeMirrorAdapter.Vim;
+      const action = vim.defineAction.mock.calls.find(
         ([name]) => name === "insertLineAfterBullet",
       )?.[1];
 
-      expect(action).toBeDefined();
+      if (!action) {
+        throw new Error("Expected Vim action to be registered");
+      }
 
       const cm = {};
-      action!(cm, { after });
+      action(cm, { after });
 
       expect(vim.handleEx).toHaveBeenCalledWith(cm, "normal! A");
       expect(parser.parse).toHaveBeenCalledTimes(1);
       expect(insertPlainLineMock).toHaveBeenCalledTimes(1);
-      expect(insertPlainLineMock.mock.calls[0][1]).toBe(after);
+      expect(insertPlainLineMock.mock.calls[0]?.[1]).toBe(after);
       expect(vim.enterInsertMode).toHaveBeenCalledWith(cm);
     },
   );

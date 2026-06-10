@@ -70,13 +70,17 @@ interface FakeSetting {
   toggleCallbacks: Array<(value: boolean) => Promise<void>>;
 }
 
+interface DisplayableSettingsTab {
+  display(): void;
+}
+
 describe("SettingsTab", () => {
   beforeEach(() => {
     mockSettingsRecords.length = 0;
   });
 
   test("should configure vertical indentation line action with a toggle", async () => {
-    const addSettingTab = jest.fn();
+    const addSettingTab = jest.fn<void, [DisplayableSettingsTab]>();
     const settings = {
       keepCursorWithinContent: "bullet-and-checkbox",
       overrideTabBehaviour: true,
@@ -96,7 +100,10 @@ describe("SettingsTab", () => {
       settings as never,
     ).load();
 
-    const tab = addSettingTab.mock.calls[0][0];
+    const tab = addSettingTab.mock.calls[0]?.[0];
+    if (!tab) {
+      throw new Error("Expected settings tab to be registered");
+    }
     tab.display();
 
     const verticalLinesSetting = mockSettingsRecords.find(
