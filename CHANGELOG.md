@@ -1,3 +1,15 @@
+## 5.4.7
+
+### Release Notes
+
+- Removed the in-app release notes announcement.
+
+### Maintenance
+
+- Added lint coverage to prevent using the main plugin instance as a
+  MarkdownRenderer component.
+- Added a dedicated typecheck script and included it in lint.
+
 ## 5.4.4
 
 ### Vertical Indentation Lines

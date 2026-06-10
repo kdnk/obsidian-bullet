@@ -39,6 +39,7 @@ export default tseslint.config(
         "@typescript-eslint/no-explicit-any",
       ],
       "@eslint-community/eslint-comments/require-description": "error",
+      "obsidianmd/no-plugin-as-component": "error",
       "obsidianmd/no-static-styles-assignment": "error",
       "obsidianmd/prefer-active-doc": "warn",
       "obsidianmd/prefer-instanceof": "warn",
