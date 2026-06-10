@@ -53,6 +53,25 @@ function parseAssertState(l) {
   };
 }
 
+function parseAssertStateOneOf(l) {
+  const states = [];
+
+  l.nextNotEmpty();
+
+  while (!l.isEnded() && isCodeBlock(l.line)) {
+    states.push(parseState(l));
+  }
+
+  if (states.length === 0) {
+    throw new Error("parseAssertStateOneOf: Expected at least one state");
+  }
+
+  return {
+    type: "assertStateOneOf",
+    states,
+  };
+}
+
 function parseSimulateKeydown(l) {
   const key = l.line.replace(/- keydown: `([^`]+)`/, "$1");
 
@@ -168,6 +187,8 @@ function parseAction(l) {
     return parseExecuteCommandById(l);
   } else if (l.line.startsWith("- setting:")) {
     return parseSetSetting(l);
+  } else if (l.line.startsWith("- assertStateOneOf:")) {
+    return parseAssertStateOneOf(l);
   } else if (l.line.startsWith("- assertState:")) {
     return parseAssertState(l);
   } else if (l.line.startsWith("- platform:")) {
@@ -301,6 +322,25 @@ module.exports.process = function process(sourceText, sourcePath, options) {
           code += `    await expect(await getCurrentState()).toEqualEditorState(${s(
             action.state.lines
           )});\n`;
+          break;
+        case "assertStateOneOf":
+          code += `    await waitForIdle();\n`;
+          code += `    const currentState = await getCurrentState();\n`;
+          code += `    const expectedStates = ${s(
+            action.states.map((state) => state.lines)
+          )};\n`;
+          code += `    let lastStateError = null;\n`;
+          code += `    let stateMatched = false;\n`;
+          code += `    for (const expectedState of expectedStates) {\n`;
+          code += `      try {\n`;
+          code += `        await expect(currentState).toEqualEditorState(expectedState);\n`;
+          code += `        stateMatched = true;\n`;
+          code += `        break;\n`;
+          code += `      } catch (error) {\n`;
+          code += `        lastStateError = error;\n`;
+          code += `      }\n`;
+          code += `    }\n`;
+          code += `    if (!stateMatched) throw lastStateError;\n`;
           break;
       }
     }
