@@ -60,8 +60,7 @@ export class EditorSelectionsBehaviourOverride implements Feature {
   private lastKey: string | null = null;
   private skipSelectionAdjustments = false;
   private suppressSelectionAdjustments = 0;
-  private pendingSelectionAdjustment: ReturnType<typeof setTimeout> | null =
-    null;
+  private pendingSelectionAdjustment: number | null = null;
   private selectionAdjustmentVersion = 0;
 
   constructor(
@@ -131,7 +130,7 @@ export class EditorSelectionsBehaviourOverride implements Feature {
     this.clearPendingSelectionAdjustment();
     const version = ++this.selectionAdjustmentVersion;
 
-    this.pendingSelectionAdjustment = setTimeout(() => {
+    this.pendingSelectionAdjustment = window.setTimeout(() => {
       this.pendingSelectionAdjustment = null;
 
       if (version !== this.selectionAdjustmentVersion) {
@@ -229,7 +228,7 @@ export class EditorSelectionsBehaviourOverride implements Feature {
 
   private clearPendingSelectionAdjustment() {
     if (this.pendingSelectionAdjustment !== null) {
-      clearTimeout(this.pendingSelectionAdjustment);
+      window.clearTimeout(this.pendingSelectionAdjustment);
       this.pendingSelectionAdjustment = null;
     }
 

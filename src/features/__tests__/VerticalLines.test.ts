@@ -15,6 +15,18 @@ describe("VerticalLinesPluginValue", () => {
     jest.useFakeTimers();
     jest.clearAllMocks();
     mockGetEditorFromState.mockReturnValue(null);
+    Object.defineProperty(global, "window", {
+      configurable: true,
+      value: {
+        setTimeout: global.setTimeout,
+        clearTimeout: global.clearTimeout,
+        getComputedStyle: jest
+          .fn()
+          .mockReturnValue({ paddingInlineStart: "28px" }),
+        requestAnimationFrame: jest.fn(),
+        cancelAnimationFrame: jest.fn(),
+      },
+    });
   });
 
   afterEach(() => {
@@ -25,6 +37,12 @@ describe("VerticalLinesPluginValue", () => {
   function makeElement() {
     return {
       classList: { add: jest.fn() },
+      setCssStyles(styles: Record<string, string>) {
+        Object.assign(
+          (this as { style?: Record<string, string> }).style ?? {},
+          styles,
+        );
+      },
       appendChild: jest.fn(),
       removeChild: jest.fn(),
       addEventListener: jest.fn(),
@@ -37,8 +55,8 @@ describe("VerticalLinesPluginValue", () => {
     const contentContainer = makeElement();
     const viewDom = makeElement();
     const scrollDOM = makeElement();
-    const setTimeoutSpy = jest.spyOn(global, "setTimeout");
-    const clearTimeoutSpy = jest.spyOn(global, "clearTimeout");
+    const setTimeoutSpy = jest.spyOn(window, "setTimeout");
+    const clearTimeoutSpy = jest.spyOn(window, "clearTimeout");
 
     Object.defineProperty(global, "document", {
       configurable: true,
@@ -111,6 +129,8 @@ describe("VerticalLinesPluginValue", () => {
     Object.defineProperty(global, "window", {
       configurable: true,
       value: {
+        setTimeout: global.setTimeout,
+        clearTimeout: global.clearTimeout,
         getComputedStyle: jest
           .fn()
           .mockReturnValue({ paddingInlineStart: "28px" }),
@@ -266,6 +286,8 @@ describe("VerticalLinesPluginValue", () => {
     Object.defineProperty(global, "window", {
       configurable: true,
       value: {
+        setTimeout: global.setTimeout,
+        clearTimeout: global.clearTimeout,
         getComputedStyle: jest
           .fn()
           .mockReturnValue({ paddingInlineStart: "64px" }),
@@ -418,6 +440,8 @@ describe("VerticalLinesPluginValue", () => {
     Object.defineProperty(global, "window", {
       configurable: true,
       value: {
+        setTimeout: global.setTimeout,
+        clearTimeout: global.clearTimeout,
         getComputedStyle: jest
           .fn()
           .mockReturnValue({ paddingInlineStart: "64px" }),
@@ -531,7 +555,7 @@ describe("VerticalLinesPluginValue", () => {
     (pluginValue as unknown as { calculate(): void }).calculate();
     expect(lineElement.style.display).toBe("block");
 
-    lineElement.style.display = "";
+    lineElement.setCssStyles({ display: "" });
     coordinatesAvailable = false;
     (pluginValue as unknown as { calculate(): void }).calculate();
 

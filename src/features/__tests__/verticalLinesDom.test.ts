@@ -28,6 +28,12 @@ describe("applyVerticalLineElementStyle", () => {
           this.customProperties.set(name, value);
         },
       },
+      setCssStyles(
+        this: { style: Record<string, string> },
+        styles: Record<string, string>,
+      ) {
+        Object.assign(this.style, styles);
+      },
     } as unknown as HTMLElement;
 
     const first = applyVerticalLineElementStyle(element, {

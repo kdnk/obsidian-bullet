@@ -140,6 +140,10 @@ export class MyEditor {
     return this.e.getValue();
   }
 
+  getCodeMirrorView(): EditorView {
+    return this.view;
+  }
+
   offsetToPos(offset: number): MyEditorPosition {
     return this.e.offsetToPos(offset);
   }

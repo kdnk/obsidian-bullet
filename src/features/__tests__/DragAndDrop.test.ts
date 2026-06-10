@@ -63,6 +63,7 @@ describe("DragAndDrop", () => {
     style: Record<string, string>;
     children: unknown[];
     parentNode: unknown;
+    setCssStyles: (styles: Record<string, string>) => void;
     appendChild: (child: unknown) => void;
     removeChild?: (child: unknown) => void;
   }
@@ -73,6 +74,9 @@ describe("DragAndDrop", () => {
       style: {},
       children: [],
       parentNode: null,
+      setCssStyles(styles: Record<string, string>) {
+        Object.assign(this.style, styles);
+      },
       appendChild(child: unknown) {
         this.children.push(child);
         (child as { parentNode: unknown }).parentNode = this;

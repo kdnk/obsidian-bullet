@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { makeEditor, makeLogger, makeSettings } from "../../__mocks__";
 import { Logger } from "../Logger";
 import { Parser } from "../Parser";

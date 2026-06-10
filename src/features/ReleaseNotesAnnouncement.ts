@@ -17,7 +17,8 @@ class ReleaseNotesModal extends Modal {
   async onOpen() {
     this.titleEl.setText(this.title);
 
-    MarkdownRenderer.renderMarkdown(
+    await MarkdownRenderer.render(
+      this.plugin.app,
       this.content,
       this.contentEl,
       "",
@@ -119,7 +120,9 @@ export class ReleaseNotesAnnouncement implements Feature {
       this.plugin,
       modalTitle,
       releaseNotes,
-      this.handleClose,
+      () => {
+        void this.handleClose();
+      },
     );
     this.modal.open();
   };

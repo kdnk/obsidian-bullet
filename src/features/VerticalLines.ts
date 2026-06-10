@@ -55,7 +55,7 @@ export class VerticalLinesPluginValue implements PluginValue {
   private scheduler: ReturnType<typeof createAnimationFrameScheduler>;
   private resizeObserver?: ResizeObserver;
   private mutationObserver?: MutationObserver;
-  private waitForEditorTimeout: ReturnType<typeof setTimeout> | null = null;
+  private waitForEditorTimeout: number | null = null;
   private destroyed = false;
 
   constructor(
@@ -80,7 +80,7 @@ export class VerticalLinesPluginValue implements PluginValue {
     this.waitForEditorTimeout = null;
     const editor = getEditorFromState(this.view.state);
     if (!editor) {
-      this.waitForEditorTimeout = setTimeout(this.waitForEditor, 0);
+      this.waitForEditorTimeout = window.setTimeout(this.waitForEditor, 0);
       return;
     }
     this.editor = editor;
@@ -88,12 +88,14 @@ export class VerticalLinesPluginValue implements PluginValue {
   };
 
   private prepareDom() {
-    this.contentContainer = document.createElement("div");
+    const doc = this.view.dom.ownerDocument ?? document;
+
+    this.contentContainer = doc.createElement("div");
     this.contentContainer.classList.add(
       "bullet-plugin-list-lines-content-container",
     );
 
-    this.scroller = document.createElement("div");
+    this.scroller = doc.createElement("div");
     this.scroller.classList.add("bullet-plugin-list-lines-scroller");
 
     this.scroller.appendChild(this.contentContainer);
@@ -358,7 +360,8 @@ export class VerticalLinesPluginValue implements PluginValue {
     }
 
     const cmSizer = cmContentContainer.parentElement;
-    if (!cmSizer || !(cmContent.firstElementChild instanceof HTMLElement)) {
+    const firstElementChild = cmContent.firstElementChild;
+    if (!cmSizer || !isInstanceOf(firstElementChild, HTMLElement)) {
       return;
     }
 
@@ -376,16 +379,18 @@ export class VerticalLinesPluginValue implements PluginValue {
       }
     }
 
-    this.scroller.style.top = cmScroll.offsetTop + "px";
-    this.contentContainer.style.height = cmSizerChildrenSumHeight + "px";
-    this.contentContainer.style.marginLeft =
-      getVerticalLinesContentLeft(this.view) + "px";
-    this.contentContainer.style.marginTop =
-      cmContent.firstElementChild.offsetTop - CONTENT_TOP_OFFSET + "px";
+    this.scroller.setCssStyles({ top: cmScroll.offsetTop + "px" });
+    this.contentContainer.setCssStyles({
+      height: cmSizerChildrenSumHeight + "px",
+      marginLeft: getVerticalLinesContentLeft(this.view) + "px",
+      marginTop: firstElementChild.offsetTop - CONTENT_TOP_OFFSET + "px",
+    });
 
     for (let i = 0; i < this.lines.length; i++) {
       if (this.lineElements.length === i) {
-        const e = document.createElement("div");
+        const e = (this.view.dom.ownerDocument ?? document).createElement(
+          "div",
+        );
         e.classList.add("bullet-plugin-list-line");
         e.dataset.index = String(i);
         e.addEventListener("mousedown", this.onClick);
@@ -435,7 +440,7 @@ export class VerticalLinesPluginValue implements PluginValue {
     this.mutationObserver?.disconnect();
     this.scheduler.cancel();
     if (this.waitForEditorTimeout !== null) {
-      clearTimeout(this.waitForEditorTimeout);
+      window.clearTimeout(this.waitForEditorTimeout);
       this.waitForEditorTimeout = null;
     }
   }
@@ -452,7 +457,7 @@ export class VerticalLinesPluginValue implements PluginValue {
 
     if (list.hasCheckbox()) {
       const checkbox = line?.querySelector(".task-list-item-checkbox");
-      if (checkbox instanceof HTMLElement) {
+      if (isInstanceOf(checkbox, HTMLElement)) {
         const rect = checkbox.getBoundingClientRect();
         return rect.left - scrollerLeft + scrollLeft + rect.width / 2;
       }
@@ -507,7 +512,7 @@ export class VerticalLinesPluginValue implements PluginValue {
       return Number.parseFloat(padding);
     }
 
-    const computedPadding = window.getComputedStyle(line).paddingInlineStart;
+    const computedPadding = line.win.getComputedStyle(line).paddingInlineStart;
     return computedPadding ? Number.parseFloat(computedPadding) : null;
   }
 
@@ -516,7 +521,10 @@ export class VerticalLinesPluginValue implements PluginValue {
     let node: Node | null = domAtPos.node;
 
     while (node) {
-      if (node instanceof HTMLElement && node.classList.contains("cm-line")) {
+      if (
+        isInstanceOf(node, HTMLElement) &&
+        node.classList.contains("cm-line")
+      ) {
         return node;
       }
       node = node.parentNode;
@@ -524,6 +532,27 @@ export class VerticalLinesPluginValue implements PluginValue {
 
     return null;
   }
+}
+
+function isInstanceOf<T>(
+  value: unknown,
+  type: {
+    new (): T;
+  },
+): value is T {
+  if (!value) {
+    return false;
+  }
+
+  if (
+    typeof value === "object" &&
+    "instanceOf" in value &&
+    typeof value.instanceOf === "function"
+  ) {
+    return value.instanceOf(type);
+  }
+
+  return value instanceof type;
 }
 
 export class VerticalLines implements Feature {
@@ -551,22 +580,24 @@ export class VerticalLines implements Feature {
 
   async unload() {
     if (this.updateBodyClassInterval !== null) {
-      clearInterval(this.updateBodyClassInterval);
+      window.clearInterval(this.updateBodyClassInterval);
       this.updateBodyClassInterval = null;
     }
-    document.body.classList.remove(VERTICAL_LINES_BODY_CLASS);
+    activeDocument.body.classList.remove(VERTICAL_LINES_BODY_CLASS);
   }
 
   private updateBodyClass = () => {
     const shouldExists = this.settings.verticalLines;
-    const exists = document.body.classList.contains(VERTICAL_LINES_BODY_CLASS);
+    const exists = activeDocument.body.classList.contains(
+      VERTICAL_LINES_BODY_CLASS,
+    );
 
     if (shouldExists && !exists) {
-      document.body.classList.add(VERTICAL_LINES_BODY_CLASS);
+      activeDocument.body.classList.add(VERTICAL_LINES_BODY_CLASS);
     }
 
     if (!shouldExists && exists) {
-      document.body.classList.remove(VERTICAL_LINES_BODY_CLASS);
+      activeDocument.body.classList.remove(VERTICAL_LINES_BODY_CLASS);
     }
   };
 }

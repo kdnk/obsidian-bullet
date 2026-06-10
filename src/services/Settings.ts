@@ -4,7 +4,7 @@ export type KeepCursorWithinContent =
   | "bullet-only"
   | "bullet-and-checkbox";
 
-interface SettingsObject {
+export interface SettingsObject {
   styleLists: boolean;
   debug: boolean;
   stickCursor: KeepCursorWithinContent | boolean;
@@ -153,8 +153,9 @@ export class Settings {
   }
 
   reset() {
-    for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
-      this.set(k as keyof SettingsObject, v);
+    const keys = Object.keys(DEFAULT_SETTINGS) as (keyof SettingsObject)[];
+    for (const key of keys) {
+      this.set(key, DEFAULT_SETTINGS[key]);
     }
   }
 
@@ -172,6 +173,13 @@ export class Settings {
 
   getValues(): SettingsObject {
     return { ...this.values };
+  }
+
+  setValue<T extends keyof SettingsObject>(
+    key: T,
+    value: SettingsObject[T],
+  ): void {
+    this.set(key, value);
   }
 
   private set<T extends keyof SettingsObject>(

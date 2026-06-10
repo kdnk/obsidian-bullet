@@ -43,6 +43,6 @@ function setStyleProperty(
     return 0;
   }
 
-  element.style[propertyName] = value;
+  element.setCssStyles({ [propertyName]: value });
   return 1;
 }

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { MyEditor } from "./editor";
 import { Root } from "./root";
 import { Logger } from "./services/Logger";
@@ -15,14 +14,14 @@ export function makeEditor(params: EditorMockParams): MyEditor {
   const text = params.text;
   const cursor = { ...params.cursor };
 
-  const editor: any = {
+  const editor = {
     getCursor: () => cursor,
     listSelections: () => [{ anchor: cursor, head: cursor }],
     getLine: (l: number) => text.split("\n")[l],
     lastLine: () => text.split("\n").length - 1,
     lineCount: () => text.split("\n").length,
     getAllFoldedLines: params.getAllFoldedLines || (() => []),
-  };
+  } as unknown as MyEditor;
 
   return editor;
 }
@@ -30,21 +29,21 @@ export function makeEditor(params: EditorMockParams): MyEditor {
 export function makeLogger(): Logger {
   const log = jest.fn();
 
-  const logger: any = {
+  const logger = {
     log,
     bind: jest
       .fn()
       .mockImplementation((method: string) => log.bind(null, method)),
-  };
+  } as unknown as Logger;
 
   return logger;
 }
 
 export function makeSettings(): Settings {
-  const settings: any = {
+  const settings = {
     stickCursor: "bullet-and-checkbox",
     keepCursorWithinContent: "bullet-and-checkbox",
-  };
+  } as unknown as Settings;
   return settings;
 }
 

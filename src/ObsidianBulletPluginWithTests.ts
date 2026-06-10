@@ -1,13 +1,53 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { MarkdownView } from "obsidian";
-
-import { EditorView } from "@codemirror/view";
+import { App, MarkdownView, Vault } from "obsidian";
 
 import ObsidianBulletPlugin from "./ObsidianBulletPlugin";
 import { MyEditor, MyEditorPosition, MyEditorSelection } from "./editor";
 import { EditorSelectionsBehaviourOverride } from "./features/EditorSelectionsBehaviourOverride";
 import { KeepCursorWithinListContent } from "./operations/KeepCursorWithinListContent";
+import { SettingsObject } from "./services/Settings";
 import { getTestPlatformWsUrl } from "./testPlatform";
+
+declare global {
+  interface Window {
+    ObsidianBulletPlugin?: ObsidianBulletPluginWithTests;
+  }
+}
+
+interface AppWithCommands extends App {
+  commands: {
+    executeCommandById(id: string): void;
+  };
+}
+
+interface VaultWithConfig extends Vault {
+  setConfig(key: string, value: unknown): void;
+}
+
+type TestMessage =
+  | { id: string; type: "applyState"; data: State | string | string[] }
+  | { id: string; type: "simulateKeydown"; data: string }
+  | { id: string; type: "insertText"; data: string }
+  | { id: string; type: "executeCommandById"; data: string }
+  | { id: string; type: "drag"; data: { from: MyEditorPosition } }
+  | {
+      id: string;
+      type: "move";
+      data: { to: MyEditorPosition; offsetX: number; offsetY: number };
+    }
+  | { id: string; type: "drop" }
+  | { id: string; type: "waitForIdle" }
+  | { id: string; type: "adjustSelection" }
+  | { id: string; type: "resetSettings" }
+  | {
+      id: string;
+      type: "setSetting";
+      data: {
+        k: keyof SettingsObject;
+        v: SettingsObject[keyof SettingsObject];
+      };
+    }
+  | { id: string; type: "parseState"; data: string | string[] }
+  | { id: string; type: "getCurrentState" };
 
 const keysMap: { [key: string]: number } = {
   Backspace: 8,
@@ -26,28 +66,34 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   private editor!: MyEditor;
 
   wait(time: number) {
-    return new Promise((resolve) => setTimeout(resolve, time));
+    return new Promise((resolve) => window.setTimeout(resolve, time));
   }
 
   executeCommandById(id: string) {
-    (this.app as any).commands.executeCommandById(id);
+    (this.app as AppWithCommands).commands.executeCommandById(id);
   }
 
-  setSetting({ k, v }: { k: string; v: any }) {
-    (this.settings as any).set(k, v);
+  setSetting({
+    k,
+    v,
+  }: {
+    k: keyof SettingsObject;
+    v: SettingsObject[keyof SettingsObject];
+  }) {
+    this.settings.setValue(k, v);
   }
 
   resetSettings() {
     this.settings.reset();
     this.settings.previousRelease = "999.999.999";
 
-    for (const feature of (this as any).features || []) {
+    for (const feature of this.features || []) {
       if (feature instanceof EditorSelectionsBehaviourOverride) {
         feature.resetState();
       }
     }
 
-    const vault = this.app.vault as any;
+    const vault = this.app.vault as VaultWithConfig;
     if (typeof vault.setConfig === "function") {
       vault.setConfig("smartIndentList", true);
     }
@@ -106,26 +152,28 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   }
 
   insertText(text: string) {
-    document.execCommand("insertText", false, text);
+    activeDocument.execCommand("insertText", false, text);
   }
 
   async onload() {
     await super.onload();
 
-    (window as any).ObsidianBulletPlugin = this;
+    window.ObsidianBulletPlugin = this;
 
     if (process.env.TEST_PLATFORM) {
-      setTimeout(async () => {
-        await this.wait(1000);
-        this.connect();
+      window.setTimeout(() => {
+        void (async () => {
+          await this.wait(1000);
+          await this.connect();
+        })();
       }, 0);
     }
   }
 
-  async onunload() {
-    await super.onunload();
+  onunload() {
+    super.onunload();
 
-    delete (window as any).ObsidianBulletPlugin;
+    delete window.ObsidianBulletPlugin;
   }
 
   protected async prepareSettings() {
@@ -148,7 +196,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
       await this.wait(1000);
       if (this.app.workspace.activeLeaf) {
         // TODO: Fix deprecation issue
-        this.app.workspace.activeLeaf.openFile(file);
+        await this.app.workspace.activeLeaf.openFile(file);
         break;
       }
     }
@@ -166,64 +214,69 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     await this.prepareForTests();
     ws.send("ready");
 
-    ws.addEventListener("message", async (event) => {
-      const { id, type, data } = JSON.parse(event.data);
-
-      let result;
-      let error;
-
-      try {
-        switch (type) {
-          case "applyState":
-            await this.applyState(data);
-            break;
-          case "simulateKeydown":
-            this.simulateKeydown(data);
-            break;
-          case "insertText":
-            this.insertText(data);
-            break;
-          case "executeCommandById":
-            this.executeCommandById(data);
-            break;
-          case "drag":
-            this.drag(data);
-            break;
-          case "move":
-            this.move(data);
-            break;
-          case "drop":
-            this.drop();
-            break;
-          case "waitForIdle":
-            await this.waitForIdle();
-            break;
-          case "adjustSelection":
-            await this.adjustSelection();
-            break;
-          case "resetSettings":
-            this.resetSettings();
-            break;
-          case "setSetting":
-            this.setSetting(data);
-            break;
-          case "parseState":
-            result = this.parseState(data);
-            break;
-          case "getCurrentState":
-            result = this.getCurrentState();
-            break;
-        }
-      } catch (e) {
-        error = e instanceof Error ? e.stack || e.message : JSON.stringify(e);
-      }
-
-      ws.send(JSON.stringify({ id, data: result, error }));
+    ws.addEventListener("message", (event) => {
+      void this.handleTestMessage(ws, event);
     });
   }
 
+  private async handleTestMessage(ws: WebSocket, event: MessageEvent) {
+    const message = JSON.parse(String(event.data)) as TestMessage;
+    const { id, type } = message;
+
+    let result: State | undefined;
+    let error: string | undefined;
+
+    try {
+      switch (type) {
+        case "applyState":
+          await this.applyState(message.data);
+          break;
+        case "simulateKeydown":
+          this.simulateKeydown(message.data);
+          break;
+        case "insertText":
+          this.insertText(message.data);
+          break;
+        case "executeCommandById":
+          this.executeCommandById(message.data);
+          break;
+        case "drag":
+          this.drag(message.data);
+          break;
+        case "move":
+          this.move(message.data);
+          break;
+        case "drop":
+          this.drop();
+          break;
+        case "waitForIdle":
+          await this.waitForIdle();
+          break;
+        case "adjustSelection":
+          await this.adjustSelection();
+          break;
+        case "resetSettings":
+          this.resetSettings();
+          break;
+        case "setSetting":
+          this.setSetting(message.data);
+          break;
+        case "parseState":
+          result = this.parseState(message.data);
+          break;
+        case "getCurrentState":
+          result = this.getCurrentState();
+          break;
+      }
+    } catch (e) {
+      error = e instanceof Error ? e.stack || e.message : JSON.stringify(e);
+    }
+
+    ws.send(JSON.stringify({ id, data: result, error }));
+  }
+
   private drag(opts: { from: { line: number; ch: number } }) {
-    const view: EditorView = (this.editor as any).view;
+    const view = this.editor.getCodeMirrorView();
     this.assertValidEditorPosition(opts.from);
 
     const offset = this.editor.posToOffset(opts.from);
@@ -243,7 +296,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
       clientY: y,
     });
     const { node } = view.domAtPos(offset);
-    let el = node instanceof HTMLElement ? node : node.parentElement;
+    let el = node.instanceOf(HTMLElement) ? node : node.parentElement;
     while (el && !el.classList.contains("cm-line")) {
       el = el.parentElement;
     }
@@ -268,7 +321,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     offsetX: number;
     offsetY: number;
   }) {
-    const view: EditorView = (this.editor as any).view;
+    const view = this.editor.getCodeMirrorView();
     this.assertValidEditorPosition(opts.to);
 
     const coords = view.coordsAtPos(this.editor.posToOffset(opts.to));
@@ -286,12 +339,12 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
       clientX: x,
       clientY: y,
     });
-    document.dispatchEvent(e);
+    view.dom.ownerDocument.dispatchEvent(e);
   }
 
   private drop() {
     const e = new MouseEvent("mouseup");
-    document.dispatchEvent(e);
+    this.editor.getCodeMirrorView().dom.ownerDocument.dispatchEvent(e);
   }
 
   private assertValidEditorPosition(pos: MyEditorPosition) {
@@ -313,6 +366,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   async applyState(state: string[]): Promise<void>;
   async applyState(state: string): Promise<void>;
   async applyState(state: State): Promise<void>;
+  async applyState(state: State | string | string[]): Promise<void>;
   async applyState(state: State | string | string[]) {
     if (typeof state === "string") {
       state = state.split("\n");
@@ -344,16 +398,16 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   private async adjustSelection() {
     await this.wait(0);
 
-    const stickCursor = (this.settings as any).getValues().stickCursor;
+    const stickCursor = this.settings.getValues().stickCursor;
     const shouldAdjustCursor = stickCursor !== false && stickCursor !== "never";
     let targetSelections: MyEditorSelection[] | null = null;
 
     if (shouldAdjustCursor) {
-      const root = (this as any).parser.parse(this.editor);
+      const root = this.parser.parse(this.editor);
 
       if (root) {
         const op = new KeepCursorWithinListContent(root);
-        (this as any).operationPerformer.eval(root, op, this.editor);
+        this.operationPerformer.eval(root, op, this.editor);
 
         targetSelections = root.getSelections();
       } else {
@@ -392,7 +446,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   }
 
   private beginSuppressingSelectionAdjustments() {
-    for (const feature of (this as any).features || []) {
+    for (const feature of this.features || []) {
       if (feature instanceof EditorSelectionsBehaviourOverride) {
         feature.beginSuppressingSelectionAdjustments();
         return;
@@ -401,7 +455,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   }
 
   private endSuppressingSelectionAdjustments() {
-    for (const feature of (this as any).features || []) {
+    for (const feature of this.features || []) {
       if (feature instanceof EditorSelectionsBehaviourOverride) {
         feature.endSuppressingSelectionAdjustments();
         return;
@@ -454,7 +508,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   }
 
   private hasPendingSelectionAdjustments() {
-    for (const feature of (this as any).features || []) {
+    for (const feature of this.features || []) {
       if (
         feature instanceof EditorSelectionsBehaviourOverride &&
         feature.hasPendingSelectionAdjustment()
@@ -484,6 +538,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
 
   parseState(content: string[]): State;
   parseState(content: string): State;
+  parseState(content: string | string[]): State;
   parseState(content: string | string[]): State {
     if (typeof content === "string") {
       content = content.split("\n");

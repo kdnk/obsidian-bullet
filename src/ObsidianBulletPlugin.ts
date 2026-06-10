@@ -33,13 +33,13 @@ declare global {
 }
 
 export default class ObsidianBulletPlugin extends Plugin {
-  private features!: Feature[];
+  protected features!: Feature[];
   settings!: Settings;
   private logger!: Logger;
   private obsidianSettings!: ObsidianSettings;
-  private parser!: Parser;
+  protected parser!: Parser;
   private changesApplicator!: ChangesApplicator;
-  private operationPerformer!: OperationPerformer;
+  protected operationPerformer!: OperationPerformer;
   private imeDetector!: IMEDetector;
 
   async onload() {
@@ -173,7 +173,11 @@ export default class ObsidianBulletPlugin extends Plugin {
     }
   }
 
-  async onunload() {
+  onunload() {
+    void this.unloadFeatures();
+  }
+
+  private async unloadFeatures() {
     console.log(`Unloading obsidian-bullet`);
 
     await this.imeDetector.unload();
