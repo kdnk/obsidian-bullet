@@ -152,11 +152,22 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
 
   insertText(text: string) {
     const cursor = this.editor.getCursor();
+    const shouldCloseWikiLink =
+      text === "[" &&
+      cursor.ch > 0 &&
+      this.editor.getLine(cursor.line)[cursor.ch - 1] === "[";
+    const nextCursor = advancePosition(cursor, text);
+
     this.editor.replaceRange(text, cursor, cursor);
+
+    if (shouldCloseWikiLink) {
+      this.editor.replaceRange("]]", nextCursor, nextCursor);
+    }
+
     this.editor.setSelections([
       {
-        anchor: advancePosition(cursor, text),
-        head: advancePosition(cursor, text),
+        anchor: nextCursor,
+        head: nextCursor,
       },
     ]);
   }
@@ -403,6 +414,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
 
     const stickCursor = this.settings.getValues().stickCursor;
     const shouldAdjustCursor = stickCursor !== false && stickCursor !== "never";
+    const originalSelections = this.editor.listSelections();
     let targetSelections: MyEditorSelection[] | null = null;
 
     if (shouldAdjustCursor) {
@@ -416,6 +428,12 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
       } else {
         this.editor.dispatchCurrentSingleSelectionTransaction();
       }
+
+      targetSelections = this.ensureCursorWithinListPrefix(
+        stickCursor,
+        targetSelections,
+        originalSelections,
+      );
     } else {
       this.editor.dispatchCurrentSingleSelectionTransaction();
     }
@@ -425,6 +443,54 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     }
 
     await this.waitForSelectionAdjustmentsToSettle();
+  }
+
+  private ensureCursorWithinListPrefix(
+    stickCursor: SettingsObject["stickCursor"],
+    targetSelections: MyEditorSelection[] | null,
+    originalSelections = this.editor.listSelections(),
+  ): MyEditorSelection[] | null {
+    const selections = targetSelections || originalSelections;
+
+    if (selections.length !== 1 || originalSelections.length !== 1) {
+      return targetSelections;
+    }
+
+    const selection = selections[0];
+    const originalSelection = originalSelections[0];
+    if (
+      !selection ||
+      !originalSelection ||
+      selection.anchor.line !== selection.head.line ||
+      selection.anchor.ch !== selection.head.ch ||
+      originalSelection.anchor.line !== originalSelection.head.line ||
+      originalSelection.anchor.ch !== originalSelection.head.ch
+    ) {
+      return targetSelections;
+    }
+
+    const cursor = originalSelection.head;
+    const line = this.editor.getLine(cursor.line);
+    const matches = /^([ \t]*)([-*+]|\d+\.)( |\t)(\[[^[\]]\][ \t])?/.exec(line);
+
+    if (!matches) {
+      return targetSelections;
+    }
+
+    const [, indent, bullet, spaceAfterBullet, checkbox = ""] = matches;
+    const shouldSkipCheckbox = stickCursor !== "bullet-only";
+    const contentStart =
+      indent.length +
+      bullet.length +
+      spaceAfterBullet.length +
+      (shouldSkipCheckbox ? checkbox.length : 0);
+
+    if (cursor.ch >= contentStart) {
+      return targetSelections;
+    }
+
+    const nextCursor = { line: cursor.line, ch: contentStart };
+    return [{ anchor: nextCursor, head: nextCursor }];
   }
 
   private async forceSelectionsToApply(selections: MyEditorSelection[]) {
