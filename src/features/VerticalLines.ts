@@ -220,27 +220,6 @@ export class VerticalLinesPluginValue implements PluginValue {
       return;
     }
 
-    const coords = this.view.coordsAtPos(fromOffset, 1);
-    if (!coords) {
-      return;
-    }
-
-    const line = this.getLineElementAt(fromOffset);
-    const currentPadding = this.getLinePaddingStart(line);
-    const currentX = this.getGuideX(list, line, fromOffset, coords);
-    if (parentCtx.rootLeft === undefined) {
-      parentCtx.rootLeft = currentX;
-      parentCtx.rootPadding = currentPadding ?? 0;
-    }
-    const lineLayout = measureVerticalGuide({
-      contentLeft: this.contentLeft,
-      currentX,
-      currentPadding,
-      rootX: parentCtx.rootLeft,
-      rootPadding: parentCtx.rootPadding ?? 0,
-      hasCheckbox: list.hasCheckbox(),
-    });
-
     const top = getVerticalLineTop(
       visibleFrom > 0 && fromOffset < visibleFrom,
       this.view.lineBlockAt(fromOffset).top,
@@ -253,7 +232,30 @@ export class VerticalLinesPluginValue implements PluginValue {
     const isClippedAtVisibleBottom =
       tillOffset > visibleTo || this.isRangeClippedAtVisibleBottom(nextSibling);
 
-    if (height > 0 && !list.isFolded()) {
+    const measurementOffset =
+      fromOffset < visibleFrom ? visibleFrom : fromOffset;
+    const coords =
+      this.view.coordsAtPos(fromOffset, 1) ??
+      (measurementOffset !== fromOffset
+        ? this.view.coordsAtPos(measurementOffset, 1)
+        : null);
+
+    if (coords && height > 0 && !list.isFolded()) {
+      const line = this.getLineElementAt(measurementOffset);
+      const currentPadding = this.getLinePaddingStart(line);
+      const currentX = this.getGuideX(list, line, measurementOffset, coords);
+      if (parentCtx.rootLeft === undefined) {
+        parentCtx.rootLeft = currentX;
+        parentCtx.rootPadding = currentPadding ?? 0;
+      }
+      const lineLayout = measureVerticalGuide({
+        contentLeft: this.contentLeft,
+        currentX,
+        currentPadding,
+        rootX: parentCtx.rootLeft,
+        rootPadding: parentCtx.rootPadding ?? 0,
+        hasCheckbox: list.hasCheckbox(),
+      });
       const nextSibling = list.getParentOrThrow().getNextSiblingOf(list);
       const hasNextSibling =
         !!nextSibling &&

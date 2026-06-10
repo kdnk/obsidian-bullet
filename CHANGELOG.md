@@ -1,3 +1,15 @@
+## 5.4.2
+
+### Vertical Indentation Lines
+
+- Fixed vertical indentation guides disappearing after scrolling below the
+  parent list item that owns the guide.
+
+### Release
+
+- Added a release workflow guard so tag names must match the package,
+  manifest, and versions metadata before publishing assets.
+
 ## 5.4.1
 
 ### Vertical Indentation Lines
