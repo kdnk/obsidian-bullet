@@ -12,6 +12,7 @@
         2. minor
         3. patch
     - リリース種別の回答を受けたら、現在取り組んでいるブランチをデフォルトブランチへ直接取り込んで push してください。pull request の作成は不要です。
+    - GitButler の target remote が `origin` の場合、`but merge` は使えません。その場合に限り、全テスト通過後に `git push origin <branch>:<default-branch>` でデフォルトブランチへ直接 push してください。
     - デフォルトブランチへ取り込む前に全テストを実行し、すべて通ることを確認してください。全テストが通らない状態では取り込まないでください。
     - 取り込み後、デフォルトブランチに対して `npm version <major|minor|patch>` を実行し、新しいバージョンをリリースしてください。
 - テストについて
