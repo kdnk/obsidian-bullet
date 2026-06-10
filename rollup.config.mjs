@@ -2,8 +2,6 @@ import commonjs from "@rollup/plugin-commonjs";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
 import replace from "@rollup/plugin-replace";
 import typescript from "@rollup/plugin-typescript";
-import fs from "node:fs";
-
 export default (commandLineArgs) => {
   const isWatch = Boolean(commandLineArgs.watch);
 
@@ -25,15 +23,7 @@ export default (commandLineArgs) => {
       "@codemirror/language",
     ],
     plugins: [
-      replace({
-        preventAssignment: true,
-        PLUGIN_VERSION: JSON.stringify(
-          JSON.parse(fs.readFileSync("./package.json", "utf-8")).version,
-        ),
-        CHANGELOG_MD: JSON.stringify(
-          fs.readFileSync("./CHANGELOG.md", "utf-8"),
-        ),
-      }),
+      replace({ preventAssignment: true }),
       typescript(),
       nodeResolve({ browser: true }),
       commonjs(),

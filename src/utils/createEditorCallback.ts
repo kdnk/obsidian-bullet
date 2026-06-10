@@ -6,13 +6,14 @@ export function createEditorCallback(cb: (editor: MyEditor) => boolean) {
   return (editor: Editor) => {
     const myEditor = new MyEditor(editor);
     const shouldStopPropagation = cb(myEditor);
+    const currentEvent: unknown = Reflect.get(window, "event");
 
     if (
       !shouldStopPropagation &&
-      window.event &&
-      window.event.type === "keydown"
+      currentEvent instanceof KeyboardEvent &&
+      currentEvent.type === "keydown"
     ) {
-      myEditor.triggerOnKeyDown(window.event as KeyboardEvent);
+      myEditor.triggerOnKeyDown(currentEvent);
     }
   };
 }

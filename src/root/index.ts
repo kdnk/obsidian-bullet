@@ -190,14 +190,12 @@ export class List {
     return this.getLastChild().getLastLineContentEnd();
   }
 
-  private getLastChild() {
-    let lastChild: List = this;
-
-    while (!lastChild.isEmpty()) {
-      lastChild = lastChild.getLastDirectChild();
+  private getLastChild(): List {
+    if (this.isEmpty()) {
+      return this;
     }
 
-    return lastChild;
+    return this.getLastDirectChild().getLastChild();
   }
 
   private getLastDirectChild(): List {
@@ -229,16 +227,13 @@ export class List {
     return this.foldRoot;
   }
 
-  getTopFoldRoot() {
-    let tmp: List | null = this;
-    let foldRoot: List | null = null;
-    while (tmp) {
-      if (tmp.isFoldRoot()) {
-        foldRoot = tmp;
-      }
-      tmp = tmp.parent;
+  getTopFoldRoot(): List | null {
+    const parentFoldRoot: List | null = this.parent?.getTopFoldRoot() ?? null;
+    if (parentFoldRoot) {
+      return parentFoldRoot;
     }
-    return foldRoot;
+
+    return this.isFoldRoot() ? this : null;
   }
 
   getLevel(): number {

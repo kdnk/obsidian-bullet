@@ -15,7 +15,6 @@ export interface SettingsObject {
   listLines: boolean;
   listLineAction: VerticalLinesAction;
   dnd: boolean;
-  previousRelease: string | null;
 }
 
 const DEFAULT_SETTINGS: SettingsObject = {
@@ -29,7 +28,6 @@ const DEFAULT_SETTINGS: SettingsObject = {
   listLines: true,
   listLineAction: "toggle-folding",
   dnd: true,
-  previousRelease: null,
 };
 
 export interface Storage {
@@ -134,14 +132,6 @@ export class Settings {
 
   set debug(value: boolean) {
     this.set("debug", value);
-  }
-
-  get previousRelease() {
-    return this.values.previousRelease;
-  }
-
-  set previousRelease(value: string | null) {
-    this.set("previousRelease", value);
   }
 
   onChange(cb: Callback) {

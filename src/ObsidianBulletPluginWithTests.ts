@@ -85,7 +85,6 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
 
   resetSettings() {
     this.settings.reset();
-    this.settings.previousRelease = "999.999.999";
 
     for (const feature of this.features || []) {
       if (feature instanceof EditorSelectionsBehaviourOverride) {
@@ -152,7 +151,14 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   }
 
   insertText(text: string) {
-    activeDocument.execCommand("insertText", false, text);
+    const cursor = this.editor.getCursor();
+    this.editor.replaceRange(text, cursor, cursor);
+    this.editor.setSelections([
+      {
+        anchor: advancePosition(cursor, text),
+        head: advancePosition(cursor, text),
+      },
+    ]);
   }
 
   async onload() {
@@ -194,11 +200,8 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     }
     for (let i = 0; i < 10; i++) {
       await this.wait(1000);
-      if (this.app.workspace.activeLeaf) {
-        // TODO: Fix deprecation issue
-        await this.app.workspace.activeLeaf.openFile(file);
-        break;
-      }
+      await this.app.workspace.getLeaf(false).openFile(file);
+      break;
     }
     await this.wait(1000);
 
@@ -597,9 +600,22 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
       value: acc.lines.join("\n"),
     };
   }
+}
 
-  async setPreviousRelease(previousRelease: string | null = null) {
-    this.settings.previousRelease = previousRelease;
-    await this.settings.save();
+function advancePosition(
+  position: MyEditorPosition,
+  insertedText: string,
+): MyEditorPosition {
+  const lines = insertedText.split("\n");
+  if (lines.length === 1) {
+    return {
+      line: position.line,
+      ch: position.ch + insertedText.length,
+    };
   }
+
+  return {
+    line: position.line + lines.length - 1,
+    ch: lines[lines.length - 1].length,
+  };
 }

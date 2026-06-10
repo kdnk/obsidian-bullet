@@ -12,7 +12,6 @@ import { Feature } from "./features/Feature";
 import { ListsFoldingCommands } from "./features/ListsFoldingCommands";
 import { ListsMovementCommands } from "./features/ListsMovementCommands";
 import { MetaBackspaceBehaviourOverride } from "./features/MetaBackspaceBehaviourOverride";
-import { ReleaseNotesAnnouncement } from "./features/ReleaseNotesAnnouncement";
 import { SettingsTab } from "./features/SettingsTab";
 import { ShiftTabBehaviourOverride } from "./features/ShiftTabBehaviourOverride";
 import { SystemInfo } from "./features/SystemInfo";
@@ -26,11 +25,6 @@ import { ObsidianSettings } from "./services/ObsidianSettings";
 import { OperationPerformer } from "./services/OperationPerformer";
 import { Parser } from "./services/Parser";
 import { Settings } from "./services/Settings";
-
-declare global {
-  const PLUGIN_VERSION: string;
-  const CHANGELOG_MD: string;
-}
 
 export default class ObsidianBulletPlugin extends Plugin {
   protected features!: Feature[];
@@ -61,7 +55,6 @@ export default class ObsidianBulletPlugin extends Plugin {
 
     this.features = [
       // service features
-      new ReleaseNotesAnnouncement(this, this.settings),
       new SettingsTab(this, this.settings),
       new SystemInfo(this, this.settings),
 
