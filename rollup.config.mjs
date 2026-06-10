@@ -30,9 +30,6 @@ export default (commandLineArgs) => {
         PLUGIN_VERSION: JSON.stringify(
           JSON.parse(fs.readFileSync("./package.json", "utf-8")).version,
         ),
-        CHANGELOG_MD: JSON.stringify(
-          fs.readFileSync("./CHANGELOG.md", "utf-8"),
-        ),
       }),
       typescript(),
       nodeResolve({ browser: true }),

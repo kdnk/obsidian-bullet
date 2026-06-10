@@ -1,14 +1,15 @@
 {
   "name": "bullet",
-  "version": "5.4.6",
+  "version": "5.4.7",
   "description": "Work with your lists like in Workflowy or RoamResearch.",
   "main": "dist/main.js",
   "scripts": {
     "dev": "rollup --config rollup.config.mjs -w --configWithTests",
     "build-with-tests": "rollup --config rollup.config.mjs --configWithTests",
     "build": "rollup --config rollup.config.mjs",
-    "lint": "prettier --check src && eslint src --max-warnings=0",
+    "lint": "prettier --check src && eslint src --max-warnings=0 && npm run typecheck",
     "lint:fix": "prettier --write src && eslint src --fix",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "jest --forceExit",
     "test:unit": "SKIP_OBSIDIAN=1 jest src",
     "version": "node release.mjs && git add manifest.json versions.json",

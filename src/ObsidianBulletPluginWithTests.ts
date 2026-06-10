@@ -85,7 +85,6 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
 
   resetSettings() {
     this.settings.reset();
-    this.settings.previousRelease = "999.999.999";
 
     for (const feature of this.features || []) {
       if (feature instanceof EditorSelectionsBehaviourOverride) {
@@ -596,10 +595,5 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
       selections: [{ anchor: acc.anchor, head: acc.head }],
       value: acc.lines.join("\n"),
     };
-  }
-
-  async setPreviousRelease(previousRelease: string | null = null) {
-    this.settings.previousRelease = previousRelease;
-    await this.settings.save();
   }
 }
