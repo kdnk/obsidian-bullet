@@ -88,4 +88,51 @@ describe("ObsidianBulletPluginWithTests", () => {
     expect(wait).toHaveBeenCalledWith(1000);
     expect(connect).toHaveBeenCalled();
   });
+
+  test("keeps cursor before checkbox in bullet-only selection adjustment fallback", () => {
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests & {
+      editor: {
+        getLine(line: number): string;
+        listSelections(): Array<{
+          anchor: { line: number; ch: number };
+          head: { line: number; ch: number };
+        }>;
+      };
+      ensureCursorWithinListPrefix(
+        stickCursor: "bullet-only",
+        targetSelections: Array<{
+          anchor: { line: number; ch: number };
+          head: { line: number; ch: number };
+        }> | null,
+        originalSelections?: Array<{
+          anchor: { line: number; ch: number };
+          head: { line: number; ch: number };
+        }>,
+      ): Array<{
+        anchor: { line: number; ch: number };
+        head: { line: number; ch: number };
+      }>;
+    };
+    plugin.editor = {
+      getLine: () => "- [!] one",
+      listSelections: () => [
+        { anchor: { line: 0, ch: 0 }, head: { line: 0, ch: 0 } },
+      ],
+    };
+
+    expect(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- Accesses a private helper through a narrowed test-only object.
+      plugin.ensureCursorWithinListPrefix("bullet-only", null),
+    ).toStrictEqual([{ anchor: { line: 0, ch: 2 }, head: { line: 0, ch: 2 } }]);
+    expect(
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- Accesses a private helper through a narrowed test-only object.
+      plugin.ensureCursorWithinListPrefix(
+        "bullet-only",
+        [{ anchor: { line: 0, ch: 6 }, head: { line: 0, ch: 6 } }],
+        [{ anchor: { line: 0, ch: 0 }, head: { line: 0, ch: 0 } }],
+      ),
+    ).toStrictEqual([{ anchor: { line: 0, ch: 2 }, head: { line: 0, ch: 2 } }]);
+  });
 });
