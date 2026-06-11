@@ -52,7 +52,7 @@ export class VerticalLinesPluginValue implements PluginValue {
   private lines: LineData[] = [];
   private lineElements: HTMLElement[] = [];
   private contentLeft = 0;
-  private guideMeasurements = new Map<number, GuideMeasurement>();
+  private guideMeasurements = new Map<string, GuideMeasurement>();
   private scheduler: ReturnType<typeof createAnimationFrameScheduler>;
   private resizeObserver?: ResizeObserver;
   private mutationObserver?: MutationObserver;
@@ -134,7 +134,9 @@ export class VerticalLinesPluginValue implements PluginValue {
 
   private onScroll = (e: Event) => {
     const { scrollLeft, scrollTop } = e.target as HTMLElement;
-    this.scroller.scrollTo(scrollLeft, scrollTop);
+    this.scroller.scrollLeft = scrollLeft;
+    this.scroller.scrollTop = scrollTop;
+    this.scheduleRecalculate();
   };
 
   private scheduleRecalculate = () => {
@@ -263,11 +265,14 @@ export class VerticalLinesPluginValue implements PluginValue {
     );
     const guideMeasurement =
       currentX === null
-        ? this.guideMeasurements.get(list.getID())
+        ? this.guideMeasurements.get(this.getGuideMeasurementKey(list))
         : { currentX, currentPadding };
 
     if (guideMeasurement && height > 0 && !list.isFolded()) {
-      this.guideMeasurements.set(list.getID(), guideMeasurement);
+      this.guideMeasurements.set(
+        this.getGuideMeasurementKey(list),
+        guideMeasurement,
+      );
       if (parentCtx.rootLeft === undefined) {
         parentCtx.rootLeft = guideMeasurement.currentX;
         parentCtx.rootPadding = guideMeasurement.currentPadding ?? 0;
@@ -391,7 +396,7 @@ export class VerticalLinesPluginValue implements PluginValue {
 
     this.contentContainer.setCssStyles({
       height: overlayScrollHeight + "px",
-      marginLeft: getVerticalLinesContentLeft(this.view) + "px",
+      marginLeft: this.contentLeft + "px",
       marginTop: firstElementChild.offsetTop - CONTENT_TOP_OFFSET + "px",
     });
 
@@ -523,6 +528,11 @@ export class VerticalLinesPluginValue implements PluginValue {
 
   private isListBlockLine(line: number) {
     return LIST_BLOCK_LINE_RE.test(this.editor.getLine(line));
+  }
+
+  private getGuideMeasurementKey(list: List) {
+    const firstLineContentStart = list.getFirstLineContentStart();
+    return `${firstLineContentStart.line}:${list.getFirstLineIndent()}:${list.hasCheckbox()}`;
   }
 
   private getLinePaddingStart(line: HTMLElement | null): number | null {

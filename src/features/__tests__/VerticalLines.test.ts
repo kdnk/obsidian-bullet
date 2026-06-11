@@ -103,6 +103,67 @@ describe("VerticalLinesPluginValue", () => {
     );
   });
 
+  test("syncs overlay scroll position immediately on editor scroll", () => {
+    const scrollHandlers: Array<(event: Event) => void> = [];
+    const contentContainer = makeElement();
+    const overlayScroller = {
+      ...makeElement(),
+      scrollLeft: 0,
+      scrollTop: 0,
+    };
+    const viewDom = makeElement();
+    const scrollDOM = {
+      ...makeElement(),
+      addEventListener: jest.fn(
+        (_eventName: string, handler: (event: Event) => void) => {
+          scrollHandlers.push(handler);
+        },
+      ),
+    };
+
+    Object.defineProperty(global, "document", {
+      configurable: true,
+      value: {
+        createElement: jest
+          .fn()
+          .mockReturnValueOnce(contentContainer)
+          .mockReturnValueOnce(overlayScroller),
+      },
+    });
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: global.document,
+    });
+
+    const requestAnimationFrameSpy = jest
+      .spyOn(window, "requestAnimationFrame")
+      .mockReturnValue(1);
+    const pluginValue = new VerticalLinesPluginValue(
+      {
+        onChange: jest.fn(),
+        removeCallback: jest.fn(),
+      } as never,
+      {} as never,
+      {
+        state: {},
+        scrollDOM,
+        dom: viewDom,
+        contentDOM: makeElement(),
+      } as never,
+    );
+
+    expect(scrollHandlers).toHaveLength(1);
+    scrollHandlers[0]({
+      target: { scrollLeft: 12, scrollTop: 34 },
+    } as unknown as Event);
+
+    expect(overlayScroller.scrollLeft).toBe(12);
+    expect(overlayScroller.scrollTop).toBe(34);
+    expect(requestAnimationFrameSpy).toHaveBeenCalled();
+
+    pluginValue.destroy();
+  });
+
   test("measures clipped list lines from the visible range when the list start is not rendered", () => {
     const createdElements: unknown[] = [];
     const contentContainer = {
@@ -829,6 +890,350 @@ describe("VerticalLinesPluginValue", () => {
     (pluginValue as unknown as { calculate(): void }).calculate();
 
     expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 20);
+
+    pluginValue.destroy();
+  });
+
+  test("reuses guide positions across recalculations for nested list lines", () => {
+    const createdElements: unknown[] = [];
+    const contentContainer = {
+      ...makeElement(),
+      style: {},
+    };
+    const overlayScroller = {
+      ...makeElement(),
+      style: {},
+      scrollTo: jest.fn(),
+    };
+    const parentLineElement = {
+      ...makeElement(),
+      dataset: {},
+      style: {
+        top: "",
+        left: "",
+        width: "",
+        height: "",
+        display: "",
+        getPropertyValue: jest.fn().mockReturnValue(""),
+        setProperty: jest.fn(),
+      },
+    };
+    const childLineElement = {
+      ...makeElement(),
+      dataset: {},
+      style: {
+        top: "",
+        left: "",
+        width: "",
+        height: "",
+        display: "",
+        getPropertyValue: jest.fn().mockReturnValue(""),
+        setProperty: jest.fn(),
+      },
+    };
+    createdElements.push(
+      contentContainer,
+      overlayScroller,
+      parentLineElement,
+      childLineElement,
+    );
+
+    Object.defineProperty(global, "document", {
+      configurable: true,
+      value: {
+        createElement: jest
+          .fn()
+          .mockImplementation(() => createdElements.shift()),
+      },
+    });
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: global.document,
+    });
+
+    class FakeHTMLElement {}
+    Object.defineProperty(global, "HTMLElement", {
+      configurable: true,
+      value: FakeHTMLElement,
+    });
+
+    const editor = {
+      offsetToPos: jest.fn((offset: number) =>
+        offset === 100 ? { line: 10, ch: 0 } : { line: 20, ch: 0 },
+      ),
+      posToOffset: jest.fn(({ line }: { line: number }) =>
+        line === 0 ? 0 : line === 1 ? 10 : line === 30 ? 300 : 100,
+      ),
+      lastLine: jest.fn().mockReturnValue(40),
+      getLine: jest.fn().mockReturnValue("  - nested"),
+    };
+    mockGetEditorFromState.mockReturnValue(editor);
+
+    const emptyLeaf = {
+      getChildren: jest.fn().mockReturnValue([]),
+      isEmpty: jest.fn().mockReturnValue(true),
+    };
+
+    const makeLists = () => {
+      const child = {
+        getID: jest.fn().mockReturnValue(Math.random()),
+        getChildren: jest.fn().mockReturnValue([emptyLeaf]),
+        getFirstLineContentStart: jest.fn().mockReturnValue({
+          line: 1,
+          ch: 4,
+        }),
+        getFirstLineIndent: jest.fn().mockReturnValue("  "),
+        getParent: jest.fn().mockReturnValue(null),
+        getParentOrThrow: jest.fn(),
+        hasCheckbox: jest.fn().mockReturnValue(false),
+        isFolded: jest.fn().mockReturnValue(false),
+        isEmpty: jest.fn().mockReturnValue(false),
+      };
+      const parent = {
+        getID: jest.fn().mockReturnValue(Math.random()),
+        getChildren: jest.fn().mockReturnValue([child]),
+        getFirstLineContentStart: jest.fn().mockReturnValue({
+          line: 0,
+          ch: 2,
+        }),
+        getFirstLineIndent: jest.fn().mockReturnValue(""),
+        getParent: jest.fn().mockReturnValue(null),
+        getParentOrThrow: jest.fn(),
+        getNextSiblingOf: jest.fn().mockReturnValue(null),
+        hasCheckbox: jest.fn().mockReturnValue(false),
+        isFolded: jest.fn().mockReturnValue(false),
+        isEmpty: jest.fn().mockReturnValue(false),
+      };
+      child.getParent.mockReturnValue(parent);
+      child.getParentOrThrow.mockReturnValue(parent);
+      parent.getParentOrThrow.mockReturnValue({
+        getNextSiblingOf: jest.fn().mockReturnValue(null),
+      });
+      const root = {
+        getContentEnd: jest.fn().mockReturnValue({ line: 30, ch: 0 }),
+        getChildren: jest.fn().mockReturnValue([parent]),
+      };
+      return root;
+    };
+
+    const parser = {
+      parseRange: jest.fn().mockImplementation(() => [makeLists()]),
+    };
+    const renderedLine = Object.assign(new FakeHTMLElement(), {
+      classList: { contains: jest.fn().mockReturnValue(true) },
+      style: { paddingInlineStart: "64px", paddingLeft: "" },
+      querySelector: jest.fn().mockReturnValue(null),
+    });
+    let coordinatesAvailable = true;
+    const view = {
+      state: {},
+      viewport: { from: 100, to: 200 },
+      viewportLineBlocks: [{}],
+      visibleRanges: [{ from: 100, to: 200 }],
+      scrollDOM: {
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        getBoundingClientRect: jest.fn().mockReturnValue({ left: 10 }),
+        scrollLeft: 0,
+        offsetTop: 0,
+        scrollHeight: 600,
+      },
+      dom: {
+        appendChild: jest.fn(),
+        removeChild: jest.fn(),
+        querySelector: jest.fn().mockReturnValue({
+          getBoundingClientRect: jest.fn().mockReturnValue({ left: 20 }),
+        }),
+      },
+      contentDOM: {
+        parentElement: {
+          offsetLeft: 0,
+          parentElement: {
+            children: [{ clientHeight: 400 }],
+          },
+        },
+        firstElementChild: Object.assign(new FakeHTMLElement(), {
+          offsetTop: 24,
+        }),
+      },
+      coordsAtPos: jest.fn(() => (coordinatesAvailable ? { right: 84 } : null)),
+      lineBlockAt: jest.fn((offset: number) =>
+        offset === 199 ? { top: 180, bottom: 200 } : { top: 0, bottom: 20 },
+      ),
+      domAtPos: jest.fn(() => ({
+        node: coordinatesAvailable ? renderedLine : null,
+      })),
+    };
+
+    const pluginValue = new VerticalLinesPluginValue(
+      {
+        verticalLines: true,
+        onChange: jest.fn(),
+        removeCallback: jest.fn(),
+      } as never,
+      parser as never,
+      view as never,
+    );
+
+    jest.runOnlyPendingTimers();
+    (pluginValue as unknown as { calculate(): void }).calculate();
+    expect(parentLineElement.style.display).toBe("block");
+    expect(childLineElement.style.display).toBe("block");
+
+    parentLineElement.setCssStyles({ display: "" });
+    childLineElement.setCssStyles({ display: "" });
+    coordinatesAvailable = false;
+    (pluginValue as unknown as { calculate(): void }).calculate();
+
+    expect(parentLineElement.style.display).toBe("block");
+    expect(childLineElement.style.display).toBe("block");
+
+    pluginValue.destroy();
+  });
+
+  test("uses the same content-left measurement for line layout and container margin", () => {
+    const createdElements: unknown[] = [];
+    const contentContainer = {
+      ...makeElement(),
+      style: { marginLeft: "" },
+    };
+    const overlayScroller = {
+      ...makeElement(),
+      style: {},
+      scrollLeft: 0,
+      scrollTop: 0,
+    };
+    const lineElement = {
+      ...makeElement(),
+      dataset: {},
+      style: {
+        top: "",
+        left: "",
+        width: "",
+        height: "",
+        display: "",
+        getPropertyValue: jest.fn().mockReturnValue(""),
+        setProperty: jest.fn(),
+      },
+    };
+    createdElements.push(contentContainer, overlayScroller, lineElement);
+
+    Object.defineProperty(global, "document", {
+      configurable: true,
+      value: {
+        createElement: jest
+          .fn()
+          .mockImplementation(() => createdElements.shift()),
+      },
+    });
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: global.document,
+    });
+
+    class FakeHTMLElement {}
+    Object.defineProperty(global, "HTMLElement", {
+      configurable: true,
+      value: FakeHTMLElement,
+    });
+
+    const editor = {
+      offsetToPos: jest.fn((offset: number) =>
+        offset === 100 ? { line: 10, ch: 0 } : { line: 20, ch: 0 },
+      ),
+      posToOffset: jest.fn(({ line }: { line: number }) =>
+        line === 0 ? 0 : line === 30 ? 300 : 100,
+      ),
+      lastLine: jest.fn().mockReturnValue(40),
+      getLine: jest.fn().mockReturnValue("  note"),
+    };
+    mockGetEditorFromState.mockReturnValue(editor);
+
+    const child = {
+      getChildren: jest.fn().mockReturnValue([]),
+      isEmpty: jest.fn().mockReturnValue(true),
+    };
+    const list = {
+      getID: jest.fn().mockReturnValue(44),
+      getChildren: jest.fn().mockReturnValue([child]),
+      getFirstLineContentStart: jest.fn().mockReturnValue({ line: 0, ch: 2 }),
+      getFirstLineIndent: jest.fn().mockReturnValue(""),
+      getParent: jest.fn().mockReturnValue(null),
+      getParentOrThrow: jest.fn().mockReturnValue({
+        getNextSiblingOf: jest.fn().mockReturnValue(null),
+      }),
+      hasCheckbox: jest.fn().mockReturnValue(false),
+      isFolded: jest.fn().mockReturnValue(false),
+      isEmpty: jest.fn().mockReturnValue(false),
+    };
+    const root = {
+      getContentEnd: jest.fn().mockReturnValue({ line: 30, ch: 0 }),
+      getChildren: jest.fn().mockReturnValue([list]),
+    };
+    const parser = {
+      parseRange: jest.fn().mockReturnValue([root]),
+    };
+
+    const renderedLine = Object.assign(new FakeHTMLElement(), {
+      classList: { contains: jest.fn().mockReturnValue(true) },
+      style: { paddingInlineStart: "64px", paddingLeft: "" },
+      querySelector: jest.fn().mockReturnValue(null),
+    });
+    const measuredLineLefts = [30, 999];
+    const view = {
+      state: {},
+      viewport: { from: 100, to: 200 },
+      viewportLineBlocks: [{}],
+      visibleRanges: [{ from: 100, to: 200 }],
+      scrollDOM: {
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        getBoundingClientRect: jest.fn().mockReturnValue({ left: 10 }),
+        scrollLeft: 0,
+        offsetTop: 0,
+        scrollHeight: 600,
+      },
+      dom: {
+        appendChild: jest.fn(),
+        removeChild: jest.fn(),
+        querySelector: jest.fn().mockReturnValue({
+          getBoundingClientRect: jest.fn(() => ({
+            left: measuredLineLefts.shift() ?? 999,
+          })),
+        }),
+      },
+      contentDOM: {
+        parentElement: {
+          offsetLeft: 0,
+          parentElement: {
+            children: [{ clientHeight: 400 }],
+          },
+        },
+        firstElementChild: Object.assign(new FakeHTMLElement(), {
+          offsetTop: 24,
+        }),
+      },
+      coordsAtPos: jest.fn().mockReturnValue({ right: 84 }),
+      lineBlockAt: jest.fn((offset: number) =>
+        offset === 199 ? { top: 180, bottom: 200 } : { top: 0, bottom: 20 },
+      ),
+      domAtPos: jest.fn().mockReturnValue({ node: renderedLine }),
+    };
+
+    const pluginValue = new VerticalLinesPluginValue(
+      {
+        verticalLines: true,
+        onChange: jest.fn(),
+        removeCallback: jest.fn(),
+      } as never,
+      parser as never,
+      view as never,
+    );
+
+    jest.runOnlyPendingTimers();
+    (pluginValue as unknown as { calculate(): void }).calculate();
+
+    expect(contentContainer.style.marginLeft).toBe("20px");
 
     pluginValue.destroy();
   });
