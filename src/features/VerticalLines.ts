@@ -248,31 +248,29 @@ export class VerticalLinesPluginValue implements PluginValue {
 
     const measurementOffset =
       fromOffset < visibleFrom ? visibleFrom : fromOffset;
-    const coords =
-      this.view.coordsAtPos(fromOffset, 1) ??
-      (measurementOffset !== fromOffset
-        ? this.view.coordsAtPos(measurementOffset, 1)
-        : null);
+    const guideMeasurementKey = this.getGuideMeasurementKey(list);
+    const cachedGuideMeasurement =
+      this.guideMeasurements.get(guideMeasurementKey);
+    const startCoords = this.view.coordsAtPos(fromOffset, 1);
+    const shouldPreferCachedClippedMeasurement =
+      fromOffset < visibleFrom && !startCoords && !!cachedGuideMeasurement;
+    const coords = shouldPreferCachedClippedMeasurement
+      ? null
+      : (startCoords ??
+        (measurementOffset !== fromOffset
+          ? this.view.coordsAtPos(measurementOffset, 1)
+          : null));
 
     const line = this.getLineElementAt(measurementOffset);
     const currentPadding = this.getLinePaddingStart(line);
-    const currentX = this.getGuideX(
-      list,
-      line,
-      measurementOffset,
-      coords,
-      currentPadding,
-    );
+    const currentX = shouldPreferCachedClippedMeasurement
+      ? null
+      : this.getGuideX(list, line, measurementOffset, coords, currentPadding);
     const guideMeasurement =
-      currentX === null
-        ? this.guideMeasurements.get(this.getGuideMeasurementKey(list))
-        : { currentX, currentPadding };
+      currentX === null ? cachedGuideMeasurement : { currentX, currentPadding };
 
     if (guideMeasurement && height > 0 && !list.isFolded()) {
-      this.guideMeasurements.set(
-        this.getGuideMeasurementKey(list),
-        guideMeasurement,
-      );
+      this.guideMeasurements.set(guideMeasurementKey, guideMeasurement);
       if (parentCtx.rootLeft === undefined) {
         parentCtx.rootLeft = guideMeasurement.currentX;
         parentCtx.rootPadding = guideMeasurement.currentPadding ?? 0;

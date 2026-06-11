@@ -35,6 +35,31 @@ describe("getVerticalLinesContentLeft", () => {
     expect(getVerticalLinesContentLeft(view)).toBe(112);
   });
 
+  test("uses the leftmost rendered line when the first rendered line is indented", () => {
+    const indentedLine = {
+      getBoundingClientRect: jest.fn().mockReturnValue({ left: 260 }),
+    };
+    const rootLine = {
+      getBoundingClientRect: jest.fn().mockReturnValue({ left: 188 }),
+    };
+    const scrollDOM = {
+      getBoundingClientRect: jest.fn().mockReturnValue({ left: 100 }),
+      scrollLeft: 24,
+    };
+    const view: Parameters<typeof getVerticalLinesContentLeft>[0] = {
+      dom: {
+        querySelector: jest.fn().mockReturnValue(indentedLine),
+        querySelectorAll: jest.fn().mockReturnValue([indentedLine, rootLine]),
+      },
+      scrollDOM,
+      contentDOM: {
+        parentElement: { offsetLeft: 56 },
+      },
+    };
+
+    expect(getVerticalLinesContentLeft(view)).toBe(112);
+  });
+
   test("falls back to the content container offset when no line is rendered", () => {
     const contentParent = { offsetLeft: 56 };
     const view: Parameters<typeof getVerticalLinesContentLeft>[0] = {

@@ -2,11 +2,12 @@ export function getVerticalLinesContentLeft(view: {
   contentDOM: {
     parentElement: Pick<HTMLElement, "offsetLeft"> | null;
   };
-  dom: Pick<HTMLElement, "querySelector">;
+  dom: Pick<HTMLElement, "querySelector"> &
+    Partial<Pick<HTMLElement, "querySelectorAll">>;
   scrollDOM: Pick<HTMLElement, "getBoundingClientRect" | "scrollLeft">;
 }) {
-  const cmLine = view.dom.querySelector("div.cm-line");
-  if (isElementLike(cmLine)) {
+  const cmLine = getLeftmostLineElement(view.dom);
+  if (cmLine) {
     return (
       cmLine.getBoundingClientRect().left -
       view.scrollDOM.getBoundingClientRect().left +
@@ -15,6 +16,25 @@ export function getVerticalLinesContentLeft(view: {
   }
 
   return view.contentDOM.parentElement?.offsetLeft ?? 0;
+}
+
+function getLeftmostLineElement(
+  dom: Pick<HTMLElement, "querySelector"> &
+    Partial<Pick<HTMLElement, "querySelectorAll">>,
+) {
+  const lineElements = Array.from(dom.querySelectorAll?.("div.cm-line") ?? []);
+  const elementLikes = lineElements.filter(isElementLike);
+  if (elementLikes.length > 0) {
+    return elementLikes.reduce((leftmost, element) =>
+      element.getBoundingClientRect().left <
+      leftmost.getBoundingClientRect().left
+        ? element
+        : leftmost,
+    );
+  }
+
+  const cmLine = dom.querySelector("div.cm-line");
+  return isElementLike(cmLine) ? cmLine : null;
 }
 
 export function getVerticalLineLeft(
