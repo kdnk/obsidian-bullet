@@ -735,4 +735,101 @@ describe("VerticalLinesPluginValue", () => {
 
     pluginValue.destroy();
   });
+
+  test("parses from the start of a list block when the viewport starts inside it", () => {
+    const contentContainer = {
+      ...makeElement(),
+      style: {},
+    };
+    const overlayScroller = {
+      ...makeElement(),
+      style: {},
+      scrollTo: jest.fn(),
+    };
+
+    Object.defineProperty(global, "document", {
+      configurable: true,
+      value: {
+        createElement: jest
+          .fn()
+          .mockReturnValueOnce(contentContainer)
+          .mockReturnValueOnce(overlayScroller),
+      },
+    });
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: global.document,
+    });
+
+    class FakeHTMLElement {}
+    Object.defineProperty(global, "HTMLElement", {
+      configurable: true,
+      value: FakeHTMLElement,
+    });
+
+    const lines = ["- parent"];
+    for (let i = 1; i <= 30; i++) {
+      lines.push("  - child " + i);
+    }
+
+    const editor = {
+      offsetToPos: jest.fn((offset: number) =>
+        offset === 100 ? { line: 10, ch: 0 } : { line: 20, ch: 0 },
+      ),
+      getLine: jest.fn((line: number) => lines[line] ?? ""),
+      lastLine: jest.fn().mockReturnValue(lines.length - 1),
+    };
+    mockGetEditorFromState.mockReturnValue(editor);
+
+    const parser = {
+      parseRange: jest.fn().mockReturnValue([]),
+    };
+    const view = {
+      state: {},
+      viewport: { from: 100, to: 200 },
+      viewportLineBlocks: [{}],
+      visibleRanges: [{ from: 100, to: 200 }],
+      scrollDOM: {
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        getBoundingClientRect: jest.fn().mockReturnValue({ left: 10 }),
+        scrollLeft: 0,
+        offsetTop: 0,
+        scrollHeight: 600,
+      },
+      dom: {
+        appendChild: jest.fn(),
+        removeChild: jest.fn(),
+        querySelector: jest.fn().mockReturnValue(null),
+      },
+      contentDOM: {
+        parentElement: {
+          offsetLeft: 0,
+          parentElement: {
+            children: [{ clientHeight: 400 }],
+          },
+        },
+        firstElementChild: Object.assign(new FakeHTMLElement(), {
+          offsetTop: 24,
+        }),
+      },
+    };
+
+    const pluginValue = new VerticalLinesPluginValue(
+      {
+        verticalLines: true,
+        onChange: jest.fn(),
+        removeCallback: jest.fn(),
+      } as never,
+      parser as never,
+      view as never,
+    );
+
+    jest.runOnlyPendingTimers();
+    (pluginValue as unknown as { calculate(): void }).calculate();
+
+    expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 20);
+
+    pluginValue.destroy();
+  });
 });

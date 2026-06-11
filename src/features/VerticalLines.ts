@@ -27,6 +27,7 @@ import { Settings } from "../services/Settings";
 
 const VERTICAL_LINES_BODY_CLASS = "bullet-plugin-vertical-lines";
 const CONTENT_TOP_OFFSET = 24;
+const LIST_BLOCK_LINE_RE = /^[ \t]*(?:[-*+]|\d+\.)( |\t)|^[ \t]+/;
 
 interface LineData {
   top: number;
@@ -160,7 +161,10 @@ export class VerticalLinesPluginValue implements PluginValue {
       this.view.viewportLineBlocks.length > 0 &&
       this.view.visibleRanges.length > 0
     ) {
-      const fromLine = this.editor.offsetToPos(this.view.viewport.from).line;
+      const visibleFromLine = this.editor.offsetToPos(
+        this.view.viewport.from,
+      ).line;
+      const fromLine = this.getListBlockStartLine(visibleFromLine);
       const toLine = this.editor.offsetToPos(this.view.viewport.to).line;
       this.toLine = toLine;
       const lists = this.parser.parseRange(this.editor, fromLine, toLine);
@@ -505,6 +509,20 @@ export class VerticalLinesPluginValue implements PluginValue {
     return /^[ \t]*(?:[-*+]|\d+\.)( |\t)|^[ \t]+/.test(
       this.editor.getLine(nextLine),
     );
+  }
+
+  private getListBlockStartLine(fromLine: number) {
+    let line = fromLine;
+
+    while (line > 0 && this.isListBlockLine(line - 1)) {
+      line--;
+    }
+
+    return line;
+  }
+
+  private isListBlockLine(line: number) {
+    return LIST_BLOCK_LINE_RE.test(this.editor.getLine(line));
   }
 
   private getLinePaddingStart(line: HTMLElement | null): number | null {
