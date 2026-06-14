@@ -146,7 +146,7 @@ export default class ObsidianBulletPlugin extends Plugin {
       ),
 
       // features based on settings.betterListsStyles
-      new BetterListsStyles(this.settings, this.obsidianSettings),
+      new BetterListsStyles(this, this.settings, this.obsidianSettings),
 
       // features based on settings.verticalLines
       new VerticalLines(this, this.settings, this.parser),
