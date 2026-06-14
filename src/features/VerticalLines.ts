@@ -7,6 +7,7 @@ import {
   ViewUpdate,
 } from "@codemirror/view";
 
+import { DocumentBodyClass } from "./DocumentBodyClass";
 import { Feature } from "./Feature";
 import {
   applyVerticalLineElementStyle,
@@ -594,19 +595,24 @@ function isInstanceOf<T>(value: unknown, type: { new (): T }): value is T {
 }
 
 export class VerticalLines implements Feature {
-  private updateBodyClassInterval: number | null = null;
+  private bodyClass: DocumentBodyClass;
 
   constructor(
     private plugin: Plugin,
     private settings: Settings,
     private parser: Parser,
-  ) {}
+  ) {
+    this.bodyClass = new DocumentBodyClass(
+      this.plugin,
+      VERTICAL_LINES_BODY_CLASS,
+      this.shouldApplyBodyClass,
+    );
+  }
 
   async load() {
+    this.settings.onChange(this.updateBodyClass);
     this.updateBodyClass();
-    this.updateBodyClassInterval = window.setInterval(() => {
-      this.updateBodyClass();
-    }, 1000);
+    this.bodyClass.load();
 
     this.plugin.registerEditorExtension(
       ViewPlugin.define(
@@ -617,25 +623,15 @@ export class VerticalLines implements Feature {
   }
 
   async unload() {
-    if (this.updateBodyClassInterval !== null) {
-      window.clearInterval(this.updateBodyClassInterval);
-      this.updateBodyClassInterval = null;
-    }
-    activeDocument.body.classList.remove(VERTICAL_LINES_BODY_CLASS);
+    this.settings.removeCallback(this.updateBodyClass);
+    this.bodyClass.unload();
   }
 
   private updateBodyClass = () => {
-    const shouldExists = this.settings.verticalLines;
-    const exists = activeDocument.body.classList.contains(
-      VERTICAL_LINES_BODY_CLASS,
-    );
+    this.bodyClass.update();
+  };
 
-    if (shouldExists && !exists) {
-      activeDocument.body.classList.add(VERTICAL_LINES_BODY_CLASS);
-    }
-
-    if (!shouldExists && exists) {
-      activeDocument.body.classList.remove(VERTICAL_LINES_BODY_CLASS);
-    }
+  private shouldApplyBodyClass = () => {
+    return this.settings.verticalLines;
   };
 }
