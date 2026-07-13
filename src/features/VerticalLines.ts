@@ -13,48 +13,25 @@ import { Settings } from "../services/Settings";
 const VERTICAL_LINES_BODY_CLASS = "bullet-plugin-vertical-lines";
 const INDENT_GUIDE_SELECTOR = ".cm-indent";
 const LINE_SELECTOR = ".cm-line";
-const LINE_GUIDES_SELECTOR = ".cm-hmd-list-indent .cm-indent";
 
-export function resolveVerticalGuideTarget(
-  list: List,
-  guides: readonly Element[],
-  pressedGuide: Element,
-): List | null {
-  const pressedIndex = guides.indexOf(pressedGuide);
-  if (pressedIndex < 0) {
-    return null;
-  }
-
-  const ancestors: List[] = [];
-  for (
-    let ancestor = list.getParent();
-    ancestor?.getParent();
-    ancestor = ancestor.getParent()
-  ) {
-    ancestors.unshift(ancestor);
-  }
-
-  const ancestorIndex = pressedIndex - (guides.length - ancestors.length);
-  return ancestorIndex >= 0 ? (ancestors[ancestorIndex] ?? null) : null;
+export function resolveVerticalGuideTarget(list: List): List | null {
+  const parent = list.getParent();
+  return parent?.getParent() ? parent : null;
 }
 
 export function toggleVerticalGuideTarget(
   editor: Pick<MyEditor, "fold" | "unfold">,
   list: List,
 ) {
-  const children = list.getChildren().filter((child) => !child.isEmpty());
-  if (children.length === 0) {
+  if (list.isEmpty()) {
     return false;
   }
 
-  const shouldUnfold = children.every((child) => child.isFolded());
-  for (const child of children) {
-    const line = child.getFirstLineContentStart().line;
-    if (shouldUnfold) {
-      editor.unfold(line);
-    } else {
-      editor.fold(line);
-    }
+  const line = list.getFirstLineContentStart().line;
+  if (list.isFoldRoot()) {
+    editor.unfold(line);
+  } else {
+    editor.fold(line);
   }
 
   return true;
@@ -64,7 +41,10 @@ export class VerticalLinesPluginValue implements PluginValue {
   constructor(
     private settings: Settings,
     private parser: Parser,
-  ) {}
+    private view: EditorView,
+  ) {
+    this.view.contentDOM.addEventListener("mousedown", this.onMouseDown, true);
+  }
 
   handleMouseDown(event: MouseEvent, view: EditorView) {
     if (
@@ -106,10 +86,7 @@ export class VerticalLinesPluginValue implements PluginValue {
       return false;
     }
 
-    const guides = Array.from(
-      lineElement.querySelectorAll(LINE_GUIDES_SELECTOR),
-    );
-    const target = resolveVerticalGuideTarget(list, guides, pressedGuide);
+    const target = resolveVerticalGuideTarget(list);
     if (!target || !toggleVerticalGuideTarget(editor, target)) {
       return false;
     }
@@ -117,6 +94,20 @@ export class VerticalLinesPluginValue implements PluginValue {
     event.preventDefault();
     return true;
   }
+
+  destroy() {
+    this.view.contentDOM.removeEventListener(
+      "mousedown",
+      this.onMouseDown,
+      true,
+    );
+  }
+
+  private onMouseDown = (event: MouseEvent) => {
+    if (this.handleMouseDown(event, this.view)) {
+      event.stopPropagation();
+    }
+  };
 }
 
 function isElementLike(value: EventTarget | null): value is Element {
@@ -152,14 +143,8 @@ export class VerticalLines implements Feature {
 
     this.plugin.registerEditorExtension(
       ViewPlugin.define(
-        () => new VerticalLinesPluginValue(this.settings, this.parser),
-        {
-          eventHandlers: {
-            mousedown(event, view) {
-              return this.handleMouseDown(event, view);
-            },
-          },
-        },
+        (view) =>
+          new VerticalLinesPluginValue(this.settings, this.parser, view),
       ),
     );
   }

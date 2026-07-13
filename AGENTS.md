@@ -15,6 +15,10 @@
     - 取り込み後、デフォルトブランチに対して `npm version <major|minor|patch>` を実行し、新しいバージョンをリリースしてください。
 - テストについて
     - `.spec.md` の統合 spec やフルテストは `dist/main.js` を実行するため、`src` を変更した後に実行する場合は先に `npm run build-with-tests` を実行してください。
+- 縦線ガイドについて
+    - Obsidian 1.13 系の Live Preview では、1 行のインデント全体が 1 個の `.cm-indent` に入ります。ネスト階層ごとに `.cm-indent` が複数作られる前提で、ガイドとリスト祖先を対応付けないでください。
+    - `.cm-indent` の `mousedown` は、通常の CodeMirror ViewPlugin event handler へ届く前に Obsidian 側で bubble が止まります。クリック操作は `contentDOM` の capture phase で受け取り、ViewPlugin の destroy 時に同じ listener を必ず解除してください。
+    - `.cm-indent::before` は Obsidian / CodeMirror が配置・仮想化・スクロールする描画源です。独立したスクロール overlay や座標 cache を再導入せず、描画の実確認が必要な変更では `npm run build-with-tests` 後に実 Obsidian の長い多段リストで上端と下端を確認してください。
 - エージェント向けのローカル指示について
     - 作業中に、このファイルや同等のエージェント向け指示に不足、矛盾、繰り返し確認を生む表現を見つけた場合は、ユーザーに追加確認せず、同じ変更範囲に含めて改善してください。
     - 作業中に「指示通りに進められない」「ツールやコマンドが失敗する」「どの手順を使うべきか不明」といった状況に当たった場合は、ユーザーに繰り返し確認せず、まずローカルのヘルプ、CLI の `--help`、プロジェクト内ドキュメント、利用可能なスキル/プラグインの説明を自分で調べてください。

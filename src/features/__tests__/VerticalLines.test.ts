@@ -140,7 +140,7 @@ describe("VerticalLines", () => {
 });
 
 describe("resolveVerticalGuideTarget", () => {
-  test("maps nested guides from the outermost to the nearest ancestor", () => {
+  test("maps the native indent guide to the immediate list ancestor", () => {
     const root = makeRoot({
       editor: makeEditor({
         text: "- parent\n  - child\n    - grandchild",
@@ -151,26 +151,13 @@ describe("resolveVerticalGuideTarget", () => {
     if (!grandchild) {
       throw new Error("Expected a grandchild list");
     }
-    const outerGuide = {} as Element;
-    const innerGuide = {} as Element;
 
     expect(
-      resolveVerticalGuideTarget(
-        grandchild,
-        [outerGuide, innerGuide],
-        outerGuide,
-      )?.getFirstLineContentStart().line,
-    ).toBe(0);
-    expect(
-      resolveVerticalGuideTarget(
-        grandchild,
-        [outerGuide, innerGuide],
-        innerGuide,
-      )?.getFirstLineContentStart().line,
+      resolveVerticalGuideTarget(grandchild)?.getFirstLineContentStart().line,
     ).toBe(1);
   });
 
-  test("ignores a shared leading indentation guide", () => {
+  test("maps a child guide when the list block has leading indentation", () => {
     const root = makeRoot({
       editor: makeEditor({
         text: "  - parent\n    - child",
@@ -181,26 +168,13 @@ describe("resolveVerticalGuideTarget", () => {
     if (!child) {
       throw new Error("Expected a child list");
     }
-    const leadingGuide = {} as Element;
-    const parentGuide = {} as Element;
 
     expect(
-      resolveVerticalGuideTarget(
-        child,
-        [leadingGuide, parentGuide],
-        leadingGuide,
-      ),
-    ).toBeNull();
-    expect(
-      resolveVerticalGuideTarget(
-        child,
-        [leadingGuide, parentGuide],
-        parentGuide,
-      )?.getFirstLineContentStart().line,
+      resolveVerticalGuideTarget(child)?.getFirstLineContentStart().line,
     ).toBe(0);
   });
 
-  test("ignores an extra indentation guide on a note line", () => {
+  test("maps a note-line guide to the owning list's parent", () => {
     const root = makeRoot({
       editor: makeEditor({
         text: "- parent\n  - child\n    note",
@@ -211,40 +185,25 @@ describe("resolveVerticalGuideTarget", () => {
     if (!child) {
       throw new Error("Expected the note line to belong to child");
     }
-    const noteIndentGuide = {} as Element;
-    const parentGuide = {} as Element;
 
     expect(
-      resolveVerticalGuideTarget(
-        child,
-        [noteIndentGuide, parentGuide],
-        noteIndentGuide,
-      ),
-    ).toBeNull();
-    expect(
-      resolveVerticalGuideTarget(
-        child,
-        [noteIndentGuide, parentGuide],
-        parentGuide,
-      )?.getFirstLineContentStart().line,
+      resolveVerticalGuideTarget(child)?.getFirstLineContentStart().line,
     ).toBe(0);
   });
 
-  test("ignores an element outside the line guide collection", () => {
+  test("ignores leading indentation on a root list item", () => {
     const root = makeRoot({
       editor: makeEditor({
-        text: "- parent\n  - child",
-        cursor: { line: 1, ch: 2 },
+        text: "  - root item",
+        cursor: { line: 0, ch: 2 },
       }),
     });
-    const child = root.getListUnderLine(1);
-    if (!child) {
-      throw new Error("Expected a child list");
+    const rootItem = root.getListUnderLine(0);
+    if (!rootItem) {
+      throw new Error("Expected a root list item");
     }
 
-    expect(
-      resolveVerticalGuideTarget(child, [{} as Element], {} as Element),
-    ).toBeNull();
+    expect(resolveVerticalGuideTarget(rootItem)).toBeNull();
   });
 });
 
@@ -265,7 +224,7 @@ describe("toggleVerticalGuideTarget", () => {
     };
   }
 
-  test("folds each non-empty direct child when any branch is unfolded", () => {
+  test("folds the represented list itself", () => {
     const root = makeRoot({
       editor: makeEditor({ text, cursor: { line: 0, ch: 0 } }),
     });
@@ -276,17 +235,17 @@ describe("toggleVerticalGuideTarget", () => {
     const editor = makeFoldEditor();
 
     expect(toggleVerticalGuideTarget(editor, parent)).toBe(true);
-    expect(editor.fold).toHaveBeenNthCalledWith(1, 1);
-    expect(editor.fold).toHaveBeenNthCalledWith(2, 4);
+    expect(editor.fold).toHaveBeenCalledWith(0);
+    expect(editor.fold).toHaveBeenCalledTimes(1);
     expect(editor.unfold).not.toHaveBeenCalled();
   });
 
-  test("unfolds each non-empty direct child when every branch is folded", () => {
+  test("unfolds the represented list when it is the fold root", () => {
     const root = makeRoot({
       editor: makeEditor({
         text,
         cursor: { line: 0, ch: 0 },
-        getAllFoldedLines: () => [1, 4],
+        getAllFoldedLines: () => [0],
       }),
     });
     const parent = root.getListUnderLine(0);
@@ -296,8 +255,8 @@ describe("toggleVerticalGuideTarget", () => {
     const editor = makeFoldEditor();
 
     expect(toggleVerticalGuideTarget(editor, parent)).toBe(true);
-    expect(editor.unfold).toHaveBeenNthCalledWith(1, 1);
-    expect(editor.unfold).toHaveBeenNthCalledWith(2, 4);
+    expect(editor.unfold).toHaveBeenCalledWith(0);
+    expect(editor.unfold).toHaveBeenCalledTimes(1);
     expect(editor.fold).not.toHaveBeenCalled();
   });
 
@@ -369,6 +328,50 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     };
   }
 
+  test("observes mousedown during capture and removes the listener", () => {
+    type CapturedListener = (event: Event) => void;
+    const addEventListener = jest.fn<
+      void,
+      [string, CapturedListener, boolean]
+    >();
+    const removeEventListener = jest.fn<
+      void,
+      [string, CapturedListener | undefined, boolean]
+    >();
+    const contentDOM = {
+      addEventListener,
+      removeEventListener,
+    };
+    const PluginValueWithView = VerticalLinesPluginValue as unknown as new (
+      settings: unknown,
+      parser: unknown,
+      view: unknown,
+    ) => { destroy(): void };
+    const pluginValue = new PluginValueWithView(
+      {
+        verticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      { parse: jest.fn() },
+      { contentDOM },
+    );
+
+    expect(contentDOM.addEventListener).toHaveBeenCalledWith(
+      "mousedown",
+      expect.any(Function),
+      true,
+    );
+    const listener = addEventListener.mock.calls[0]?.[1];
+
+    pluginValue.destroy();
+
+    expect(contentDOM.removeEventListener).toHaveBeenCalledWith(
+      "mousedown",
+      listener,
+      true,
+    );
+  });
+
   test("folds the ancestor represented by a native indentation guide", () => {
     const root = makeRoot({
       editor: makeEditor({
@@ -396,7 +399,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     expect(pluginValue.handleMouseDown(event, view)).toBe(true);
     expect(view.posAtDOM).toHaveBeenCalledWith(line);
     expect(parser.parse).toHaveBeenCalledWith(editor, { line: 1, ch: 0 });
-    expect(editor.fold).toHaveBeenCalledWith(1);
+    expect(editor.fold).toHaveBeenCalledWith(0);
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 

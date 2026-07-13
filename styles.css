@@ -14,70 +14,11 @@
 }
 
 /* lines */
-.bullet-plugin-list-lines-scroller {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  padding: var(--file-margins);
-  padding-left: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
-.bullet-plugin-list-lines-content-container {
-  position: relative;
-}
-
-.bullet-plugin-list-line {
-  pointer-events: auto;
-  position: absolute;
-  width: 5px;
-  --bullet-guide-offset-x: 2px;
-  --bullet-guide-width: 1px;
-  --bullet-guide-color: var(--text-faint);
-  margin-top: 1em;
-  z-index: 1;
-  cursor: pointer;
-  background: transparent;
-}
-
-.bullet-plugin-list-line::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: var(--bullet-guide-offset-x);
-  width: var(--bullet-guide-width);
-  transform: translateX(-50%);
-  background: var(--bullet-guide-color);
-}
-
-body.is-mobile .bullet-plugin-list-line {
-  margin-top: 2.7em;
-}
-
-.bullet-plugin-better-bullets .bullet-plugin-list-line {
-  margin-top: 1.4em;
-}
-
-.markdown-source-view.mod-cm6.is-readable-line-width
-  .bullet-plugin-list-lines-content-container {
-  max-width: 700px;
-  margin: auto;
-}
-
-.bullet-plugin-list-line:hover {
-  --bullet-guide-width: 4px;
-  --bullet-guide-color: var(--text-muted);
-}
-
 .bullet-plugin-vertical-lines
   .markdown-source-view.mod-cm6
   .cm-hmd-list-indent
-  .cm-indent::before {
-  content: none;
+  .cm-indent {
+  cursor: pointer;
 }
 
 /* drag-n-drop */
