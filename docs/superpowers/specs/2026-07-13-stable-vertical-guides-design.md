@@ -36,14 +36,14 @@ No additional cache invalidation or scheduling rule can make these independent c
 
 ## Chosen Architecture
 
-Obsidian already renders `.cm-indent` elements inside each visible CodeMirror list line and draws its indentation guides with `.cm-indent::before`. Those elements are created, positioned, virtualized, and scrolled by CodeMirror and Obsidian. The plugin will use them as the only guide-rendering source.
+Obsidian draws indentation guides with `.cm-indent::before`, but it removes every visible `.cm-indent` for a parent after all of that parent's non-empty child branches fold. CodeMirror still keeps `.cm-indent-spacing` spans on the visible branch roots and direct leaves. The plugin promotes those existing spans into the native `.cm-indent` class so the native guide remains available for reopening. The spans are still created, positioned, virtualized, and scrolled by CodeMirror and Obsidian.
 
 The feature will contain two responsibilities:
 
 1. `DocumentBodyClass` continues to apply `bullet-plugin-vertical-lines` to every participating document when the feature is enabled.
 2. A small CodeMirror view plugin observes `mousedown` on `contentDOM` during the capture phase and handles `.cm-indent` elements when click-to-fold is enabled. Obsidian stops these events before CodeMirror's normal bubbling view-plugin handlers, so capture is required. The listener is removed when the view plugin is destroyed.
 
-There will be no plugin-owned guide elements, overlay scroller, layout observer, animation-frame scheduler, coordinate cache, or geometry helper.
+There will be no plugin-owned guide elements, overlay scroller, layout observer, animation-frame scheduler, coordinate cache, or geometry helper. A plugin marker class records only the spans promoted into native guides and is removed when the feature is disabled or the view is destroyed.
 
 ## Guide-to-list Mapping
 
@@ -60,7 +60,7 @@ The handler does nothing when the feature is disabled, the configured action is 
 
 ## Styling
 
-The plugin will stop suppressing Obsidian's `.cm-indent::before` guide. While the feature is enabled it will add a pointer affordance to `.cm-indent` without changing its layout. The event handler remains inactive when click-to-fold is disabled.
+The plugin will stop suppressing Obsidian's `.cm-indent::before` guide. While the feature is enabled it will promote visible `.cm-indent-spacing` spans into `.cm-indent`, allowing Obsidian to apply its own layout, theme, and guide pseudo-element. The event handler remains inactive when click-to-fold is disabled.
 
 The old `.bullet-plugin-list-lines-scroller`, `.bullet-plugin-list-lines-content-container`, and `.bullet-plugin-list-line` styles will be removed.
 

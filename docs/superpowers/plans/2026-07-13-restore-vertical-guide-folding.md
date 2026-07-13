@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Restore legacy vertical-guide clicks so the single native guide targets the outermost real list ancestor and batch-toggles that ancestor's direct child branches without reopening a branch that contains the cursor.
+**Goal:** Restore legacy vertical-guide clicks so a persistent native guide targets the outermost real list ancestor and batch-toggles that ancestor's direct child branches in both directions without reopening a branch that contains the cursor.
 
-**Architecture:** Keep the native `.cm-indent::before` rendering and capture-phase guide handler unchanged. Map the pressed line to its outermost real list ancestor, then run the legacy direct-child batch algorithm through `MyEditor.foldEnsuringCursorVisible`.
+**Architecture:** Keep Obsidian's native `.cm-indent::before` rendering and capture-phase guide handler. Promote CodeMirror-owned `.cm-indent-spacing` spans into native `.cm-indent` spans during measurement writes so a guide remains after folding, map the pressed segment to its outermost real list ancestor, then run the legacy direct-child batch algorithm through `MyEditor.foldEnsuringCursorVisible`.
 
 **Tech Stack:** TypeScript 5.9, Obsidian 1.13.1, CodeMirror 6, Jest 30, Rollup 4.
 
@@ -13,6 +13,7 @@
 - Use normal `git` on `main`; do not use GitButler.
 - Do not reintroduce overlay DOM, measurements, coordinate caches, or scroll synchronization.
 - Keep `.cm-indent::before` as the only vertical-guide rendering source.
+- Do not duplicate native guide geometry or theme CSS; add and remove only the native `.cm-indent` class on existing spacing spans.
 - Keep `contentDOM` capture-phase `mousedown` handling and listener cleanup unchanged.
 - Map one native `.cm-indent` to the outermost real list ancestor before the parser's synthetic root.
 - Never fold or unfold the represented parent itself from a vertical-guide click.
@@ -29,7 +30,7 @@
 ## File Structure
 
 - Modify: `src/features/VerticalLines.ts` — implement direct-child batch folding and unfolding.
-- Modify: `src/features/__tests__/VerticalLines.test.ts` — restore the legacy helper contract and handler-level regression coverage.
+- Modify: `src/features/__tests__/VerticalLines.test.ts` — restore the legacy helper contract, persistent native segments, and handler-level regression coverage.
 - Modify: `docs/superpowers/plans/2026-07-13-restore-vertical-guide-folding.md` — record completed steps and final verification evidence.
 - Temporary manual-test fixture: `vault/vertical-guide-regression-test.md` — exercise the built plugin in the repository's test vault, then remove it after verification.
 
@@ -199,15 +200,15 @@ Expected: the commit succeeds and its hooks pass.
 - Consumes: `List.getParent(): List | null` and the parser convention that the top container has no parent.
 - Produces: `resolveVerticalGuideTarget(list): List | null`, selecting the last real ancestor before the synthetic root.
 
-- [ ] **Step 1: Change the deep mapping test to require the outermost real ancestor**
+- [x] **Step 1: Change the deep mapping test to require the outermost real ancestor**
 
 For `- parent / - child / - grandchild`, require the guide on `grandchild` to resolve to line `0`, not line `1`. Keep the leading-indentation, note-line, and root-item cases.
 
-- [ ] **Step 2: Strengthen the handler regression with the live fixture shape**
+- [x] **Step 2: Strengthen the handler regression with the live fixture shape**
 
 Use the `parent / branch one / leaf one / leaf sibling / branch two / leaf two` fixture. Dispatch the guide event from the `leaf one` line and require folds for branch roots at lines `1` and `4`, never the immediate parent alone.
 
-- [ ] **Step 3: Run the focused test and confirm RED**
+- [x] **Step 3: Run the focused test and confirm RED**
 
 Run:
 
@@ -217,11 +218,11 @@ SKIP_OBSIDIAN=1 npx jest --forceExit --runInBand src/features/__tests__/Vertical
 
 Expected: FAIL because the deep mapping returns line `1`, and the handler targets only the immediate parent.
 
-- [ ] **Step 4: Implement the minimal ancestor walk**
+- [x] **Step 4: Implement the minimal ancestor walk**
 
 Walk upward from the pressed line's owning list. Remember each ancestor that itself has a parent, and return the last such ancestor. This excludes the parser's synthetic root and returns `null` for a root list item.
 
-- [ ] **Step 5: Run focused tests and lint**
+- [x] **Step 5: Run focused tests and lint**
 
 Run:
 
@@ -232,11 +233,80 @@ npm run lint
 
 Expected: both suites and lint pass.
 
-- [ ] **Step 6: Commit the mapping correction**
+- [x] **Step 6: Commit the mapping correction**
 
 Create an English Conventional Commit with detailed `Why` and `What` sections. Include only the source and unit-test changes in the implementation commit.
 
-### Task 3: Complete Automated and Obsidian Verification
+### Task 3: Keep Native Guide Segments Available After Folding
+
+**Files:**
+- Modify: `src/features/VerticalLines.ts`
+- Modify: `src/features/__tests__/VerticalLines.test.ts`
+
+**Interfaces:**
+- Consumes: existing `.cm-hmd-list-indent > .cm-indent-spacing` elements inside `EditorView.contentDOM`.
+- Produces: plugin-owned promotions carrying both `.cm-indent` and `.bullet-plugin-persistent-indent-guide`.
+- Uses: `EditorView.requestMeasure` write phase, `PluginValue.update`, `Settings.onChange`, and `Settings.removeCallback`.
+
+- [ ] **Step 1: Add failing promotion-helper tests**
+
+Add tests proving that synchronization:
+
+1. Adds `.cm-indent` and `.bullet-plugin-persistent-indent-guide` only to spacing spans that are not already native guides.
+2. Leaves pre-existing native `.cm-indent` elements unowned and untouched.
+3. Removes both added classes from plugin-owned spans when disabled.
+4. Does not remove a native guide that lacks the plugin marker.
+
+- [ ] **Step 2: Add failing ViewPlugin lifecycle tests**
+
+Extend the constructor/destroy test and add update/setting coverage proving that:
+
+1. Construction subscribes to settings and requests a measurement write.
+2. The write synchronizes against the current `contentDOM` and current `verticalLines` value.
+3. A view update and a setting callback each schedule synchronization.
+4. Destroy removes the capture listener, unregisters the setting callback, and synchronously removes plugin-owned promotions.
+5. A queued write after destroy is a no-op.
+
+- [ ] **Step 3: Run the focused vertical-line test and confirm RED**
+
+Run:
+
+```bash
+SKIP_OBSIDIAN=1 npx jest --forceExit --runInBand src/features/__tests__/VerticalLines.test.ts
+```
+
+Expected: FAIL because no promotion helper or lifecycle synchronization exists.
+
+- [ ] **Step 4: Implement minimal persistent native-guide promotion**
+
+Implement an exported synchronization helper and integrate it into `VerticalLinesPluginValue`:
+
+1. Select only `.cm-hmd-list-indent > .cm-indent-spacing:not(.cm-indent)` for new ownership.
+2. Add `.cm-indent` plus a plugin marker class.
+3. On disable or cleanup, remove both classes only from marker elements.
+4. Schedule synchronization with `view.requestMeasure({ key, write })` after construction, every view update, and settings changes.
+5. Subscribe/unsubscribe the per-view settings callback.
+6. Guard queued writes after destroy.
+
+Do not add CSS, DOM elements, measurements, observers, animation frames, or coordinate state. Existing `.cm-indent::before` and cursor styling must render the promoted spans.
+
+- [ ] **Step 5: Run focused GREEN tests and lint**
+
+Run:
+
+```bash
+SKIP_OBSIDIAN=1 npx jest --forceExit --runInBand src/features/__tests__/VerticalLines.test.ts src/editor/__tests__/index.test.ts
+npm run lint
+git diff --check
+```
+
+Expected: focused suites, lint, and diff check pass.
+
+- [ ] **Step 6: Commit the persistent-guide implementation**
+
+Commit only the two source/test files with an English Conventional Commit and detailed `Why`/`What`. Suggested subject: `fix(vertical-lines): keep folded guides clickable`.
+
+### Task 4: Complete Automated and Obsidian Verification
 
 **Files:**
 - Create temporarily: `vault/vertical-guide-regression-test.md`
@@ -339,18 +409,26 @@ Open the isolated note and reload the plugin with the test vault explicitly sele
 /Applications/Obsidian.app/Contents/MacOS/obsidian-cli vault=vault plugin:reload id=bullet
 ```
 
-Before any UI interaction, use Computer Use to confirm the Obsidian window title identifies the `vault` test vault and does not identify `base`. Then use Live Preview and verify:
+Before every Computer Use action, focus the test renderer with:
+
+```bash
+/Applications/Obsidian.app/Contents/MacOS/obsidian-cli vault=vault eval code='window.focus()'
+```
+
+Fetch a fresh full app state in the same action unit and proceed only if the title identifies the `vault` test vault and does not identify `base`. Never reuse a prior element index or coordinate. If the guide is not exposed to accessibility, use `vault=vault eval` only to add a temporary unique `aria-label`, `role="button"`, and `tabindex="-1"` to that exact `.cm-indent`; do not dispatch an event or change editor/fold state through eval. The actual click must come from Computer Use using the freshly exposed element.
+
+Then use Live Preview and verify:
 
 1. Place the cursor in `leaf one` and click the vertical guide represented by `parent`.
 2. Confirm `parent`, `branch one`, `leaf sibling`, and `branch two` remain visible.
 3. Confirm `leaf one` and `leaf two` become hidden and remain hidden after the mouse interaction completes.
-4. Click the same guide again and confirm both leaves return.
+4. Confirm a promoted `.cm-indent-spacing.cm-indent.bullet-plugin-persistent-indent-guide` remains on a visible branch root or direct leaf, click that guide, and confirm both leaves return.
 5. Fold only `branch one`, click the guide, and confirm both branch roots end folded.
 6. Scroll the note and confirm the native guide remains attached to the list; no overlay or drift appears.
 
 Expected: every check passes, including the inside-selection case that previously reopened immediately.
 
-- [ ] **Step 7: Remove the isolated manual-test note**
+- [ ] **Step 7: Remove temporary accessibility metadata and the isolated manual-test note**
 
 Use `apply_patch` to delete `vault/vertical-guide-regression-test.md` after the Obsidian checks pass.
 
@@ -365,13 +443,13 @@ git diff --check
 
 Expected: only this implementation plan is modified to record completed checkboxes and verification results; `git diff --check` exits successfully.
 
-### Task 3: Record Verification and Push `main`
+### Task 5: Record Verification and Push `main`
 
 **Files:**
 - Modify: `docs/superpowers/plans/2026-07-13-restore-vertical-guide-folding.md`
 
 **Interfaces:**
-- Consumes: focused-test, lint, full-suite, production-build, artifact-hash, and Obsidian verification results from Tasks 1 and 2.
+- Consumes: focused-test, lint, full-suite, production-build, artifact-hash, and Obsidian verification results from Tasks 1 through 4.
 - Produces: a durable execution record on `main` and an updated `origin/main`.
 
 - [ ] **Step 1: Record the completed verification results**
@@ -392,7 +470,7 @@ Mark every completed checkbox in this plan as `[x]` and append a `## Verificatio
 - Native guide scrolling/alignment: PASS
 ```
 
-If the exact Jest summary values printed in Task 2 differ from these expected counts, replace this line with the observed values before committing the record.
+If the exact Jest summary values printed in Task 4 differ from these expected counts, replace this line with the observed values before committing the record.
 
 - [ ] **Step 2: Review the final diff and history**
 

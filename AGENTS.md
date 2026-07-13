@@ -17,9 +17,11 @@
     - `.spec.md` の統合 spec やフルテストは `dist/main.js` を実行するため、`src` を変更した後に実行する場合は先に `npm run build-with-tests` を実行してください。
     - 実 Obsidian で手動検証するときは、リポジトリ内の `vault` をテスト用 vault として使ってください。個人用の `/Users/kodai/base` vault へテスト bundle やテストノートを配置しないでください。
     - テスト用 vault を開く操作と plugin の再読込は、Obsidian CLI で `vault=vault` を明示してください。UI 操作前にウィンドウタイトルが `vault` を示すことを確認し、`base` が表示された場合は操作を止めてください。
+    - Obsidian の複数 window が開いている場合、open 後の 1 回だけのタイトル確認では不十分です。Computer Use の各 UI action 直前に `obsidian-cli vault=vault eval code='window.focus()'` で test vault renderer を focus し、fresh state のタイトルが test vault であることを確認してください。過去の element index や座標を再利用せず、対象 window を保証できない場合は action を実行しないでください。
 - 縦線ガイドについて
     - Obsidian 1.13 系の Live Preview では、1 行のインデント全体が 1 個の `.cm-indent` に入ります。ネスト階層ごとに `.cm-indent` が複数作られる前提で、ガイドとリスト祖先を対応付けないでください。
     - 深い行にある 1 個の `.cm-indent` が描くのは最外側のインデント境界です。クリック対象は、parser の synthetic root を除く最外側の実リスト祖先へ対応付け、直近の親へ対応付けないでください。
+    - 全 child branch を閉じると、表示中の native `.cm-indent` が 0 個になり、そのままでは再度開けません。persistent guide は、CodeMirror が管理する `.cm-indent-spacing` に native `.cm-indent` class を付与して維持し、独自の線描画や overlay は追加しないでください。plugin が付けた class は設定無効化と ViewPlugin destroy 時に除去してください。
     - `.cm-indent` の `mousedown` は、通常の CodeMirror ViewPlugin event handler へ届く前に Obsidian 側で bubble が止まります。クリック操作は `contentDOM` の capture phase で受け取り、ViewPlugin の destroy 時に同じ listener を必ず解除してください。
     - 縦線クリックでは、線が表す親リスト自体を閉じず、その直下の非空 child を一括で開閉してください。1 つでも開いた child があれば全 child を閉じ、すべて閉じていれば全 child を開きます。直下の leaf は表示したままにしてください。
     - CodeMirror は、新しい selection head が fold 範囲内に入ると、その fold を自動解除します。縦線クリックで selection を含む child を閉じる場合は、安全な selection への退避と `foldEffect` を同一トランザクションで dispatch してください。遅延した再 fold やイベント順依存の回避策は使わないでください。
