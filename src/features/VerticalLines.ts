@@ -12,6 +12,7 @@ import { Settings } from "../services/Settings";
 
 const VERTICAL_LINES_BODY_CLASS = "bullet-plugin-vertical-lines";
 const INDENT_GUIDE_SELECTOR = ".cm-indent";
+const INDENT_CONTAINER_SELECTOR = ".cm-hmd-list-indent";
 const LINE_SELECTOR = ".cm-line";
 const PERSISTENT_GUIDE_MARKER = "bullet-plugin-persistent-indent-guide";
 const PERSISTENT_GUIDE_SELECTOR = `.${PERSISTENT_GUIDE_MARKER}`;
@@ -36,16 +37,41 @@ export function synchronizePersistentIndentGuides(
   });
 }
 
-export function resolveVerticalGuideTarget(list: List): List | null {
-  let target: List | null = null;
-  let ancestor = list.getParent();
+function getGuideIndentPrefix(pressedGuide: Element): string | null {
+  const indentContainer = pressedGuide.parentElement;
+  if (!indentContainer?.matches(INDENT_CONTAINER_SELECTOR)) {
+    return null;
+  }
 
+  let prefix = "";
+  for (const child of Array.from(indentContainer.childNodes)) {
+    if (child === pressedGuide) {
+      return prefix;
+    }
+    prefix += child.textContent ?? "";
+  }
+
+  return null;
+}
+
+export function resolveVerticalGuideTarget(
+  list: List,
+  pressedGuide: Element,
+): List | null {
+  const indentPrefix = getGuideIndentPrefix(pressedGuide);
+  if (indentPrefix === null) {
+    return null;
+  }
+
+  let ancestor = list.getParent();
   while (ancestor?.getParent()) {
-    target = ancestor;
+    if (ancestor.getFirstLineIndent() === indentPrefix) {
+      return ancestor;
+    }
     ancestor = ancestor.getParent();
   }
 
-  return target;
+  return null;
 }
 
 export function toggleVerticalGuideTarget(
@@ -128,7 +154,7 @@ export class VerticalLinesPluginValue implements PluginValue {
       return false;
     }
 
-    const target = resolveVerticalGuideTarget(list);
+    const target = resolveVerticalGuideTarget(list, pressedGuide);
     if (!target || !toggleVerticalGuideTarget(editor, target)) {
       return false;
     }

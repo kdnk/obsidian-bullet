@@ -121,6 +121,36 @@ function makeFoldEditor() {
   };
 }
 
+function makeGuideLine(indentSegments: string[] = ["  "]) {
+  const line = {};
+  const indentContainer = {
+    matches: jest.fn((selector: string) => selector === ".cm-hmd-list-indent"),
+    childNodes: [] as Array<{ textContent: string | null }>,
+  };
+  const guides = indentSegments.map((textContent) => ({
+    textContent,
+    parentElement: indentContainer,
+    matches: jest.fn((selector: string) => selector === ".cm-indent"),
+    closest: jest.fn((selector: string) =>
+      selector === ".cm-line" ? line : null,
+    ),
+  }));
+  indentContainer.childNodes.push(...guides);
+
+  return { guides, indentContainer, line };
+}
+
+function resolveGuideTarget(
+  list: Parameters<typeof resolveVerticalGuideTarget>[0],
+  guide: unknown,
+) {
+  const resolver = resolveVerticalGuideTarget as unknown as (
+    list: Parameters<typeof resolveVerticalGuideTarget>[0],
+    guide: unknown,
+  ) => ReturnType<typeof resolveVerticalGuideTarget>;
+  return resolver(list, guide);
+}
+
 describe("VerticalLines", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -201,27 +231,82 @@ describe("VerticalLines", () => {
 });
 
 describe("resolveVerticalGuideTarget", () => {
-  test("maps the native indent guide to the outermost real ancestor", () => {
+  test("maps each standard indent guide to its exact real ancestor", () => {
     const root = makeRoot({
       editor: makeEditor({
-        text: "- parent\n  - child\n    - grandchild",
-        cursor: { line: 2, ch: 4 },
+        text: [
+          "- parent",
+          "    - child",
+          "        - grandchild",
+          "            - leaf",
+        ].join("\n"),
+        cursor: { line: 3, ch: 12 },
       }),
     });
-    const grandchild = root.getListUnderLine(2);
-    if (!grandchild) {
-      throw new Error("Expected a grandchild list");
+    const leaf = root.getListUnderLine(3);
+    if (!leaf) {
+      throw new Error("Expected a leaf list");
     }
+    const { guides } = makeGuideLine(["    ", "    ", "    "]);
 
     expect(
-      resolveVerticalGuideTarget(grandchild)?.getFirstLineContentStart().line,
+      resolveGuideTarget(leaf, guides[0])?.getFirstLineContentStart().line,
     ).toBe(0);
+    expect(
+      resolveGuideTarget(leaf, guides[1])?.getFirstLineContentStart().line,
+    ).toBe(1);
+    expect(
+      resolveGuideTarget(leaf, guides[2])?.getFirstLineContentStart().line,
+    ).toBe(2);
   });
 
-  test("maps a child guide when the list block has leading indentation", () => {
+  test("uses the painted boundary when native indentation is combined", () => {
     const root = makeRoot({
       editor: makeEditor({
-        text: "  - parent\n    - child",
+        text: [
+          "- parent",
+          "  - child",
+          "    - grandchild",
+          "      - leaf",
+        ].join("\n"),
+        cursor: { line: 3, ch: 6 },
+      }),
+    });
+    const leaf = root.getListUnderLine(3);
+    if (!leaf) {
+      throw new Error("Expected a leaf list");
+    }
+    const { guides } = makeGuideLine(["    ", "  "]);
+
+    expect(
+      resolveGuideTarget(leaf, guides[0])?.getFirstLineContentStart().line,
+    ).toBe(0);
+    expect(
+      resolveGuideTarget(leaf, guides[1])?.getFirstLineContentStart().line,
+    ).toBe(2);
+  });
+
+  test("ignores guide boundaries that match only shared leading indentation", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "  - parent\n      - child",
+        cursor: { line: 1, ch: 6 },
+      }),
+    });
+    const child = root.getListUnderLine(1);
+    if (!child) {
+      throw new Error("Expected a child list");
+    }
+    const { guides } = makeGuideLine(["    ", "  "]);
+
+    expect(resolveGuideTarget(child, guides[0])).toBeNull();
+    expect(resolveGuideTarget(child, guides[1])).toBeNull();
+  });
+
+  test("ignores a guide outside a list-indent container", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- parent\n    - child",
         cursor: { line: 1, ch: 4 },
       }),
     });
@@ -229,42 +314,11 @@ describe("resolveVerticalGuideTarget", () => {
     if (!child) {
       throw new Error("Expected a child list");
     }
+    const guide = {
+      parentElement: { matches: jest.fn().mockReturnValue(false) },
+    };
 
-    expect(
-      resolveVerticalGuideTarget(child)?.getFirstLineContentStart().line,
-    ).toBe(0);
-  });
-
-  test("maps a note-line guide to the owning list's parent", () => {
-    const root = makeRoot({
-      editor: makeEditor({
-        text: "- parent\n  - child\n    note",
-        cursor: { line: 2, ch: 4 },
-      }),
-    });
-    const child = root.getListUnderLine(2);
-    if (!child) {
-      throw new Error("Expected the note line to belong to child");
-    }
-
-    expect(
-      resolveVerticalGuideTarget(child)?.getFirstLineContentStart().line,
-    ).toBe(0);
-  });
-
-  test("ignores leading indentation on a root list item", () => {
-    const root = makeRoot({
-      editor: makeEditor({
-        text: "  - root item",
-        cursor: { line: 0, ch: 2 },
-      }),
-    });
-    const rootItem = root.getListUnderLine(0);
-    if (!rootItem) {
-      throw new Error("Expected a root list item");
-    }
-
-    expect(resolveVerticalGuideTarget(rootItem)).toBeNull();
+    expect(resolveGuideTarget(child, guide)).toBeNull();
   });
 });
 
@@ -424,21 +478,6 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     jest.clearAllMocks();
     mockGetEditorFromState.mockReturnValue(null);
   });
-
-  function makeGuideLine(guideCount = 1) {
-    const line = {
-      querySelectorAll: jest.fn(),
-    };
-    const guides = Array.from({ length: guideCount }, () => ({
-      matches: jest.fn((selector: string) => selector === ".cm-indent"),
-      closest: jest.fn((selector: string) =>
-        selector === ".cm-line" ? line : null,
-      ),
-    }));
-    line.querySelectorAll.mockReturnValue(guides);
-
-    return { guides, line };
-  }
 
   function makeEvent(target: unknown) {
     const preventDefault = jest.fn();
@@ -658,7 +697,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       },
       parser,
     );
-    const { guides, line } = makeGuideLine();
+    const { guides, line } = makeGuideLine(["    "]);
     const { event, preventDefault } = makeEvent(guides[0]);
     const view = makeView(2);
 
@@ -674,6 +713,56 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       ch: 4,
     });
     expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(2);
+    expect(editor.unfold).not.toHaveBeenCalled();
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  test("folds only the child branch represented by an inner guide", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: [
+          "- parent",
+          "    - child",
+          "        - branch alpha",
+          "            - leaf alpha",
+          "        - branch beta",
+          "            - leaf beta",
+          "    - outer sibling",
+          "        - outer leaf",
+        ].join("\n"),
+        cursor: { line: 3, ch: 12 },
+      }),
+    });
+    const editor = makeFoldEditor();
+    mockGetEditorFromState.mockReturnValue(editor);
+    const parser = { parse: jest.fn().mockReturnValue(root) };
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      parser,
+    );
+    const { guides, line } = makeGuideLine(["    ", "    ", "    "]);
+    const { event, preventDefault } = makeEvent(guides[1]);
+    const view = makeView(3);
+
+    expect(pluginValue.handleMouseDown(event, view)).toBe(true);
+    expect(view.posAtDOM).toHaveBeenCalledWith(line);
+    expect(parser.parse).toHaveBeenCalledWith(editor, { line: 3, ch: 0 });
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenNthCalledWith(1, 2, {
+      line: 2,
+      ch: 10,
+    });
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenNthCalledWith(2, 4, {
+      line: 4,
+      ch: 10,
+    });
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(2);
+    expect(editor.foldEnsuringCursorVisible).not.toHaveBeenCalledWith(
+      6,
+      expect.anything(),
+    );
     expect(editor.unfold).not.toHaveBeenCalled();
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
