@@ -13,6 +13,28 @@ import { Settings } from "../services/Settings";
 const VERTICAL_LINES_BODY_CLASS = "bullet-plugin-vertical-lines";
 const INDENT_GUIDE_SELECTOR = ".cm-indent";
 const LINE_SELECTOR = ".cm-line";
+const PERSISTENT_GUIDE_MARKER = "bullet-plugin-persistent-indent-guide";
+const PERSISTENT_GUIDE_SELECTOR = `.${PERSISTENT_GUIDE_MARKER}`;
+const PERSISTENT_GUIDE_CANDIDATE_SELECTOR =
+  ".cm-hmd-list-indent > .cm-indent-spacing:not(.cm-indent)";
+
+export function synchronizePersistentIndentGuides(
+  contentDOM: ParentNode,
+  enabled: boolean,
+) {
+  if (enabled) {
+    contentDOM
+      .querySelectorAll(PERSISTENT_GUIDE_CANDIDATE_SELECTOR)
+      .forEach((element) => {
+        element.classList.add("cm-indent", PERSISTENT_GUIDE_MARKER);
+      });
+    return;
+  }
+
+  contentDOM.querySelectorAll(PERSISTENT_GUIDE_SELECTOR).forEach((element) => {
+    element.classList.remove("cm-indent", PERSISTENT_GUIDE_MARKER);
+  });
+}
 
 export function resolveVerticalGuideTarget(list: List): List | null {
   let target: List | null = null;
@@ -49,12 +71,21 @@ export function toggleVerticalGuideTarget(
 }
 
 export class VerticalLinesPluginValue implements PluginValue {
+  private destroyed = false;
+  private measureKey = {};
+
   constructor(
     private settings: Settings,
     private parser: Parser,
     private view: EditorView,
   ) {
     this.view.contentDOM.addEventListener("mousedown", this.onMouseDown, true);
+    this.settings.onChange(this.onSettingsChange);
+    this.scheduleGuideSynchronization();
+  }
+
+  update() {
+    this.scheduleGuideSynchronization();
   }
 
   handleMouseDown(event: MouseEvent, view: EditorView) {
@@ -107,11 +138,14 @@ export class VerticalLinesPluginValue implements PluginValue {
   }
 
   destroy() {
+    this.destroyed = true;
     this.view.contentDOM.removeEventListener(
       "mousedown",
       this.onMouseDown,
       true,
     );
+    this.settings.removeCallback(this.onSettingsChange);
+    synchronizePersistentIndentGuides(this.view.contentDOM, false);
   }
 
   private onMouseDown = (event: MouseEvent) => {
@@ -119,6 +153,31 @@ export class VerticalLinesPluginValue implements PluginValue {
       event.stopPropagation();
     }
   };
+
+  private onSettingsChange = () => {
+    this.scheduleGuideSynchronization();
+  };
+
+  private scheduleGuideSynchronization() {
+    if (this.destroyed) {
+      return;
+    }
+
+    this.view.requestMeasure({
+      key: this.measureKey,
+      read: () => null,
+      write: () => {
+        if (this.destroyed) {
+          return;
+        }
+
+        synchronizePersistentIndentGuides(
+          this.view.contentDOM,
+          this.settings.verticalLines,
+        );
+      },
+    });
+  }
 }
 
 function isElementLike(value: EventTarget | null): value is Element {

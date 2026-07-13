@@ -3,6 +3,7 @@ import {
   VerticalLines,
   VerticalLinesPluginValue,
   resolveVerticalGuideTarget,
+  synchronizePersistentIndentGuides,
   toggleVerticalGuideTarget,
 } from "../VerticalLines";
 
@@ -22,13 +23,63 @@ function makeClassList() {
   const values = new Set<string>();
 
   return {
-    add: jest.fn((value: string) => {
-      values.add(value);
+    add: jest.fn((...classes: string[]) => {
+      for (const className of classes) {
+        values.add(className);
+      }
     }),
-    remove: jest.fn((value: string) => {
-      values.delete(value);
+    remove: jest.fn((...classes: string[]) => {
+      for (const className of classes) {
+        values.delete(className);
+      }
     }),
     contains: (value: string) => values.has(value),
+  };
+}
+
+function makeGuideElement(
+  classes: string[],
+  options: { insideListIndent?: boolean } = {},
+) {
+  const classList = makeClassList();
+  classList.add(...classes);
+
+  return {
+    classList,
+    insideListIndent: options.insideListIndent ?? true,
+  };
+}
+
+function makeGuideDOM(elements: Array<ReturnType<typeof makeGuideElement>>) {
+  const querySelectorAll = jest.fn((selector: string) => {
+    if (
+      selector === ".cm-hmd-list-indent > .cm-indent-spacing:not(.cm-indent)"
+    ) {
+      return elements.filter(
+        (element) =>
+          element.insideListIndent &&
+          element.classList.contains("cm-indent-spacing") &&
+          !element.classList.contains("cm-indent"),
+      );
+    }
+
+    if (selector === ".bullet-plugin-persistent-indent-guide") {
+      return elements.filter((element) =>
+        element.classList.contains("bullet-plugin-persistent-indent-guide"),
+      );
+    }
+
+    return [];
+  });
+
+  return {
+    contentDOM: {
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      querySelectorAll,
+    },
+    elements,
+    querySelectorAll,
   };
 }
 
@@ -291,6 +342,61 @@ describe("toggleVerticalGuideTarget", () => {
   });
 });
 
+describe("synchronizePersistentIndentGuides", () => {
+  test("promotes only unclaimed list indentation spacing spans", () => {
+    const promoted = makeGuideElement(["cm-indent-spacing"]);
+    const nativeGuide = makeGuideElement(["cm-indent-spacing", "cm-indent"]);
+    const outsideListIndent = makeGuideElement(["cm-indent-spacing"], {
+      insideListIndent: false,
+    });
+    const { contentDOM, querySelectorAll } = makeGuideDOM([
+      promoted,
+      nativeGuide,
+      outsideListIndent,
+    ]);
+
+    synchronizePersistentIndentGuides(contentDOM as never, true);
+
+    expect(querySelectorAll).toHaveBeenCalledWith(
+      ".cm-hmd-list-indent > .cm-indent-spacing:not(.cm-indent)",
+    );
+    expect(promoted.classList.contains("cm-indent")).toBe(true);
+    expect(
+      promoted.classList.contains("bullet-plugin-persistent-indent-guide"),
+    ).toBe(true);
+    expect(nativeGuide.classList.contains("cm-indent")).toBe(true);
+    expect(
+      nativeGuide.classList.contains("bullet-plugin-persistent-indent-guide"),
+    ).toBe(false);
+    expect(outsideListIndent.classList.contains("cm-indent")).toBe(false);
+  });
+
+  test("removes both guide classes only from plugin-owned spans", () => {
+    const promoted = makeGuideElement([
+      "cm-indent-spacing",
+      "cm-indent",
+      "bullet-plugin-persistent-indent-guide",
+    ]);
+    const nativeGuide = makeGuideElement(["cm-indent-spacing", "cm-indent"]);
+    const { contentDOM, querySelectorAll } = makeGuideDOM([
+      promoted,
+      nativeGuide,
+    ]);
+
+    synchronizePersistentIndentGuides(contentDOM as never, false);
+
+    expect(querySelectorAll).toHaveBeenCalledWith(
+      ".bullet-plugin-persistent-indent-guide",
+    );
+    expect(promoted.classList.contains("cm-indent-spacing")).toBe(true);
+    expect(promoted.classList.contains("cm-indent")).toBe(false);
+    expect(
+      promoted.classList.contains("bullet-plugin-persistent-indent-guide"),
+    ).toBe(false);
+    expect(nativeGuide.classList.contains("cm-indent")).toBe(true);
+  });
+});
+
 describe("VerticalLinesPluginValue.handleMouseDown", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -350,22 +456,30 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       void,
       [string, CapturedListener | undefined, boolean]
     >();
+    const settingsCallbacks: Array<() => void> = [];
+    const settings = {
+      verticalLines: true,
+      verticalLinesAction: "toggle-folding",
+      onChange: jest.fn((callback: () => void) => {
+        settingsCallbacks.push(callback);
+      }),
+      removeCallback: jest.fn(),
+    };
     const contentDOM = {
       addEventListener,
       removeEventListener,
+      querySelectorAll: jest.fn().mockReturnValue([]),
     };
+    const requestMeasure = jest.fn();
     const PluginValueWithView = VerticalLinesPluginValue as unknown as new (
       settings: unknown,
       parser: unknown,
       view: unknown,
     ) => { destroy(): void };
     const pluginValue = new PluginValueWithView(
-      {
-        verticalLines: true,
-        verticalLinesAction: "toggle-folding",
-      },
+      settings,
       { parse: jest.fn() },
-      { contentDOM },
+      { contentDOM, requestMeasure },
     );
 
     expect(contentDOM.addEventListener).toHaveBeenCalledWith(
@@ -373,7 +487,10 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       expect.any(Function),
       true,
     );
+    expect(settings.onChange).toHaveBeenCalledWith(expect.any(Function));
+    expect(requestMeasure).toHaveBeenCalledTimes(1);
     const listener = addEventListener.mock.calls[0]?.[1];
+    const settingsCallback = settingsCallbacks[0];
 
     pluginValue.destroy();
 
@@ -382,6 +499,117 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       listener,
       true,
     );
+    expect(settings.removeCallback).toHaveBeenCalledWith(settingsCallback);
+  });
+
+  test("schedules synchronization after construction, updates, and settings changes", () => {
+    const guide = makeGuideElement(["cm-indent-spacing"]);
+    const { contentDOM } = makeGuideDOM([guide]);
+    const settingsCallbacks: Array<() => void> = [];
+    const settings = {
+      verticalLines: false,
+      verticalLinesAction: "toggle-folding",
+      onChange: jest.fn((callback: () => void) => {
+        settingsCallbacks.push(callback);
+      }),
+      removeCallback: jest.fn(),
+    };
+    const requests: Array<{
+      key?: unknown;
+      write?: (measure: unknown, view: unknown) => void;
+    }> = [];
+    const view = {
+      contentDOM,
+      requestMeasure: jest.fn(
+        (request: {
+          key?: unknown;
+          write?: (measure: unknown, view: unknown) => void;
+        }) => {
+          requests.push(request);
+        },
+      ),
+    };
+    const PluginValueWithView = VerticalLinesPluginValue as unknown as new (
+      settings: unknown,
+      parser: unknown,
+      view: unknown,
+    ) => { update(update: unknown): void };
+    const pluginValue = new PluginValueWithView(
+      settings,
+      { parse: jest.fn() },
+      view,
+    );
+
+    expect(requests).toHaveLength(1);
+    settings.verticalLines = true;
+    requests[0]?.write?.(undefined, view);
+    expect(guide.classList.contains("cm-indent")).toBe(true);
+
+    pluginValue.update({});
+    expect(requests).toHaveLength(2);
+
+    const settingsCallback = settingsCallbacks[0];
+    if (!settingsCallback) {
+      throw new Error("Expected settings callback to be registered");
+    }
+    settingsCallback();
+    expect(requests).toHaveLength(3);
+    expect(requests[1]?.key).toBe(requests[0]?.key);
+    expect(requests[2]?.key).toBe(requests[0]?.key);
+  });
+
+  test("cleans up synchronously and ignores queued writes after destroy", () => {
+    const promoted = makeGuideElement(["cm-indent-spacing"]);
+    const elements = [promoted];
+    const { contentDOM } = makeGuideDOM(elements);
+    const settingsCallbacks: Array<() => void> = [];
+    const settings = {
+      verticalLines: true,
+      verticalLinesAction: "toggle-folding",
+      onChange: jest.fn((callback: () => void) => {
+        settingsCallbacks.push(callback);
+      }),
+      removeCallback: jest.fn(),
+    };
+    const requests: Array<{
+      write?: (measure: unknown, view: unknown) => void;
+    }> = [];
+    const view = {
+      contentDOM,
+      requestMeasure: jest.fn(
+        (request: { write?: (measure: unknown, view: unknown) => void }) => {
+          requests.push(request);
+        },
+      ),
+    };
+    const PluginValueWithView = VerticalLinesPluginValue as unknown as new (
+      settings: unknown,
+      parser: unknown,
+      view: unknown,
+    ) => { destroy(): void; update(update: unknown): void };
+    const pluginValue = new PluginValueWithView(
+      settings,
+      { parse: jest.fn() },
+      view,
+    );
+
+    requests[0]?.write?.(undefined, view);
+    expect(promoted.classList.contains("cm-indent")).toBe(true);
+    pluginValue.update({});
+    const queuedWrite = requests[1]?.write;
+
+    pluginValue.destroy();
+
+    expect(promoted.classList.contains("cm-indent")).toBe(false);
+    expect(
+      promoted.classList.contains("bullet-plugin-persistent-indent-guide"),
+    ).toBe(false);
+    expect(settings.removeCallback).toHaveBeenCalledWith(settingsCallbacks[0]);
+
+    const laterSpacing = makeGuideElement(["cm-indent-spacing"]);
+    elements.push(laterSpacing);
+    queuedWrite?.(undefined, view);
+    expect(laterSpacing.classList.contains("cm-indent")).toBe(false);
   });
 
   test("folds the outermost ancestor represented by a native indentation guide", () => {
