@@ -60,6 +60,13 @@ function makePlugin() {
   };
 }
 
+function makeFoldEditor() {
+  return {
+    foldEnsuringCursorVisible: jest.fn(),
+    unfold: jest.fn(),
+  };
+}
+
 describe("VerticalLines", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -217,14 +224,7 @@ describe("toggleVerticalGuideTarget", () => {
     "    - leaf two",
   ].join("\n");
 
-  function makeFoldEditor() {
-    return {
-      fold: jest.fn(),
-      unfold: jest.fn(),
-    };
-  }
-
-  test("folds the represented list itself", () => {
+  test("folds the represented list with a visible fallback cursor", () => {
     const root = makeRoot({
       editor: makeEditor({ text, cursor: { line: 0, ch: 0 } }),
     });
@@ -235,8 +235,11 @@ describe("toggleVerticalGuideTarget", () => {
     const editor = makeFoldEditor();
 
     expect(toggleVerticalGuideTarget(editor, parent)).toBe(true);
-    expect(editor.fold).toHaveBeenCalledWith(0);
-    expect(editor.fold).toHaveBeenCalledTimes(1);
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledWith(0, {
+      line: 0,
+      ch: 2,
+    });
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(1);
     expect(editor.unfold).not.toHaveBeenCalled();
   });
 
@@ -257,7 +260,7 @@ describe("toggleVerticalGuideTarget", () => {
     expect(toggleVerticalGuideTarget(editor, parent)).toBe(true);
     expect(editor.unfold).toHaveBeenCalledWith(0);
     expect(editor.unfold).toHaveBeenCalledTimes(1);
-    expect(editor.fold).not.toHaveBeenCalled();
+    expect(editor.foldEnsuringCursorVisible).not.toHaveBeenCalled();
   });
 
   test("does nothing when the target has no non-empty children", () => {
@@ -274,7 +277,7 @@ describe("toggleVerticalGuideTarget", () => {
     const editor = makeFoldEditor();
 
     expect(toggleVerticalGuideTarget(editor, leaf)).toBe(false);
-    expect(editor.fold).not.toHaveBeenCalled();
+    expect(editor.foldEnsuringCursorVisible).not.toHaveBeenCalled();
     expect(editor.unfold).not.toHaveBeenCalled();
   });
 });
@@ -379,10 +382,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
         cursor: { line: 1, ch: 2 },
       }),
     });
-    const editor = {
-      fold: jest.fn(),
-      unfold: jest.fn(),
-    };
+    const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
     const parser = { parse: jest.fn().mockReturnValue(root) };
     const pluginValue = makePluginValue(
@@ -399,7 +399,10 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     expect(pluginValue.handleMouseDown(event, view)).toBe(true);
     expect(view.posAtDOM).toHaveBeenCalledWith(line);
     expect(parser.parse).toHaveBeenCalledWith(editor, { line: 1, ch: 0 });
-    expect(editor.fold).toHaveBeenCalledWith(0);
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledWith(0, {
+      line: 0,
+      ch: 2,
+    });
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
@@ -450,7 +453,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
   });
 
   test("ignores a guide when the containing list cannot be parsed", () => {
-    const editor = { fold: jest.fn(), unfold: jest.fn() };
+    const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makePluginValue(
       {
@@ -473,7 +476,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
         cursor: { line: 0, ch: 2 },
       }),
     });
-    const editor = { fold: jest.fn(), unfold: jest.fn() };
+    const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makePluginValue(
       {
@@ -486,7 +489,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     const { event, preventDefault } = makeEvent(guides[0]);
 
     expect(pluginValue.handleMouseDown(event, makeView(0))).toBe(false);
-    expect(editor.fold).not.toHaveBeenCalled();
+    expect(editor.foldEnsuringCursorVisible).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 });

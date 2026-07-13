@@ -20,18 +20,18 @@ export function resolveVerticalGuideTarget(list: List): List | null {
 }
 
 export function toggleVerticalGuideTarget(
-  editor: Pick<MyEditor, "fold" | "unfold">,
+  editor: Pick<MyEditor, "foldEnsuringCursorVisible" | "unfold">,
   list: List,
 ) {
   if (list.isEmpty()) {
     return false;
   }
 
-  const line = list.getFirstLineContentStart().line;
+  const fallbackCursor = list.getFirstLineContentStart();
   if (list.isFoldRoot()) {
-    editor.unfold(line);
+    editor.unfold(fallbackCursor.line);
   } else {
-    editor.fold(line);
+    editor.foldEnsuringCursorVisible(fallbackCursor.line, fallbackCursor);
   }
 
   return true;
