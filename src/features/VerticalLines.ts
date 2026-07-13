@@ -15,8 +15,15 @@ const INDENT_GUIDE_SELECTOR = ".cm-indent";
 const LINE_SELECTOR = ".cm-line";
 
 export function resolveVerticalGuideTarget(list: List): List | null {
-  const parent = list.getParent();
-  return parent?.getParent() ? parent : null;
+  let target: List | null = null;
+  let ancestor = list.getParent();
+
+  while (ancestor?.getParent()) {
+    target = ancestor;
+    ancestor = ancestor.getParent();
+  }
+
+  return target;
 }
 
 export function toggleVerticalGuideTarget(

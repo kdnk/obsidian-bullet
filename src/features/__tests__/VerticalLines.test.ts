@@ -147,7 +147,7 @@ describe("VerticalLines", () => {
 });
 
 describe("resolveVerticalGuideTarget", () => {
-  test("maps the native indent guide to the immediate list ancestor", () => {
+  test("maps the native indent guide to the outermost real ancestor", () => {
     const root = makeRoot({
       editor: makeEditor({
         text: "- parent\n  - child\n    - grandchild",
@@ -161,7 +161,7 @@ describe("resolveVerticalGuideTarget", () => {
 
     expect(
       resolveVerticalGuideTarget(grandchild)?.getFirstLineContentStart().line,
-    ).toBe(1);
+    ).toBe(0);
   });
 
   test("maps a child guide when the list block has leading indentation", () => {
@@ -384,11 +384,18 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     );
   });
 
-  test("folds the ancestor represented by a native indentation guide", () => {
+  test("folds the outermost ancestor represented by a native indentation guide", () => {
     const root = makeRoot({
       editor: makeEditor({
-        text: "- parent\n  - branch\n    - leaf",
-        cursor: { line: 1, ch: 2 },
+        text: [
+          "- parent",
+          "  - branch one",
+          "    - leaf one",
+          "  - leaf sibling",
+          "  - branch two",
+          "    - leaf two",
+        ].join("\n"),
+        cursor: { line: 2, ch: 4 },
       }),
     });
     const editor = makeFoldEditor();
@@ -403,16 +410,20 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     );
     const { guides, line } = makeGuideLine();
     const { event, preventDefault } = makeEvent(guides[0]);
-    const view = makeView(1);
+    const view = makeView(2);
 
     expect(pluginValue.handleMouseDown(event, view)).toBe(true);
     expect(view.posAtDOM).toHaveBeenCalledWith(line);
-    expect(parser.parse).toHaveBeenCalledWith(editor, { line: 1, ch: 0 });
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledWith(1, {
+    expect(parser.parse).toHaveBeenCalledWith(editor, { line: 2, ch: 0 });
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenNthCalledWith(1, 1, {
       line: 1,
       ch: 4,
     });
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(1);
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenNthCalledWith(2, 4, {
+      line: 4,
+      ch: 4,
+    });
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(2);
     expect(editor.unfold).not.toHaveBeenCalled();
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
