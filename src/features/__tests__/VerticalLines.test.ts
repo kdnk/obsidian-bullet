@@ -519,6 +519,29 @@ describe("synchronizePersistentIndentGuides", () => {
 
     expect(declarations?.trim()).toBe("z-index: 2;");
   });
+
+  test("shows a pointer only for actionable vertical guides", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const declarations = styles.match(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(declarations?.trim()).toBe("cursor: pointer;");
+    expect(styles).not.toMatch(
+      /\.bullet-plugin-vertical-lines\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\s*\{[^}]*cursor:\s*pointer/,
+    );
+  });
+
+  test("uses the native active guide style on only the hovered segment", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const declarations = styles.match(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent:hover::before\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(declarations?.replace(/\s+/g, " ").trim()).toBe(
+      "border-inline-end: var(--indentation-guide-width-active) solid var(--indentation-guide-color-active);",
+    );
+  });
 });
 
 describe("VerticalLinesPluginValue.handleMouseDown", () => {
