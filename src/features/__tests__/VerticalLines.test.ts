@@ -702,15 +702,16 @@ describe("synchronizePersistentIndentGuides", () => {
     );
   });
 
-  test("uses the native active guide style on only the hovered segment", () => {
+  test("uses the native active style on the complete marked logical guide", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(
-      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent:hover::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
 
     expect(declarations?.replace(/\s+/g, " ").trim()).toBe(
       "border-inline-end: var(--indentation-guide-width-active) solid var(--indentation-guide-color-active);",
     );
+    expect(styles).not.toMatch(/\.cm-indent:hover::before/);
   });
 });
 
