@@ -623,7 +623,7 @@ git commit \
 - Consumes: Task 1 semantic markers and Task 2 native active styling.
 - Produces: automated evidence, guarded Obsidian evidence, clean production artifacts, and an execution record ready for final review.
 
-- [ ] **Step 1: Run the full automated pipeline**
+- [x] **Step 1: Run the full automated pipeline**
 
 ```bash
 npm run lint
@@ -635,7 +635,7 @@ npm run build
 
 Expected: every command exits 0 and no Jest suite or test fails.
 
-- [ ] **Step 2: Install production artifacts only into the repository test vault**
+- [x] **Step 2: Install production artifacts only into the repository test vault**
 
 ```bash
 cp dist/main.js manifest.json styles.css vault/.obsidian/plugins/bullet/
@@ -648,7 +648,7 @@ shasum -a 256 \
 
 Expected: each source/install pair matches exactly.
 
-- [ ] **Step 3: Create the isolated two-tree fixture**
+- [x] **Step 3: Create the isolated two-tree fixture**
 
 Use `apply_patch` to create `vault/logical-vertical-guide-hover-test.md`:
 
@@ -681,7 +681,7 @@ Use `apply_patch` to create `vault/logical-vertical-guide-hover-test.md`:
 - scroll filler 12
 ```
 
-- [ ] **Step 4: Open and reload only `vault`**
+- [x] **Step 4: Open and reload only `vault`**
 
 If needed, bootstrap only:
 
@@ -702,7 +702,7 @@ Then:
 
 Expected exact title: `logical-vertical-guide-hover-test - vault - Obsidian 1.13.1`. Stop all UI actions on any title containing `base` or not identifying this fixture and `vault`.
 
-- [ ] **Step 5: Verify outer full-guide grouping and unrelated-tree isolation**
+- [x] **Step 5: Verify outer full-guide grouping and unrelated-tree isolation**
 
 Before every Computer Use action, run the mandatory focus command and acquire fresh full state. Use vault-scoped read-only DOM evaluation to rediscover current guide rectangles and marker state.
 
@@ -715,7 +715,7 @@ Hover an outer guide segment belonging to `parent A`. Confirm:
 
 Move away with a newly guarded action and confirm marker count returns to 0.
 
-- [ ] **Step 6: Verify inner full-guide grouping, click behavior, and update resynchronization**
+- [x] **Step 6: Verify inner full-guide grouping, click behavior, and update resynchronization**
 
 Hover the child-A inner guide. Confirm all visible segments resolving to `child A` are marked while adjacent parent-A outer segments are unmarked.
 
@@ -726,7 +726,7 @@ With fresh guards:
 3. click again and confirm both leaves reopen;
 4. scroll down and back up with fresh guards and confirm newly rendered child-A segments rejoin the group without overlay elements or alignment drift.
 
-- [ ] **Step 7: Verify action gating and cleanup behavior**
+- [x] **Step 7: Verify action gating and cleanup behavior**
 
 Use the in-memory plugin setting only:
 
@@ -738,7 +738,7 @@ Expected: display class true, action class false, marker count 0. Restore `toggl
 
 Confirm no legacy overlay selector exists.
 
-- [ ] **Step 8: Remove temporary state and restore production artifacts**
+- [x] **Step 8: Remove temporary state and restore production artifacts**
 
 Restore the action setting, remove test-only DOM metadata, delete the fixture with `apply_patch`, rebuild production, reinstall, and verify:
 
@@ -757,7 +757,7 @@ git status --short --branch
 
 Expected: fixture and markers are absent, action is restored, source/install pairs match, and only the execution-record edit remains uncommitted.
 
-- [ ] **Step 9: Record evidence and commit without pushing**
+- [x] **Step 9: Record evidence and commit without pushing**
 
 Record exact test counts, hashes, title guards, outer/inner marker counts, target identities, normal/active computed borders, fold/reopen results, scroll resynchronization, action gating, overlay absence, and cleanup in this plan. Mark completed steps accurately.
 
@@ -782,3 +782,18 @@ git commit \
 ```
 
 Do not push. The controller must run task review, a fresh whole-branch review, final verification, `git fetch`, `git pull --ff-only`, and only then `git push origin main`.
+
+#### Task 3 execution evidence (2026-07-14)
+
+- Baseline: `main` at `11c4879a02d154a9f642eb4dde96929830c57e94`, ahead of `origin/main` by 8 commits, with a clean tracked worktree.
+- Full automated pipeline: `npm run lint`, `npx tsc --noEmit`, `npm run build-with-tests`, `npm test -- --runInBand`, and `npm run build` all exited 0. Jest reported 55/55 passing suites, 337 passed and 14 skipped tests (351 total), and 0 snapshots.
+- Production artifact hashes matched before and after live verification: `main.js` `4d9f844951e020a6936533c4a11896ea7f72fc46ae771cbdabae6218137eec20`, `manifest.json` `a78d94c5c8817427fcc6744cf3430d354dc4696dcf8cc0e9c9b2650398519054`, and `styles.css` `d4c677221e1e3e9f1610374cee1e44c6cd76afe804fb4d79418a30d2b4ea95d1`; each source/install pair was identical.
+- Vault isolation and guards: Obsidian was initially stopped, so the fixture-scoped `obsidian://open?vault=vault&file=logical-vertical-guide-hover-test` bootstrap was used. Open/reload then returned exact title `logical-vertical-guide-hover-test - vault - Obsidian 1.13.1`. Ten Computer Use action attempts each followed `vault=vault` focus, fresh full state, exact-title rejection guard, and fresh DOM coordinate/index discovery. Nine actions succeeded. One first outer-hover attempt was rejected before input with `windowNotFoundAtPosition((2267.0, 285.0))`; the guard was repeated and a newly discovered in-window start point was used. No guard exposed `base` or another title.
+- Outer `parent A` hover: 7 visible markers appeared on `child A`, `branch alpha`, `leaf alpha`, `branch beta`, `leaf beta`, `outer sibling A`, and `outer leaf A`. Every marker had exact raw prefix four spaces and therefore resolved to `parent A`. All 5 corresponding four-space segments under `parent B` remained unmarked. Marked native `::before` borders computed to `1px solid oklch(0.999994 0.0000497986 none / 0.3)` while parent-B normal borders were `1px solid oklch(0.999994 0.0000497986 none / 0.12)`; the theme variables were active width `1px`, active color `color-mix(in oklch, white 30%, transparent)`, normal width `1px`, and normal color `color-mix(in oklch, white 12%, transparent)`. Moving away cleared the marker count to 0.
+- Inner `child A` hover: 4 markers appeared only on `branch alpha`, `leaf alpha`, `branch beta`, and `leaf beta`, all with exact raw prefix eight spaces. The 7 adjacent four-space `parent A` segments remained unmarked with the normal border.
+- Fold and DOM update: clicking the inner group hid only `leaf alpha` and `leaf beta`; `outer sibling A`, `outer leaf A`, and all checked parent-B content remained visible. The fold update immediately resynchronized to 2 surviving marked native segments on `branch alpha…` and `branch beta…`. Clicking the rediscovered surviving guide reopened both leaves and restored the 4-member inner group.
+- Scroll resynchronization: the editor moved from `scrollTop` 0 to 268 and back to 0 under separately guarded scroll actions. The offscreen group cleared to 0; after returning and re-hovering the freshly discovered inner segment, all 4 members rejoined at x `394.484375`, width `18`, with the active native border. The pre-scroll inner x/width were identical, and legacy/custom overlay count remained 0, so no alignment drift or overlay rendering was observed.
+- Action gating: assigning the in-memory action to `none` left display class true, removed the action class, and cleared markers to 0. Restoring `toggle-folding` returned the action class; marker count, legacy overlay count, and test metadata count were all 0.
+- Persistent-guide concern: this fixture retained 2 native inner `.cm-indent` segments on the folded branch roots, so the environment did not instantiate a promoted `.cm-indent-spacing` persistent marker. The required surviving-guide fold/reopen and update behavior passed on native segments; no classes were forced to manufacture the promoted state.
+- Cleanup: the action remained `toggle-folding`, the fixture was closed before deletion, `vault/logical-vertical-guide-hover-test.md` was absent, production artifacts were rebuilt/reinstalled, and `git diff --check` exited 0. Only this execution-record edit was left tracked for commit.
+- Fresh focused verification before commit: `SKIP_OBSIDIAN=1 npx jest --forceExit --runInBand src/features/__tests__/VerticalLines.test.ts` passed 1/1 suite and 30/30 tests; `npm run lint` and `npx tsc --noEmit` both exited 0.
