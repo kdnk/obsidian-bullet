@@ -22,7 +22,8 @@
     - Obsidian 1.13 系の Live Preview では、複数のインデント単位が 1 個の `.cm-indent` にまとめられる場合も、複数の `.cm-indent` として表示される場合もあります。guide 数がネスト階層数と一致すると仮定しないでください。
     - 深い行では複数の `.cm-indent` が表示される場合があり、Obsidian が複数のインデント単位を 1 要素へまとめる場合もあります。クリックした guide より前にある同じ `.cm-hmd-list-indent` 内の text を raw indent prefix とし、`getFirstLineIndent()` がその prefix と完全一致する実リスト祖先へ対応付けてください。常に最外側へ対応付けたり、guide 数と祖先数を右寄せで対応付けたりしないでください。一致する祖先がなければ操作を無視してください。
     - 全 child branch を閉じると、表示中の native `.cm-indent` が 0 個になり、そのままでは再度開けません。persistent guide は、CodeMirror が管理する `.cm-indent-spacing` に native `.cm-indent` class を付与して維持し、独自の線描画や overlay は追加しないでください。plugin が付けた class は設定無効化と ViewPlugin destroy 時に除去してください。
-    - `.cm-indent` は `min-width` と `inline-block` も適用するため、spacing span へ付与するだけでは nesting の横位置が変わります。plugin marker に限定して `min-width: 0` と `display: inline` を適用し、元の spacing 幅を維持してください。線の offset・太さ・色は上書きしないでください。
+    - `.cm-indent` は `min-width` と `inline-block` も適用するため、spacing span へ付与するだけでは nesting の横位置が変わります。plugin marker に限定して `min-width: 0` と `display: inline` を適用し、元の spacing 幅を維持してください。persistent guide の通常表示では、線の offset・太さ・色を上書きしないでください。
+    - クリック可能な guide の hover feedback は、toggle folding action が有効なときだけ付く body class に限定し、既存の native `.cm-indent::before` へ Obsidian の `--indentation-guide-width-active` と `--indentation-guide-color-active` を適用してください。固定色、独自 geometry、背景 highlight、通常時の見た目変更は追加しないでください。
     - folded branch root の `.cm-fold-indicator` は `z-index: 1` で guide と重なります。直下 leaf がない親も再度開けるよう、plugin marker の native `::before` だけを `z-index: 2` にし、線の位置・幅・見た目は変更しないでください。
     - `.cm-indent` の `mousedown` は、通常の CodeMirror ViewPlugin event handler へ届く前に Obsidian 側で bubble が止まります。クリック操作は `contentDOM` の capture phase で受け取り、ViewPlugin の destroy 時に同じ listener を必ず解除してください。
     - 縦線クリックでは、線が表す親リスト自体を閉じず、その直下の非空 child を一括で開閉してください。1 つでも開いた child があれば全 child を閉じ、すべて閉じていれば全 child を開きます。直下の leaf は表示したままにしてください。

@@ -14,11 +14,19 @@
 }
 
 /* lines */
-.bullet-plugin-vertical-lines
+.bullet-plugin-vertical-lines-action-toggle-folding
   .markdown-source-view.mod-cm6
   .cm-hmd-list-indent
   .cm-indent {
   cursor: pointer;
+}
+
+.bullet-plugin-vertical-lines-action-toggle-folding
+  .markdown-source-view.mod-cm6
+  .cm-hmd-list-indent
+  .cm-indent:hover::before {
+  border-inline-end: var(--indentation-guide-width-active) solid
+    var(--indentation-guide-color-active);
 }
 
 .bullet-plugin-vertical-lines
