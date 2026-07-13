@@ -13,7 +13,7 @@
 - Use normal `git` on `main`; do not use GitButler.
 - Do not reintroduce overlay DOM, measurements, coordinate caches, or scroll synchronization.
 - Keep `.cm-indent::before` as the only vertical-guide rendering source.
-- Do not duplicate native guide geometry or theme CSS; add and remove only the native `.cm-indent` class on existing spacing spans.
+- Do not duplicate native guide geometry or theme CSS; add and remove the native `.cm-indent` class on existing spacing spans and reset only its marker-owned `min-width`/`display` layout changes.
 - Keep `contentDOM` capture-phase `mousedown` handling and listener cleanup unchanged.
 - Map one native `.cm-indent` to the outermost real list ancestor before the parser's synthetic root.
 - Never fold or unfold the represented parent itself from a vertical-guide click.
@@ -242,6 +242,7 @@ Create an English Conventional Commit with detailed `Why` and `What` sections. I
 **Files:**
 - Modify: `src/features/VerticalLines.ts`
 - Modify: `src/features/__tests__/VerticalLines.test.ts`
+- Modify: `styles.css`
 
 **Interfaces:**
 - Consumes: existing `.cm-hmd-list-indent > .cm-indent-spacing` elements inside `EditorView.contentDOM`.
@@ -256,6 +257,7 @@ Add tests proving that synchronization:
 2. Leaves pre-existing native `.cm-indent` elements unowned and untouched.
 3. Removes both added classes from plugin-owned spans when disabled.
 4. Does not remove a native guide that lacks the plugin marker.
+5. Requires marker-scoped CSS to keep promoted spans at their original inline width (`min-width: 0; display: inline`).
 
 - [ ] **Step 2: Add failing ViewPlugin lifecycle tests**
 
@@ -288,7 +290,7 @@ Implement an exported synchronization helper and integrate it into `VerticalLine
 5. Subscribe/unsubscribe the per-view settings callback.
 6. Guard queued writes after destroy.
 
-Do not add CSS, DOM elements, measurements, observers, animation frames, or coordinate state. Existing `.cm-indent::before` and cursor styling must render the promoted spans.
+Add only marker-scoped CSS that resets `min-width` and `display`; do not define guide offset, width, border, color, or theme behavior. Do not add DOM elements, measurements, observers, animation frames, or coordinate state. Existing `.cm-indent::before` and cursor styling must render the promoted spans.
 
 - [ ] **Step 5: Run focused GREEN tests and lint**
 
@@ -304,7 +306,7 @@ Expected: focused suites, lint, and diff check pass.
 
 - [ ] **Step 6: Commit the persistent-guide implementation**
 
-Commit only the two source/test files with an English Conventional Commit and detailed `Why`/`What`. Suggested subject: `fix(vertical-lines): keep folded guides clickable`.
+Commit the source/test/style changes with an English Conventional Commit and detailed `Why`/`What`. The implementation may use a follow-up commit if a layout-preservation defect is discovered after the initial promotion commit.
 
 ### Task 4: Complete Automated and Obsidian Verification
 

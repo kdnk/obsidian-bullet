@@ -63,6 +63,8 @@ The plugin could draw a pseudo-element on `.cm-indent-spacing`, but that would d
 
 Obsidian leaves `.cm-hmd-list-indent > .cm-indent-spacing` on every visible indented branch root and direct leaf. Adding the existing `.cm-indent` class to those spans makes Obsidian apply its own guide width, offset, color, pointer area, and theme rules. A plugin-owned marker class identifies only promoted spans so the added class can be removed when the feature is disabled or the view is destroyed.
 
+Obsidian's `.cm-indent` class also applies `min-width: var(--list-indent)` and `display: inline-block`. Those layout rules are correct for a full native indent decoration but would widen a shorter `.cm-indent-spacing` span and can collapse distinct nesting levels onto the same X position. A marker-scoped CSS reset keeps promoted spans at their original inline text width with `min-width: 0` and `display: inline`. The native `.cm-indent::before` rule still owns the guide offset, width, color, and theme behavior.
+
 The promotion runs in a CodeMirror measurement write after construction, view updates, and setting changes. It does not create elements, measure coordinates, or manage scrolling. Folding triggers a view update; the newly visible spacing spans are promoted before the next interaction, leaving a valid guide target for reopening.
 
 This is the chosen persistent-guide approach.
@@ -96,6 +98,7 @@ Sequential child operations are safe because only one branch can contain the mai
 - The handler continues to ignore disabled settings, non-guide targets, unavailable editor state, parse failures, and synthetic-root targets.
 - No overlay DOM, layout observer, animation-frame scheduler, or coordinate cache is added.
 - Promotion is scoped to visible CodeMirror DOM and is removed on disable and destroy.
+- Marker-scoped CSS cancels only the native class's span-width/layout changes; it does not define guide geometry or color.
 
 ## Testing
 
@@ -104,6 +107,7 @@ Unit tests will verify that:
 - A deeply nested line's single native guide resolves to the outermost real ancestor, not its immediate parent.
 - A root item, including one with leading indentation, has no real ancestor target.
 - Visible `.cm-indent-spacing` spans are promoted without replacing existing native guides.
+- Promoted spans retain their pre-promotion text width so child and grandchild content stay at distinct X positions.
 - Disabling the feature and destroying the view remove only plugin-owned promotions.
 - Construction, view updates, and setting changes schedule promotion in a measurement write.
 - Any open direct child causes all direct non-empty children to receive selection-safe folds.
