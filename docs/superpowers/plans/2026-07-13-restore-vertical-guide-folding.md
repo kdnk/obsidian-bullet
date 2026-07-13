@@ -510,7 +510,7 @@ What:
 
 Expected: the commit succeeds and its hooks pass.
 
-- [ ] **Step 4: Recheck upstream and push the verified commits**
+- [x] **Step 4: Recheck upstream and push the verified commits**
 
 Run:
 
@@ -522,7 +522,7 @@ git push origin main
 
 Expected: the pull is fast-forward-only or already up to date, and `origin/main` advances to the verification-record commit without a pull request.
 
-- [ ] **Step 5: Confirm the final repository state**
+- [x] **Step 5: Confirm the final repository state**
 
 Run:
 
