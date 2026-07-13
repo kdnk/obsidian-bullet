@@ -44,6 +44,51 @@ interface GuideMeasurement {
   currentPadding: number | null;
 }
 
+export function resolveVerticalGuideTarget(
+  list: List,
+  guides: readonly Element[],
+  pressedGuide: Element,
+): List | null {
+  const pressedIndex = guides.indexOf(pressedGuide);
+  if (pressedIndex < 0) {
+    return null;
+  }
+
+  const ancestors: List[] = [];
+  for (
+    let ancestor = list.getParent();
+    ancestor?.getParent();
+    ancestor = ancestor.getParent()
+  ) {
+    ancestors.unshift(ancestor);
+  }
+
+  const ancestorIndex = pressedIndex - (guides.length - ancestors.length);
+  return ancestorIndex >= 0 ? (ancestors[ancestorIndex] ?? null) : null;
+}
+
+export function toggleVerticalGuideTarget(
+  editor: Pick<MyEditor, "fold" | "unfold">,
+  list: List,
+) {
+  const children = list.getChildren().filter((child) => !child.isEmpty());
+  if (children.length === 0) {
+    return false;
+  }
+
+  const shouldUnfold = children.every((child) => child.isFolded());
+  for (const child of children) {
+    const line = child.getFirstLineContentStart().line;
+    if (shouldUnfold) {
+      editor.unfold(line);
+    } else {
+      editor.fold(line);
+    }
+  }
+
+  return true;
+}
+
 export class VerticalLinesPluginValue implements PluginValue {
   private scroller!: HTMLElement;
   private contentContainer!: HTMLElement;
