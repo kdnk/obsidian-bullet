@@ -11,6 +11,8 @@ import { Parser } from "../services/Parser";
 import { Settings } from "../services/Settings";
 
 const VERTICAL_LINES_BODY_CLASS = "bullet-plugin-vertical-lines";
+const VERTICAL_LINES_ACTION_BODY_CLASS =
+  "bullet-plugin-vertical-lines-action-toggle-folding";
 const INDENT_GUIDE_SELECTOR = ".cm-indent";
 const INDENT_CONTAINER_SELECTOR = ".cm-hmd-list-indent";
 const LINE_SELECTOR = ".cm-line";
@@ -220,6 +222,7 @@ function isElementLike(value: EventTarget | null): value is Element {
 
 export class VerticalLines implements Feature {
   private bodyClass: DocumentBodyClass;
+  private actionBodyClass: DocumentBodyClass;
 
   constructor(
     private plugin: Plugin,
@@ -231,11 +234,17 @@ export class VerticalLines implements Feature {
       VERTICAL_LINES_BODY_CLASS,
       this.shouldApplyBodyClass,
     );
+    this.actionBodyClass = new DocumentBodyClass(
+      this.plugin,
+      VERTICAL_LINES_ACTION_BODY_CLASS,
+      this.shouldApplyActionBodyClass,
+    );
   }
 
   async load() {
-    this.settings.onChange(this.updateBodyClass);
+    this.settings.onChange(this.updateBodyClasses);
     this.bodyClass.load();
+    this.actionBodyClass.load();
 
     this.plugin.registerEditorExtension(
       ViewPlugin.define(
@@ -246,15 +255,24 @@ export class VerticalLines implements Feature {
   }
 
   async unload() {
-    this.settings.removeCallback(this.updateBodyClass);
+    this.settings.removeCallback(this.updateBodyClasses);
+    this.actionBodyClass.unload();
     this.bodyClass.unload();
   }
 
-  private updateBodyClass = () => {
+  private updateBodyClasses = () => {
     this.bodyClass.update();
+    this.actionBodyClass.update();
   };
 
   private shouldApplyBodyClass = () => {
     return this.settings.verticalLines;
+  };
+
+  private shouldApplyActionBodyClass = () => {
+    return (
+      this.settings.verticalLines &&
+      this.settings.verticalLinesAction === "toggle-folding"
+    );
   };
 }

@@ -95,11 +95,14 @@ function makeDocument() {
 }
 
 function makePlugin() {
-  const eventHandlers = new Map<string, (...args: never[]) => void>();
+  type WorkspaceHandler = (...args: never[]) => void;
+  const eventHandlers = new Map<string, WorkspaceHandler[]>();
   const workspace = {
-    on: jest.fn((eventName: string, handler: (...args: never[]) => void) => {
-      eventHandlers.set(eventName, handler);
-      return { eventName };
+    on: jest.fn((eventName: string, handler: WorkspaceHandler) => {
+      const handlers = eventHandlers.get(eventName) ?? [];
+      handlers.push(handler);
+      eventHandlers.set(eventName, handlers);
+      return { eventName, handler };
     }),
   };
 
@@ -156,7 +159,7 @@ describe("VerticalLines", () => {
     jest.clearAllMocks();
   });
 
-  test("manages the body class for pop-out windows", async () => {
+  test("manages display and folding-action classes across documents", async () => {
     const mainDocument = makeDocument();
     const popoutDocument = makeDocument();
     Object.defineProperty(global, "activeDocument", {
@@ -168,6 +171,7 @@ describe("VerticalLines", () => {
     const settingsCallbacks: Array<() => void> = [];
     const settings = {
       verticalLines: true,
+      verticalLinesAction: "toggle-folding",
       onChange: jest.fn((callback: () => void) => {
         settingsCallbacks.push(callback);
       }),
@@ -194,37 +198,81 @@ describe("VerticalLines", () => {
     expect(
       mainDocument.body.classList.contains("bullet-plugin-vertical-lines"),
     ).toBe(true);
+    expect(
+      mainDocument.body.classList.contains(
+        "bullet-plugin-vertical-lines-action-toggle-folding",
+      ),
+    ).toBe(true);
 
-    eventHandlers.get("window-open")?.(
-      {} as never,
-      { document: popoutDocument } as never,
-    );
+    for (const handler of eventHandlers.get("window-open") ?? []) {
+      handler({} as never, { document: popoutDocument } as never);
+    }
     expect(
       popoutDocument.body.classList.contains("bullet-plugin-vertical-lines"),
     ).toBe(true);
+    expect(
+      popoutDocument.body.classList.contains(
+        "bullet-plugin-vertical-lines-action-toggle-folding",
+      ),
+    ).toBe(true);
 
-    settings.verticalLines = false;
     const settingsCallback = settingsCallbacks[0];
     if (!settingsCallback) {
       throw new Error("Expected settings callback to be registered");
     }
+
+    settings.verticalLinesAction = "none";
+    settingsCallback();
+
+    expect(
+      mainDocument.body.classList.contains("bullet-plugin-vertical-lines"),
+    ).toBe(true);
+    expect(
+      mainDocument.body.classList.contains(
+        "bullet-plugin-vertical-lines-action-toggle-folding",
+      ),
+    ).toBe(false);
+    expect(
+      popoutDocument.body.classList.contains("bullet-plugin-vertical-lines"),
+    ).toBe(true);
+    expect(
+      popoutDocument.body.classList.contains(
+        "bullet-plugin-vertical-lines-action-toggle-folding",
+      ),
+    ).toBe(false);
+
+    settings.verticalLinesAction = "toggle-folding";
+    settings.verticalLines = false;
     settingsCallback();
 
     expect(
       mainDocument.body.classList.contains("bullet-plugin-vertical-lines"),
     ).toBe(false);
     expect(
-      popoutDocument.body.classList.contains("bullet-plugin-vertical-lines"),
+      mainDocument.body.classList.contains(
+        "bullet-plugin-vertical-lines-action-toggle-folding",
+      ),
     ).toBe(false);
 
-    eventHandlers.get("window-close")?.(
-      {} as never,
-      { document: popoutDocument } as never,
-    );
+    settings.verticalLines = true;
+    settingsCallback();
     await feature.unload();
 
     expect(
       mainDocument.body.classList.contains("bullet-plugin-vertical-lines"),
+    ).toBe(false);
+    expect(
+      mainDocument.body.classList.contains(
+        "bullet-plugin-vertical-lines-action-toggle-folding",
+      ),
+    ).toBe(false);
+    expect(
+      popoutDocument.body.classList.contains("bullet-plugin-vertical-lines"),
+    ).toBe(false);
+    expect(
+      popoutDocument.body.classList.contains(
+        "bullet-plugin-vertical-lines-action-toggle-folding",
+      ),
     ).toBe(false);
     expect(settings.removeCallback).toHaveBeenCalledWith(expect.any(Function));
   });
