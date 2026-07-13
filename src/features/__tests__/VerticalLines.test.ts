@@ -1,6 +1,7 @@
 import { makeEditor, makeRoot } from "../../__mocks__";
 import {
   VerticalLines,
+  VerticalLinesPluginValue,
   resolveVerticalGuideTarget,
   toggleVerticalGuideTarget,
 } from "../VerticalLines";
@@ -316,5 +317,173 @@ describe("toggleVerticalGuideTarget", () => {
     expect(toggleVerticalGuideTarget(editor, leaf)).toBe(false);
     expect(editor.fold).not.toHaveBeenCalled();
     expect(editor.unfold).not.toHaveBeenCalled();
+  });
+});
+
+describe("VerticalLinesPluginValue.handleMouseDown", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetEditorFromState.mockReturnValue(null);
+  });
+
+  function makeGuideLine(guideCount = 1) {
+    const line = {
+      querySelectorAll: jest.fn(),
+    };
+    const guides = Array.from({ length: guideCount }, () => ({
+      matches: jest.fn((selector: string) => selector === ".cm-indent"),
+      closest: jest.fn((selector: string) =>
+        selector === ".cm-line" ? line : null,
+      ),
+    }));
+    line.querySelectorAll.mockReturnValue(guides);
+
+    return { guides, line };
+  }
+
+  function makeEvent(target: unknown) {
+    const preventDefault = jest.fn();
+    return {
+      event: { target, preventDefault } as unknown as MouseEvent,
+      preventDefault,
+    };
+  }
+
+  function makeView(lineNumber: number) {
+    return {
+      state: {
+        doc: {
+          lineAt: jest.fn().mockReturnValue({ number: lineNumber + 1 }),
+        },
+      },
+      posAtDOM: jest.fn().mockReturnValue(10),
+    };
+  }
+
+  function makePluginValue(settings: unknown, parser: unknown) {
+    return Object.assign(Object.create(VerticalLinesPluginValue.prototype), {
+      settings,
+      parser,
+    }) as {
+      handleMouseDown(event: MouseEvent, view: unknown): boolean;
+    };
+  }
+
+  test("folds the ancestor represented by a native indentation guide", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- parent\n  - branch\n    - leaf",
+        cursor: { line: 1, ch: 2 },
+      }),
+    });
+    const editor = {
+      fold: jest.fn(),
+      unfold: jest.fn(),
+    };
+    mockGetEditorFromState.mockReturnValue(editor);
+    const parser = { parse: jest.fn().mockReturnValue(root) };
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      parser,
+    );
+    const { guides, line } = makeGuideLine();
+    const { event, preventDefault } = makeEvent(guides[0]);
+    const view = makeView(1);
+
+    expect(pluginValue.handleMouseDown(event, view)).toBe(true);
+    expect(view.posAtDOM).toHaveBeenCalledWith(line);
+    expect(parser.parse).toHaveBeenCalledWith(editor, { line: 1, ch: 0 });
+    expect(editor.fold).toHaveBeenCalledWith(1);
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    [{ verticalLines: false, verticalLinesAction: "toggle-folding" }],
+    [{ verticalLines: true, verticalLinesAction: "none" }],
+  ])("ignores guides when settings disable interaction", (settings) => {
+    const pluginValue = makePluginValue(settings, { parse: jest.fn() });
+    const { guides } = makeGuideLine();
+    const { event, preventDefault } = makeEvent(guides[0]);
+
+    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+
+  test("ignores targets that are not native indentation guides", () => {
+    const target = {
+      matches: jest.fn().mockReturnValue(false),
+      closest: jest.fn(),
+    };
+    const { event, preventDefault } = makeEvent(target);
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      { parse: jest.fn() },
+    );
+
+    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(target.closest).not.toHaveBeenCalled();
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+
+  test("ignores a guide while editor state is unavailable", () => {
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      { parse: jest.fn() },
+    );
+    const { guides } = makeGuideLine();
+    const { event, preventDefault } = makeEvent(guides[0]);
+
+    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+
+  test("ignores a guide when the containing list cannot be parsed", () => {
+    const editor = { fold: jest.fn(), unfold: jest.fn() };
+    mockGetEditorFromState.mockReturnValue(editor);
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      { parse: jest.fn().mockReturnValue(null) },
+    );
+    const { guides } = makeGuideLine();
+    const { event, preventDefault } = makeEvent(guides[0]);
+
+    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+
+  test("ignores a guide that has no corresponding list ancestor", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "  - root item\n    - child",
+        cursor: { line: 0, ch: 2 },
+      }),
+    });
+    const editor = { fold: jest.fn(), unfold: jest.fn() };
+    mockGetEditorFromState.mockReturnValue(editor);
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      { parse: jest.fn().mockReturnValue(root) },
+    );
+    const { guides } = makeGuideLine();
+    const { event, preventDefault } = makeEvent(guides[0]);
+
+    expect(pluginValue.handleMouseDown(event, makeView(0))).toBe(false);
+    expect(editor.fold).not.toHaveBeenCalled();
+    expect(preventDefault).not.toHaveBeenCalled();
   });
 });
