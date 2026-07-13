@@ -224,31 +224,12 @@ describe("toggleVerticalGuideTarget", () => {
     "    - leaf two",
   ].join("\n");
 
-  test("folds the represented list with a visible fallback cursor", () => {
-    const root = makeRoot({
-      editor: makeEditor({ text, cursor: { line: 0, ch: 0 } }),
-    });
-    const parent = root.getListUnderLine(0);
-    if (!parent) {
-      throw new Error("Expected a parent list");
-    }
-    const editor = makeFoldEditor();
-
-    expect(toggleVerticalGuideTarget(editor, parent)).toBe(true);
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledWith(0, {
-      line: 0,
-      ch: 2,
-    });
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(1);
-    expect(editor.unfold).not.toHaveBeenCalled();
-  });
-
-  test("unfolds the represented list when it is the fold root", () => {
+  test("folds each direct non-empty child when any branch is open", () => {
     const root = makeRoot({
       editor: makeEditor({
         text,
         cursor: { line: 0, ch: 0 },
-        getAllFoldedLines: () => [0],
+        getAllFoldedLines: () => [1],
       }),
     });
     const parent = root.getListUnderLine(0);
@@ -258,8 +239,36 @@ describe("toggleVerticalGuideTarget", () => {
     const editor = makeFoldEditor();
 
     expect(toggleVerticalGuideTarget(editor, parent)).toBe(true);
-    expect(editor.unfold).toHaveBeenCalledWith(0);
-    expect(editor.unfold).toHaveBeenCalledTimes(1);
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenNthCalledWith(1, 1, {
+      line: 1,
+      ch: 4,
+    });
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenNthCalledWith(2, 4, {
+      line: 4,
+      ch: 4,
+    });
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(2);
+    expect(editor.unfold).not.toHaveBeenCalled();
+  });
+
+  test("unfolds each direct non-empty child when every branch is folded", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text,
+        cursor: { line: 0, ch: 0 },
+        getAllFoldedLines: () => [1, 4],
+      }),
+    });
+    const parent = root.getListUnderLine(0);
+    if (!parent) {
+      throw new Error("Expected a parent list");
+    }
+    const editor = makeFoldEditor();
+
+    expect(toggleVerticalGuideTarget(editor, parent)).toBe(true);
+    expect(editor.unfold).toHaveBeenNthCalledWith(1, 1);
+    expect(editor.unfold).toHaveBeenNthCalledWith(2, 4);
+    expect(editor.unfold).toHaveBeenCalledTimes(2);
     expect(editor.foldEnsuringCursorVisible).not.toHaveBeenCalled();
   });
 
@@ -399,10 +408,12 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     expect(pluginValue.handleMouseDown(event, view)).toBe(true);
     expect(view.posAtDOM).toHaveBeenCalledWith(line);
     expect(parser.parse).toHaveBeenCalledWith(editor, { line: 1, ch: 0 });
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledWith(0, {
-      line: 0,
-      ch: 2,
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledWith(1, {
+      line: 1,
+      ch: 4,
     });
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(1);
+    expect(editor.unfold).not.toHaveBeenCalled();
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 

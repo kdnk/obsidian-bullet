@@ -23,15 +23,19 @@ export function toggleVerticalGuideTarget(
   editor: Pick<MyEditor, "foldEnsuringCursorVisible" | "unfold">,
   list: List,
 ) {
-  if (list.isEmpty()) {
+  const children = list.getChildren().filter((child) => !child.isEmpty());
+  if (children.length === 0) {
     return false;
   }
 
-  const fallbackCursor = list.getFirstLineContentStart();
-  if (list.isFoldRoot()) {
-    editor.unfold(fallbackCursor.line);
-  } else {
-    editor.foldEnsuringCursorVisible(fallbackCursor.line, fallbackCursor);
+  const shouldUnfold = children.every((child) => child.isFolded());
+  for (const child of children) {
+    const fallbackCursor = child.getFirstLineContentStart();
+    if (shouldUnfold) {
+      editor.unfold(fallbackCursor.line);
+    } else {
+      editor.foldEnsuringCursorVisible(fallbackCursor.line, fallbackCursor);
+    }
   }
 
   return true;
