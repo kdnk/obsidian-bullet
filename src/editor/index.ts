@@ -170,6 +170,30 @@ export class MyEditor {
     view.dispatch({ effects: [foldEffect.of(range)] });
   }
 
+  foldEnsuringCursorVisible(n: number, fallbackCursor: MyEditorPosition): void {
+    const { view } = this;
+    const l = view.lineBlockAt(view.state.doc.line(n + 1).from);
+    const range = foldable(view.state, l.from, l.to);
+
+    if (!range || range.from === range.to) {
+      return;
+    }
+
+    const effects = [foldEffect.of(range)];
+    const { head } = view.state.selection.main;
+
+    if (range.from < head && head < range.to) {
+      const fallbackOffset = this.posToDocOffset(fallbackCursor);
+      view.dispatch({
+        selection: { anchor: fallbackOffset, head: fallbackOffset },
+        effects,
+      });
+      return;
+    }
+
+    view.dispatch({ effects });
+  }
+
   unfold(n: number): void {
     const { view } = this;
     const l = view.lineBlockAt(view.state.doc.line(n + 1).from);
