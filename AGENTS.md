@@ -19,6 +19,7 @@
     - テスト用 vault を開く操作と plugin の再読込は、Obsidian CLI で `vault=vault` を明示してください。UI 操作前にウィンドウタイトルが `vault` を示すことを確認し、`base` が表示された場合は操作を止めてください。
 - 縦線ガイドについて
     - Obsidian 1.13 系の Live Preview では、1 行のインデント全体が 1 個の `.cm-indent` に入ります。ネスト階層ごとに `.cm-indent` が複数作られる前提で、ガイドとリスト祖先を対応付けないでください。
+    - 深い行にある 1 個の `.cm-indent` が描くのは最外側のインデント境界です。クリック対象は、parser の synthetic root を除く最外側の実リスト祖先へ対応付け、直近の親へ対応付けないでください。
     - `.cm-indent` の `mousedown` は、通常の CodeMirror ViewPlugin event handler へ届く前に Obsidian 側で bubble が止まります。クリック操作は `contentDOM` の capture phase で受け取り、ViewPlugin の destroy 時に同じ listener を必ず解除してください。
     - 縦線クリックでは、線が表す親リスト自体を閉じず、その直下の非空 child を一括で開閉してください。1 つでも開いた child があれば全 child を閉じ、すべて閉じていれば全 child を開きます。直下の leaf は表示したままにしてください。
     - CodeMirror は、新しい selection head が fold 範囲内に入ると、その fold を自動解除します。縦線クリックで selection を含む child を閉じる場合は、安全な selection への退避と `foldEffect` を同一トランザクションで dispatch してください。遅延した再 fold やイベント順依存の回避策は使わないでください。
