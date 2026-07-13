@@ -43,7 +43,7 @@ The feature will contain two responsibilities:
 1. `DocumentBodyClass` continues to apply `bullet-plugin-vertical-lines` to every participating document when the feature is enabled.
 2. A small CodeMirror view plugin observes `mousedown` on `contentDOM` during the capture phase and handles `.cm-indent` elements when click-to-fold is enabled. Obsidian stops these events before CodeMirror's normal bubbling view-plugin handlers, so capture is required. The listener is removed when the view plugin is destroyed.
 
-There will be no plugin-owned guide elements, overlay scroller, layout observer, animation-frame scheduler, coordinate cache, or geometry helper. A plugin marker class records only the spans promoted into native guides and is removed when the feature is disabled or the view is destroyed. Marker-scoped CSS resets `min-width` and `display` to preserve the original spacing span width while Obsidian continues to own the guide pseudo-element.
+There will be no plugin-owned guide elements, overlay scroller, layout observer, animation-frame scheduler, coordinate cache, or geometry helper. A plugin marker class records only the spans promoted into native guides and is removed when the feature is disabled or the view is destroyed. Marker-scoped CSS resets `min-width` and `display` to preserve the original spacing span width while Obsidian continues to own the guide pseudo-element. The same marker scopes `z-index: 2` on that native pseudo-element so its one-pixel hit target remains above folded branch chevrons at `z-index: 1`.
 
 ## Guide-to-list Mapping
 

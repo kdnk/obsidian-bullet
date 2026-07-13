@@ -23,6 +23,7 @@
     - 深い行にある 1 個の `.cm-indent` が描くのは最外側のインデント境界です。クリック対象は、parser の synthetic root を除く最外側の実リスト祖先へ対応付け、直近の親へ対応付けないでください。
     - 全 child branch を閉じると、表示中の native `.cm-indent` が 0 個になり、そのままでは再度開けません。persistent guide は、CodeMirror が管理する `.cm-indent-spacing` に native `.cm-indent` class を付与して維持し、独自の線描画や overlay は追加しないでください。plugin が付けた class は設定無効化と ViewPlugin destroy 時に除去してください。
     - `.cm-indent` は `min-width` と `inline-block` も適用するため、spacing span へ付与するだけでは nesting の横位置が変わります。plugin marker に限定して `min-width: 0` と `display: inline` を適用し、元の spacing 幅を維持してください。線の offset・太さ・色は上書きしないでください。
+    - folded branch root の `.cm-fold-indicator` は `z-index: 1` で guide と重なります。直下 leaf がない親も再度開けるよう、plugin marker の native `::before` だけを `z-index: 2` にし、線の位置・幅・見た目は変更しないでください。
     - `.cm-indent` の `mousedown` は、通常の CodeMirror ViewPlugin event handler へ届く前に Obsidian 側で bubble が止まります。クリック操作は `contentDOM` の capture phase で受け取り、ViewPlugin の destroy 時に同じ listener を必ず解除してください。
     - 縦線クリックでは、線が表す親リスト自体を閉じず、その直下の非空 child を一括で開閉してください。1 つでも開いた child があれば全 child を閉じ、すべて閉じていれば全 child を開きます。直下の leaf は表示したままにしてください。
     - CodeMirror は、新しい selection head が fold 範囲内に入ると、その fold を自動解除します。縦線クリックで selection を含む child を閉じる場合は、安全な selection への退避と `foldEffect` を同一トランザクションで dispatch してください。遅延した再 fold やイベント順依存の回避策は使わないでください。

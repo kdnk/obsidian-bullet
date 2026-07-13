@@ -258,6 +258,7 @@ Add tests proving that synchronization:
 3. Removes both added classes from plugin-owned spans when disabled.
 4. Does not remove a native guide that lacks the plugin marker.
 5. Requires marker-scoped CSS to keep promoted spans at their original inline width (`min-width: 0; display: inline`).
+6. Requires the promoted native `::before` to stack above the folded branch chevron (`z-index: 2`) without changing guide geometry.
 
 - [ ] **Step 2: Add failing ViewPlugin lifecycle tests**
 
@@ -290,7 +291,7 @@ Implement an exported synchronization helper and integrate it into `VerticalLine
 5. Subscribe/unsubscribe the per-view settings callback.
 6. Guard queued writes after destroy.
 
-Add only marker-scoped CSS that resets `min-width` and `display`; do not define guide offset, width, border, color, or theme behavior. Do not add DOM elements, measurements, observers, animation frames, or coordinate state. Existing `.cm-indent::before` and cursor styling must render the promoted spans.
+Add only marker-scoped CSS that resets `min-width` and `display` and raises the existing `::before` above the chevron with `z-index: 2`; do not define guide offset, width, border, color, or theme behavior. Do not add DOM elements, measurements, observers, animation frames, or coordinate state. Existing `.cm-indent::before` and cursor styling must render the promoted spans.
 
 - [ ] **Step 5: Run focused GREEN tests and lint**
 
@@ -370,6 +371,11 @@ Use `apply_patch` to create `vault/vertical-guide-regression-test.md` with exact
   - leaf sibling
   - branch two
     - leaf two
+- branches only
+  - branch alpha
+    - leaf alpha
+  - branch beta
+    - leaf beta
 - scroll filler 01
 - scroll filler 02
 - scroll filler 03
@@ -426,7 +432,8 @@ Then use Live Preview and verify:
 3. Confirm `leaf one` and `leaf two` become hidden and remain hidden after the mouse interaction completes.
 4. Confirm a promoted `.cm-indent-spacing.cm-indent.bullet-plugin-persistent-indent-guide` remains on a visible branch root or direct leaf, click that guide, and confirm both leaves return.
 5. Fold only `branch one`, click the guide, and confirm both branch roots end folded.
-6. Scroll the note and confirm the native guide remains attached to the list; no overlay or drift appears.
+6. For `branches only`, fold both branches through its guide, confirm promoted guide segments remain on the folded roots, click the one-pixel line rather than the surrounding chevron, and confirm both leaves return.
+7. Scroll the note and confirm the native guide remains attached to the list; no overlay or drift appears.
 
 Expected: every check passes, including the inside-selection case that previously reopened immediately.
 
