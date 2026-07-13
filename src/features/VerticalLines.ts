@@ -22,6 +22,9 @@ const PERSISTENT_GUIDE_CANDIDATE_SELECTOR =
   ".cm-hmd-list-indent > .cm-indent-spacing:not(.cm-indent)";
 const HOVERED_GUIDE_MARKER = "bullet-plugin-hovered-indent-guide";
 const HOVERED_GUIDE_SELECTOR = `.${HOVERED_GUIDE_MARKER}`;
+const HOVERED_GUIDE_CANDIDATE_SELECTOR =
+  `${INDENT_GUIDE_SELECTOR}:hover, ` +
+  ".cm-hmd-list-indent > .cm-indent-spacing:hover";
 const RENDERED_GUIDE_CANDIDATE_SELECTOR =
   ".cm-hmd-list-indent > .cm-indent, " +
   ".cm-hmd-list-indent > .cm-indent-spacing";
@@ -280,7 +283,7 @@ export class VerticalLinesPluginValue implements PluginValue {
       return [];
     }
     const hoveredGuide = this.view.contentDOM.querySelector(
-      `${INDENT_GUIDE_SELECTOR}:hover`,
+      HOVERED_GUIDE_CANDIDATE_SELECTOR,
     );
     if (!hoveredGuide) {
       return [];

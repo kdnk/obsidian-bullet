@@ -897,7 +897,10 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     let currentRoot = outerRoot;
     let currentEditor = outerEditor;
     const querySelector = jest.fn((selector: string) =>
-      selector === ".cm-indent:hover" ? hoveredGuide : null,
+      selector ===
+      ".cm-indent:hover, .cm-hmd-list-indent > .cm-indent-spacing:hover"
+        ? hoveredGuide
+        : null,
     );
     const querySelectorAll = jest.fn((selector: string) => {
       if (
@@ -1075,6 +1078,109 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       pointerLeave,
       true,
     );
+  });
+
+  test("promotes and highlights a hovered spacing guide in one measurement", () => {
+    type Measurement = {
+      read?: () => unknown;
+      write?: (measure: unknown, view: unknown) => void;
+    };
+    const editor = makeEditor({
+      text: ["- parent", "    - child"].join("\n"),
+      cursor: { line: 1, ch: 4 },
+    });
+    const root = makeRoot({ editor });
+    const { guides, line } = makeGuideLine(["    "]);
+    const hoveredSpacing = guides[0];
+    if (!hoveredSpacing) {
+      throw new Error("Expected a spacing guide");
+    }
+    hoveredSpacing.classList.add("cm-indent-spacing");
+
+    const querySelector = jest.fn((selector: string) =>
+      selector ===
+      ".cm-indent:hover, .cm-hmd-list-indent > .cm-indent-spacing:hover"
+        ? hoveredSpacing
+        : null,
+    );
+    const querySelectorAll = jest.fn((selector: string) => {
+      if (
+        selector === ".cm-hmd-list-indent > .cm-indent-spacing:not(.cm-indent)"
+      ) {
+        return hoveredSpacing.classList.contains("cm-indent")
+          ? []
+          : [hoveredSpacing];
+      }
+      if (
+        selector ===
+        ".cm-hmd-list-indent > .cm-indent, .cm-hmd-list-indent > .cm-indent-spacing"
+      ) {
+        return [hoveredSpacing];
+      }
+      if (selector === ".bullet-plugin-hovered-indent-guide") {
+        return hoveredSpacing.classList.contains(
+          "bullet-plugin-hovered-indent-guide",
+        )
+          ? [hoveredSpacing]
+          : [];
+      }
+      return [];
+    });
+    const requests: Measurement[] = [];
+    const contentDOM = {
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      querySelector,
+      querySelectorAll,
+    };
+    const view = {
+      contentDOM,
+      state: {
+        doc: {
+          lineAt: jest.fn((offset: number) => ({ number: offset + 1 })),
+        },
+      },
+      posAtDOM: jest.fn((element: unknown) => {
+        if (element !== line) {
+          throw new Error("Expected the hovered guide line");
+        }
+        return 1;
+      }),
+      requestMeasure: jest.fn((request: Measurement) => {
+        requests.push(request);
+      }),
+    };
+    const settings = {
+      verticalLines: true,
+      verticalLinesAction: "toggle-folding",
+      onChange: jest.fn(),
+      removeCallback: jest.fn(),
+    };
+    mockGetEditorFromState.mockReturnValue(editor);
+    const PluginValueWithView = VerticalLinesPluginValue as unknown as new (
+      settings: unknown,
+      parser: unknown,
+      view: unknown,
+    ) => unknown;
+
+    new PluginValueWithView(settings, { parse: jest.fn(() => root) }, view);
+
+    const request = requests[0];
+    const measurement = request?.read?.();
+    request?.write?.(measurement, view);
+
+    expect(querySelector).toHaveBeenCalledWith(
+      ".cm-indent:hover, .cm-hmd-list-indent > .cm-indent-spacing:hover",
+    );
+    expect(hoveredSpacing.classList.contains("cm-indent")).toBe(true);
+    expect(
+      hoveredSpacing.classList.contains(
+        "bullet-plugin-persistent-indent-guide",
+      ),
+    ).toBe(true);
+    expect(
+      hoveredSpacing.classList.contains("bullet-plugin-hovered-indent-guide"),
+    ).toBe(true);
   });
 
   test("schedules synchronization after construction, updates, and settings changes", () => {
