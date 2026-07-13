@@ -408,6 +408,15 @@ describe("synchronizePersistentIndentGuides", () => {
     expect(declarations).toContain("min-width: 0;");
     expect(declarations).toContain("display: inline;");
   });
+
+  test("stacks the promoted native guide above folded branch indicators", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const declarations = styles.match(
+      /\.bullet-plugin-vertical-lines\s+\.markdown-source-view\.mod-cm6\s+\.cm-indent-spacing\.bullet-plugin-persistent-indent-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(declarations?.trim()).toBe("z-index: 2;");
+  });
 });
 
 describe("VerticalLinesPluginValue.handleMouseDown", () => {
