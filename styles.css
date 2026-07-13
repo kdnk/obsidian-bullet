@@ -28,6 +28,12 @@
   display: inline;
 }
 
+.bullet-plugin-vertical-lines
+  .markdown-source-view.mod-cm6
+  .cm-indent-spacing.bullet-plugin-persistent-indent-guide::before {
+  z-index: 2;
+}
+
 /* drag-n-drop */
 .bullet-plugin-dropping-line {
   background-color: hsla(var(--interactive-accent-hsl), 0.4);
