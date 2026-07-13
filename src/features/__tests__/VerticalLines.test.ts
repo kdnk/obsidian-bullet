@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { makeEditor, makeRoot } from "../../__mocks__";
 import {
   VerticalLines,
@@ -394,6 +397,16 @@ describe("synchronizePersistentIndentGuides", () => {
       promoted.classList.contains("bullet-plugin-persistent-indent-guide"),
     ).toBe(false);
     expect(nativeGuide.classList.contains("cm-indent")).toBe(true);
+  });
+
+  test("preserves promoted spacing layout with marker-scoped styles", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const declarations = styles.match(
+      /\.bullet-plugin-vertical-lines\s+\.markdown-source-view\.mod-cm6\s+\.cm-indent-spacing\.bullet-plugin-persistent-indent-guide\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(declarations).toContain("min-width: 0;");
+    expect(declarations).toContain("display: inline;");
   });
 });
 
