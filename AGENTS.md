@@ -19,7 +19,7 @@
     - テスト用 vault を開く操作と plugin の再読込は、Obsidian CLI で `vault=vault` を明示してください。UI 操作前にウィンドウタイトルが `vault` を示すことを確認し、`base` が表示された場合は操作を止めてください。
     - Obsidian の複数 window が開いている場合、open 後の 1 回だけのタイトル確認では不十分です。Computer Use の各 UI action 直前に `obsidian-cli vault=vault eval code='window.focus()'` で test vault renderer を focus し、fresh state のタイトルが test vault であることを確認してください。過去の element index や座標を再利用せず、対象 window を保証できない場合は action を実行しないでください。
 - 縦線ガイドについて
-    - Obsidian 1.13 系の Live Preview では、1 行のインデント全体が 1 個の `.cm-indent` に入ります。ネスト階層ごとに `.cm-indent` が複数作られる前提で、ガイドとリスト祖先を対応付けないでください。
+    - Obsidian 1.13 系の Live Preview では、複数のインデント単位が 1 個の `.cm-indent` にまとめられる場合も、複数の `.cm-indent` として表示される場合もあります。guide 数がネスト階層数と一致すると仮定しないでください。
     - 深い行では複数の `.cm-indent` が表示される場合があり、Obsidian が複数のインデント単位を 1 要素へまとめる場合もあります。クリックした guide より前にある同じ `.cm-hmd-list-indent` 内の text を raw indent prefix とし、`getFirstLineIndent()` がその prefix と完全一致する実リスト祖先へ対応付けてください。常に最外側へ対応付けたり、guide 数と祖先数を右寄せで対応付けたりしないでください。一致する祖先がなければ操作を無視してください。
     - 全 child branch を閉じると、表示中の native `.cm-indent` が 0 個になり、そのままでは再度開けません。persistent guide は、CodeMirror が管理する `.cm-indent-spacing` に native `.cm-indent` class を付与して維持し、独自の線描画や overlay は追加しないでください。plugin が付けた class は設定無効化と ViewPlugin destroy 時に除去してください。
     - `.cm-indent` は `min-width` と `inline-block` も適用するため、spacing span へ付与するだけでは nesting の横位置が変わります。plugin marker に限定して `min-width: 0` と `display: inline` を適用し、元の spacing 幅を維持してください。線の offset・太さ・色は上書きしないでください。
