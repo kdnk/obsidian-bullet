@@ -6,7 +6,7 @@ import { DocumentBodyClass } from "./DocumentBodyClass";
 import { Feature } from "./Feature";
 
 import { MyEditor, getEditorFromState } from "../editor";
-import { List } from "../root";
+import { List, Root } from "../root";
 import { Parser } from "../services/Parser";
 import { Settings } from "../services/Settings";
 
@@ -20,6 +20,11 @@ const PERSISTENT_GUIDE_MARKER = "bullet-plugin-persistent-indent-guide";
 const PERSISTENT_GUIDE_SELECTOR = `.${PERSISTENT_GUIDE_MARKER}`;
 const PERSISTENT_GUIDE_CANDIDATE_SELECTOR =
   ".cm-hmd-list-indent > .cm-indent-spacing:not(.cm-indent)";
+const HOVERED_GUIDE_MARKER = "bullet-plugin-hovered-indent-guide";
+const HOVERED_GUIDE_SELECTOR = `.${HOVERED_GUIDE_MARKER}`;
+const RENDERED_GUIDE_CANDIDATE_SELECTOR =
+  ".cm-hmd-list-indent > .cm-indent, " +
+  ".cm-hmd-list-indent > .cm-indent-spacing";
 
 export function synchronizePersistentIndentGuides(
   contentDOM: ParentNode,
@@ -76,6 +81,47 @@ export function resolveVerticalGuideTarget(
   return null;
 }
 
+function hasSameListStart(left: List, right: List) {
+  const leftStart = left.getFirstLineContentStart();
+  const rightStart = right.getFirstLineContentStart();
+  return leftStart.line === rightStart.line && leftStart.ch === rightStart.ch;
+}
+
+export function collectVerticalGuideGroup(
+  hoveredGuide: Element,
+  guides: Iterable<Element>,
+  getListForGuide: (guide: Element) => List | null,
+): Element[] {
+  const hoveredList = getListForGuide(hoveredGuide);
+  const hoveredTarget = hoveredList
+    ? resolveVerticalGuideTarget(hoveredList, hoveredGuide)
+    : null;
+  if (!hoveredTarget) {
+    return [];
+  }
+
+  return Array.from(guides).filter((guide) => {
+    const list = getListForGuide(guide);
+    const target = list ? resolveVerticalGuideTarget(list, guide) : null;
+    return target ? hasSameListStart(target, hoveredTarget) : false;
+  });
+}
+
+export function synchronizeHoveredIndentGuides(
+  contentDOM: ParentNode,
+  highlightedGuides: Iterable<Element>,
+) {
+  const highlighted = new Set(highlightedGuides);
+  contentDOM.querySelectorAll(HOVERED_GUIDE_SELECTOR).forEach((element) => {
+    if (!highlighted.has(element)) {
+      element.classList.remove(HOVERED_GUIDE_MARKER);
+    }
+  });
+  highlighted.forEach((element) => {
+    element.classList.add(HOVERED_GUIDE_MARKER);
+  });
+}
+
 export function toggleVerticalGuideTarget(
   editor: Pick<MyEditor, "foldEnsuringCursorVisible" | "unfold">,
   list: List,
@@ -100,6 +146,7 @@ export function toggleVerticalGuideTarget(
 
 export class VerticalLinesPluginValue implements PluginValue {
   private destroyed = false;
+  private lastPointerGuide: Element | null = null;
   private measureKey = {};
 
   constructor(
@@ -108,6 +155,16 @@ export class VerticalLinesPluginValue implements PluginValue {
     private view: EditorView,
   ) {
     this.view.contentDOM.addEventListener("mousedown", this.onMouseDown, true);
+    this.view.contentDOM.addEventListener(
+      "pointermove",
+      this.onPointerMove,
+      true,
+    );
+    this.view.contentDOM.addEventListener(
+      "pointerleave",
+      this.onPointerLeave,
+      true,
+    );
     this.settings.onChange(this.onSettingsChange);
     this.scheduleGuideSynchronization();
   }
@@ -172,7 +229,18 @@ export class VerticalLinesPluginValue implements PluginValue {
       this.onMouseDown,
       true,
     );
+    this.view.contentDOM.removeEventListener(
+      "pointermove",
+      this.onPointerMove,
+      true,
+    );
+    this.view.contentDOM.removeEventListener(
+      "pointerleave",
+      this.onPointerLeave,
+      true,
+    );
     this.settings.removeCallback(this.onSettingsChange);
+    synchronizeHoveredIndentGuides(this.view.contentDOM, []);
     synchronizePersistentIndentGuides(this.view.contentDOM, false);
   }
 
@@ -182,7 +250,87 @@ export class VerticalLinesPluginValue implements PluginValue {
     }
   };
 
+  private interactionEnabled() {
+    return (
+      this.settings.verticalLines &&
+      this.settings.verticalLinesAction === "toggle-folding"
+    );
+  }
+
+  private getLineForGuide(guide: Element): number | null {
+    const lineElement = guide.closest(LINE_SELECTOR);
+    if (!lineElement) {
+      return null;
+    }
+    try {
+      const offset = this.view.posAtDOM(lineElement);
+      return this.view.state.doc.lineAt(offset).number - 1;
+    } catch {
+      return null;
+    }
+  }
+
+  private getListForGuide(root: Root, guide: Element) {
+    const line = this.getLineForGuide(guide);
+    return line === null ? null : root.getListUnderLine(line);
+  }
+
+  private readHoveredGuideGroup(): Element[] {
+    if (!this.interactionEnabled()) {
+      return [];
+    }
+    const hoveredGuide = this.view.contentDOM.querySelector(
+      `${INDENT_GUIDE_SELECTOR}:hover`,
+    );
+    if (!hoveredGuide) {
+      return [];
+    }
+    const hoveredLine = this.getLineForGuide(hoveredGuide);
+    const editor = getEditorFromState(this.view.state);
+    if (hoveredLine === null || !editor) {
+      return [];
+    }
+    const root = this.parser.parse(editor, { line: hoveredLine, ch: 0 });
+    if (!root) {
+      return [];
+    }
+    return collectVerticalGuideGroup(
+      hoveredGuide,
+      Array.from(
+        this.view.contentDOM.querySelectorAll(
+          RENDERED_GUIDE_CANDIDATE_SELECTOR,
+        ),
+      ),
+      (guide) => this.getListForGuide(root, guide),
+    );
+  }
+
+  private onPointerMove = (event: PointerEvent) => {
+    const guide =
+      isElementLike(event.target) && event.target.matches(INDENT_GUIDE_SELECTOR)
+        ? event.target
+        : null;
+    if (guide === this.lastPointerGuide) {
+      return;
+    }
+    this.lastPointerGuide = guide;
+    if (!guide) {
+      synchronizeHoveredIndentGuides(this.view.contentDOM, []);
+      return;
+    }
+    this.scheduleGuideSynchronization();
+  };
+
+  private onPointerLeave = () => {
+    this.lastPointerGuide = null;
+    synchronizeHoveredIndentGuides(this.view.contentDOM, []);
+  };
+
   private onSettingsChange = () => {
+    if (!this.interactionEnabled()) {
+      this.lastPointerGuide = null;
+      synchronizeHoveredIndentGuides(this.view.contentDOM, []);
+    }
     this.scheduleGuideSynchronization();
   };
 
@@ -193,8 +341,8 @@ export class VerticalLinesPluginValue implements PluginValue {
 
     this.view.requestMeasure({
       key: this.measureKey,
-      read: () => null,
-      write: () => {
+      read: () => this.readHoveredGuideGroup(),
+      write: (highlightedGuides: Element[]) => {
         if (this.destroyed) {
           return;
         }
@@ -202,6 +350,10 @@ export class VerticalLinesPluginValue implements PluginValue {
         synchronizePersistentIndentGuides(
           this.view.contentDOM,
           this.settings.verticalLines,
+        );
+        synchronizeHoveredIndentGuides(
+          this.view.contentDOM,
+          this.interactionEnabled() ? highlightedGuides : [],
         );
       },
     });
