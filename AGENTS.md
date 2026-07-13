@@ -16,6 +16,7 @@
 - テストについて
     - `.spec.md` の統合 spec やフルテストは `dist/main.js` を実行するため、`src` を変更した後に実行する場合は先に `npm run build-with-tests` を実行してください。
     - 実 Obsidian で手動検証するときは、リポジトリ内の `vault` をテスト用 vault として使ってください。個人用の `/Users/kodai/base` vault へテスト bundle やテストノートを配置しないでください。
+    - テスト用 vault を開く操作と plugin の再読込は、Obsidian CLI で `vault=vault` を明示してください。UI 操作前にウィンドウタイトルが `vault` を示すことを確認し、`base` が表示された場合は操作を止めてください。
 - 縦線ガイドについて
     - Obsidian 1.13 系の Live Preview では、1 行のインデント全体が 1 個の `.cm-indent` に入ります。ネスト階層ごとに `.cm-indent` が複数作られる前提で、ガイドとリスト祖先を対応付けないでください。
     - `.cm-indent` の `mousedown` は、通常の CodeMirror ViewPlugin event handler へ届く前に Obsidian 側で bubble が止まります。クリック操作は `contentDOM` の capture phase で受け取り、ViewPlugin の destroy 時に同じ listener を必ず解除してください。
