@@ -139,20 +139,18 @@ export function isOuterListChunkActionable(root: Root) {
 }
 
 export function toggleOuterListChunk(
-  editor: Pick<MyEditor, "foldEnsuringCursorVisible" | "unfold">,
+  editor: Pick<MyEditor, "setFoldedPreservingScroll">,
   root: Root,
 ) {
   const targets = root.getChildren().filter(isFoldableTopLevelList);
   if (targets.length === 0) return false;
 
   const shouldUnfold = targets.every((target) => target.isFolded());
-  for (const target of targets) {
-    const fallbackCursor = target.getFirstLineContentStart();
-    if (shouldUnfold) {
-      editor.unfold(fallbackCursor.line);
-    } else {
-      editor.foldEnsuringCursorVisible(fallbackCursor.line, fallbackCursor);
-    }
-  }
-  return true;
+  return editor.setFoldedPreservingScroll(
+    targets.map((target) => {
+      const fallbackCursor = target.getFirstLineContentStart();
+      return { line: fallbackCursor.line, fallbackCursor };
+    }),
+    !shouldUnfold,
+  );
 }
