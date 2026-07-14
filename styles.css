@@ -13,6 +13,40 @@
   background-color: var(--text-muted);
 }
 
+/* Obsidian can expose raw list markup after restoring and unfolding a note. */
+.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .HyperMD-list-line:not(.HyperMD-task-line)
+  > .cm-formatting-list-ul:not(:has(.list-bullet)) {
+  color: transparent;
+  position: relative;
+}
+
+.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .HyperMD-list-line:not(.HyperMD-task-line)
+  > .cm-formatting-list-ul:not(:has(.list-bullet))::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 50%;
+  width: 0.4em;
+  height: 0.4em;
+  border-radius: 50%;
+  background-color: var(--text-muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .HyperMD-list-line:not(.HyperMD-task-line)
+  .cm-fold-indicator.is-collapsed
+  ~ .cm-formatting-list-ul:not(:has(.list-bullet))::after {
+  background-color: var(--list-marker-color-collapsed);
+  box-shadow: 0 0 0 4px var(--background-modifier-active-hover);
+}
+
 /* lines */
 .bullet-plugin-vertical-lines
   .markdown-source-view.mod-cm6

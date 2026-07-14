@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { BetterListsStyles } from "../BetterListsStyles";
 
 function makeClassList() {
@@ -119,5 +122,36 @@ describe("BetterListsStyles", () => {
       mainDocument.body.classList.contains("bullet-plugin-better-lists"),
     ).toBe(false);
     expect(settings.removeCallback).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  test("renders a fallback circle when restored folds expose raw bullet markup", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const rawMarker = styles.match(
+      /\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.HyperMD-list-line:not\(\.HyperMD-task-line\)\s+>\s+\.cm-formatting-list-ul:not\(:has\(\.list-bullet\)\)\s*\{([^}]*)\}/,
+    )?.[1];
+    const fallbackCircle = styles.match(
+      /\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.HyperMD-list-line:not\(\.HyperMD-task-line\)\s+>\s+\.cm-formatting-list-ul:not\(:has\(\.list-bullet\)\)::after\s*\{([^}]*)\}/,
+    )?.[1];
+    const collapsedCircle = styles.match(
+      /\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.HyperMD-list-line:not\(\.HyperMD-task-line\)\s+\.cm-fold-indicator\.is-collapsed\s+~\s+\.cm-formatting-list-ul:not\(:has\(\.list-bullet\)\)::after\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(rawMarker).toContain("color: transparent;");
+    expect(rawMarker).toContain("position: relative;");
+    expect(fallbackCircle).toContain('content: "";');
+    expect(fallbackCircle).toContain("position: absolute;");
+    expect(fallbackCircle).toContain("inset-inline-start: 0;");
+    expect(fallbackCircle).toContain("inset-block-start: 50%;");
+    expect(fallbackCircle).toContain("width: 0.4em;");
+    expect(fallbackCircle).toContain("height: 0.4em;");
+    expect(fallbackCircle).toContain("border-radius: 50%;");
+    expect(fallbackCircle).toContain("background-color: var(--text-muted);");
+    expect(fallbackCircle).toContain("transform: translateY(-50%);");
+    expect(collapsedCircle).toContain(
+      "background-color: var(--list-marker-color-collapsed);",
+    );
+    expect(collapsedCircle).toContain(
+      "box-shadow: 0 0 0 4px var(--background-modifier-active-hover);",
+    );
   });
 });
