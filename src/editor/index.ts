@@ -120,10 +120,8 @@ function correctScrollSnapshotAnchor(view: EditorView, value: unknown): void {
     return;
   }
 
-  const viewportDocumentTop = (scrollViewportTop - documentTop) / scaleY;
-  const anchor = view.lineBlockAtHeight(
-    Math.max(0, viewportDocumentTop + 8 / scaleY),
-  );
+  const viewportDocumentTop = scrollViewportTop - documentTop;
+  const anchor = view.lineBlockAtHeight(Math.max(0, viewportDocumentTop + 8));
   if (!Number.isFinite(anchor.from) || !Number.isFinite(anchor.top)) {
     return;
   }

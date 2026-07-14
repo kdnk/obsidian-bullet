@@ -308,6 +308,23 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
     expect(scrollSnapshot.value.yMargin).toBe(-786);
   });
 
+  test("keeps line-block lookup in screen coordinates when the editor is scaled", () => {
+    mockedFoldable.mockReturnValue({ from: 8, to: 20 });
+    mockedFoldEffectOf.mockReturnValue("fold-8" as never);
+    const { editor, view } = makeBatchFoldingEditor(5);
+    view.documentTop = -537.5625;
+    view.scaleY = 2;
+    view.scrollDOM.scrollTop = 1400;
+    view.scrollDOM.getBoundingClientRect.mockReturnValue({ top: 78.75 });
+
+    editor.setFoldedPreservingScroll(
+      [{ line: 0, fallbackCursor: { line: 0, ch: 2 } }],
+      true,
+    );
+
+    expect(view.lineBlockAtHeight).toHaveBeenCalledWith(624.3125);
+  });
+
   test("falls back to the native snapshot when viewport geometry is invalid", () => {
     mockedFoldable.mockReturnValue({ from: 8, to: 20 });
     mockedFoldEffectOf.mockReturnValue("fold-8" as never);

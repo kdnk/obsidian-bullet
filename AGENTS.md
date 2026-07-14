@@ -19,6 +19,7 @@
     - 取り込み後、デフォルトブランチに対して `npm version <major|minor|patch>` を実行し、新しいバージョンをリリースしてください。
 - テストについて
     - `.spec.md` の統合 spec やフルテストは `dist/main.js` を実行するため、`src` を変更した後に実行する場合は先に `npm run build-with-tests` を実行してください。
+    - フルテストは `vault/test.md` をfixtureとして上書きします。手動検証用の内容がある場合は、フルテスト前にvault外へbackupし、テスト終了直後にrestoreしてから実Obsidianの検証を続けてください。Obsidianのfile historyだけをbackupとして使わないでください。
     - `dist/main.js` は生成物としてgitignoreされています。検証用にbuildしても、`git add -f` で追跡対象へ追加しないでください。
     - 実 Obsidian で手動検証するときは、リポジトリ内の `vault` をテスト用 vault として使ってください。個人用の `/Users/kodai/base` vault へテスト bundle やテストノートを配置しないでください。
     - 手動検証用のplugin IDは `bullet` です。build artifactは `vault/.obsidian/plugins/bullet/` へ配置し、別のpluginディレクトリを作らないでください。
@@ -34,7 +35,7 @@
     - `.cm-indent` の `mousedown` は、通常の CodeMirror ViewPlugin event handler へ届く前に Obsidian 側で bubble が止まります。クリック操作は `contentDOM` の capture phase で受け取り、ViewPlugin の destroy 時に同じ listener を必ず解除してください。
     - 縦線クリックでは、線が表す親リスト自体を閉じず、その直下の非空 child を一括で開閉してください。1 つでも開いた child があれば全 child を閉じ、すべて閉じていれば全 child を開きます。直下の leaf は表示したままにしてください。
     - CodeMirror は、新しい selection head が fold 範囲内に入ると、その fold を自動解除します。縦線クリックで selection を含む child を閉じる場合は、安全な selection への退避と `foldEffect` を同一トランザクションで dispatch してください。遅延した再 fold やイベント順依存の回避策は使わないでください。
-    - 縦線クリック1回で複数branchを開閉するときは、開閉前の `EditorView.scrollSnapshot()`、全 `foldEffect` または `unfoldEffect`、必要なselection退避を1個のtransactionへまとめてください。branchごとのdispatch、手動の `scrollTop` 復元、遅延したscroll補正を使わず、viewport上側をanchorとして維持してください。Obsidianではfile titleとPropertiesがCodeMirror documentより前にある同じscroll container内へ配置されるため、`scrollTop` をそのままdocument内の高さとして使わないでください。scroll container上端と `EditorView.documentTop` の実座標差を `scaleY` で補正し、`lineBlockAtHeight()` で実際のviewport上端に対応する行へsnapshot targetを合わせてください。native chevronと通常のfolding commandにはこの縦線専用処理を適用しないでください。
+    - 縦線クリック1回で複数branchを開閉するときは、開閉前の `EditorView.scrollSnapshot()`、全 `foldEffect` または `unfoldEffect`、必要なselection退避を1個のtransactionへまとめてください。branchごとのdispatch、手動の `scrollTop` 復元、遅延したscroll補正を使わず、viewport上側をanchorとして維持してください。Obsidianではfile titleとPropertiesがCodeMirror documentより前にある同じscroll container内へ配置されるため、`scrollTop` をそのままdocument内の高さとして使わないでください。scroll container上端と `EditorView.documentTop` の実座標差を、screen座標を受け取る `lineBlockAtHeight()` へそのまま渡し、実際のviewport上端に対応する行へsnapshot targetを合わせてください。CSS transform時もこの差を `scaleY` で除算しないでください。native chevronと通常のfolding commandにはこの縦線専用処理を適用しないでください。
     - document末尾ではfold後の高さが減ると `scrollSnapshot()` だけでは最大 `scrollTop` へclampされます。縦線のtoggle actionが有効な間だけCodeMirror標準の `scrollPastEnd()` をmutable editor-extension配列へ追加し、設定変更時に `Workspace.updateOptions()` で反映してください。ObsidianはMarkdown editor viewを開いた直後に実DOMの `padding-bottom` を `100px` へ上書きするため、縦線操作の直前に実DOMの余白がCodeMirror標準の計算値より小さい場合だけ `contentDOM.style.paddingBottom` を復元してください。常時監視、遅延したpadding再設定、dispatch後の手動scroll補正は追加しないでください。
     - fold前後のheight差がsub-pixelの場合、`scrollSnapshot()` の `yMargin` をそのまま繰り返すとscroll elementの丸め誤差が累積します。snapshot effectを同じtransactionへ入れる前に、marginを `devicePixelRatio` に対応する物理pixel gridへ正規化してください。開閉中に1物理pixel未満の差が出ても、往復後に元位置へ戻り、誤差が蓄積しないことを長いリストで確認してください。
     - `.cm-indent::before` は Obsidian / CodeMirror が配置・仮想化・スクロールする描画源です。独立したスクロール overlay や座標 cache を再導入せず、描画の実確認が必要な変更では `npm run build-with-tests` 後に実 Obsidian の長い多段リストで上端と下端を確認してください。
