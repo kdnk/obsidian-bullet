@@ -1,6 +1,7 @@
 - git の操作は、このリポジトリでは `but` (GitButler) を使わず、通常の `git` を使ってください。
     - 基本的にデフォルトブランチで作業し、必要な検証後にデフォルトブランチへ直接 push してください。
     - 作業開始時、リリース作業前、長めの作業の区切りでは定期的に `git fetch` / `git pull --ff-only` で upstream を取り込んでください。
+    - `fetch.pruneTags=true` の環境では、remoteにまだ存在しないrelease tagを作成した後の `git fetch --prune` がlocal tagを削除します。release前のfetch/pullは `npm version` より前に済ませ、tagを最初にpushするまではfetchしないでください。
 - github の URL に直接アクセス禁止。必要な GitHub 操作は `gh` CLI を使ってください。
 - commit について
     - commit するときは、Conventional Commits に従ってください。英語で commit メッセージを書いてください。
