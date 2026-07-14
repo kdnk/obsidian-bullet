@@ -26,6 +26,7 @@
     - テスト用 vault を開く操作と plugin の再読込は、Obsidian CLI で `vault=vault` を明示してください。UI 操作前にウィンドウタイトルが `vault` を示すことを確認し、`base` が表示された場合は操作を止めてください。
     - Obsidian の複数 window が開いている場合、open 後の 1 回だけのタイトル確認では不十分です。Computer Use の各 UI action 直前に `obsidian-cli vault=vault eval code='window.focus()'` で test vault renderer を focus し、fresh state のタイトルが test vault であることを確認してください。過去の element index や座標を再利用せず、対象 window を保証できない場合は action を実行しないでください。
 - 縦線ガイドについて
+    - Obsidian 1.13 系では、foldしたままノートを離れて再オープンし、縦線で展開すると、再表示された通常bulletが `.list-bullet` を持たず `.cm-formatting-list-ul` 内のraw `-` として残る場合があります。bullet描画を変更するときは、この保存済みfoldの再オープン経路も実vaultで確認してください。fallbackはLive Previewの非task行かつ `.list-bullet` が欠けたmarkerだけに限定し、Source mode、task checkbox、正常なnative bulletへ適用しないでください。色とcollapsed feedbackには既存のObsidian変数を使ってください。
     - Obsidian 1.13 系の Live Preview では、複数のインデント単位が 1 個の `.cm-indent` にまとめられる場合も、複数の `.cm-indent` として表示される場合もあります。guide 数がネスト階層数と一致すると仮定しないでください。
     - 深い行では複数の `.cm-indent` が表示される場合があり、Obsidian が複数のインデント単位を 1 要素へまとめる場合もあります。クリックした guide より前にある同じ `.cm-hmd-list-indent` 内の text を raw indent prefix とし、`getFirstLineIndent()` がその prefix と完全一致する実リスト祖先へ対応付けてください。常に最外側へ対応付けたり、guide 数と祖先数を右寄せで対応付けたりしないでください。一致する祖先がなければ操作を無視してください。
     - 全 child branch を閉じると、表示中の native `.cm-indent` が 0 個になり、そのままでは再度開けません。persistent guide は、CodeMirror が管理する `.cm-indent-spacing` に native `.cm-indent` class を付与して維持し、独自の線描画や overlay は追加しないでください。plugin が付けた class は設定無効化と ViewPlugin destroy 時に除去してください。
