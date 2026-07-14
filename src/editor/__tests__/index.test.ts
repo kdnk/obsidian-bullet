@@ -1,4 +1,9 @@
-import { foldEffect, foldable } from "@codemirror/language";
+import {
+  foldEffect,
+  foldable,
+  foldedRanges,
+  unfoldEffect,
+} from "@codemirror/language";
 
 import { MyEditor, getEditorFromState, getFoldedLinesFromState } from "..";
 
@@ -104,5 +109,160 @@ describe("MyEditor.foldEnsuringCursorVisible", () => {
     editor.foldEnsuringCursorVisible(0, { line: 0, ch: 2 });
 
     expect(view.dispatch).not.toHaveBeenCalled();
+  });
+});
+
+describe("MyEditor.setFoldedPreservingScroll", () => {
+  const mockedFoldable = jest.mocked(foldable);
+  const mockedFoldedRanges = jest.mocked(foldedRanges);
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- CodeMirror's mocked effect factory is intentionally stored for test setup.
+  const mockedFoldEffectOf = jest.mocked(foldEffect.of);
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- CodeMirror's mocked effect factory is intentionally stored for test setup.
+  const mockedUnfoldEffectOf = jest.mocked(unfoldEffect.of);
+  const between = jest.fn();
+
+  function makeBatchFoldingEditor(selectionHead: number) {
+    const lines = [
+      { from: 0, to: 8 },
+      { from: 21, to: 29 },
+    ];
+    const view = {
+      state: {
+        doc: {
+          line: jest.fn((number: number) => lines[number - 1]),
+        },
+        selection: { main: { head: selectionHead } },
+      },
+      lineBlockAt: jest.fn((from: number) =>
+        from === lines[0].from ? lines[0] : lines[1],
+      ),
+      scrollSnapshot: jest.fn().mockReturnValue("scroll-snapshot"),
+      dispatch: jest.fn(),
+    };
+    const editor = new MyEditor({ cm: view } as never);
+
+    return { editor, view };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedFoldedRanges.mockReturnValue({
+      iter: () => ({ value: null, from: 0, next: jest.fn() }),
+      between,
+    } as never);
+  });
+
+  test("folds every target with one scroll snapshot and a safe selection", () => {
+    mockedFoldable
+      .mockReturnValueOnce({ from: 8, to: 20 })
+      .mockReturnValueOnce({ from: 29, to: 40 });
+    mockedFoldEffectOf
+      .mockReturnValueOnce("fold-8" as never)
+      .mockReturnValueOnce("fold-29" as never);
+    const { editor, view } = makeBatchFoldingEditor(32);
+
+    expect(
+      editor.setFoldedPreservingScroll(
+        [
+          { line: 0, fallbackCursor: { line: 0, ch: 2 } },
+          { line: 1, fallbackCursor: { line: 1, ch: 2 } },
+        ],
+        true,
+      ),
+    ).toBe(true);
+
+    expect(view.scrollSnapshot).toHaveBeenCalledTimes(1);
+    expect(view.dispatch).toHaveBeenCalledWith({
+      selection: { anchor: 23, head: 23 },
+      effects: ["scroll-snapshot", "fold-8", "fold-29"],
+    });
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  test("keeps an outside selection while folding every target", () => {
+    mockedFoldable
+      .mockReturnValueOnce({ from: 8, to: 20 })
+      .mockReturnValueOnce({ from: 29, to: 40 });
+    mockedFoldEffectOf
+      .mockReturnValueOnce("fold-8" as never)
+      .mockReturnValueOnce("fold-29" as never);
+    const { editor, view } = makeBatchFoldingEditor(5);
+
+    editor.setFoldedPreservingScroll(
+      [
+        { line: 0, fallbackCursor: { line: 0, ch: 2 } },
+        { line: 1, fallbackCursor: { line: 1, ch: 2 } },
+      ],
+      true,
+    );
+
+    expect(view.dispatch).toHaveBeenCalledWith({
+      effects: ["scroll-snapshot", "fold-8", "fold-29"],
+    });
+  });
+
+  test("unfolds every target with one scroll snapshot", () => {
+    between.mockImplementation(
+      (
+        from: number,
+        _to: number,
+        callback: (from: number, to: number) => void,
+      ) => {
+        if (from === 0) callback(8, 20);
+        if (from === 21) callback(29, 40);
+      },
+    );
+    mockedUnfoldEffectOf
+      .mockReturnValueOnce("unfold-8" as never)
+      .mockReturnValueOnce("unfold-29" as never);
+    const { editor, view } = makeBatchFoldingEditor(5);
+
+    expect(
+      editor.setFoldedPreservingScroll(
+        [
+          { line: 0, fallbackCursor: { line: 0, ch: 2 } },
+          { line: 1, fallbackCursor: { line: 1, ch: 2 } },
+        ],
+        false,
+      ),
+    ).toBe(true);
+
+    expect(view.scrollSnapshot).toHaveBeenCalledTimes(1);
+    expect(view.dispatch).toHaveBeenCalledWith({
+      effects: ["scroll-snapshot", "unfold-8", "unfold-29"],
+    });
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not snapshot or dispatch when no target has a range", () => {
+    mockedFoldable.mockReturnValue(null);
+    const { editor, view } = makeBatchFoldingEditor(5);
+
+    expect(
+      editor.setFoldedPreservingScroll(
+        [{ line: 0, fallbackCursor: { line: 0, ch: 2 } }],
+        true,
+      ),
+    ).toBe(false);
+
+    expect(view.scrollSnapshot).not.toHaveBeenCalled();
+    expect(view.dispatch).not.toHaveBeenCalled();
+  });
+
+  test("keeps single-line fold and unfold free of scroll snapshots", () => {
+    mockedFoldable.mockReturnValue({ from: 8, to: 20 });
+    between.mockImplementation(
+      (
+        _from: number,
+        _to: number,
+        callback: (from: number, to: number) => void,
+      ) => callback(8, 20),
+    );
+    const { editor, view } = makeBatchFoldingEditor(5);
+
+    editor.fold(0);
+    editor.unfold(0);
+
+    expect(view.scrollSnapshot).not.toHaveBeenCalled();
   });
 });

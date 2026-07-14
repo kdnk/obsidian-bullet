@@ -14,6 +14,11 @@ export interface MyEditorPosition {
   ch: number;
 }
 
+export interface MyEditorFoldTarget {
+  line: number;
+  fallbackCursor: MyEditorPosition;
+}
+
 export interface MyEditorRange {
   from: MyEditorPosition;
   to: MyEditorPosition;
@@ -192,6 +197,52 @@ export class MyEditor {
     }
 
     view.dispatch({ effects });
+  }
+
+  setFoldedPreservingScroll(
+    targets: readonly MyEditorFoldTarget[],
+    folded: boolean,
+  ): boolean {
+    const { view } = this;
+    const resolved = targets.flatMap((target) => {
+      const line = view.lineBlockAt(view.state.doc.line(target.line + 1).from);
+      const range = folded
+        ? foldable(view.state, line.from, line.to)
+        : foldInside(view, line.from, line.to);
+
+      return range && range.from !== range.to ? [{ range, target }] : [];
+    });
+
+    if (resolved.length === 0) {
+      return false;
+    }
+
+    const effects = [
+      view.scrollSnapshot(),
+      ...resolved.map(({ range }) =>
+        (folded ? foldEffect : unfoldEffect).of(range),
+      ),
+    ];
+    const selectionHead = view.state.selection.main.head;
+    const selectedTarget = folded
+      ? resolved.find(
+          ({ range }) => range.from < selectionHead && selectionHead < range.to,
+        )
+      : undefined;
+
+    if (selectedTarget) {
+      const fallbackOffset = this.posToDocOffset(
+        selectedTarget.target.fallbackCursor,
+      );
+      view.dispatch({
+        selection: { anchor: fallbackOffset, head: fallbackOffset },
+        effects,
+      });
+    } else {
+      view.dispatch({ effects });
+    }
+
+    return true;
   }
 
   unfold(n: number): void {
