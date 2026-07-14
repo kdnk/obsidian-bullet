@@ -12,6 +12,7 @@ import {
 } from "../../__mocks__";
 import { Parser } from "../../services/Parser";
 import {
+  VERTICAL_GUIDE_SCROLL_PAST_END_EXTENSION,
   VerticalLines,
   VerticalLinesPluginValue,
   collectVerticalGuideGroup,
@@ -121,13 +122,14 @@ function makePlugin() {
       eventHandlers.set(eventName, handlers);
       return { eventName, handler };
     }),
+    updateOptions: jest.fn(),
   };
 
   return {
     eventHandlers,
     plugin: {
       app: { workspace },
-      registerEditorExtension: jest.fn(),
+      registerEditorExtension: jest.fn<void, [unknown]>(),
       registerEvent: jest.fn(),
     },
     workspace,
@@ -306,6 +308,66 @@ describe("VerticalLines", () => {
       ),
     ).toBe(false);
     expect(settings.removeCallback).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  test("reserves scroll-past-end space only while guide folding is enabled", async () => {
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: makeDocument(),
+    });
+    const { plugin, workspace } = makePlugin();
+    const settingsCallbacks: Array<() => void> = [];
+    const settings = {
+      verticalLines: true,
+      verticalLinesAction: "toggle-folding",
+      onChange: jest.fn((callback: () => void) => {
+        settingsCallbacks.push(callback);
+      }),
+      removeCallback: jest.fn(),
+    };
+    const feature = new VerticalLines(
+      plugin as never,
+      settings as never,
+      {} as never,
+    );
+
+    await feature.load();
+
+    const registeredExtensions = plugin.registerEditorExtension.mock
+      .calls[0]?.[0] as unknown[];
+    expect(registeredExtensions).toContain(
+      VERTICAL_GUIDE_SCROLL_PAST_END_EXTENSION,
+    );
+    expect(workspace.updateOptions).not.toHaveBeenCalled();
+
+    const settingsCallback = settingsCallbacks[0];
+    if (!settingsCallback) {
+      throw new Error("Expected settings callback to be registered");
+    }
+
+    settings.verticalLinesAction = "none";
+    settingsCallback();
+
+    expect(registeredExtensions).not.toContain(
+      VERTICAL_GUIDE_SCROLL_PAST_END_EXTENSION,
+    );
+    expect(workspace.updateOptions).toHaveBeenCalledTimes(1);
+
+    settings.verticalLinesAction = "toggle-folding";
+    settingsCallback();
+
+    expect(registeredExtensions).toContain(
+      VERTICAL_GUIDE_SCROLL_PAST_END_EXTENSION,
+    );
+    expect(workspace.updateOptions).toHaveBeenCalledTimes(2);
+
+    settings.verticalLines = false;
+    settingsCallback();
+
+    expect(registeredExtensions).not.toContain(
+      VERTICAL_GUIDE_SCROLL_PAST_END_EXTENSION,
+    );
+    expect(workspace.updateOptions).toHaveBeenCalledTimes(3);
   });
 
   test("exposes plugin value decorations through the view plugin", async () => {

@@ -69,6 +69,31 @@ function foldInside(view: EditorView, from: number, to: number) {
   return found;
 }
 
+function stableScrollSnapshot(view: EditorView) {
+  const snapshot = view.scrollSnapshot();
+  const value: unknown = snapshot.value;
+  // CodeMirror stores the precise snapshot offset in this mutable margin.
+  // Snap it once so scrollTop rounding cannot accumulate across fold cycles.
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("yMargin" in value) ||
+    typeof value.yMargin !== "number" ||
+    !Number.isFinite(value.yMargin)
+  ) {
+    return snapshot;
+  }
+
+  const window = view.dom.ownerDocument.defaultView;
+  const devicePixelRatio = window?.devicePixelRatio ?? 1;
+  const pixelScale =
+    Number.isFinite(devicePixelRatio) && devicePixelRatio > 0
+      ? devicePixelRatio
+      : 1;
+  value.yMargin = Math.round(value.yMargin * pixelScale) / pixelScale;
+  return snapshot;
+}
+
 export class MyEditor {
   private view: EditorView;
 
@@ -218,7 +243,7 @@ export class MyEditor {
     }
 
     const effects = [
-      view.scrollSnapshot(),
+      stableScrollSnapshot(view),
       ...resolved.map(({ range }) =>
         (folded ? foldEffect : unfoldEffect).of(range),
       ),

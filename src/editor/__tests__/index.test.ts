@@ -121,12 +121,18 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
   const mockedUnfoldEffectOf = jest.mocked(unfoldEffect.of);
   const between = jest.fn();
 
-  function makeBatchFoldingEditor(selectionHead: number) {
+  function makeBatchFoldingEditor(selectionHead: number, devicePixelRatio = 1) {
     const lines = [
       { from: 0, to: 8 },
       { from: 21, to: 29 },
     ];
+    const scrollSnapshot = { value: { yMargin: -12.875 } };
     const view = {
+      dom: {
+        ownerDocument: {
+          defaultView: { devicePixelRatio },
+        },
+      },
       state: {
         doc: {
           line: jest.fn((number: number) => lines[number - 1]),
@@ -136,12 +142,12 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
       lineBlockAt: jest.fn((from: number) =>
         from === lines[0].from ? lines[0] : lines[1],
       ),
-      scrollSnapshot: jest.fn().mockReturnValue("scroll-snapshot"),
+      scrollSnapshot: jest.fn().mockReturnValue(scrollSnapshot),
       dispatch: jest.fn(),
     };
     const editor = new MyEditor({ cm: view } as never);
 
-    return { editor, view };
+    return { editor, scrollSnapshot, view };
   }
 
   beforeEach(() => {
@@ -159,7 +165,7 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
     mockedFoldEffectOf
       .mockReturnValueOnce("fold-8" as never)
       .mockReturnValueOnce("fold-29" as never);
-    const { editor, view } = makeBatchFoldingEditor(32);
+    const { editor, scrollSnapshot, view } = makeBatchFoldingEditor(32);
 
     expect(
       editor.setFoldedPreservingScroll(
@@ -174,8 +180,9 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
     expect(view.scrollSnapshot).toHaveBeenCalledTimes(1);
     expect(view.dispatch).toHaveBeenCalledWith({
       selection: { anchor: 23, head: 23 },
-      effects: ["scroll-snapshot", "fold-8", "fold-29"],
+      effects: [scrollSnapshot, "fold-8", "fold-29"],
     });
+    expect(scrollSnapshot.value.yMargin).toBe(-13);
     expect(view.dispatch).toHaveBeenCalledTimes(1);
   });
 
@@ -186,7 +193,7 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
     mockedFoldEffectOf
       .mockReturnValueOnce("fold-8" as never)
       .mockReturnValueOnce("fold-29" as never);
-    const { editor, view } = makeBatchFoldingEditor(5);
+    const { editor, scrollSnapshot, view } = makeBatchFoldingEditor(5);
 
     editor.setFoldedPreservingScroll(
       [
@@ -197,7 +204,7 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
     );
 
     expect(view.dispatch).toHaveBeenCalledWith({
-      effects: ["scroll-snapshot", "fold-8", "fold-29"],
+      effects: [scrollSnapshot, "fold-8", "fold-29"],
     });
   });
 
@@ -215,7 +222,7 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
     mockedUnfoldEffectOf
       .mockReturnValueOnce("unfold-8" as never)
       .mockReturnValueOnce("unfold-29" as never);
-    const { editor, view } = makeBatchFoldingEditor(5);
+    const { editor, scrollSnapshot, view } = makeBatchFoldingEditor(5);
 
     expect(
       editor.setFoldedPreservingScroll(
@@ -229,7 +236,7 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
 
     expect(view.scrollSnapshot).toHaveBeenCalledTimes(1);
     expect(view.dispatch).toHaveBeenCalledWith({
-      effects: ["scroll-snapshot", "unfold-8", "unfold-29"],
+      effects: [scrollSnapshot, "unfold-8", "unfold-29"],
     });
     expect(view.dispatch).toHaveBeenCalledTimes(1);
   });
@@ -247,6 +254,20 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
 
     expect(view.scrollSnapshot).not.toHaveBeenCalled();
     expect(view.dispatch).not.toHaveBeenCalled();
+  });
+
+  test("snaps the scroll margin to the physical-pixel grid", () => {
+    mockedFoldable.mockReturnValue({ from: 8, to: 20 });
+    mockedFoldEffectOf.mockReturnValue("fold-8" as never);
+    const { editor, scrollSnapshot } = makeBatchFoldingEditor(5, 2);
+    scrollSnapshot.value.yMargin = -12.74;
+
+    editor.setFoldedPreservingScroll(
+      [{ line: 0, fallbackCursor: { line: 0, ch: 2 } }],
+      true,
+    );
+
+    expect(scrollSnapshot.value.yMargin).toBe(-12.5);
   });
 
   test("keeps single-line fold and unfold free of scroll snapshots", () => {

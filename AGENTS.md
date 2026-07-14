@@ -31,6 +31,8 @@
     - 縦線クリックでは、線が表す親リスト自体を閉じず、その直下の非空 child を一括で開閉してください。1 つでも開いた child があれば全 child を閉じ、すべて閉じていれば全 child を開きます。直下の leaf は表示したままにしてください。
     - CodeMirror は、新しい selection head が fold 範囲内に入ると、その fold を自動解除します。縦線クリックで selection を含む child を閉じる場合は、安全な selection への退避と `foldEffect` を同一トランザクションで dispatch してください。遅延した再 fold やイベント順依存の回避策は使わないでください。
     - 縦線クリック1回で複数branchを開閉するときは、開閉前の `EditorView.scrollSnapshot()`、全 `foldEffect` または `unfoldEffect`、必要なselection退避を1個のtransactionへまとめてください。branchごとのdispatch、手動の `scrollTop` 復元、遅延したscroll補正を使わず、viewport上側をanchorとして維持してください。native chevronと通常のfolding commandにはこの縦線専用処理を適用しないでください。
+    - document末尾ではfold後の高さが減ると `scrollSnapshot()` だけでは最大 `scrollTop` へclampされます。縦線のtoggle actionが有効な間だけCodeMirror標準の `scrollPastEnd()` をmutable editor-extension配列へ追加し、設定変更時に `Workspace.updateOptions()` で反映してください。独自paddingや手動scroll補正は追加しないでください。
+    - fold前後のheight差がsub-pixelの場合、`scrollSnapshot()` の `yMargin` をそのまま繰り返すとscroll elementの丸め誤差が累積します。snapshot effectを同じtransactionへ入れる前に、marginを `devicePixelRatio` に対応する物理pixel gridへ正規化してください。開閉中に1物理pixel未満の差が出ても、往復後に元位置へ戻り、誤差が蓄積しないことを長いリストで確認してください。
     - `.cm-indent::before` は Obsidian / CodeMirror が配置・仮想化・スクロールする描画源です。独立したスクロール overlay や座標 cache を再導入せず、描画の実確認が必要な変更では `npm run build-with-tests` 後に実 Obsidian の長い多段リストで上端と下端を確認してください。
     - outer guide は document chunk の開始・終了行を key とする CodeMirror widget decoration として各行へ配置してください。空行・空白だけの行・見出しで chunk を分割し、同じ chunk id の表示中 segment だけを一括 hover / toggle の対象にしてください。独立 overlay、screen 座標測定、座標 cache は追加しないでください。
 - エージェント向けのローカル指示について

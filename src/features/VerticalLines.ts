@@ -1,5 +1,6 @@
 import { Plugin } from "obsidian";
 
+import { Extension } from "@codemirror/state";
 import {
   Decoration,
   DecorationSet,
@@ -7,6 +8,7 @@ import {
   PluginValue,
   ViewPlugin,
   ViewUpdate,
+  scrollPastEnd,
 } from "@codemirror/view";
 
 import { DocumentBodyClass } from "./DocumentBodyClass";
@@ -44,6 +46,8 @@ const RENDERED_GUIDE_CANDIDATE_SELECTOR =
   ".cm-hmd-list-indent > .cm-indent, " +
   ".cm-hmd-list-indent > .cm-indent-spacing";
 const CHUNK_LINE_ATTRIBUTE_RE = /^(0|[1-9]\d*)$/;
+
+export const VERTICAL_GUIDE_SCROLL_PAST_END_EXTENSION = scrollPastEnd();
 
 type HoverMeasurement = {
   indentGuides: Element[];
@@ -506,6 +510,7 @@ function isElementLike(value: EventTarget | null): value is Element {
 export class VerticalLines implements Feature {
   private bodyClass: DocumentBodyClass;
   private actionBodyClass: DocumentBodyClass;
+  private editorExtensions: Extension[] = [];
 
   constructor(
     private plugin: Plugin,
@@ -525,17 +530,19 @@ export class VerticalLines implements Feature {
   }
 
   async load() {
-    this.settings.onChange(this.updateBodyClasses);
-    this.bodyClass.load();
-    this.actionBodyClass.load();
-
-    this.plugin.registerEditorExtension(
+    this.editorExtensions = [
       ViewPlugin.define(
         (view) =>
           new VerticalLinesPluginValue(this.settings, this.parser, view),
         { decorations: (value) => value.decorations },
       ),
-    );
+    ];
+    this.synchronizeScrollPastEndExtension(false);
+    this.plugin.registerEditorExtension(this.editorExtensions);
+
+    this.settings.onChange(this.updateBodyClasses);
+    this.bodyClass.load();
+    this.actionBodyClass.load();
   }
 
   async unload() {
@@ -547,7 +554,29 @@ export class VerticalLines implements Feature {
   private updateBodyClasses = () => {
     this.bodyClass.update();
     this.actionBodyClass.update();
+    this.synchronizeScrollPastEndExtension(true);
   };
+
+  private synchronizeScrollPastEndExtension(updateViews: boolean) {
+    const extensionIndex = this.editorExtensions.indexOf(
+      VERTICAL_GUIDE_SCROLL_PAST_END_EXTENSION,
+    );
+    const enabled = extensionIndex !== -1;
+    const shouldEnable = this.shouldApplyActionBodyClass();
+    if (enabled === shouldEnable) {
+      return;
+    }
+
+    if (shouldEnable) {
+      this.editorExtensions.push(VERTICAL_GUIDE_SCROLL_PAST_END_EXTENSION);
+    } else {
+      this.editorExtensions.splice(extensionIndex, 1);
+    }
+
+    if (updateViews) {
+      this.plugin.app.workspace.updateOptions();
+    }
+  }
 
   private shouldApplyBodyClass = () => {
     return this.settings.verticalLines;
