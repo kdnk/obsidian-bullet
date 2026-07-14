@@ -1,11 +1,81 @@
+import { Text } from "@codemirror/state";
+
 import { makeEditor, makeLogger, makeSettings } from "../../__mocks__";
 import { Parser } from "../../services/Parser";
 import {
+  OuterListGuideWidget,
+  buildOuterListGuideDecorations,
   collectOuterListChunks,
   toggleOuterListChunk,
 } from "../OuterListGuide";
 
 const parser = new Parser(makeLogger(), makeSettings());
+
+describe("OuterListGuideWidget", () => {
+  test("renders a zero-content widget with chunk metadata", () => {
+    const classes = new Set<string>();
+    const element = {
+      set className(value: string) {
+        classes.clear();
+        value.split(/\s+/).forEach((className) => classes.add(className));
+      },
+      classList: {
+        contains: (className: string) => classes.has(className),
+      },
+      dataset: {} as Record<string, string>,
+      setAttribute: jest.fn(),
+    };
+    const createElement = jest.fn(() => element);
+    const widget = new OuterListGuideWidget({
+      id: "0:4",
+      startLine: 0,
+      endLine: 4,
+      actionable: true,
+    });
+
+    const rendered = widget.toDOM({
+      dom: { ownerDocument: { createElement } },
+    } as never);
+
+    expect(createElement).toHaveBeenCalledWith("span");
+    expect(rendered.classList.contains("bullet-plugin-outer-list-guide")).toBe(
+      true,
+    );
+    expect(rendered.dataset.chunkId).toBe("0:4");
+    expect(rendered.dataset.actionable).toBe("true");
+    expect(widget.ignoreEvent()).toBe(false);
+  });
+});
+
+test("builds one widget at every line start in parsed chunks", () => {
+  const lines = [
+    "- parent",
+    "    continuation",
+    "    - child",
+    "",
+    "# Heading",
+    "- sibling",
+  ];
+  const text = lines.join("\n");
+  const doc = Text.of(lines);
+  const chunks = collectOuterListChunks(
+    parser,
+    makeEditor({ text, cursor: { line: 0, ch: 0 } }),
+  );
+
+  const decorations = buildOuterListGuideDecorations(doc, chunks);
+  const positions: number[] = [];
+  for (let cursor = decorations.iter(); cursor.value; cursor.next()) {
+    positions.push(cursor.from);
+  }
+
+  expect(positions).toEqual([
+    doc.line(1).from,
+    doc.line(2).from,
+    doc.line(3).from,
+    doc.line(6).from,
+  ]);
+});
 
 test.each([
   [

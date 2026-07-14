@@ -1,7 +1,16 @@
+import { Text } from "@codemirror/state";
+import { Decoration, DecorationSet, ViewPlugin } from "@codemirror/view";
+
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { makeEditor, makeRoot } from "../../__mocks__";
+import {
+  makeEditor,
+  makeLogger,
+  makeRoot,
+  makeSettings,
+} from "../../__mocks__";
+import { Parser } from "../../services/Parser";
 import {
   VerticalLines,
   VerticalLinesPluginValue,
@@ -297,6 +306,158 @@ describe("VerticalLines", () => {
       ),
     ).toBe(false);
     expect(settings.removeCallback).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  test("exposes plugin value decorations through the view plugin", async () => {
+    const { plugin } = makePlugin();
+    const settings = {
+      verticalLines: true,
+      outerVerticalLines: true,
+      verticalLinesAction: "none",
+      onChange: jest.fn(),
+      removeCallback: jest.fn(),
+    };
+    const viewPluginApi = ViewPlugin as unknown as {
+      define: (...args: unknown[]) => unknown;
+    };
+    const define = jest.spyOn(viewPluginApi, "define");
+    const feature = new VerticalLines(
+      plugin as never,
+      settings as never,
+      {} as never,
+    );
+
+    await feature.load();
+
+    const lastCall = define.mock.calls[define.mock.calls.length - 1];
+    const spec = lastCall?.[1] as
+      | {
+          decorations?: (value: {
+            decorations: DecorationSet;
+          }) => DecorationSet;
+        }
+      | undefined;
+    define.mockRestore();
+    const decorations = Decoration.none;
+    expect(spec?.decorations?.({ decorations })).toBe(decorations);
+  });
+});
+
+describe("VerticalLinesPluginValue decorations", () => {
+  function positions(decorations: ReturnType<typeof Decoration.set>) {
+    const result: number[] = [];
+    for (let cursor = decorations.iter(); cursor.value; cursor.next()) {
+      result.push(cursor.from);
+    }
+    return result;
+  }
+
+  function makeFixture(
+    text: string,
+    visibility: { verticalLines: boolean; outerVerticalLines: boolean } = {
+      verticalLines: true,
+      outerVerticalLines: true,
+    },
+  ) {
+    const settingsCallbacks: Array<() => void> = [];
+    const settings = {
+      ...visibility,
+      verticalLinesAction: "none",
+      onChange: jest.fn((callback: () => void) => {
+        settingsCallbacks.push(callback);
+      }),
+      removeCallback: jest.fn(),
+    };
+    const contentDOM = {
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      querySelector: jest.fn().mockReturnValue(null),
+      querySelectorAll: jest.fn().mockReturnValue([]),
+    };
+    const view = {
+      state: { doc: Text.of(text.split("\n")) },
+      contentDOM,
+      dispatch: jest.fn(),
+      requestMeasure: jest.fn(),
+    };
+    const parser = new Parser(makeLogger(), makeSettings());
+    let editor = makeEditor({ text, cursor: { line: 0, ch: 0 } });
+    mockGetEditorFromState.mockImplementation(() => editor);
+    const PluginValueWithView = VerticalLinesPluginValue as unknown as new (
+      settings: unknown,
+      parser: unknown,
+      view: unknown,
+    ) => {
+      decorations: ReturnType<typeof Decoration.set>;
+      destroy(): void;
+      update(update: unknown): void;
+    };
+    const pluginValue = new PluginValueWithView(settings, parser, view);
+
+    return {
+      pluginValue,
+      settings,
+      settingsCallback: settingsCallbacks[0],
+      view,
+      replaceText(nextText: string) {
+        editor = makeEditor({ text: nextText, cursor: { line: 0, ch: 0 } });
+        view.state.doc = Text.of(nextText.split("\n"));
+      },
+    };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test("builds outer decorations on construction when both settings are visible", () => {
+    const fixture = makeFixture("- parent\n    - child");
+
+    expect(positions(fixture.pluginValue.decorations)).toEqual([0, 9]);
+    fixture.pluginValue.destroy();
+  });
+
+  test.each([
+    { verticalLines: false, outerVerticalLines: true },
+    { verticalLines: true, outerVerticalLines: false },
+  ])("builds no outer decorations when visibility is %o", (visibility) => {
+    const fixture = makeFixture("- parent\n    - child", visibility);
+
+    expect(fixture.pluginValue.decorations).toBe(Decoration.none);
+    fixture.pluginValue.destroy();
+  });
+
+  test("rebuilds outer decorations at new line positions after a document change", () => {
+    const fixture = makeFixture("- parent\n    - child");
+    fixture.replaceText("# Heading\n- parent\n    - child");
+
+    fixture.pluginValue.update({ docChanged: true });
+
+    expect(positions(fixture.pluginValue.decorations)).toEqual([10, 19]);
+    fixture.pluginValue.destroy();
+  });
+
+  test("refreshes decorations only when an outer visibility setting changes", () => {
+    const fixture = makeFixture("- parent\n    - child");
+    if (!fixture.settingsCallback) {
+      throw new Error("Expected settings callback to be registered");
+    }
+
+    fixture.settings.outerVerticalLines = false;
+    fixture.settingsCallback();
+
+    expect(fixture.pluginValue.decorations).toBe(Decoration.none);
+    expect(fixture.view.dispatch).toHaveBeenLastCalledWith({});
+
+    fixture.settings.verticalLinesAction = "toggle-folding";
+    fixture.settingsCallback();
+    expect(fixture.view.dispatch).toHaveBeenCalledTimes(1);
+
+    fixture.settings.outerVerticalLines = true;
+    fixture.settingsCallback();
+    expect(positions(fixture.pluginValue.decorations)).toEqual([0, 9]);
+    expect(fixture.view.dispatch).toHaveBeenCalledTimes(2);
+    fixture.pluginValue.destroy();
   });
 });
 
@@ -1201,6 +1362,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     }> = [];
     const view = {
       contentDOM,
+      dispatch: jest.fn(),
       requestMeasure: jest.fn(
         (request: {
           key?: unknown;

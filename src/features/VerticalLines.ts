@@ -1,9 +1,20 @@
 import { Plugin } from "obsidian";
 
-import { EditorView, PluginValue, ViewPlugin } from "@codemirror/view";
+import {
+  Decoration,
+  DecorationSet,
+  EditorView,
+  PluginValue,
+  ViewPlugin,
+  ViewUpdate,
+} from "@codemirror/view";
 
 import { DocumentBodyClass } from "./DocumentBodyClass";
 import { Feature } from "./Feature";
+import {
+  buildOuterListGuideDecorations,
+  collectOuterListChunks,
+} from "./OuterListGuide";
 
 import { MyEditor, getEditorFromState } from "../editor";
 import { List, Root } from "../root";
@@ -148,7 +159,10 @@ export function toggleVerticalGuideTarget(
 }
 
 export class VerticalLinesPluginValue implements PluginValue {
+  decorations: DecorationSet;
+
   private destroyed = false;
+  private lastOuterVisibility: [boolean, boolean];
   private lastPointerGuide: Element | null = null;
   private measureKey = {};
 
@@ -157,6 +171,8 @@ export class VerticalLinesPluginValue implements PluginValue {
     private parser: Parser,
     private view: EditorView,
   ) {
+    this.lastOuterVisibility = this.outerVisibility();
+    this.decorations = this.buildOuterDecorations();
     this.view.contentDOM.addEventListener("mousedown", this.onMouseDown, true);
     this.view.contentDOM.addEventListener(
       "pointermove",
@@ -172,7 +188,10 @@ export class VerticalLinesPluginValue implements PluginValue {
     this.scheduleGuideSynchronization();
   }
 
-  update() {
+  update(update: ViewUpdate) {
+    if (update.docChanged) {
+      this.decorations = this.buildOuterDecorations();
+    }
     this.scheduleGuideSynchronization();
   }
 
@@ -330,12 +349,39 @@ export class VerticalLinesPluginValue implements PluginValue {
   };
 
   private onSettingsChange = () => {
+    const outerVisibility = this.outerVisibility();
+    if (
+      outerVisibility[0] !== this.lastOuterVisibility[0] ||
+      outerVisibility[1] !== this.lastOuterVisibility[1]
+    ) {
+      this.lastOuterVisibility = outerVisibility;
+      this.decorations = this.buildOuterDecorations();
+      this.view.dispatch({});
+    }
     if (!this.interactionEnabled()) {
       this.lastPointerGuide = null;
       synchronizeHoveredIndentGuides(this.view.contentDOM, []);
     }
     this.scheduleGuideSynchronization();
   };
+
+  private outerVisibility(): [boolean, boolean] {
+    return [this.settings.verticalLines, this.settings.outerVerticalLines];
+  }
+
+  private buildOuterDecorations() {
+    if (!this.settings.verticalLines || !this.settings.outerVerticalLines) {
+      return Decoration.none;
+    }
+    const editor = getEditorFromState(this.view.state);
+    if (!editor) {
+      return Decoration.none;
+    }
+    return buildOuterListGuideDecorations(
+      this.view.state.doc,
+      collectOuterListChunks(this.parser, editor),
+    );
+  }
 
   private scheduleGuideSynchronization() {
     if (this.destroyed) {
@@ -405,6 +451,7 @@ export class VerticalLines implements Feature {
       ViewPlugin.define(
         (view) =>
           new VerticalLinesPluginValue(this.settings, this.parser, view),
+        { decorations: (value) => value.decorations },
       ),
     );
   }
