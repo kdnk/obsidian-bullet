@@ -72,6 +72,7 @@ function foldInside(view: EditorView, from: number, to: number) {
 function stableScrollSnapshot(view: EditorView) {
   const snapshot = view.scrollSnapshot();
   const value: unknown = snapshot.value;
+  correctScrollSnapshotAnchor(view, value);
   // CodeMirror stores the precise snapshot offset in this mutable margin.
   // Snap it once so scrollTop rounding cannot accumulate across fold cycles.
   if (
@@ -92,6 +93,59 @@ function stableScrollSnapshot(view: EditorView) {
       : 1;
   value.yMargin = Math.round(value.yMargin * pixelScale) / pixelScale;
   return snapshot;
+}
+
+function correctScrollSnapshotAnchor(view: EditorView, value: unknown): void {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("range" in value) ||
+    !("yMargin" in value) ||
+    typeof value.yMargin !== "number"
+  ) {
+    return;
+  }
+
+  const scaleY = view.scaleY;
+  const scrollTop = view.scrollDOM.scrollTop;
+  const scrollViewportTop = view.scrollDOM.getBoundingClientRect().top;
+  const documentTop = view.documentTop;
+  if (
+    !Number.isFinite(scaleY) ||
+    scaleY <= 0 ||
+    !Number.isFinite(scrollTop) ||
+    !Number.isFinite(scrollViewportTop) ||
+    !Number.isFinite(documentTop)
+  ) {
+    return;
+  }
+
+  const viewportDocumentTop = (scrollViewportTop - documentTop) / scaleY;
+  const anchor = view.lineBlockAtHeight(
+    Math.max(0, viewportDocumentTop + 8 / scaleY),
+  );
+  if (!Number.isFinite(anchor.from) || !Number.isFinite(anchor.top)) {
+    return;
+  }
+
+  value.range = EditorSelection.cursor(anchor.from);
+  value.yMargin = anchor.top - scrollTop;
+}
+
+function ensureScrollPastEndReserve(view: EditorView): void {
+  const expected =
+    view.scrollDOM.clientHeight -
+    view.defaultLineHeight -
+    view.documentPadding.top -
+    0.5;
+  const current = Number.parseFloat(view.contentDOM.style.paddingBottom);
+  if (
+    Number.isFinite(expected) &&
+    expected >= 0 &&
+    (!Number.isFinite(current) || current < expected)
+  ) {
+    view.contentDOM.style.paddingBottom = `${expected}px`;
+  }
 }
 
 export class MyEditor {
@@ -242,6 +296,7 @@ export class MyEditor {
       return false;
     }
 
+    ensureScrollPastEndReserve(view);
     const effects = [
       stableScrollSnapshot(view),
       ...resolved.map(({ range }) =>

@@ -4,6 +4,7 @@ import {
   foldedRanges,
   unfoldEffect,
 } from "@codemirror/language";
+import { EditorSelection } from "@codemirror/state";
 
 import { MyEditor, getEditorFromState, getFoldedLinesFromState } from "..";
 
@@ -126,12 +127,27 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
       { from: 0, to: 8 },
       { from: 21, to: 29 },
     ];
-    const scrollSnapshot = { value: { yMargin: -12.875 } };
+    const scrollSnapshot = {
+      value: {
+        range: EditorSelection.cursor(0),
+        yMargin: -12.875,
+      },
+    };
     const view = {
+      contentDOM: { style: { paddingBottom: "1138.5px" } },
+      defaultLineHeight: 24,
+      documentPadding: { top: 0, bottom: 0 },
+      documentTop: 0,
       dom: {
         ownerDocument: {
           defaultView: { devicePixelRatio },
         },
+      },
+      scaleY: 1,
+      scrollDOM: {
+        clientHeight: 1163,
+        scrollTop: 100,
+        getBoundingClientRect: jest.fn(() => ({ top: 50 })),
       },
       state: {
         doc: {
@@ -142,12 +158,24 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
       lineBlockAt: jest.fn((from: number) =>
         from === lines[0].from ? lines[0] : lines[1],
       ),
+      lineBlockAtHeight: jest.fn(() => ({ from: 0, top: 87.125 })),
       scrollSnapshot: jest.fn().mockReturnValue(scrollSnapshot),
       dispatch: jest.fn(),
     };
     const editor = new MyEditor({ cm: view } as never);
 
     return { editor, scrollSnapshot, view };
+  }
+
+  function setPaddingBottom(
+    view: ReturnType<typeof makeBatchFoldingEditor>["view"],
+    value: string,
+  ) {
+    Object.defineProperty(view.contentDOM.style, "paddingBottom", {
+      configurable: true,
+      value,
+      writable: true,
+    });
   }
 
   beforeEach(() => {
@@ -244,6 +272,7 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
   test("does not snapshot or dispatch when no target has a range", () => {
     mockedFoldable.mockReturnValue(null);
     const { editor, view } = makeBatchFoldingEditor(5);
+    setPaddingBottom(view, "100px");
 
     expect(
       editor.setFoldedPreservingScroll(
@@ -254,12 +283,83 @@ describe("MyEditor.setFoldedPreservingScroll", () => {
 
     expect(view.scrollSnapshot).not.toHaveBeenCalled();
     expect(view.dispatch).not.toHaveBeenCalled();
+    expect(view.contentDOM.style.paddingBottom).toBe("100px");
+  });
+
+  test("anchors the snapshot to the visible document below properties", () => {
+    mockedFoldable.mockReturnValue({ from: 8, to: 20 });
+    mockedFoldEffectOf.mockReturnValue("fold-8" as never);
+    const { editor, scrollSnapshot, view } = makeBatchFoldingEditor(5);
+    view.documentTop = -537.5625;
+    view.scrollDOM.scrollTop = 1400;
+    view.scrollDOM.getBoundingClientRect.mockReturnValue({ top: 78.75 });
+    view.lineBlockAtHeight.mockReturnValue({ from: 848, top: 614.34375 });
+    scrollSnapshot.value.range = EditorSelection.cursor(1570);
+    scrollSnapshot.value.yMargin = -17.34375;
+
+    editor.setFoldedPreservingScroll(
+      [{ line: 0, fallbackCursor: { line: 0, ch: 2 } }],
+      true,
+    );
+
+    expect(view.lineBlockAtHeight).toHaveBeenCalledWith(624.3125);
+    expect(scrollSnapshot.value.range.from).toBe(848);
+    expect(scrollSnapshot.value.range.to).toBe(848);
+    expect(scrollSnapshot.value.yMargin).toBe(-786);
+  });
+
+  test("falls back to the native snapshot when viewport geometry is invalid", () => {
+    mockedFoldable.mockReturnValue({ from: 8, to: 20 });
+    mockedFoldEffectOf.mockReturnValue("fold-8" as never);
+    const { editor, scrollSnapshot, view } = makeBatchFoldingEditor(5);
+    view.scaleY = 0;
+    scrollSnapshot.value.range = EditorSelection.cursor(1570);
+    scrollSnapshot.value.yMargin = -17.34375;
+
+    editor.setFoldedPreservingScroll(
+      [{ line: 0, fallbackCursor: { line: 0, ch: 2 } }],
+      true,
+    );
+
+    expect(view.lineBlockAtHeight).not.toHaveBeenCalled();
+    expect(scrollSnapshot.value.range.from).toBe(1570);
+    expect(scrollSnapshot.value.yMargin).toBe(-17);
+  });
+
+  test("restores the standard scroll reserve before folding", () => {
+    mockedFoldable.mockReturnValue({ from: 8, to: 20 });
+    mockedFoldEffectOf.mockReturnValue("fold-8" as never);
+    const { editor, view } = makeBatchFoldingEditor(5);
+    setPaddingBottom(view, "100px");
+
+    editor.setFoldedPreservingScroll(
+      [{ line: 0, fallbackCursor: { line: 0, ch: 2 } }],
+      true,
+    );
+
+    expect(view.contentDOM.style.paddingBottom).toBe("1138.5px");
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  test("keeps a scroll reserve that already exceeds the standard value", () => {
+    mockedFoldable.mockReturnValue({ from: 8, to: 20 });
+    mockedFoldEffectOf.mockReturnValue("fold-8" as never);
+    const { editor, view } = makeBatchFoldingEditor(5);
+    setPaddingBottom(view, "1200px");
+
+    editor.setFoldedPreservingScroll(
+      [{ line: 0, fallbackCursor: { line: 0, ch: 2 } }],
+      true,
+    );
+
+    expect(view.contentDOM.style.paddingBottom).toBe("1200px");
   });
 
   test("snaps the scroll margin to the physical-pixel grid", () => {
     mockedFoldable.mockReturnValue({ from: 8, to: 20 });
     mockedFoldEffectOf.mockReturnValue("fold-8" as never);
-    const { editor, scrollSnapshot } = makeBatchFoldingEditor(5, 2);
+    const { editor, scrollSnapshot, view } = makeBatchFoldingEditor(5, 2);
+    view.scaleY = 0;
     scrollSnapshot.value.yMargin = -12.74;
 
     editor.setFoldedPreservingScroll(
