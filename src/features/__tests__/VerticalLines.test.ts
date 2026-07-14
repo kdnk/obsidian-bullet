@@ -1450,6 +1450,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
         guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
       ),
     ).toBe(false);
+    // Detached replacements are outside contentDOM, so scoped cleanup cannot reach them.
     expect(
       oldGuides
         .slice(0, 2)
@@ -1847,13 +1848,11 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       parser: unknown,
       view: unknown,
     ) => unknown;
+    const root = makeRoot({ editor: sourceEditor });
+    const parseRange = jest.fn().mockReturnValue([root]);
     new PluginValueWithView(
       settings,
-      {
-        parseRange: jest
-          .fn()
-          .mockReturnValue([makeRoot({ editor: sourceEditor })]),
-      },
+      { parseRange },
       {
         contentDOM,
         state: { doc: Text.of(["- parent", "    - child"]) },
@@ -1868,22 +1867,71 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     const preventDefault = jest.fn();
 
     listener?.({
-      target: makeOuterGuideTarget(),
+      target: makeOuterGuideTarget({
+        "data-actionable": "true",
+        "data-chunk-start": "0",
+        "data-chunk-end": "1",
+      }),
       preventDefault,
       stopPropagation,
     } as unknown as Event);
+    for (const start of ["0x1", "1e0", "+1", "1.0"]) {
+      listener?.({
+        target: makeOuterGuideTarget({
+          "data-actionable": "true",
+          "data-chunk-start": start,
+          "data-chunk-end": "1",
+        }),
+        preventDefault,
+        stopPropagation,
+      } as unknown as Event);
+    }
     listener?.({
       target: makeOuterGuideTarget({
         "data-actionable": "true",
-        "data-chunk-start": "broken",
+        "data-chunk-start": "1",
         "data-chunk-end": "1",
       }),
       preventDefault,
       stopPropagation,
     } as unknown as Event);
 
+    expect(parseRange).toHaveBeenCalledTimes(2);
+    expect(parseRange).toHaveBeenNthCalledWith(1, editor, 0, 1);
+    expect(parseRange).toHaveBeenNthCalledWith(2, editor, 1, 1);
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(1);
     expect(preventDefault).toHaveBeenCalledTimes(1);
     expect(stopPropagation).toHaveBeenCalledTimes(1);
+  });
+
+  test("does not consume an outer widget when parsing returns multiple roots", () => {
+    const sourceEditor = makeEditor({
+      text: "- parent\n    - child",
+      cursor: { line: 0, ch: 0 },
+    });
+    const root = makeRoot({ editor: sourceEditor });
+    const editor = makeFoldEditor();
+    mockGetEditorFromState.mockReturnValue(editor);
+    const parser = { parseRange: jest.fn().mockReturnValue([root, root]) };
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        outerVerticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      parser,
+    );
+    const { event, preventDefault } = makeEvent(
+      makeOuterGuideTarget({
+        "data-actionable": "true",
+        "data-chunk-start": "0",
+        "data-chunk-end": "1",
+      }),
+    );
+
+    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(editor.foldEnsuringCursorVisible).not.toHaveBeenCalled();
+    expect(preventDefault).not.toHaveBeenCalled();
   });
 
   test("folds the outermost ancestor represented by a native indentation guide", () => {

@@ -43,6 +43,7 @@ const HOVERED_GUIDE_CANDIDATE_SELECTOR =
 const RENDERED_GUIDE_CANDIDATE_SELECTOR =
   ".cm-hmd-list-indent > .cm-indent, " +
   ".cm-hmd-list-indent > .cm-indent-spacing";
+const CHUNK_LINE_ATTRIBUTE_RE = /^(0|[1-9]\d*)$/;
 
 type HoverMeasurement = {
   indentGuides: Element[];
@@ -229,8 +230,8 @@ export class VerticalLinesPluginValue implements PluginValue {
       if (
         startAttribute === null ||
         endAttribute === null ||
-        startAttribute.trim().length === 0 ||
-        endAttribute.trim().length === 0
+        !CHUNK_LINE_ATTRIBUTE_RE.test(startAttribute) ||
+        !CHUNK_LINE_ATTRIBUTE_RE.test(endAttribute)
       ) {
         return false;
       }
@@ -249,8 +250,17 @@ export class VerticalLinesPluginValue implements PluginValue {
       ) {
         return false;
       }
-      const root = this.parser.parseRange(editor, startLine, endLine)[0];
-      if (!root || !toggleOuterListChunk(editor, root)) {
+      const roots = this.parser.parseRange(editor, startLine, endLine);
+      if (roots.length !== 1) {
+        return false;
+      }
+      const root = roots[0];
+      if (
+        !root ||
+        root.getContentStart().line !== startLine ||
+        root.getContentEnd().line !== endLine ||
+        !toggleOuterListChunk(editor, root)
+      ) {
         return false;
       }
       event.preventDefault();
