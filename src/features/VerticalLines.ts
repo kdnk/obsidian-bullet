@@ -18,6 +18,7 @@ import {
   buildOuterListGuideDecorations,
   collectHoveredOuterListGuides,
   collectOuterListChunks,
+  isOuterListChunkActionable,
   synchronizeHoveredOuterListGuides,
   toggleOuterListChunk,
 } from "./OuterListGuide";
@@ -169,6 +170,10 @@ export function toggleVerticalGuideTarget(
   );
 }
 
+function isVerticalGuideTargetActionable(list: List) {
+  return list.getChildren().some((child) => !child.isEmpty());
+}
+
 export class VerticalLinesPluginValue implements PluginValue {
   decorations: DecorationSet;
 
@@ -185,6 +190,7 @@ export class VerticalLinesPluginValue implements PluginValue {
     this.lastOuterVisibility = this.outerVisibility();
     this.decorations = this.buildOuterDecorations();
     this.view.contentDOM.addEventListener("mousedown", this.onMouseDown, true);
+    this.view.contentDOM.addEventListener("click", this.onClick, true);
     this.view.contentDOM.addEventListener(
       "pointermove",
       this.onPointerMove,
@@ -207,6 +213,18 @@ export class VerticalLinesPluginValue implements PluginValue {
   }
 
   handleMouseDown(event: MouseEvent, view: EditorView) {
+    return this.handleGuideInteraction(event, view, false);
+  }
+
+  handleClick(event: MouseEvent, view: EditorView) {
+    return this.handleGuideInteraction(event, view, true);
+  }
+
+  private handleGuideInteraction(
+    event: MouseEvent,
+    view: EditorView,
+    shouldToggle: boolean,
+  ) {
     if (
       !this.settings.verticalLines ||
       this.settings.verticalLinesAction !== "toggle-folding"
@@ -260,7 +278,8 @@ export class VerticalLinesPluginValue implements PluginValue {
         !root ||
         root.getContentStart().line !== startLine ||
         root.getContentEnd().line !== endLine ||
-        !toggleOuterListChunk(editor, root)
+        !isOuterListChunkActionable(root) ||
+        (shouldToggle && !toggleOuterListChunk(editor, root))
       ) {
         return false;
       }
@@ -297,7 +316,11 @@ export class VerticalLinesPluginValue implements PluginValue {
     }
 
     const target = resolveVerticalGuideTarget(list, pressedGuide);
-    if (!target || !toggleVerticalGuideTarget(editor, target)) {
+    if (
+      !target ||
+      !isVerticalGuideTargetActionable(target) ||
+      (shouldToggle && !toggleVerticalGuideTarget(editor, target))
+    ) {
       return false;
     }
 
@@ -312,6 +335,7 @@ export class VerticalLinesPluginValue implements PluginValue {
       this.onMouseDown,
       true,
     );
+    this.view.contentDOM.removeEventListener("click", this.onClick, true);
     this.view.contentDOM.removeEventListener(
       "pointermove",
       this.onPointerMove,
@@ -330,6 +354,12 @@ export class VerticalLinesPluginValue implements PluginValue {
 
   private onMouseDown = (event: MouseEvent) => {
     if (this.handleMouseDown(event, this.view)) {
+      event.stopPropagation();
+    }
+  };
+
+  private onClick = (event: MouseEvent) => {
+    if (this.handleClick(event, this.view)) {
       event.stopPropagation();
     }
   };

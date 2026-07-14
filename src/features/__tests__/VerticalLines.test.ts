@@ -971,7 +971,7 @@ describe("synchronizePersistentIndentGuides", () => {
   });
 });
 
-describe("VerticalLinesPluginValue.handleMouseDown", () => {
+describe("VerticalLinesPluginValue guide interactions", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetEditorFromState.mockReturnValue(null);
@@ -1003,6 +1003,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       parser,
     }) as {
       handleMouseDown(event: MouseEvent, view: unknown): boolean;
+      handleClick(event: MouseEvent, view: unknown): boolean;
     };
   }
 
@@ -1022,7 +1023,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     };
   }
 
-  test("observes mousedown during capture and removes the listener", () => {
+  test("observes mousedown and click during capture and removes both listeners", () => {
     type CapturedListener = (event: Event) => void;
     const addEventListener = jest.fn<
       void,
@@ -1070,6 +1071,11 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       true,
     );
     expect(contentDOM.addEventListener).toHaveBeenCalledWith(
+      "click",
+      expect.any(Function),
+      true,
+    );
+    expect(contentDOM.addEventListener).toHaveBeenCalledWith(
       "pointermove",
       expect.any(Function),
       true,
@@ -1082,6 +1088,9 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     expect(settings.onChange).toHaveBeenCalledWith(expect.any(Function));
     expect(requestMeasure).toHaveBeenCalledTimes(1);
     const listener = addEventListener.mock.calls[0]?.[1];
+    const clickListener = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === "click",
+    )?.[1];
     const pointerMoveListener = addEventListener.mock.calls.find(
       ([eventName]) => eventName === "pointermove",
     )?.[1];
@@ -1095,6 +1104,11 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     expect(contentDOM.removeEventListener).toHaveBeenCalledWith(
       "mousedown",
       listener,
+      true,
+    );
+    expect(contentDOM.removeEventListener).toHaveBeenCalledWith(
+      "click",
+      clickListener,
       true,
     );
     expect(contentDOM.removeEventListener).toHaveBeenCalledWith(
@@ -1792,7 +1806,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     const { event, preventDefault } = makeEvent(target);
     const view = makeView(1);
 
-    expect(pluginValue.handleMouseDown(event, view)).toBe(true);
+    expect(pluginValue.handleClick(event, view)).toBe(true);
     expect(parser.parseRange).toHaveBeenCalledTimes(1);
     expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 2);
     expect(parser.parse).not.toHaveBeenCalled();
@@ -1802,6 +1816,60 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       true,
     );
     expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  test("mousedown suppresses selection without toggling before click", () => {
+    const sourceEditor = makeEditor({
+      text: "- parent\n    - child\n- leaf",
+      cursor: { line: 0, ch: 0 },
+    });
+    const root = makeRoot({ editor: sourceEditor });
+    const editor = makeFoldEditor();
+    mockGetEditorFromState.mockReturnValue(editor);
+    const parser = {
+      parse: jest.fn(),
+      parseRange: jest.fn().mockReturnValue([root]),
+    };
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        outerVerticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      parser,
+    );
+    const { event, preventDefault } = makeEvent(makeOuterGuideTarget());
+
+    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(true);
+    expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 2);
+    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  test("mousedown suppresses selection on a native guide without toggling", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- parent\n    - child\n        - leaf",
+        cursor: { line: 2, ch: 8 },
+      }),
+    });
+    const editor = makeFoldEditor();
+    mockGetEditorFromState.mockReturnValue(editor);
+    const parser = { parse: jest.fn().mockReturnValue(root) };
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      parser,
+    );
+    const { guides } = makeGuideLine(["    ", "    "]);
+    const { event, preventDefault } = makeEvent(guides[0]);
+
+    expect(pluginValue.handleMouseDown(event, makeView(2))).toBe(true);
+    expect(parser.parse).toHaveBeenCalledWith(editor, { line: 2, ch: 0 });
+    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
@@ -1880,7 +1948,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       makeOuterGuideTarget(attributes),
     );
 
-    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
     expect(parser.parseRange).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
@@ -1913,13 +1981,13 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       }),
     );
 
-    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
     expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 1);
     expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
-  test("capture listener stops propagation only after an outer toggle", () => {
+  test("capture listeners suppress mousedown selection and toggle on click", () => {
     type CapturedListener = (event: Event) => void;
     const addEventListener = jest.fn<
       void,
@@ -1960,49 +2028,65 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
         requestMeasure: jest.fn(),
       },
     );
-    const listener = addEventListener.mock.calls.find(
+    const mouseDownListener = addEventListener.mock.calls.find(
       ([eventName]) => eventName === "mousedown",
     )?.[1];
+    const clickListener = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === "click",
+    )?.[1];
     settings.verticalLines = true;
-    const stopPropagation = jest.fn();
-    const preventDefault = jest.fn();
+    const mouseDownStopPropagation = jest.fn();
+    const mouseDownPreventDefault = jest.fn();
+    const clickStopPropagation = jest.fn();
+    const clickPreventDefault = jest.fn();
+    const target = makeOuterGuideTarget({
+      "data-actionable": "true",
+      "data-chunk-start": "0",
+      "data-chunk-end": "1",
+    });
 
-    listener?.({
-      target: makeOuterGuideTarget({
-        "data-actionable": "true",
-        "data-chunk-start": "0",
-        "data-chunk-end": "1",
-      }),
-      preventDefault,
-      stopPropagation,
+    mouseDownListener?.({
+      target,
+      preventDefault: mouseDownPreventDefault,
+      stopPropagation: mouseDownStopPropagation,
+    } as unknown as Event);
+    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
+
+    clickListener?.({
+      target,
+      preventDefault: clickPreventDefault,
+      stopPropagation: clickStopPropagation,
     } as unknown as Event);
     for (const start of ["0x1", "1e0", "+1", "1.0"]) {
-      listener?.({
+      clickListener?.({
         target: makeOuterGuideTarget({
           "data-actionable": "true",
           "data-chunk-start": start,
           "data-chunk-end": "1",
         }),
-        preventDefault,
-        stopPropagation,
+        preventDefault: clickPreventDefault,
+        stopPropagation: clickStopPropagation,
       } as unknown as Event);
     }
-    listener?.({
+    clickListener?.({
       target: makeOuterGuideTarget({
         "data-actionable": "true",
         "data-chunk-start": "1",
         "data-chunk-end": "1",
       }),
-      preventDefault,
-      stopPropagation,
+      preventDefault: clickPreventDefault,
+      stopPropagation: clickStopPropagation,
     } as unknown as Event);
 
-    expect(parseRange).toHaveBeenCalledTimes(2);
+    expect(parseRange).toHaveBeenCalledTimes(3);
     expect(parseRange).toHaveBeenNthCalledWith(1, editor, 0, 1);
-    expect(parseRange).toHaveBeenNthCalledWith(2, editor, 1, 1);
+    expect(parseRange).toHaveBeenNthCalledWith(2, editor, 0, 1);
+    expect(parseRange).toHaveBeenNthCalledWith(3, editor, 1, 1);
     expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
-    expect(preventDefault).toHaveBeenCalledTimes(1);
-    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(mouseDownPreventDefault).toHaveBeenCalledTimes(1);
+    expect(mouseDownStopPropagation).toHaveBeenCalledTimes(1);
+    expect(clickPreventDefault).toHaveBeenCalledTimes(1);
+    expect(clickStopPropagation).toHaveBeenCalledTimes(1);
   });
 
   test("does not consume an outer widget when parsing returns multiple roots", () => {
@@ -2030,7 +2114,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       }),
     );
 
-    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
     expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
@@ -2063,7 +2147,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     const { event, preventDefault } = makeEvent(guides[0]);
     const view = makeView(2);
 
-    expect(pluginValue.handleMouseDown(event, view)).toBe(true);
+    expect(pluginValue.handleClick(event, view)).toBe(true);
     expect(view.posAtDOM).toHaveBeenCalledWith(line);
     expect(parser.parse).toHaveBeenCalledWith(editor, { line: 2, ch: 0 });
     expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
@@ -2107,7 +2191,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     const { event, preventDefault } = makeEvent(guides[1]);
     const view = makeView(3);
 
-    expect(pluginValue.handleMouseDown(event, view)).toBe(true);
+    expect(pluginValue.handleClick(event, view)).toBe(true);
     expect(view.posAtDOM).toHaveBeenCalledWith(line);
     expect(parser.parse).toHaveBeenCalledWith(editor, { line: 3, ch: 0 });
     expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
@@ -2129,7 +2213,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     const { guides } = makeGuideLine();
     const { event, preventDefault } = makeEvent(guides[0]);
 
-    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
@@ -2147,7 +2231,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       { parse: jest.fn() },
     );
 
-    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
     expect(target.closest).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
@@ -2163,7 +2247,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     const { guides } = makeGuideLine();
     const { event, preventDefault } = makeEvent(guides[0]);
 
-    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
@@ -2180,7 +2264,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     const { guides } = makeGuideLine();
     const { event, preventDefault } = makeEvent(guides[0]);
 
-    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
@@ -2203,7 +2287,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     const { guides } = makeGuideLine();
     const { event, preventDefault } = makeEvent(guides[0]);
 
-    expect(pluginValue.handleMouseDown(event, makeView(0))).toBe(false);
+    expect(pluginValue.handleClick(event, makeView(0))).toBe(false);
     expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
