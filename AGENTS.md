@@ -19,7 +19,7 @@
     - 取り込み後、デフォルトブランチに対して `npm version <major|minor|patch>` を実行し、新しいバージョンをリリースしてください。
 - テストについて
     - `.spec.md` の統合 spec やフルテストは `dist/main.js` を実行するため、`src` を変更した後に実行する場合は先に `npm run build-with-tests` を実行してください。
-    - フルテストは `vault/test.md` をfixtureとして上書きします。手動検証用の内容がある場合は、フルテスト前にvault外へbackupし、テスト終了直後にrestoreしてから実Obsidianの検証を続けてください。Obsidianのfile historyだけをbackupとして使わないでください。
+    - フルテストは `vault/test.md` をfixtureとして上書きします。手動検証用の内容がある場合は、フルテスト前にvault外へbackupしてください。テストcommandの終了直後はtest rendererの遅延終了処理がfixtureを再保存する場合があるため、`vault=vault` のrendererが終了したことを確認してからrestoreしてください。restore後は少し待ってfile sizeまたはhashがbackupと一致することを再確認してから実Obsidianの検証を続けてください。Obsidianのfile historyだけをbackupとして使わないでください。
     - `dist/main.js` は生成物としてgitignoreされています。検証用にbuildしても、`git add -f` で追跡対象へ追加しないでください。
     - 実 Obsidian で手動検証するときは、リポジトリ内の `vault` をテスト用 vault として使ってください。個人用の `/Users/kodai/base` vault へテスト bundle やテストノートを配置しないでください。
     - 手動検証用のplugin IDは `bullet` です。build artifactは `vault/.obsidian/plugins/bullet/` へ配置し、別のpluginディレクトリを作らないでください。
