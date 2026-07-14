@@ -1811,10 +1811,18 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       },
       parser,
     );
-    const { event, preventDefault } = makeEvent(makeOuterGuideTarget());
+    const { event, preventDefault } = makeEvent(
+      makeOuterGuideTarget({
+        "data-actionable": "true",
+        "data-chunk-start": "0",
+        "data-chunk-end": "1",
+      }),
+    );
 
     expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
-    expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 2);
+    expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 1);
+    expect(editor.foldEnsuringCursorVisible).not.toHaveBeenCalled();
+    expect(editor.unfold).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
