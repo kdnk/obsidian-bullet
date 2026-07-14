@@ -7,6 +7,38 @@ import { Parser, Reader } from "../services/Parser";
 
 export const OUTER_LIST_GUIDE_CLASS = "bullet-plugin-outer-list-guide";
 export const OUTER_LIST_GUIDE_SELECTOR = `.${OUTER_LIST_GUIDE_CLASS}`;
+export const HOVERED_OUTER_LIST_GUIDE_CLASS =
+  "bullet-plugin-hovered-outer-list-guide";
+const HOVERED_OUTER_LIST_GUIDE_SELECTOR = `.${HOVERED_OUTER_LIST_GUIDE_CLASS}`;
+
+export function collectHoveredOuterListGuides(contentDOM: ParentNode) {
+  const hovered = contentDOM.querySelector<HTMLElement>(
+    `${OUTER_LIST_GUIDE_SELECTOR}[data-actionable="true"]:hover`,
+  );
+  const chunkId = hovered?.dataset.chunkId;
+  if (hovered?.dataset.actionable !== "true" || !chunkId) return [];
+
+  return Array.from(
+    contentDOM.querySelectorAll<HTMLElement>(OUTER_LIST_GUIDE_SELECTOR),
+  ).filter((element) => element.dataset.chunkId === chunkId);
+}
+
+export function synchronizeHoveredOuterListGuides(
+  contentDOM: ParentNode,
+  guides: Iterable<Element>,
+) {
+  const next = new Set(guides);
+  contentDOM
+    .querySelectorAll(HOVERED_OUTER_LIST_GUIDE_SELECTOR)
+    .forEach((element) => {
+      if (!next.has(element)) {
+        element.classList.remove(HOVERED_OUTER_LIST_GUIDE_CLASS);
+      }
+    });
+  next.forEach((element) =>
+    element.classList.add(HOVERED_OUTER_LIST_GUIDE_CLASS),
+  );
+}
 
 export interface OuterListChunk {
   root: Root;

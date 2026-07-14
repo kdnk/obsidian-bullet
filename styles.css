@@ -14,6 +14,41 @@
 }
 
 /* lines */
+.bullet-plugin-vertical-lines
+  .markdown-source-view.mod-cm6
+  .bullet-plugin-outer-list-guide {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(-1 * var(--list-indent));
+  width: var(--list-indent);
+  pointer-events: none;
+}
+
+.bullet-plugin-vertical-lines
+  .markdown-source-view.mod-cm6
+  .bullet-plugin-outer-list-guide::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  border-inline-end: var(--indentation-guide-width) solid
+    var(--indentation-guide-color);
+}
+
+.bullet-plugin-vertical-lines-action-toggle-folding
+  .markdown-source-view.mod-cm6
+  .bullet-plugin-outer-list-guide[data-actionable="true"] {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.bullet-plugin-vertical-lines-action-toggle-folding
+  .markdown-source-view.mod-cm6
+  .bullet-plugin-outer-list-guide[data-actionable="true"].bullet-plugin-hovered-outer-list-guide::before {
+  border-inline-end: var(--indentation-guide-width-active) solid
+    var(--indentation-guide-color-active);
+}
+
 .bullet-plugin-vertical-lines-action-toggle-folding
   .markdown-source-view.mod-cm6
   .cm-hmd-list-indent

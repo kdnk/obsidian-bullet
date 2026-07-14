@@ -138,6 +138,7 @@ function makeFoldEditor() {
   return {
     foldEnsuringCursorVisible: jest.fn(),
     unfold: jest.fn(),
+    lastLine: jest.fn().mockReturnValue(9),
   };
 }
 
@@ -894,6 +895,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     return {
       state: {
         doc: {
+          lines: 10,
           lineAt: jest.fn().mockReturnValue({ number: lineNumber + 1 }),
         },
       },
@@ -907,6 +909,22 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
       parser,
     }) as {
       handleMouseDown(event: MouseEvent, view: unknown): boolean;
+    };
+  }
+
+  function makeOuterGuideTarget(
+    attributes: Record<string, string> = {
+      "data-actionable": "true",
+      "data-chunk-start": "0",
+      "data-chunk-end": "2",
+    },
+  ) {
+    return {
+      matches: jest.fn(
+        (selector: string) => selector === ".bullet-plugin-outer-list-guide",
+      ),
+      closest: jest.fn(),
+      getAttribute: jest.fn((name: string) => attributes[name] ?? null),
     };
   }
 
@@ -1241,6 +1259,206 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     );
   });
 
+  test("measures and synchronizes whole outer chunks across DOM replacement and cleanup", () => {
+    type CapturedListener = (event: Event) => void;
+    type HoverMeasurement = {
+      indentGuides: Element[];
+      outerGuides: Element[];
+    };
+    type Measurement = {
+      read?: () => HoverMeasurement;
+      write?: (measure: HoverMeasurement, view: unknown) => void;
+    };
+    const addEventListener = jest.fn<
+      void,
+      [string, CapturedListener, boolean]
+    >();
+    const settingsCallbacks: Array<() => void> = [];
+    const settings = {
+      verticalLines: true,
+      outerVerticalLines: true,
+      verticalLinesAction: "toggle-folding",
+      onChange: jest.fn((callback: () => void) => {
+        settingsCallbacks.push(callback);
+      }),
+      removeCallback: jest.fn(),
+    };
+    const makeOuterSegment = (chunkId: string, actionable = true) => {
+      const attributes = { "data-actionable": String(actionable) };
+      return {
+        dataset: { chunkId, actionable: String(actionable) },
+        classList: makeClassList(),
+        matches: jest.fn(
+          (selector: string) => selector === ".bullet-plugin-outer-list-guide",
+        ),
+        closest: jest.fn(),
+        getAttribute: jest.fn(
+          (name: string) => attributes[name as keyof typeof attributes] ?? null,
+        ),
+      };
+    };
+    let outerGuides = [
+      makeOuterSegment("0:2"),
+      makeOuterSegment("0:2"),
+      makeOuterSegment("4:5"),
+    ];
+    let hoveredOuter: (typeof outerGuides)[number] | null = outerGuides[0];
+    const querySelector = jest.fn((selector: string) => {
+      if (
+        selector ===
+        '.bullet-plugin-outer-list-guide[data-actionable="true"]:hover'
+      ) {
+        return hoveredOuter;
+      }
+      return null;
+    });
+    const querySelectorAll = jest.fn((selector: string) => {
+      if (selector === ".bullet-plugin-outer-list-guide") return outerGuides;
+      if (selector === ".bullet-plugin-hovered-outer-list-guide") {
+        return outerGuides.filter((guide) =>
+          guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
+        );
+      }
+      return [];
+    });
+    const contentDOM = {
+      addEventListener,
+      removeEventListener: jest.fn(),
+      querySelector,
+      querySelectorAll,
+    };
+    const requests: Measurement[] = [];
+    const sourceEditor = makeEditor({
+      text: "- parent\n    - child\n- leaf",
+      cursor: { line: 0, ch: 0 },
+    });
+    mockGetEditorFromState.mockReturnValue(sourceEditor);
+    const view = {
+      contentDOM,
+      state: { doc: Text.of(["- parent", "    - child", "- leaf"]) },
+      dispatch: jest.fn(),
+      requestMeasure: jest.fn((request: Measurement) => requests.push(request)),
+    };
+    const PluginValueWithView = VerticalLinesPluginValue as unknown as new (
+      settings: unknown,
+      parser: unknown,
+      view: unknown,
+    ) => {
+      decorations: DecorationSet;
+      destroy(): void;
+      update(update: unknown): void;
+    };
+    const pluginValue = new PluginValueWithView(
+      settings,
+      new Parser(makeLogger(), makeSettings()),
+      view,
+    );
+    const executeLatestMeasurement = () => {
+      const request = requests[requests.length - 1];
+      const measurement = request?.read?.();
+      if (!measurement) throw new Error("Expected hover measurement");
+      expect(measurement.indentGuides).toEqual([]);
+      request?.write?.(measurement, view);
+      return measurement;
+    };
+
+    const firstMeasurement = requests[0]?.read?.();
+    expect(firstMeasurement).toEqual({
+      indentGuides: [],
+      outerGuides: outerGuides.slice(0, 2),
+    });
+    expect(
+      outerGuides.some((guide) =>
+        guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
+      ),
+    ).toBe(false);
+    requests[0]?.write?.(firstMeasurement!, view);
+    expect(
+      outerGuides
+        .slice(0, 2)
+        .every((guide) =>
+          guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
+        ),
+    ).toBe(true);
+
+    const oldGuides = outerGuides;
+    const decorationSet = pluginValue.decorations;
+    outerGuides = [makeOuterSegment("0:2"), makeOuterSegment("0:2")];
+    hoveredOuter = outerGuides[1]!;
+    pluginValue.update({ docChanged: false });
+    expect(pluginValue.decorations).toBe(decorationSet);
+    expect(executeLatestMeasurement().outerGuides).toEqual(outerGuides);
+    expect(
+      outerGuides.every((guide) =>
+        guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
+      ),
+    ).toBe(true);
+
+    const pointerMove = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === "pointermove",
+    )?.[1];
+    const pointerLeave = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === "pointerleave",
+    )?.[1];
+    pointerMove?.({ target: outerGuides[0] } as unknown as Event);
+    expect(requests).toHaveLength(3);
+    pointerMove?.({
+      target: makeOuterSegment("6:6", false),
+    } as unknown as Event);
+    expect(requests).toHaveLength(3);
+    expect(
+      outerGuides.some((guide) =>
+        guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
+      ),
+    ).toBe(false);
+    pointerLeave?.({} as Event);
+    expect(
+      outerGuides.some((guide) =>
+        guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
+      ),
+    ).toBe(false);
+
+    hoveredOuter = outerGuides[0]!;
+    pluginValue.update({ docChanged: false });
+    executeLatestMeasurement();
+    const settingsCallback = settingsCallbacks[0];
+    settings.verticalLinesAction = "none";
+    settingsCallback();
+    expect(
+      outerGuides.some((guide) =>
+        guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
+      ),
+    ).toBe(false);
+
+    settings.verticalLinesAction = "toggle-folding";
+    settingsCallback();
+    executeLatestMeasurement();
+    settings.outerVerticalLines = false;
+    settingsCallback();
+    expect(
+      outerGuides.some((guide) =>
+        guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
+      ),
+    ).toBe(false);
+
+    settings.outerVerticalLines = true;
+    settingsCallback();
+    executeLatestMeasurement();
+    pluginValue.destroy();
+    expect(
+      outerGuides.some((guide) =>
+        guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
+      ),
+    ).toBe(false);
+    expect(
+      oldGuides
+        .slice(0, 2)
+        .every((guide) =>
+          guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
+        ),
+    ).toBe(true);
+  });
+
   test("promotes and highlights a hovered spacing guide in one measurement", () => {
     type Measurement = {
       read?: () => unknown;
@@ -1453,6 +1671,219 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     elements.push(laterSpacing);
     queuedWrite?.(undefined, view);
     expect(laterSpacing.classList.contains("cm-indent")).toBe(false);
+  });
+
+  test("toggles only the root parsed from an actionable outer widget range", () => {
+    const sourceEditor = makeEditor({
+      text: "- parent\n    - child\n- leaf",
+      cursor: { line: 0, ch: 0 },
+    });
+    const root = makeRoot({ editor: sourceEditor });
+    const editor = makeFoldEditor();
+    mockGetEditorFromState.mockReturnValue(editor);
+    const parser = {
+      parse: jest.fn(),
+      parseRange: jest.fn().mockReturnValue([root]),
+    };
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        outerVerticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      parser,
+    );
+    const target = makeOuterGuideTarget();
+    const { event, preventDefault } = makeEvent(target);
+    const view = makeView(1);
+
+    expect(pluginValue.handleMouseDown(event, view)).toBe(true);
+    expect(parser.parseRange).toHaveBeenCalledTimes(1);
+    expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 2);
+    expect(parser.parse).not.toHaveBeenCalled();
+    expect(view.posAtDOM).not.toHaveBeenCalled();
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(1);
+    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledWith(0, {
+      line: 0,
+      ch: 2,
+    });
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    [
+      "non-actionable widget",
+      { verticalLines: true, outerVerticalLines: true },
+      {
+        "data-actionable": "false",
+        "data-chunk-start": "0",
+        "data-chunk-end": "2",
+      },
+    ],
+    [
+      "malformed range",
+      { verticalLines: true, outerVerticalLines: true },
+      {
+        "data-actionable": "true",
+        "data-chunk-start": "not-a-line",
+        "data-chunk-end": "2",
+      },
+    ],
+    [
+      "missing range",
+      { verticalLines: true, outerVerticalLines: true },
+      { "data-actionable": "true" },
+    ],
+    [
+      "blank range",
+      { verticalLines: true, outerVerticalLines: true },
+      {
+        "data-actionable": "true",
+        "data-chunk-start": " ",
+        "data-chunk-end": "2",
+      },
+    ],
+    [
+      "out-of-bounds range",
+      { verticalLines: true, outerVerticalLines: true },
+      {
+        "data-actionable": "true",
+        "data-chunk-start": "0",
+        "data-chunk-end": "99",
+      },
+    ],
+    [
+      "disabled action",
+      {
+        verticalLines: true,
+        outerVerticalLines: true,
+        verticalLinesAction: "none",
+      },
+      undefined,
+    ],
+    [
+      "master visibility off",
+      { verticalLines: false, outerVerticalLines: true },
+      undefined,
+    ],
+    [
+      "outer visibility off",
+      { verticalLines: true, outerVerticalLines: false },
+      undefined,
+    ],
+  ])("does not consume a %s outer widget", (_name, visibility, attributes) => {
+    const parser = { parse: jest.fn(), parseRange: jest.fn() };
+    mockGetEditorFromState.mockReturnValue(makeFoldEditor());
+    const pluginValue = makePluginValue(
+      {
+        verticalLinesAction: "toggle-folding",
+        ...visibility,
+      },
+      parser,
+    );
+    const { event, preventDefault } = makeEvent(
+      makeOuterGuideTarget(attributes),
+    );
+
+    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(parser.parseRange).not.toHaveBeenCalled();
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+
+  test("does not consume an actionable outer widget when the chunk has no fold targets", () => {
+    const sourceEditor = makeEditor({
+      text: "- leaf A\n- leaf B",
+      cursor: { line: 0, ch: 0 },
+    });
+    const editor = makeFoldEditor();
+    mockGetEditorFromState.mockReturnValue(editor);
+    const parser = {
+      parseRange: jest
+        .fn()
+        .mockReturnValue([makeRoot({ editor: sourceEditor })]),
+    };
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        outerVerticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      parser,
+    );
+    const { event, preventDefault } = makeEvent(makeOuterGuideTarget());
+
+    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
+    expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 2);
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+
+  test("capture listener stops propagation only after an outer toggle", () => {
+    type CapturedListener = (event: Event) => void;
+    const addEventListener = jest.fn<
+      void,
+      [string, CapturedListener, boolean]
+    >();
+    const sourceEditor = makeEditor({
+      text: "- parent\n    - child",
+      cursor: { line: 0, ch: 0 },
+    });
+    const editor = makeFoldEditor();
+    mockGetEditorFromState.mockReturnValue(editor);
+    const settings = {
+      verticalLines: false,
+      outerVerticalLines: true,
+      verticalLinesAction: "toggle-folding",
+      onChange: jest.fn(),
+      removeCallback: jest.fn(),
+    };
+    const contentDOM = {
+      addEventListener,
+      removeEventListener: jest.fn(),
+      querySelector: jest.fn().mockReturnValue(null),
+      querySelectorAll: jest.fn().mockReturnValue([]),
+    };
+    const PluginValueWithView = VerticalLinesPluginValue as unknown as new (
+      settings: unknown,
+      parser: unknown,
+      view: unknown,
+    ) => unknown;
+    new PluginValueWithView(
+      settings,
+      {
+        parseRange: jest
+          .fn()
+          .mockReturnValue([makeRoot({ editor: sourceEditor })]),
+      },
+      {
+        contentDOM,
+        state: { doc: Text.of(["- parent", "    - child"]) },
+        requestMeasure: jest.fn(),
+      },
+    );
+    const listener = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === "mousedown",
+    )?.[1];
+    settings.verticalLines = true;
+    const stopPropagation = jest.fn();
+    const preventDefault = jest.fn();
+
+    listener?.({
+      target: makeOuterGuideTarget(),
+      preventDefault,
+      stopPropagation,
+    } as unknown as Event);
+    listener?.({
+      target: makeOuterGuideTarget({
+        "data-actionable": "true",
+        "data-chunk-start": "broken",
+        "data-chunk-end": "1",
+      }),
+      preventDefault,
+      stopPropagation,
+    } as unknown as Event);
+
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
   });
 
   test("folds the outermost ancestor represented by a native indentation guide", () => {

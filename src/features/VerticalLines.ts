@@ -12,8 +12,12 @@ import {
 import { DocumentBodyClass } from "./DocumentBodyClass";
 import { Feature } from "./Feature";
 import {
+  OUTER_LIST_GUIDE_SELECTOR,
   buildOuterListGuideDecorations,
+  collectHoveredOuterListGuides,
   collectOuterListChunks,
+  synchronizeHoveredOuterListGuides,
+  toggleOuterListChunk,
 } from "./OuterListGuide";
 
 import { MyEditor, getEditorFromState } from "../editor";
@@ -39,6 +43,11 @@ const HOVERED_GUIDE_CANDIDATE_SELECTOR =
 const RENDERED_GUIDE_CANDIDATE_SELECTOR =
   ".cm-hmd-list-indent > .cm-indent, " +
   ".cm-hmd-list-indent > .cm-indent-spacing";
+
+type HoverMeasurement = {
+  indentGuides: Element[];
+  outerGuides: Element[];
+};
 
 export function synchronizePersistentIndentGuides(
   contentDOM: ParentNode,
@@ -204,10 +213,51 @@ export class VerticalLinesPluginValue implements PluginValue {
     }
 
     const pressedGuide = event.target;
-    if (
-      !isElementLike(pressedGuide) ||
-      !pressedGuide.matches(INDENT_GUIDE_SELECTOR)
-    ) {
+    if (!isElementLike(pressedGuide)) {
+      return false;
+    }
+
+    if (pressedGuide.matches(OUTER_LIST_GUIDE_SELECTOR)) {
+      if (
+        !this.settings.outerVerticalLines ||
+        pressedGuide.getAttribute("data-actionable") !== "true"
+      ) {
+        return false;
+      }
+      const startAttribute = pressedGuide.getAttribute("data-chunk-start");
+      const endAttribute = pressedGuide.getAttribute("data-chunk-end");
+      if (
+        startAttribute === null ||
+        endAttribute === null ||
+        startAttribute.trim().length === 0 ||
+        endAttribute.trim().length === 0
+      ) {
+        return false;
+      }
+      const startLine = Number(startAttribute);
+      const endLine = Number(endAttribute);
+      const editor = getEditorFromState(view.state);
+      if (!editor) {
+        return false;
+      }
+      if (
+        !Number.isInteger(startLine) ||
+        !Number.isInteger(endLine) ||
+        startLine < 0 ||
+        endLine < startLine ||
+        endLine > editor.lastLine()
+      ) {
+        return false;
+      }
+      const root = this.parser.parseRange(editor, startLine, endLine)[0];
+      if (!root || !toggleOuterListChunk(editor, root)) {
+        return false;
+      }
+      event.preventDefault();
+      return true;
+    }
+
+    if (!pressedGuide.matches(INDENT_GUIDE_SELECTOR)) {
       return false;
     }
 
@@ -263,6 +313,7 @@ export class VerticalLinesPluginValue implements PluginValue {
     );
     this.settings.removeCallback(this.onSettingsChange);
     synchronizeHoveredIndentGuides(this.view.contentDOM, []);
+    synchronizeHoveredOuterListGuides(this.view.contentDOM, []);
     synchronizePersistentIndentGuides(this.view.contentDOM, false);
   }
 
@@ -277,6 +328,10 @@ export class VerticalLinesPluginValue implements PluginValue {
       this.settings.verticalLines &&
       this.settings.verticalLinesAction === "toggle-folding"
     );
+  }
+
+  private outerInteractionEnabled() {
+    return this.interactionEnabled() && this.settings.outerVerticalLines;
   }
 
   private getLineForGuide(guide: Element): number | null {
@@ -297,10 +352,8 @@ export class VerticalLinesPluginValue implements PluginValue {
     return line === null ? null : root.getListUnderLine(line);
   }
 
-  private readHoveredGuideGroup(): Element[] {
-    if (!this.interactionEnabled()) {
-      return [];
-    }
+  private readHoveredIndentGuideGroup(): Element[] {
+    if (!this.interactionEnabled()) return [];
     const hoveredGuide = this.view.contentDOM.querySelector(
       HOVERED_GUIDE_CANDIDATE_SELECTOR,
     );
@@ -327,25 +380,38 @@ export class VerticalLinesPluginValue implements PluginValue {
     );
   }
 
+  private readHoverMeasurement(): HoverMeasurement {
+    return {
+      indentGuides: this.readHoveredIndentGuideGroup(),
+      outerGuides: this.outerInteractionEnabled()
+        ? collectHoveredOuterListGuides(this.view.contentDOM)
+        : [],
+    };
+  }
+
   private onPointerMove = (event: PointerEvent) => {
     const guide =
-      isElementLike(event.target) && event.target.matches(INDENT_GUIDE_SELECTOR)
+      isElementLike(event.target) &&
+      (event.target.matches(INDENT_GUIDE_SELECTOR) ||
+        (event.target.matches(OUTER_LIST_GUIDE_SELECTOR) &&
+          event.target.getAttribute("data-actionable") === "true"))
         ? event.target
         : null;
-    if (guide === this.lastPointerGuide) {
-      return;
-    }
-    this.lastPointerGuide = guide;
     if (!guide) {
+      this.lastPointerGuide = null;
       synchronizeHoveredIndentGuides(this.view.contentDOM, []);
+      synchronizeHoveredOuterListGuides(this.view.contentDOM, []);
       return;
     }
+    if (guide === this.lastPointerGuide) return;
+    this.lastPointerGuide = guide;
     this.scheduleGuideSynchronization();
   };
 
   private onPointerLeave = () => {
     this.lastPointerGuide = null;
     synchronizeHoveredIndentGuides(this.view.contentDOM, []);
+    synchronizeHoveredOuterListGuides(this.view.contentDOM, []);
   };
 
   private onSettingsChange = () => {
@@ -361,6 +427,9 @@ export class VerticalLinesPluginValue implements PluginValue {
     if (!this.interactionEnabled()) {
       this.lastPointerGuide = null;
       synchronizeHoveredIndentGuides(this.view.contentDOM, []);
+    }
+    if (!this.outerInteractionEnabled()) {
+      synchronizeHoveredOuterListGuides(this.view.contentDOM, []);
     }
     this.scheduleGuideSynchronization();
   };
@@ -390,8 +459,8 @@ export class VerticalLinesPluginValue implements PluginValue {
 
     this.view.requestMeasure({
       key: this.measureKey,
-      read: () => this.readHoveredGuideGroup(),
-      write: (highlightedGuides: Element[]) => {
+      read: () => this.readHoverMeasurement(),
+      write: (measurement: HoverMeasurement) => {
         if (this.destroyed) {
           return;
         }
@@ -402,7 +471,13 @@ export class VerticalLinesPluginValue implements PluginValue {
         );
         synchronizeHoveredIndentGuides(
           this.view.contentDOM,
-          this.interactionEnabled() ? highlightedGuides : [],
+          this.interactionEnabled() ? (measurement?.indentGuides ?? []) : [],
+        );
+        synchronizeHoveredOuterListGuides(
+          this.view.contentDOM,
+          this.outerInteractionEnabled()
+            ? (measurement?.outerGuides ?? [])
+            : [],
         );
       },
     });

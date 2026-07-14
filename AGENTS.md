@@ -29,6 +29,7 @@
     - 縦線クリックでは、線が表す親リスト自体を閉じず、その直下の非空 child を一括で開閉してください。1 つでも開いた child があれば全 child を閉じ、すべて閉じていれば全 child を開きます。直下の leaf は表示したままにしてください。
     - CodeMirror は、新しい selection head が fold 範囲内に入ると、その fold を自動解除します。縦線クリックで selection を含む child を閉じる場合は、安全な selection への退避と `foldEffect` を同一トランザクションで dispatch してください。遅延した再 fold やイベント順依存の回避策は使わないでください。
     - `.cm-indent::before` は Obsidian / CodeMirror が配置・仮想化・スクロールする描画源です。独立したスクロール overlay や座標 cache を再導入せず、描画の実確認が必要な変更では `npm run build-with-tests` 後に実 Obsidian の長い多段リストで上端と下端を確認してください。
+    - outer guide は document chunk の開始・終了行を key とする CodeMirror widget decoration として各行へ配置してください。空行・空白だけの行・見出しで chunk を分割し、同じ chunk id の表示中 segment だけを一括 hover / toggle の対象にしてください。独立 overlay、screen 座標測定、座標 cache は追加しないでください。
 - エージェント向けのローカル指示について
     - 作業中に、このファイルや同等のエージェント向け指示に不足、矛盾、繰り返し確認を生む表現を見つけた場合は、ユーザーに追加確認せず、同じ変更範囲に含めて改善してください。
     - 作業中に「指示通りに進められない」「ツールやコマンドが失敗する」「どの手順を使うべきか不明」といった状況に当たった場合は、ユーザーに繰り返し確認せず、まずローカルのヘルプ、CLI の `--help`、プロジェクト内ドキュメント、利用可能なスキル/プラグインの説明を自分で調べてください。
