@@ -183,6 +183,7 @@ describe("outer list guide styles", () => {
 
     expect(actionable).toContain("pointer-events: auto;");
     expect(actionable).toContain("cursor: pointer;");
+    expect(actionable).toContain("z-index: 2;");
     expect(styles).not.toMatch(
       /\.bullet-plugin-vertical-lines\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\s*\{[^}]*cursor:/,
     );
