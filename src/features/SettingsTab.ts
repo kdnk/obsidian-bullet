@@ -115,6 +115,18 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName("Draw outer list lines")
+      .setDesc("Show a root-level guide beside each contiguous list chunk.")
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.settings.outerVerticalLines)
+          .onChange(async (value) => {
+            this.settings.outerVerticalLines = value;
+            await this.settings.save();
+          });
+      });
+
+    new Setting(containerEl)
       .setName("Fold lists from vertical indentation lines")
       .setDesc("Click a vertical indentation line to fold or unfold that list.")
       .addToggle((toggle) => {

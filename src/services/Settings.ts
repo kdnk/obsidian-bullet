@@ -13,6 +13,7 @@ export interface SettingsObject {
   betterTab: boolean;
   selectAll: boolean;
   listLines: boolean;
+  outerListLines: boolean;
   listLineAction: VerticalLinesAction;
   dnd: boolean;
 }
@@ -26,6 +27,7 @@ const DEFAULT_SETTINGS: SettingsObject = {
   betterTab: true,
   selectAll: true,
   listLines: true,
+  outerListLines: true,
   listLineAction: "toggle-folding",
   dnd: true,
 };
@@ -108,6 +110,14 @@ export class Settings {
 
   set verticalLines(value: boolean) {
     this.set("listLines", value);
+  }
+
+  get outerVerticalLines() {
+    return this.values.outerListLines;
+  }
+
+  set outerVerticalLines(value: boolean) {
+    this.set("outerListLines", value);
   }
 
   get verticalLinesAction() {
