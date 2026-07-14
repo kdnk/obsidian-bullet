@@ -65,6 +65,15 @@
     var(--indentation-guide-color-active);
 }
 
+.bullet-plugin-vertical-lines-action-toggle-folding
+  .markdown-source-view.mod-cm6
+  .HyperMD-list-line
+  .cm-fold-indicator
+  .collapse-indicator {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .bullet-plugin-vertical-lines
   .markdown-source-view.mod-cm6
   .cm-indent-spacing.bullet-plugin-persistent-indent-guide {

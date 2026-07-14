@@ -864,6 +864,21 @@ describe("synchronizePersistentIndentGuides", () => {
     );
   });
 
+  test("hides list chevrons while vertical guides toggle folding", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const declarations = styles.match(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-list-line\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(declarations?.replace(/\s+/g, " ").trim()).toBe(
+      "visibility: hidden; pointer-events: none;",
+    );
+    expect(declarations).not.toContain("display:");
+    expect(styles).not.toMatch(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{/,
+    );
+  });
+
   test("uses the native active style on the complete marked logical guide", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(

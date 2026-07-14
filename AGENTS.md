@@ -15,7 +15,9 @@
     - 取り込み後、デフォルトブランチに対して `npm version <major|minor|patch>` を実行し、新しいバージョンをリリースしてください。
 - テストについて
     - `.spec.md` の統合 spec やフルテストは `dist/main.js` を実行するため、`src` を変更した後に実行する場合は先に `npm run build-with-tests` を実行してください。
+    - `dist/main.js` は生成物としてgitignoreされています。検証用にbuildしても、`git add -f` で追跡対象へ追加しないでください。
     - 実 Obsidian で手動検証するときは、リポジトリ内の `vault` をテスト用 vault として使ってください。個人用の `/Users/kodai/base` vault へテスト bundle やテストノートを配置しないでください。
+    - 手動検証用のplugin IDは `bullet` です。build artifactは `vault/.obsidian/plugins/bullet/` へ配置し、別のpluginディレクトリを作らないでください。
     - テスト用 vault を開く操作と plugin の再読込は、Obsidian CLI で `vault=vault` を明示してください。UI 操作前にウィンドウタイトルが `vault` を示すことを確認し、`base` が表示された場合は操作を止めてください。
     - Obsidian の複数 window が開いている場合、open 後の 1 回だけのタイトル確認では不十分です。Computer Use の各 UI action 直前に `obsidian-cli vault=vault eval code='window.focus()'` で test vault renderer を focus し、fresh state のタイトルが test vault であることを確認してください。過去の element index や座標を再利用せず、対象 window を保証できない場合は action を実行しないでください。
 - 縦線ガイドについて
