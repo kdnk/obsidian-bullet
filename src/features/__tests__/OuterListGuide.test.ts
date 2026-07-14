@@ -317,18 +317,18 @@ test("folds every foldable top-level item and preserves leaf items", () => {
   });
   const [chunk] = collectOuterListChunks(parser, editor);
   const foldEditor = {
-    foldEnsuringCursorVisible: jest.fn<
-      void,
-      [number, { line: number; ch: number }]
-    >(),
-    unfold: jest.fn<void, [number]>(),
+    setFoldedPreservingScroll: jest.fn().mockReturnValue(true),
   };
 
   expect(toggleOuterListChunk(foldEditor, chunk.root)).toBe(true);
-  expect(foldEditor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(2);
-  expect(
-    foldEditor.foldEnsuringCursorVisible.mock.calls.map(([line]) => line),
-  ).toEqual([0, 3]);
+  expect(foldEditor.setFoldedPreservingScroll).toHaveBeenCalledWith(
+    [
+      { line: 0, fallbackCursor: { line: 0, ch: 2 } },
+      { line: 3, fallbackCursor: { line: 3, ch: 2 } },
+    ],
+    true,
+  );
+  expect(foldEditor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
 });
 
 test("unfolds all foldable top-level items when all are folded", () => {
@@ -339,14 +339,29 @@ test("unfolds all foldable top-level items when all are folded", () => {
   });
   const [chunk] = collectOuterListChunks(parser, editor);
   const foldEditor = {
-    foldEnsuringCursorVisible: jest.fn<
-      void,
-      [number, { line: number; ch: number }]
-    >(),
-    unfold: jest.fn<void, [number]>(),
+    setFoldedPreservingScroll: jest.fn().mockReturnValue(true),
   };
 
   expect(toggleOuterListChunk(foldEditor, chunk.root)).toBe(true);
-  expect(foldEditor.unfold.mock.calls.map(([line]) => line)).toEqual([0, 3]);
-  expect(foldEditor.foldEnsuringCursorVisible).not.toHaveBeenCalled();
+  expect(foldEditor.setFoldedPreservingScroll).toHaveBeenCalledWith(
+    [
+      { line: 0, fallbackCursor: { line: 0, ch: 2 } },
+      { line: 3, fallbackCursor: { line: 3, ch: 2 } },
+    ],
+    false,
+  );
+  expect(foldEditor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
+});
+
+test("returns false when no top-level fold range can be updated", () => {
+  const editor = makeEditor({
+    text: "- parent A\n    - child A\n- parent B\n    - child B",
+    cursor: { line: 0, ch: 0 },
+  });
+  const [chunk] = collectOuterListChunks(parser, editor);
+  const foldEditor = {
+    setFoldedPreservingScroll: jest.fn().mockReturnValue(false),
+  };
+
+  expect(toggleOuterListChunk(foldEditor, chunk.root)).toBe(false);
 });

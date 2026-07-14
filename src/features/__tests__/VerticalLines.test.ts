@@ -136,8 +136,7 @@ function makePlugin() {
 
 function makeFoldEditor() {
   return {
-    foldEnsuringCursorVisible: jest.fn(),
-    unfold: jest.fn(),
+    setFoldedPreservingScroll: jest.fn().mockReturnValue(true),
     lastLine: jest.fn().mockReturnValue(9),
   };
 }
@@ -727,16 +726,14 @@ describe("toggleVerticalGuideTarget", () => {
     const editor = makeFoldEditor();
 
     expect(toggleVerticalGuideTarget(editor, parent)).toBe(true);
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenNthCalledWith(1, 1, {
-      line: 1,
-      ch: 4,
-    });
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenNthCalledWith(2, 4, {
-      line: 4,
-      ch: 4,
-    });
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(2);
-    expect(editor.unfold).not.toHaveBeenCalled();
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
+      [
+        { line: 1, fallbackCursor: { line: 1, ch: 4 } },
+        { line: 4, fallbackCursor: { line: 4, ch: 4 } },
+      ],
+      true,
+    );
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
   });
 
   test("unfolds each direct non-empty child when every branch is folded", () => {
@@ -754,10 +751,14 @@ describe("toggleVerticalGuideTarget", () => {
     const editor = makeFoldEditor();
 
     expect(toggleVerticalGuideTarget(editor, parent)).toBe(true);
-    expect(editor.unfold).toHaveBeenNthCalledWith(1, 1);
-    expect(editor.unfold).toHaveBeenNthCalledWith(2, 4);
-    expect(editor.unfold).toHaveBeenCalledTimes(2);
-    expect(editor.foldEnsuringCursorVisible).not.toHaveBeenCalled();
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
+      [
+        { line: 1, fallbackCursor: { line: 1, ch: 4 } },
+        { line: 4, fallbackCursor: { line: 4, ch: 4 } },
+      ],
+      false,
+    );
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
   });
 
   test("does nothing when the target has no non-empty children", () => {
@@ -774,8 +775,24 @@ describe("toggleVerticalGuideTarget", () => {
     const editor = makeFoldEditor();
 
     expect(toggleVerticalGuideTarget(editor, leaf)).toBe(false);
-    expect(editor.foldEnsuringCursorVisible).not.toHaveBeenCalled();
-    expect(editor.unfold).not.toHaveBeenCalled();
+    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
+  });
+
+  test("returns false when no fold range can be updated", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text,
+        cursor: { line: 0, ch: 0 },
+      }),
+    });
+    const parent = root.getListUnderLine(0);
+    if (!parent) {
+      throw new Error("Expected a parent list");
+    }
+    const editor = makeFoldEditor();
+    editor.setFoldedPreservingScroll.mockReturnValue(false);
+
+    expect(toggleVerticalGuideTarget(editor, parent)).toBe(false);
   });
 });
 
@@ -1718,11 +1735,11 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 2);
     expect(parser.parse).not.toHaveBeenCalled();
     expect(view.posAtDOM).not.toHaveBeenCalled();
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(1);
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledWith(0, {
-      line: 0,
-      ch: 2,
-    });
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
+      [{ line: 0, fallbackCursor: { line: 0, ch: 2 } }],
+      true,
+    );
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
@@ -1836,8 +1853,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
 
     expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
     expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 1);
-    expect(editor.foldEnsuringCursorVisible).not.toHaveBeenCalled();
-    expect(editor.unfold).not.toHaveBeenCalled();
+    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
@@ -1922,7 +1938,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     expect(parseRange).toHaveBeenCalledTimes(2);
     expect(parseRange).toHaveBeenNthCalledWith(1, editor, 0, 1);
     expect(parseRange).toHaveBeenNthCalledWith(2, editor, 1, 1);
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(1);
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
     expect(preventDefault).toHaveBeenCalledTimes(1);
     expect(stopPropagation).toHaveBeenCalledTimes(1);
   });
@@ -1953,7 +1969,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     );
 
     expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(false);
-    expect(editor.foldEnsuringCursorVisible).not.toHaveBeenCalled();
+    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
@@ -1988,16 +2004,14 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     expect(pluginValue.handleMouseDown(event, view)).toBe(true);
     expect(view.posAtDOM).toHaveBeenCalledWith(line);
     expect(parser.parse).toHaveBeenCalledWith(editor, { line: 2, ch: 0 });
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenNthCalledWith(1, 1, {
-      line: 1,
-      ch: 4,
-    });
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenNthCalledWith(2, 4, {
-      line: 4,
-      ch: 4,
-    });
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(2);
-    expect(editor.unfold).not.toHaveBeenCalled();
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
+      [
+        { line: 1, fallbackCursor: { line: 1, ch: 4 } },
+        { line: 4, fallbackCursor: { line: 4, ch: 4 } },
+      ],
+      true,
+    );
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
@@ -2034,20 +2048,14 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     expect(pluginValue.handleMouseDown(event, view)).toBe(true);
     expect(view.posAtDOM).toHaveBeenCalledWith(line);
     expect(parser.parse).toHaveBeenCalledWith(editor, { line: 3, ch: 0 });
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenNthCalledWith(1, 2, {
-      line: 2,
-      ch: 10,
-    });
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenNthCalledWith(2, 4, {
-      line: 4,
-      ch: 10,
-    });
-    expect(editor.foldEnsuringCursorVisible).toHaveBeenCalledTimes(2);
-    expect(editor.foldEnsuringCursorVisible).not.toHaveBeenCalledWith(
-      6,
-      expect.anything(),
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
+      [
+        { line: 2, fallbackCursor: { line: 2, ch: 10 } },
+        { line: 4, fallbackCursor: { line: 4, ch: 10 } },
+      ],
+      true,
     );
-    expect(editor.unfold).not.toHaveBeenCalled();
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
@@ -2134,7 +2142,7 @@ describe("VerticalLinesPluginValue.handleMouseDown", () => {
     const { event, preventDefault } = makeEvent(guides[0]);
 
     expect(pluginValue.handleMouseDown(event, makeView(0))).toBe(false);
-    expect(editor.foldEnsuringCursorVisible).not.toHaveBeenCalled();
+    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 });

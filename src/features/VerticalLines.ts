@@ -147,7 +147,7 @@ export function synchronizeHoveredIndentGuides(
 }
 
 export function toggleVerticalGuideTarget(
-  editor: Pick<MyEditor, "foldEnsuringCursorVisible" | "unfold">,
+  editor: Pick<MyEditor, "setFoldedPreservingScroll">,
   list: List,
 ) {
   const children = list.getChildren().filter((child) => !child.isEmpty());
@@ -156,16 +156,13 @@ export function toggleVerticalGuideTarget(
   }
 
   const shouldUnfold = children.every((child) => child.isFolded());
-  for (const child of children) {
-    const fallbackCursor = child.getFirstLineContentStart();
-    if (shouldUnfold) {
-      editor.unfold(fallbackCursor.line);
-    } else {
-      editor.foldEnsuringCursorVisible(fallbackCursor.line, fallbackCursor);
-    }
-  }
-
-  return true;
+  return editor.setFoldedPreservingScroll(
+    children.map((child) => {
+      const fallbackCursor = child.getFirstLineContentStart();
+      return { line: fallbackCursor.line, fallbackCursor };
+    }),
+    !shouldUnfold,
+  );
 }
 
 export class VerticalLinesPluginValue implements PluginValue {
