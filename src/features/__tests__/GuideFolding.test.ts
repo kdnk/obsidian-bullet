@@ -440,6 +440,40 @@ describe("GuideFoldingPluginValue decorations", () => {
     };
   }
 
+  function renderOuterSegments(decorations: DecorationSet) {
+    const segments: Array<{
+      className: string;
+      dataset: Record<string, string>;
+      setAttribute: jest.Mock;
+    }> = [];
+
+    for (let cursor = decorations.iter(); cursor.value; cursor.next()) {
+      const element = {
+        className: "",
+        dataset: {} as Record<string, string>,
+        setAttribute: jest.fn(),
+      };
+      const widget = (
+        cursor.value.spec as {
+          widget: {
+            toDOM(view: unknown): typeof element;
+            ignoreEvent(): boolean;
+          };
+        }
+      ).widget;
+      const createElement = jest.fn(() => element);
+
+      expect(widget.toDOM({ dom: { ownerDocument: { createElement } } })).toBe(
+        element,
+      );
+      expect(createElement).toHaveBeenCalledWith("span");
+      expect(widget.ignoreEvent()).toBe(false);
+      segments.push(element);
+    }
+
+    return segments;
+  }
+
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -448,6 +482,76 @@ describe("GuideFoldingPluginValue decorations", () => {
     const fixture = makeFixture("- parent\n    - child");
 
     expect(positions(fixture.pluginValue.decorations)).toEqual([0, 9]);
+    fixture.pluginValue.destroy();
+  });
+
+  test.each([
+    ["empty line", "- a\n    - child\n\n- b\n    - child"],
+    ["spaces-only line", "- a\n    - child\n   \n- b\n    - child"],
+    ["heading", "- a\n    - child\n# Heading\n- b\n    - child"],
+    ["paragraph", "- a\n    - child\ntext\n- b\n    - child"],
+  ])("splits outer decoration chunks at a %s", (_name, text) => {
+    const fixture = makeFixture(text);
+
+    expect(fixture.pluginValue.decorations.size).toBe(4);
+    expect(
+      renderOuterSegments(fixture.pluginValue.decorations).map(
+        ({ dataset }) => [
+          dataset.chunkId,
+          dataset.chunkStart,
+          dataset.chunkEnd,
+        ],
+      ),
+    ).toEqual([
+      ["0:1", "0", "1"],
+      ["0:1", "0", "1"],
+      ["3:4", "3", "4"],
+      ["3:4", "3", "4"],
+    ]);
+    fixture.pluginValue.destroy();
+  });
+
+  test("renders preserved widget metadata and current chunk actionability", () => {
+    const fixture = makeFixture(
+      "- leaf A\n- leaf B\n\n- parent\n    continuation\n- sibling",
+    );
+
+    expect(fixture.pluginValue.decorations.size).toBe(5);
+    const segments = renderOuterSegments(fixture.pluginValue.decorations);
+    expect(
+      segments.map(({ className, dataset }) => ({ className, dataset })),
+    ).toEqual([
+      {
+        className: "bullet-plugin-outer-list-guide",
+        dataset: {
+          actionable: "false",
+          chunkEnd: "1",
+          chunkId: "0:1",
+          chunkStart: "0",
+        },
+      },
+      {
+        className: "bullet-plugin-outer-list-guide",
+        dataset: {
+          actionable: "false",
+          chunkEnd: "1",
+          chunkId: "0:1",
+          chunkStart: "0",
+        },
+      },
+      ...Array.from({ length: 3 }, () => ({
+        className: "bullet-plugin-outer-list-guide",
+        dataset: {
+          actionable: "true",
+          chunkEnd: "5",
+          chunkId: "3:5",
+          chunkStart: "3",
+        },
+      })),
+    ]);
+    for (const segment of segments) {
+      expect(segment.setAttribute).toHaveBeenCalledWith("aria-hidden", "true");
+    }
     fixture.pluginValue.destroy();
   });
 
@@ -648,6 +752,67 @@ describe("GuideFolding persistent guide styles", () => {
       "border-inline-end: var(--indentation-guide-width-active) solid var(--indentation-guide-color-active);",
     );
     expect(styles).not.toMatch(/\.cm-indent:hover::before/);
+  });
+});
+
+describe("GuideFolding outer guide styles", () => {
+  const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+
+  test("positions a zero-content segment one list indent outside the native guide", () => {
+    const declarations = styles.match(
+      /\.bullet-plugin-vertical-lines\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(declarations).toContain("position: absolute;");
+    expect(declarations).toContain("inset-block: 0;");
+    expect(declarations).toContain(
+      "inset-inline-start: calc(-1 * var(--list-indent));",
+    );
+    expect(declarations).toContain("width: var(--list-indent);");
+    expect(declarations).toContain("pointer-events: none;");
+  });
+
+  test("draws normal and hovered segments with native theme variables", () => {
+    const normal = styles.match(
+      /\.bullet-plugin-vertical-lines\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const hovered = styles.match(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(normal?.replace(/\s+/g, " ")).toContain(
+      "border-inline-end: var(--indentation-guide-width) solid var(--indentation-guide-color);",
+    );
+    expect(hovered?.replace(/\s+/g, " ")).toContain(
+      "border-inline-end: var(--indentation-guide-width-active) solid var(--indentation-guide-color-active);",
+    );
+  });
+
+  test("enables pointer interaction only for actionable widgets under the action class", () => {
+    const actionable = styles.match(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(actionable).toContain("pointer-events: auto;");
+    expect(actionable).toContain("cursor: pointer;");
+    expect(actionable).toContain("z-index: 2;");
+    expect(styles).not.toMatch(
+      /\.bullet-plugin-vertical-lines\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\s*\{[^}]*cursor:/,
+    );
+  });
+
+  test("introduces no custom paint, overlay, or scroll correction", () => {
+    const outerRules = Array.from(
+      styles.matchAll(
+        /[^{}]*\.bullet-plugin-outer-list-guide[^{}]*\{([^}]*)\}/g,
+      ),
+      (match) => match[1] ?? "",
+    ).join("\n");
+
+    expect(outerRules).not.toMatch(/\bbackground(?:-color)?\s*:/);
+    expect(outerRules).not.toMatch(/(?:#[0-9a-f]{3,8}|rgba?\(|hsla?\()/i);
+    expect(outerRules).not.toMatch(/\btransform\s*:/);
+    expect(styles).not.toContain("bullet-plugin-outer-list-guide-overlay");
   });
 });
 
@@ -1766,6 +1931,43 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
+  test("unfolds every foldable top-level item when the current chunk is closed", () => {
+    const sourceEditor = makeEditor({
+      text: "- parent A\n    - child A\n- leaf\n- parent B\n    - child B",
+      cursor: { line: 0, ch: 0 },
+      getAllFoldedLines: () => [0, 3],
+    });
+    const root = makeRoot({ editor: sourceEditor });
+    const editor = makeFoldEditor();
+    mockGetEditorFromState.mockReturnValue(editor);
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        outerVerticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      { parseRange: jest.fn().mockReturnValue([root]) },
+    );
+    const { event, preventDefault } = makeEvent(
+      makeOuterGuideTarget({
+        "data-actionable": "true",
+        "data-chunk-start": "0",
+        "data-chunk-end": "4",
+      }),
+    );
+
+    expect(pluginValue.handleClick(event, makeView(1))).toBe(true);
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
+      [
+        { line: 0, fallbackCursor: { line: 0, ch: 2 } },
+        { line: 3, fallbackCursor: { line: 3, ch: 2 } },
+      ],
+      false,
+    );
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
   test("mousedown suppresses selection without toggling before click", () => {
     const sourceEditor = makeEditor({
       text: "- parent\n    - child\n- leaf",
@@ -1931,6 +2133,39 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
     expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 1);
     expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
+    expect(preventDefault).not.toHaveBeenCalled();
+  });
+
+  test("does not consume an outer widget when no planned fold range can be updated", () => {
+    const sourceEditor = makeEditor({
+      text: "- parent\n    - child",
+      cursor: { line: 0, ch: 0 },
+    });
+    const editor = makeFoldEditor();
+    editor.setFoldedPreservingScroll.mockReturnValue(false);
+    mockGetEditorFromState.mockReturnValue(editor);
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        outerVerticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      {
+        parseRange: jest
+          .fn()
+          .mockReturnValue([makeRoot({ editor: sourceEditor })]),
+      },
+    );
+    const { event, preventDefault } = makeEvent(
+      makeOuterGuideTarget({
+        "data-actionable": "true",
+        "data-chunk-start": "0",
+        "data-chunk-end": "1",
+      }),
+    );
+
+    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
+    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
