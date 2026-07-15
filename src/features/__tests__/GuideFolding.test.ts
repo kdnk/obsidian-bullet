@@ -20,6 +20,15 @@ import { Parser } from "../../services/Parser";
 import { Settings } from "../../services/Settings";
 import { GuideFoldingPluginValue } from "../GuideFolding";
 
+type ExtraGuideFoldingInterfaceKeys = Exclude<
+  keyof GuideFoldingPluginValue,
+  "decorations" | "update" | "destroy"
+>;
+
+const guideFoldingInterfaceIsClosed: ExtraGuideFoldingInterfaceKeys extends never
+  ? true
+  : false = true;
+
 const mockGetEditorFromState = jest.fn<unknown, unknown[]>();
 
 jest.mock(
@@ -224,6 +233,10 @@ function makeHoverFixture(options: {
     requests,
   };
 }
+
+test("exposes only the ViewPlugin lifecycle interface", () => {
+  expect(guideFoldingInterfaceIsClosed).toBe(true);
+});
 
 describe("GuideFoldingPluginValue hover measurement", () => {
   beforeEach(() => {
@@ -881,6 +894,18 @@ describe("GuideFoldingPluginValue guide interactions", () => {
   const mockedFoldEffectOf = jest.mocked(foldEffect.of);
   // eslint-disable-next-line @typescript-eslint/unbound-method -- CodeMirror's mocked effect factory is intentionally stored for test setup and assertions.
   const mockedUnfoldEffectOf = jest.mocked(unfoldEffect.of);
+  const interactionPluginValues: GuideFoldingPluginValue[] = [];
+  type CapturedListener = (event: Event) => void;
+  type ListenerCapturingView = {
+    contentDOM: {
+      addEventListener: jest.Mock;
+      removeEventListener: jest.Mock;
+      querySelector: jest.Mock;
+      querySelectorAll: jest.Mock;
+      style: { paddingBottom: string };
+    };
+    listeners: Map<string, CapturedListener>;
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -903,11 +928,49 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     mockGetEditorFromState.mockReturnValue(null);
   });
 
+  afterEach(() => {
+    for (const pluginValue of interactionPluginValues.splice(0)) {
+      pluginValue.destroy();
+    }
+  });
+
   function makeEvent(target: unknown) {
-    const preventDefault = jest.fn();
+    let defaultPrevented = false;
+    const preventDefault = jest.fn(() => {
+      defaultPrevented = true;
+    });
+    const stopPropagation = jest.fn();
     return {
-      event: { target, preventDefault } as unknown as MouseEvent,
+      event: {
+        target,
+        get defaultPrevented() {
+          return defaultPrevented;
+        },
+        preventDefault,
+        stopPropagation,
+      } as unknown as MouseEvent,
       preventDefault,
+      stopPropagation,
+    };
+  }
+
+  function makeListenerCapturingContentDOM(paddingBottom: string) {
+    const listeners = new Map<string, CapturedListener>();
+    const addEventListener = jest.fn(
+      (eventName: string, listener: CapturedListener) => {
+        listeners.set(eventName, listener);
+      },
+    );
+
+    return {
+      contentDOM: {
+        addEventListener,
+        removeEventListener: jest.fn(),
+        querySelector: jest.fn().mockReturnValue(null),
+        querySelectorAll: jest.fn().mockReturnValue([]),
+        style: { paddingBottom },
+      },
+      listeners,
     };
   }
 
@@ -917,8 +980,9 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       to: index * 10 + 9,
     }));
     const scrollSnapshot = { value: {} };
+    const { contentDOM, listeners } = makeListenerCapturingContentDOM("1000px");
     return {
-      contentDOM: { style: { paddingBottom: "1000px" } },
+      contentDOM,
       defaultLineHeight: 24,
       documentPadding: { top: 0, bottom: 0 },
       documentTop: 0,
@@ -942,18 +1006,48 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       lineBlockAt: jest.fn((from: number) => lines[from / 10]),
       lineBlockAtHeight: jest.fn(() => ({ from: 0, top: 0 })),
       posAtDOM: jest.fn().mockReturnValue(10),
+      requestMeasure: jest.fn(),
       scrollSnapshot: jest.fn().mockReturnValue(scrollSnapshot),
       dispatch: jest.fn(),
+      listeners,
     };
   }
 
-  function makePluginValue(settings: unknown, parser: unknown) {
-    return Object.assign(Object.create(GuideFoldingPluginValue.prototype), {
-      settings,
-      parser,
-    }) as {
-      handleMouseDown(event: MouseEvent, view: unknown): boolean;
-      handleClick(event: MouseEvent, view: unknown): boolean;
+  function makeInteractionHarness(settings: object, parser: object) {
+    const dispatch = (
+      eventName: "mousedown" | "click",
+      event: MouseEvent,
+      view: ListenerCapturingView,
+    ) => {
+      const ownedSettings = {
+        verticalLines: false,
+        outerVerticalLines: false,
+        verticalLinesAction: "none",
+        onChange: jest.fn(),
+        removeCallback: jest.fn(),
+      };
+      const pluginValue = new GuideFoldingPluginValue(
+        ownedSettings as never,
+        parser as never,
+        view as never,
+      );
+      interactionPluginValues.push(pluginValue);
+      Object.assign(ownedSettings, settings);
+
+      const listener = view.listeners.get(eventName);
+      if (!listener) {
+        throw new Error(`Expected ${eventName} capture listener`);
+      }
+      listener(event);
+
+      return event.defaultPrevented;
+    };
+
+    return {
+      mouseDown: (event: MouseEvent, view: ListenerCapturingView) =>
+        dispatch("mousedown", event, view),
+      click: (event: MouseEvent, view: ListenerCapturingView) =>
+        dispatch("click", event, view),
     };
   }
 
@@ -987,8 +1081,10 @@ describe("GuideFoldingPluginValue guide interactions", () => {
         yMargin: -12.875,
       },
     };
+    const { contentDOM, listeners } =
+      makeListenerCapturingContentDOM("1138.5px");
     const view = {
-      contentDOM: { style: { paddingBottom: "1138.5px" } },
+      contentDOM,
       defaultLineHeight: 24,
       documentPadding: { top: 0, bottom: 0 },
       documentTop: 0,
@@ -1019,6 +1115,8 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       scrollSnapshot: jest.fn().mockReturnValue(scrollSnapshot),
       dispatch: jest.fn(),
       posAtDOM: jest.fn(),
+      requestMeasure: jest.fn(),
+      listeners,
     };
     const editor = makeFoldEditor();
     editor.lastLine.mockReturnValue(1);
@@ -1035,7 +1133,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       getContentStart: jest.fn(() => ({ line: 0, ch: 0 })),
       getContentEnd: jest.fn(() => ({ line: 1, ch: 0 })),
     };
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         outerVerticalLines: true,
@@ -1088,7 +1186,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       const { interaction, pluginValue, scrollSnapshot, view } =
         makeTransactionFixture(32);
 
-      expect(pluginValue.handleClick(interaction.event, view)).toBe(true);
+      expect(pluginValue.click(interaction.event, view)).toBe(true);
 
       expect(view.scrollSnapshot).toHaveBeenCalledTimes(1);
       expect(view.dispatch).toHaveBeenCalledWith({
@@ -1109,7 +1207,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       const { interaction, pluginValue, scrollSnapshot, view } =
         makeTransactionFixture(5);
 
-      pluginValue.handleClick(interaction.event, view);
+      pluginValue.click(interaction.event, view);
 
       expect(view.dispatch).toHaveBeenCalledWith({
         effects: [scrollSnapshot, "fold-8", "fold-29"],
@@ -1134,7 +1232,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       const { interaction, pluginValue, scrollSnapshot, view } =
         makeTransactionFixture(5, { targetsFolded: true });
 
-      expect(pluginValue.handleClick(interaction.event, view)).toBe(true);
+      expect(pluginValue.click(interaction.event, view)).toBe(true);
 
       expect(view.scrollSnapshot).toHaveBeenCalledTimes(1);
       expect(view.dispatch).toHaveBeenCalledWith({
@@ -1148,7 +1246,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       const { interaction, pluginValue, view } = makeTransactionFixture(5);
       setPaddingBottom(view, "100px");
 
-      expect(pluginValue.handleClick(interaction.event, view)).toBe(false);
+      expect(pluginValue.click(interaction.event, view)).toBe(false);
 
       expect(view.scrollSnapshot).not.toHaveBeenCalled();
       expect(view.dispatch).not.toHaveBeenCalled();
@@ -1170,7 +1268,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       scrollSnapshot.value.range = EditorSelection.cursor(1570);
       scrollSnapshot.value.yMargin = -17.34375;
 
-      pluginValue.handleClick(interaction.event, view);
+      pluginValue.click(interaction.event, view);
 
       expect(view.lineBlockAtHeight).toHaveBeenCalledWith(624.3125);
       expect(scrollSnapshot.value.range.from).toBe(848);
@@ -1188,7 +1286,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       view.scrollDOM.scrollTop = 1400;
       view.scrollDOM.getBoundingClientRect.mockReturnValue({ top: 78.75 });
 
-      pluginValue.handleClick(interaction.event, view);
+      pluginValue.click(interaction.event, view);
 
       expect(view.lineBlockAtHeight).toHaveBeenCalledWith(624.3125);
       expect(view.dispatch).toHaveBeenCalledTimes(1);
@@ -1203,7 +1301,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       scrollSnapshot.value.range = EditorSelection.cursor(1570);
       scrollSnapshot.value.yMargin = -17.34375;
 
-      pluginValue.handleClick(interaction.event, view);
+      pluginValue.click(interaction.event, view);
 
       expect(view.lineBlockAtHeight).not.toHaveBeenCalled();
       expect(scrollSnapshot.value.range.from).toBe(1570);
@@ -1217,7 +1315,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       const { interaction, pluginValue, view } = makeTransactionFixture(5);
       setPaddingBottom(view, "100px");
 
-      pluginValue.handleClick(interaction.event, view);
+      pluginValue.click(interaction.event, view);
 
       expect(view.contentDOM.style.paddingBottom).toBe("1138.5px");
       expect(view.dispatch).toHaveBeenCalledTimes(1);
@@ -1229,7 +1327,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       const { interaction, pluginValue, view } = makeTransactionFixture(5);
       setPaddingBottom(view, "1200px");
 
-      pluginValue.handleClick(interaction.event, view);
+      pluginValue.click(interaction.event, view);
 
       expect(view.contentDOM.style.paddingBottom).toBe("1200px");
       expect(view.dispatch).toHaveBeenCalledTimes(1);
@@ -1243,7 +1341,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       view.scaleY = 0;
       scrollSnapshot.value.yMargin = -12.74;
 
-      pluginValue.handleClick(interaction.event, view);
+      pluginValue.click(interaction.event, view);
 
       expect(scrollSnapshot.value.yMargin).toBe(-12.5);
       expect(view.dispatch).toHaveBeenCalledTimes(1);
@@ -1265,7 +1363,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     });
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -1276,9 +1374,9 @@ describe("GuideFoldingPluginValue guide interactions", () => {
 
     const views = guides.slice(0, 3).map(() => makeView(4));
     for (const [index, guide] of guides.slice(0, 3).entries()) {
-      expect(
-        pluginValue.handleClick(makeEvent(guide).event, views[index]),
-      ).toBe(true);
+      expect(pluginValue.click(makeEvent(guide).event, views[index])).toBe(
+        true,
+      );
     }
 
     expect(foldable).toHaveBeenNthCalledWith(1, expect.anything(), 10, 19);
@@ -1304,7 +1402,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     });
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -1315,12 +1413,10 @@ describe("GuideFoldingPluginValue guide interactions", () => {
 
     const firstView = makeView(4);
     const secondView = makeView(4);
-    expect(pluginValue.handleClick(makeEvent(guides[0]).event, firstView)).toBe(
+    expect(pluginValue.click(makeEvent(guides[0]).event, firstView)).toBe(true);
+    expect(pluginValue.click(makeEvent(guides[1]).event, secondView)).toBe(
       true,
     );
-    expect(
-      pluginValue.handleClick(makeEvent(guides[1]).event, secondView),
-    ).toBe(true);
 
     expect(foldable).toHaveBeenNthCalledWith(1, expect.anything(), 10, 19);
     expect(foldable).toHaveBeenNthCalledWith(2, expect.anything(), 30, 39);
@@ -1335,7 +1431,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     });
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -1344,12 +1440,12 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
     const { guides } = makeGuideLine(["    ", "    "]);
 
-    expect(
-      pluginValue.handleClick(makeEvent(guides[0]).event, makeView(2)),
-    ).toBe(false);
-    expect(
-      pluginValue.handleClick(makeEvent(guides[1]).event, makeView(2)),
-    ).toBe(false);
+    expect(pluginValue.click(makeEvent(guides[0]).event, makeView(2))).toBe(
+      false,
+    );
+    expect(pluginValue.click(makeEvent(guides[1]).event, makeView(2))).toBe(
+      false,
+    );
     expect(foldable).not.toHaveBeenCalled();
   });
 
@@ -1362,7 +1458,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     });
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -1372,9 +1468,9 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { guides, indentContainer } = makeGuideLine(["    ", "    "]);
     indentContainer.matches.mockReturnValue(false);
 
-    expect(
-      pluginValue.handleClick(makeEvent(guides[0]).event, makeView(2)),
-    ).toBe(false);
+    expect(pluginValue.click(makeEvent(guides[0]).event, makeView(2))).toBe(
+      false,
+    );
     expect(foldable).not.toHaveBeenCalled();
   });
 
@@ -1395,7 +1491,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     });
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -1405,9 +1501,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { guides } = makeGuideLine(["    "]);
 
     const view = makeView(2);
-    expect(pluginValue.handleClick(makeEvent(guides[0]).event, view)).toBe(
-      true,
-    );
+    expect(pluginValue.click(makeEvent(guides[0]).event, view)).toBe(true);
     expect(foldable).toHaveBeenNthCalledWith(1, expect.anything(), 10, 19);
     expect(foldable).toHaveBeenNthCalledWith(2, expect.anything(), 40, 49);
     expect(view.dispatch).toHaveBeenCalledTimes(1);
@@ -1430,7 +1524,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     });
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -1440,9 +1534,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { guides } = makeGuideLine(["    "]);
 
     const view = makeView(2);
-    expect(pluginValue.handleClick(makeEvent(guides[0]).event, view)).toBe(
-      true,
-    );
+    expect(pluginValue.click(makeEvent(guides[0]).event, view)).toBe(true);
     expect(mockedUnfoldEffectOf).toHaveBeenNthCalledWith(1, {
       from: 11,
       to: 19,
@@ -1463,7 +1555,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     });
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -1472,9 +1564,9 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
     const { guides } = makeGuideLine(["  "]);
 
-    expect(
-      pluginValue.handleClick(makeEvent(guides[0]).event, makeView(1)),
-    ).toBe(false);
+    expect(pluginValue.click(makeEvent(guides[0]).event, makeView(1))).toBe(
+      false,
+    );
     expect(foldable).not.toHaveBeenCalled();
   });
 
@@ -1488,7 +1580,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const editor = makeFoldEditor();
     jest.mocked(foldable).mockReturnValue(null);
     mockGetEditorFromState.mockReturnValue(editor);
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -1499,7 +1591,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { event, preventDefault } = makeEvent(guides[0]);
 
     const view = makeView(2);
-    expect(pluginValue.handleClick(event, view)).toBe(false);
+    expect(pluginValue.click(event, view)).toBe(false);
     expect(foldable).toHaveBeenCalledTimes(1);
     expect(view.dispatch).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
@@ -2279,7 +2371,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       parse: jest.fn(),
       parseRange: jest.fn().mockReturnValue([root]),
     };
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         outerVerticalLines: true,
@@ -2291,7 +2383,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { event, preventDefault } = makeEvent(target);
     const view = makeView(1);
 
-    expect(pluginValue.handleClick(event, view)).toBe(true);
+    expect(pluginValue.click(event, view)).toBe(true);
     expect(parser.parseRange).toHaveBeenCalledTimes(1);
     expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 2);
     expect(parser.parse).not.toHaveBeenCalled();
@@ -2310,7 +2402,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const root = makeRoot({ editor: sourceEditor });
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         outerVerticalLines: true,
@@ -2327,7 +2419,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
 
     const view = makeView(1);
-    expect(pluginValue.handleClick(event, view)).toBe(true);
+    expect(pluginValue.click(event, view)).toBe(true);
     expect(mockedUnfoldEffectOf).toHaveBeenNthCalledWith(1, {
       from: 1,
       to: 9,
@@ -2352,7 +2444,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       parse: jest.fn(),
       parseRange: jest.fn().mockReturnValue([root]),
     };
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         outerVerticalLines: true,
@@ -2363,7 +2455,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { event, preventDefault } = makeEvent(makeOuterGuideTarget());
 
     const view = makeView(1);
-    expect(pluginValue.handleMouseDown(event, view)).toBe(true);
+    expect(pluginValue.mouseDown(event, view)).toBe(true);
     expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 2);
     expect(view.dispatch).not.toHaveBeenCalled();
     expect(preventDefault).toHaveBeenCalledTimes(1);
@@ -2379,7 +2471,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
     const parser = { parse: jest.fn().mockReturnValue(root) };
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -2390,7 +2482,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { event, preventDefault } = makeEvent(guides[0]);
 
     const view = makeView(2);
-    expect(pluginValue.handleMouseDown(event, view)).toBe(true);
+    expect(pluginValue.mouseDown(event, view)).toBe(true);
     expect(parser.parse).toHaveBeenCalledWith(editor, { line: 2, ch: 0 });
     expect(view.dispatch).not.toHaveBeenCalled();
     expect(preventDefault).toHaveBeenCalledTimes(1);
@@ -2460,7 +2552,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
   ])("does not consume a %s outer widget", (_name, visibility, attributes) => {
     const parser = { parse: jest.fn(), parseRange: jest.fn() };
     mockGetEditorFromState.mockReturnValue(makeFoldEditor());
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLinesAction: "toggle-folding",
         ...visibility,
@@ -2471,7 +2563,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       makeOuterGuideTarget(attributes),
     );
 
-    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
+    expect(pluginValue.click(event, makeView(1))).toBe(false);
     expect(parser.parseRange).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
@@ -2488,7 +2580,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
         .fn()
         .mockReturnValue([makeRoot({ editor: sourceEditor })]),
     };
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         outerVerticalLines: true,
@@ -2505,7 +2597,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
 
     const view = makeView(1);
-    expect(pluginValue.handleClick(event, view)).toBe(false);
+    expect(pluginValue.click(event, view)).toBe(false);
     expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 1);
     expect(view.dispatch).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
@@ -2519,7 +2611,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const editor = makeFoldEditor();
     jest.mocked(foldable).mockReturnValue(null);
     mockGetEditorFromState.mockReturnValue(editor);
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         outerVerticalLines: true,
@@ -2540,7 +2632,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
 
     const view = makeView(1);
-    expect(pluginValue.handleClick(event, view)).toBe(false);
+    expect(pluginValue.click(event, view)).toBe(false);
     expect(foldable).toHaveBeenCalledTimes(1);
     expect(view.dispatch).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
@@ -2654,7 +2746,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
     const parser = { parseRange: jest.fn().mockReturnValue([root, root]) };
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         outerVerticalLines: true,
@@ -2671,7 +2763,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
 
     const view = makeView(1);
-    expect(pluginValue.handleClick(event, view)).toBe(false);
+    expect(pluginValue.click(event, view)).toBe(false);
     expect(view.dispatch).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
@@ -2693,7 +2785,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
     const parser = { parse: jest.fn().mockReturnValue(root) };
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -2704,7 +2796,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { event, preventDefault } = makeEvent(guides[0]);
     const view = makeView(2);
 
-    expect(pluginValue.handleClick(event, view)).toBe(true);
+    expect(pluginValue.click(event, view)).toBe(true);
     expect(view.posAtDOM).toHaveBeenCalledWith(line);
     expect(parser.parse).toHaveBeenCalledWith(editor, { line: 2, ch: 0 });
     expect(foldable).toHaveBeenNthCalledWith(1, expect.anything(), 10, 19);
@@ -2732,7 +2824,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
     const parser = { parse: jest.fn().mockReturnValue(root) };
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -2743,7 +2835,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { event, preventDefault } = makeEvent(guides[1]);
     const view = makeView(3);
 
-    expect(pluginValue.handleClick(event, view)).toBe(true);
+    expect(pluginValue.click(event, view)).toBe(true);
     expect(view.posAtDOM).toHaveBeenCalledWith(line);
     expect(parser.parse).toHaveBeenCalledWith(editor, { line: 3, ch: 0 });
     expect(foldable).toHaveBeenNthCalledWith(1, expect.anything(), 20, 29);
@@ -2756,11 +2848,11 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     [{ verticalLines: false, verticalLinesAction: "toggle-folding" }],
     [{ verticalLines: true, verticalLinesAction: "none" }],
   ])("ignores guides when settings disable interaction", (settings) => {
-    const pluginValue = makePluginValue(settings, { parse: jest.fn() });
+    const pluginValue = makeInteractionHarness(settings, { parse: jest.fn() });
     const { guides } = makeGuideLine();
     const { event, preventDefault } = makeEvent(guides[0]);
 
-    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
+    expect(pluginValue.click(event, makeView(1))).toBe(false);
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
@@ -2770,7 +2862,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       closest: jest.fn(),
     };
     const { event, preventDefault } = makeEvent(target);
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -2778,13 +2870,13 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       { parse: jest.fn() },
     );
 
-    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
+    expect(pluginValue.click(event, makeView(1))).toBe(false);
     expect(target.closest).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
   test("ignores a guide while editor state is unavailable", () => {
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -2794,14 +2886,14 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { guides } = makeGuideLine();
     const { event, preventDefault } = makeEvent(guides[0]);
 
-    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
+    expect(pluginValue.click(event, makeView(1))).toBe(false);
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
   test("ignores a guide when the containing list cannot be parsed", () => {
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -2811,7 +2903,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { guides } = makeGuideLine();
     const { event, preventDefault } = makeEvent(guides[0]);
 
-    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
+    expect(pluginValue.click(event, makeView(1))).toBe(false);
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
@@ -2824,7 +2916,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     });
     const editor = makeFoldEditor();
     mockGetEditorFromState.mockReturnValue(editor);
-    const pluginValue = makePluginValue(
+    const pluginValue = makeInteractionHarness(
       {
         verticalLines: true,
         verticalLinesAction: "toggle-folding",
@@ -2834,7 +2926,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { guides } = makeGuideLine();
     const { event, preventDefault } = makeEvent(guides[0]);
 
-    expect(pluginValue.handleClick(event, makeView(0))).toBe(false);
+    expect(pluginValue.click(event, makeView(0))).toBe(false);
     expect(foldable).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });

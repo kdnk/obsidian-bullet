@@ -489,19 +489,15 @@ export class GuideFoldingPluginValue implements PluginValue {
     this.scheduleGuideSynchronization();
   }
 
-  handleMouseDown(event: MouseEvent, view: EditorView) {
-    return this.handleGuideInteraction(event, view, false);
+  private handleMouseDown(event: MouseEvent) {
+    return this.handleGuideInteraction(event, false);
   }
 
-  handleClick(event: MouseEvent, view: EditorView) {
-    return this.handleGuideInteraction(event, view, true);
+  private handleClick(event: MouseEvent) {
+    return this.handleGuideInteraction(event, true);
   }
 
-  private handleGuideInteraction(
-    event: MouseEvent,
-    view: EditorView,
-    shouldToggle: boolean,
-  ) {
+  private handleGuideInteraction(event: MouseEvent, shouldToggle: boolean) {
     if (
       !this.settings.verticalLines ||
       this.settings.verticalLinesAction !== "toggle-folding"
@@ -533,7 +529,7 @@ export class GuideFoldingPluginValue implements PluginValue {
       }
       const startLine = Number(startAttribute);
       const endLine = Number(endAttribute);
-      const editor = getEditorFromState(view.state);
+      const editor = getEditorFromState(this.view.state);
       if (!editor) {
         return false;
       }
@@ -556,7 +552,7 @@ export class GuideFoldingPluginValue implements PluginValue {
         root.getContentStart().line !== startLine ||
         root.getContentEnd().line !== endLine ||
         !isOuterListChunkActionable(root) ||
-        (shouldToggle && !toggleOuterListChunk(view, root))
+        (shouldToggle && !toggleOuterListChunk(this.view, root))
       ) {
         return false;
       }
@@ -573,19 +569,19 @@ export class GuideFoldingPluginValue implements PluginValue {
       return false;
     }
 
-    const editor = getEditorFromState(view.state);
+    const editor = getEditorFromState(this.view.state);
     if (!editor) {
       return false;
     }
 
     let offset: number;
     try {
-      offset = view.posAtDOM(lineElement);
+      offset = this.view.posAtDOM(lineElement);
     } catch {
       return false;
     }
 
-    const line = view.state.doc.lineAt(offset).number - 1;
+    const line = this.view.state.doc.lineAt(offset).number - 1;
     const root = this.parser.parse(editor, { line, ch: 0 });
     const list = root?.getListUnderLine(line);
     if (!list) {
@@ -596,7 +592,7 @@ export class GuideFoldingPluginValue implements PluginValue {
     if (
       !target ||
       !isVerticalGuideTargetActionable(target) ||
-      (shouldToggle && !toggleVerticalGuideTarget(view, target))
+      (shouldToggle && !toggleVerticalGuideTarget(this.view, target))
     ) {
       return false;
     }
@@ -630,13 +626,13 @@ export class GuideFoldingPluginValue implements PluginValue {
   }
 
   private onMouseDown = (event: MouseEvent) => {
-    if (this.handleMouseDown(event, this.view)) {
+    if (this.handleMouseDown(event)) {
       event.stopPropagation();
     }
   };
 
   private onClick = (event: MouseEvent) => {
-    if (this.handleClick(event, this.view)) {
+    if (this.handleClick(event)) {
       event.stopPropagation();
     }
   };
