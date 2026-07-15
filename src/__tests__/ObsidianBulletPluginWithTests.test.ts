@@ -24,7 +24,10 @@ class FakeElement {
   readonly dispatchedEvents: MouseEvent[] = [];
   parentElement: FakeElement | null = null;
 
-  constructor(private readonly className: string) {}
+  constructor(
+    private readonly className: string,
+    private readonly visible = true,
+  ) {}
 
   get textContent(): string {
     return this.childNodes.map((child) => child.textContent).join("");
@@ -64,6 +67,10 @@ class FakeElement {
   dispatchEvent(event: MouseEvent) {
     this.dispatchedEvents.push(event);
     return true;
+  }
+
+  getClientRects() {
+    return this.visible ? [{}] : [];
   }
 }
 
@@ -215,6 +222,55 @@ describe("ObsidianBulletPluginWithTests", () => {
     );
   });
 
+  test.each([
+    ["applyState", { value: "- one", folds: [], selections: "invalid" }],
+    ["drag", { from: { line: 0, ch: "0" } }],
+    ["move", { to: { line: 0, ch: 0 }, offsetX: "0", offsetY: 0 }],
+    ["setSetting", { k: "listLines", v: "true" }],
+    ["setSetting", { k: "listLineAction", v: true }],
+    ["clickGuide", { line: 0, kind: "middle", prefix: "" }],
+  ])("rejects malformed %s command data", async (type, data) => {
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
+    const dispatch = (
+      plugin as unknown as {
+        handleTestCommand(
+          type: string,
+          data: unknown,
+        ): Promise<State | undefined>;
+      }
+    ).handleTestCommand.bind(plugin);
+
+    await expect(dispatch(type, data)).rejects.toThrow(
+      `Invalid data for test command: ${type}`,
+    );
+  });
+
+  test("validates command data before invoking its handler", async () => {
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
+    const applyState = jest.spyOn(plugin, "applyState");
+    const dispatch = (
+      plugin as unknown as {
+        handleTestCommand(
+          type: string,
+          data: unknown,
+        ): Promise<State | undefined>;
+      }
+    ).handleTestCommand.bind(plugin);
+
+    await expect(
+      dispatch("applyState", {
+        value: "- one",
+        folds: [],
+        selections: "invalid",
+      }),
+    ).rejects.toThrow("Invalid data for test command: applyState");
+    expect(applyState).not.toHaveBeenCalled();
+  });
+
   test("clicks the indent guide with the exact raw prefix in pointer order", async () => {
     const firstLine = new FakeElement("cm-line");
     const targetLine = new FakeElement("cm-line");
@@ -280,6 +336,44 @@ describe("ObsidianBulletPluginWithTests", () => {
     expect(
       secondLine.querySelector(".cm-indent")?.dispatchedEvents,
     ).toHaveLength(3);
+  });
+
+  test("asserts a native list bullet from fresh line DOM", () => {
+    const firstLine = createLineWithNativeListBullet();
+    const staleLine = createLineWithNativeListBullet();
+    const currentLine = new FakeElement("cm-line");
+    const { plugin, domAtPos } = createPluginWithLineDom([firstLine]);
+    domAtPos
+      .mockReturnValueOnce({ node: staleLine, offset: 0 })
+      .mockReturnValueOnce({ node: currentLine, offset: 0 });
+
+    expect(() => callAssertNativeListBullet(plugin, { line: 0 })).not.toThrow();
+    expect(() => callAssertNativeListBullet(plugin, { line: 0 })).toThrow(
+      "Unable to assert native list bullet on line 0: found 0 native .list-bullet elements",
+    );
+    expect(domAtPos).toHaveBeenCalledTimes(2);
+  });
+
+  test("rejects a visible raw formatting marker beside a native list bullet", () => {
+    const line = createLineWithNativeListBullet();
+    const rawMarker = new FakeElement("cm-formatting-list");
+    rawMarker.append(new FakeTextNode("-"));
+    line.append(rawMarker);
+    const { plugin } = createPluginWithLineDom([line]);
+
+    expect(() => callAssertNativeListBullet(plugin, { line: 0 })).toThrow(
+      "Unable to assert native list bullet on line 0: found a visible raw formatting marker",
+    );
+  });
+
+  test("ignores a hidden raw formatting marker beside a native list bullet", () => {
+    const line = createLineWithNativeListBullet();
+    const hiddenRawMarker = new FakeElement("cm-formatting-list", false);
+    hiddenRawMarker.append(new FakeTextNode("-"));
+    line.append(hiddenRawMarker);
+    const { plugin } = createPluginWithLineDom([line]);
+
+    expect(() => callAssertNativeListBullet(plugin, { line: 0 })).not.toThrow();
   });
 
   test("rejects an invalid editor line for a guide click", async () => {
@@ -380,6 +474,12 @@ function createLineWithIndentGuide(prefix: string) {
   return line;
 }
 
+function createLineWithNativeListBullet() {
+  const line = new FakeElement("cm-line");
+  line.append(new FakeElement("list-bullet"));
+  return line;
+}
+
 function createPluginWithLineDom(lines: FakeElement[]) {
   const domAtPos = jest.fn((offset: number) => ({
     node: lines[offset],
@@ -415,4 +515,15 @@ async function callClickGuide(
       clickGuide(options: GuideClickOptions): Promise<void>;
     }
   ).clickGuide(options);
+}
+
+function callAssertNativeListBullet(
+  plugin: ObsidianBulletPluginWithTests,
+  options: { line: number },
+) {
+  return (
+    plugin as unknown as {
+      assertNativeListBullet(options: { line: number }): void;
+    }
+  ).assertNativeListBullet(options);
 }

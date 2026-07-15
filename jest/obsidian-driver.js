@@ -1,5 +1,6 @@
 const COMMANDS = [
   "applyState",
+  "assertNativeListBullet",
   "simulateKeydown",
   "insertText",
   "executeCommandById",

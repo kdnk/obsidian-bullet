@@ -9,6 +9,7 @@
 ```
 
 - clickGuide: {"line":1,"kind":"indent","prefix":""}
+- assertNativeListBullet: {"line":1}
 - assertState:
 
 ```md

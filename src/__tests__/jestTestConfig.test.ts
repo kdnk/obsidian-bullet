@@ -26,6 +26,7 @@ describe("test config helpers", () => {
     expect(Object.keys(target)).toEqual(
       expect.arrayContaining([
         "applyState",
+        "assertNativeListBullet",
         "clickGuide",
         "parseState",
         "drag",
@@ -54,5 +55,21 @@ describe("test config helpers", () => {
     expect(code).toContain(
       'await clickGuide({"line":2,"kind":"indent","prefix":"  "});',
     );
+  });
+
+  test("transforms an assertNativeListBullet Markdown action", () => {
+    const source = [
+      "# checks a native marker",
+      "",
+      '- assertNativeListBullet: {"line":2}',
+    ].join("\n");
+
+    const { code } = mdSpecTransformer.process(
+      source,
+      "/repo/specs/native-list-bullet.spec.md",
+      { config: { cwd: "/repo" } },
+    );
+
+    expect(code).toContain('await assertNativeListBullet({"line":2});');
   });
 });

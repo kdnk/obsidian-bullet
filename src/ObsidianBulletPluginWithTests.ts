@@ -29,6 +29,14 @@ interface GuideClickOptions {
   prefix?: string;
 }
 
+interface NativeListBulletAssertionOptions {
+  line: number;
+}
+
+type SettingCommand = {
+  [K in keyof SettingsObject]: { k: K; v: SettingsObject[K] };
+}[keyof SettingsObject];
+
 interface TestCommandMap {
   applyState: State | string | string[];
   simulateKeydown: string;
@@ -40,13 +48,11 @@ interface TestCommandMap {
   waitForIdle: undefined;
   adjustSelection: undefined;
   resetSettings: undefined;
-  setSetting: {
-    k: keyof SettingsObject;
-    v: SettingsObject[keyof SettingsObject];
-  };
+  setSetting: SettingCommand;
   parseState: string | string[];
   getCurrentState: undefined;
   clickGuide: GuideClickOptions;
+  assertNativeListBullet: NativeListBulletAssertionOptions;
 }
 
 type TestMessage = {
@@ -63,6 +69,96 @@ type TestCommandHandlers = {
     data: TestCommandMap[K],
   ) => State | void | Promise<State | void>;
 };
+
+type TestCommandDecoders = {
+  [K in keyof TestCommandMap]: (data: unknown) => TestCommandMap[K];
+};
+
+type SettingCommandDecoders = {
+  [K in keyof SettingsObject]: (
+    value: unknown,
+  ) => Extract<SettingCommand, { k: K }>;
+};
+
+const settingCommandDecoders = {
+  styleLists: (value) => ({
+    k: "styleLists",
+    v: decodeBooleanSetting("styleLists", value),
+  }),
+  debug: (value) => ({
+    k: "debug",
+    v: decodeBooleanSetting("debug", value),
+  }),
+  stickCursor: (value) => ({
+    k: "stickCursor",
+    v: decodeStickCursorSetting(value),
+  }),
+  betterEnter: (value) => ({
+    k: "betterEnter",
+    v: decodeBooleanSetting("betterEnter", value),
+  }),
+  betterVimO: (value) => ({
+    k: "betterVimO",
+    v: decodeBooleanSetting("betterVimO", value),
+  }),
+  betterTab: (value) => ({
+    k: "betterTab",
+    v: decodeBooleanSetting("betterTab", value),
+  }),
+  selectAll: (value) => ({
+    k: "selectAll",
+    v: decodeBooleanSetting("selectAll", value),
+  }),
+  listLines: (value) => ({
+    k: "listLines",
+    v: decodeBooleanSetting("listLines", value),
+  }),
+  outerListLines: (value) => ({
+    k: "outerListLines",
+    v: decodeBooleanSetting("outerListLines", value),
+  }),
+  listLineAction: (value) => ({
+    k: "listLineAction",
+    v: decodeListLineActionSetting(value),
+  }),
+  dnd: (value) => ({
+    k: "dnd",
+    v: decodeBooleanSetting("dnd", value),
+  }),
+} satisfies SettingCommandDecoders;
+
+const testCommandDecoders: TestCommandDecoders = {
+  applyState: (data) => decodeStateSource("applyState", data),
+  simulateKeydown: (data) => decodeString("simulateKeydown", data),
+  insertText: (data) => decodeString("insertText", data),
+  executeCommandById: (data) => decodeString("executeCommandById", data),
+  drag: (data) => {
+    const record = decodeRecord("drag", data);
+    return { from: decodeEditorPosition("drag", record.from) };
+  },
+  move: (data) => {
+    const record = decodeRecord("move", data);
+    return {
+      to: decodeEditorPosition("move", record.to),
+      offsetX: decodeFiniteNumber("move", record.offsetX),
+      offsetY: decodeFiniteNumber("move", record.offsetY),
+    };
+  },
+  drop: (data) => decodeUndefined("drop", data),
+  waitForIdle: (data) => decodeUndefined("waitForIdle", data),
+  adjustSelection: (data) => decodeUndefined("adjustSelection", data),
+  resetSettings: (data) => decodeUndefined("resetSettings", data),
+  setSetting: (data) => decodeSetting(data),
+  parseState: (data) => decodeStateText("parseState", data),
+  getCurrentState: (data) => decodeUndefined("getCurrentState", data),
+  clickGuide: (data) => decodeGuideClickOptions(data),
+  assertNativeListBullet: (data) => {
+    const record = decodeRecord("assertNativeListBullet", data);
+    return {
+      line: decodeInteger("assertNativeListBullet", record.line),
+    };
+  },
+} satisfies TestCommandDecoders;
 
 const keysMap: { [key: string]: number } = {
   Backspace: 8,
@@ -88,14 +184,8 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     (this.app as AppWithCommands).commands.executeCommandById(id);
   }
 
-  setSetting({
-    k,
-    v,
-  }: {
-    k: keyof SettingsObject;
-    v: SettingsObject[keyof SettingsObject];
-  }) {
-    this.settings.setValue(k, v);
+  setSetting(setting: SettingCommand) {
+    this.settings.setValue(setting.k, setting.v);
   }
 
   resetSettings() {
@@ -268,7 +358,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     type: string,
     data: unknown,
   ): Promise<State | undefined> {
-    const handlers: Partial<TestCommandHandlers> = {
+    const handlers = {
       applyState: async (state) => await this.applyState(state),
       simulateKeydown: (keys) => this.simulateKeydown(keys),
       insertText: (text) => this.insertText(text),
@@ -283,16 +373,48 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
       parseState: (state) => this.parseState(state),
       getCurrentState: () => this.getCurrentState(),
       clickGuide: async (options) => await this.clickGuide(options),
-    };
-    const handler = handlers[type as keyof TestCommandMap];
+      assertNativeListBullet: (options) => this.assertNativeListBullet(options),
+    } satisfies TestCommandHandlers;
 
-    if (!handler) {
+    if (!isTestCommand(type)) {
       throw new Error(`Unknown test command: ${type}`);
     }
 
-    return (await (
-      handler as (data: unknown) => State | void | Promise<State | void>
-    )(data)) as State | undefined;
+    return await invokeTestCommand(handlers, type, data);
+  }
+
+  private assertNativeListBullet(
+    options: NativeListBulletAssertionOptions,
+  ): void {
+    const lineCount = this.editor.getValue().split("\n").length;
+    if (options.line < 0 || options.line >= lineCount) {
+      throw new Error(
+        `Unable to assert native list bullet on line ${options.line}: line must be between 0 and ${lineCount - 1}`,
+      );
+    }
+
+    const lineElement = this.resolveRenderedLine(options.line);
+    if (!lineElement) {
+      throw new Error(
+        `Unable to assert native list bullet on line ${options.line}: the rendered line is missing`,
+      );
+    }
+
+    const nativeBullets = lineElement.querySelectorAll(".list-bullet");
+    if (nativeBullets.length === 0) {
+      throw new Error(
+        `Unable to assert native list bullet on line ${options.line}: found 0 native .list-bullet elements`,
+      );
+    }
+
+    const rawMarker = Array.from(
+      lineElement.querySelectorAll(".cm-formatting-list"),
+    ).find(isVisibleRawListMarker);
+    if (rawMarker) {
+      throw new Error(
+        `Unable to assert native list bullet on line ${options.line}: found a visible raw formatting marker`,
+      );
+    }
   }
 
   async clickGuide(options: GuideClickOptions): Promise<void> {
@@ -312,14 +434,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
       );
     }
 
-    const view = this.editor.getCodeMirrorView();
-    const offset = this.editor.posToOffset({ line: options.line, ch: 0 });
-    const { node } = view.domAtPos(offset);
-    let lineElement =
-      node.nodeType === 1 ? (node as Element) : node.parentElement;
-    while (lineElement && !lineElement.matches(".cm-line")) {
-      lineElement = lineElement.parentElement;
-    }
+    const lineElement = this.resolveRenderedLine(options.line);
     if (!lineElement) {
       throw new Error(
         `Unable to click ${options.kind} guide on line ${options.line}: found 0 guide candidates because the rendered line is missing`,
@@ -358,6 +473,18 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     }
 
     await this.waitForIdle();
+  }
+
+  private resolveRenderedLine(line: number): Element | null {
+    const view = this.editor.getCodeMirrorView();
+    const offset = this.editor.posToOffset({ line, ch: 0 });
+    const { node } = view.domAtPos(offset);
+    let lineElement =
+      node.nodeType === 1 ? (node as Element) : node.parentElement;
+    while (lineElement && !lineElement.matches(".cm-line")) {
+      lineElement = lineElement.parentElement;
+    }
+    return lineElement;
   }
 
   private drag(opts: { from: { line: number; ch: number } }) {
@@ -777,4 +904,223 @@ function getGuideIndentPrefix(guide: Element): string | null {
   }
 
   return null;
+}
+
+function isVisibleRawListMarker(marker: Element): boolean {
+  if (
+    marker.querySelector(".list-bullet") ||
+    (marker.textContent ?? "").trim().length === 0 ||
+    marker.getClientRects().length === 0
+  ) {
+    return false;
+  }
+
+  const window = marker.ownerDocument?.defaultView;
+  if (!window) {
+    return true;
+  }
+  const style = window.getComputedStyle(marker);
+  return (
+    style.display !== "none" &&
+    style.visibility !== "hidden" &&
+    style.visibility !== "collapse" &&
+    style.opacity !== "0"
+  );
+}
+
+async function invokeTestCommand<K extends keyof TestCommandMap>(
+  handlers: TestCommandHandlers,
+  type: K,
+  data: unknown,
+): Promise<State | undefined> {
+  return (await handlers[type](testCommandDecoders[type](data))) as
+    | State
+    | undefined;
+}
+
+function isTestCommand(type: string): type is keyof TestCommandMap {
+  return Object.prototype.hasOwnProperty.call(testCommandDecoders, type);
+}
+
+function decodeStateSource(
+  type: "applyState",
+  data: unknown,
+): State | string | string[] {
+  if (typeof data === "string" || isStringArray(data)) {
+    return data;
+  }
+  if (isState(data)) {
+    return data;
+  }
+  return invalidCommandData(type, "expected an editor state or state text");
+}
+
+function decodeStateText(type: "parseState", data: unknown): string | string[] {
+  if (typeof data === "string" || isStringArray(data)) {
+    return data;
+  }
+  return invalidCommandData(type, "expected a string or string array");
+}
+
+function isState(data: unknown): data is State {
+  if (!isRecord(data) || typeof data.value !== "string") {
+    return false;
+  }
+  if (
+    !Array.isArray(data.folds) ||
+    !data.folds.every((line) => Number.isInteger(line))
+  ) {
+    return false;
+  }
+  return (
+    Array.isArray(data.selections) &&
+    data.selections.every(
+      (selection) =>
+        isRecord(selection) &&
+        isEditorPosition(selection.anchor) &&
+        isEditorPosition(selection.head),
+    )
+  );
+}
+
+function decodeGuideClickOptions(data: unknown): GuideClickOptions {
+  const type = "clickGuide";
+  const record = decodeRecord(type, data);
+  const line = decodeInteger(type, record.line);
+  if (record.kind !== "indent" && record.kind !== "outer") {
+    return invalidCommandData(type, 'kind must be "indent" or "outer"');
+  }
+  if (record.kind === "indent") {
+    return {
+      line,
+      kind: record.kind,
+      prefix: decodeString(type, record.prefix),
+    };
+  }
+  if (record.prefix !== undefined && typeof record.prefix !== "string") {
+    return invalidCommandData(type, "prefix must be a string when provided");
+  }
+  return { line, kind: record.kind, prefix: record.prefix };
+}
+
+function decodeSetting(data: unknown): TestCommandMap["setSetting"] {
+  const type = "setSetting";
+  const record = decodeRecord(type, data);
+  const { k, v } = record;
+  if (typeof k !== "string" || !isSettingKey(k)) {
+    return invalidCommandData(type, "k must be a known setting key");
+  }
+  return settingCommandDecoders[k](v);
+}
+
+function isSettingKey(key: string): key is keyof SettingsObject {
+  return Object.prototype.hasOwnProperty.call(settingCommandDecoders, key);
+}
+
+function decodeBooleanSetting(
+  key: keyof SettingsObject,
+  data: unknown,
+): boolean {
+  if (typeof data !== "boolean") {
+    return invalidCommandData("setSetting", `${key} must be a boolean`);
+  }
+  return data;
+}
+
+function decodeStickCursorSetting(
+  data: unknown,
+): SettingsObject["stickCursor"] {
+  if (
+    typeof data !== "boolean" &&
+    data !== "never" &&
+    data !== "bullet-only" &&
+    data !== "bullet-and-checkbox"
+  ) {
+    return invalidCommandData("setSetting", "stickCursor has an invalid value");
+  }
+  return data;
+}
+
+function decodeListLineActionSetting(
+  data: unknown,
+): SettingsObject["listLineAction"] {
+  if (data !== "none" && data !== "toggle-folding") {
+    return invalidCommandData(
+      "setSetting",
+      "listLineAction has an invalid value",
+    );
+  }
+  return data;
+}
+
+function decodeEditorPosition(
+  type: "drag" | "move",
+  data: unknown,
+): MyEditorPosition {
+  const record = decodeRecord(type, data);
+  return {
+    line: decodeInteger(type, record.line),
+    ch: decodeInteger(type, record.ch),
+  };
+}
+
+function isEditorPosition(data: unknown): data is MyEditorPosition {
+  return (
+    isRecord(data) && Number.isInteger(data.line) && Number.isInteger(data.ch)
+  );
+}
+
+function decodeRecord(
+  type: keyof TestCommandMap,
+  data: unknown,
+): Record<string, unknown> {
+  if (!isRecord(data)) {
+    return invalidCommandData(type, "expected an object");
+  }
+  return data;
+}
+
+function isRecord(data: unknown): data is Record<string, unknown> {
+  return typeof data === "object" && data !== null && !Array.isArray(data);
+}
+
+function decodeString<T extends keyof TestCommandMap>(
+  type: T,
+  data: unknown,
+): string {
+  if (typeof data !== "string") {
+    return invalidCommandData(type, "expected a string");
+  }
+  return data;
+}
+
+function isStringArray(data: unknown): data is string[] {
+  return (
+    Array.isArray(data) && data.every((value) => typeof value === "string")
+  );
+}
+
+function decodeFiniteNumber(type: keyof TestCommandMap, data: unknown): number {
+  if (typeof data !== "number" || !Number.isFinite(data)) {
+    return invalidCommandData(type, "expected a finite number");
+  }
+  return data;
+}
+
+function decodeInteger(type: keyof TestCommandMap, data: unknown): number {
+  if (!Number.isInteger(data)) {
+    return invalidCommandData(type, "expected an integer");
+  }
+  return data as number;
+}
+
+function decodeUndefined(type: keyof TestCommandMap, data: unknown): undefined {
+  if (data !== undefined) {
+    return invalidCommandData(type, "expected no data");
+  }
+  return undefined;
+}
+
+function invalidCommandData(type: keyof TestCommandMap, detail: string): never {
+  throw new Error(`Invalid data for test command: ${type} (${detail})`);
 }

@@ -116,6 +116,19 @@ function parseClickGuide(l) {
   };
 }
 
+function parseAssertNativeListBullet(l) {
+  const options = JSON.parse(
+    l.line.replace(/^- assertNativeListBullet:\s*/, "")
+  );
+
+  l.nextNotEmpty();
+
+  return {
+    type: "assertNativeListBullet",
+    options,
+  };
+}
+
 function parseMove(l) {
   const { to, offsetX, offsetY } = JSON.parse(
     l.line.replace(/- move: `([^`]+)`/, "$1")
@@ -208,6 +221,8 @@ function parseAction(l) {
     return parseDrag(l);
   } else if (l.line.startsWith("- clickGuide:")) {
     return parseClickGuide(l);
+  } else if (l.line.startsWith("- assertNativeListBullet:")) {
+    return parseAssertNativeListBullet(l);
   } else if (l.line.startsWith("- move:")) {
     return parseMove(l);
   } else if (l.line.startsWith("- drop")) {
@@ -319,6 +334,9 @@ module.exports.process = function process(sourceText, sourcePath, options) {
           break;
         case "clickGuide":
           code += `    await clickGuide(${s(action.options)});\n`;
+          break;
+        case "assertNativeListBullet":
+          code += `    await assertNativeListBullet(${s(action.options)});\n`;
           break;
         case "move":
           code += `    await move(${s({
