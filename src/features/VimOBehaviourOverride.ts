@@ -46,7 +46,7 @@ export class VimOBehaviourOverride implements Feature {
   ) {}
 
   async load() {
-    this.settings.onChange(this.handleSettingsChange);
+    this.settings.onChange(["betterVimO"], this.handleSettingsChange);
     this.handleSettingsChange();
   }
 

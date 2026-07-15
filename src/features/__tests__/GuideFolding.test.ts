@@ -17,6 +17,7 @@ import {
   makeSettings,
 } from "../../__mocks__";
 import { Parser } from "../../services/Parser";
+import { Settings } from "../../services/Settings";
 import { GuideFoldingPluginValue } from "../GuideFolding";
 
 const mockGetEditorFromState = jest.fn<unknown, unknown[]>();
@@ -411,8 +412,8 @@ describe("GuideFoldingPluginValue decorations", () => {
     const settings = {
       ...visibility,
       verticalLinesAction: "none",
-      onChange: jest.fn((callback: () => void) => {
-        settingsCallbacks.push(callback);
+      onChange: jest.fn((keys: unknown, callback?: () => void) => {
+        settingsCallbacks.push(callback ?? (keys as () => void));
       }),
       removeCallback: jest.fn(),
     };
@@ -490,6 +491,51 @@ describe("GuideFoldingPluginValue decorations", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  test("ignores debug changes and synchronizes once for list-line actions", () => {
+    const settings = new Settings({
+      loadData: jest.fn(async () => ({}) as never),
+      saveData: jest.fn(async () => undefined),
+    });
+    const onChange = jest.spyOn(settings, "onChange");
+    const contentDOM = {
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      querySelector: jest.fn().mockReturnValue(null),
+      querySelectorAll: jest.fn().mockReturnValue([]),
+    };
+    const view = {
+      state: { doc: Text.of(["- parent"]) },
+      contentDOM,
+      dispatch: jest.fn(),
+      requestMeasure: jest.fn(),
+    };
+    mockGetEditorFromState.mockReturnValue(
+      makeEditor({ text: "- parent", cursor: { line: 0, ch: 0 } }),
+    );
+    const pluginValue = new GuideFoldingPluginValue(
+      settings,
+      { parseRange: jest.fn().mockReturnValue([]) } as never,
+      view as never,
+    );
+    expect(onChange).toHaveBeenCalledWith(
+      ["listLines", "outerListLines", "listLineAction"],
+      expect.any(Function),
+    );
+    view.requestMeasure.mockClear();
+    view.dispatch.mockClear();
+
+    settings.debug = true;
+
+    expect(view.requestMeasure).not.toHaveBeenCalled();
+    expect(view.dispatch).not.toHaveBeenCalled();
+
+    settings.verticalLinesAction = "none";
+
+    expect(view.requestMeasure).toHaveBeenCalledTimes(1);
+    expect(view.dispatch).not.toHaveBeenCalled();
+    pluginValue.destroy();
   });
 
   test("builds outer decorations on construction when both settings are visible", () => {
@@ -1473,8 +1519,8 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const settings = {
       verticalLines: true,
       verticalLinesAction: "toggle-folding",
-      onChange: jest.fn((callback: () => void) => {
-        settingsCallbacks.push(callback);
+      onChange: jest.fn((keys: unknown, callback?: () => void) => {
+        settingsCallbacks.push(callback ?? (keys as () => void));
       }),
       removeCallback: jest.fn(),
     };
@@ -1521,7 +1567,10 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       expect.any(Function),
       true,
     );
-    expect(settings.onChange).toHaveBeenCalledWith(expect.any(Function));
+    expect(settings.onChange).toHaveBeenCalledWith(
+      ["listLines", "outerListLines", "listLineAction"],
+      expect.any(Function),
+    );
     expect(requestMeasure).toHaveBeenCalledTimes(1);
     const listener = addEventListener.mock.calls[0]?.[1];
     const clickListener = addEventListener.mock.calls.find(
@@ -1581,8 +1630,8 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const settings = {
       verticalLines: true,
       verticalLinesAction: "toggle-folding",
-      onChange: jest.fn((callback: () => void) => {
-        settingsCallbacks.push(callback);
+      onChange: jest.fn((keys: unknown, callback?: () => void) => {
+        settingsCallbacks.push(callback ?? (keys as () => void));
       }),
       removeCallback: jest.fn(),
     };
@@ -1822,8 +1871,8 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       verticalLines: true,
       outerVerticalLines: true,
       verticalLinesAction: "toggle-folding",
-      onChange: jest.fn((callback: () => void) => {
-        settingsCallbacks.push(callback);
+      onChange: jest.fn((keys: unknown, callback?: () => void) => {
+        settingsCallbacks.push(callback ?? (keys as () => void));
       }),
       removeCallback: jest.fn(),
     };
@@ -2114,8 +2163,8 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const settings = {
       verticalLines: false,
       verticalLinesAction: "toggle-folding",
-      onChange: jest.fn((callback: () => void) => {
-        settingsCallbacks.push(callback);
+      onChange: jest.fn((keys: unknown, callback?: () => void) => {
+        settingsCallbacks.push(callback ?? (keys as () => void));
       }),
       removeCallback: jest.fn(),
     };
@@ -2172,8 +2221,8 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const settings = {
       verticalLines: true,
       verticalLinesAction: "toggle-folding",
-      onChange: jest.fn((callback: () => void) => {
-        settingsCallbacks.push(callback);
+      onChange: jest.fn((keys: unknown, callback?: () => void) => {
+        settingsCallbacks.push(callback ?? (keys as () => void));
       }),
       removeCallback: jest.fn(),
     };

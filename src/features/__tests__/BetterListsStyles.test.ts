@@ -58,8 +58,8 @@ describe("BetterListsStyles", () => {
     const settingsCallbacks: Array<() => void> = [];
     const settings = {
       betterListsStyles: true,
-      onChange: jest.fn((callback: () => void) => {
-        settingsCallbacks.push(callback);
+      onChange: jest.fn((keys: unknown, callback?: () => void) => {
+        settingsCallbacks.push(callback ?? (keys as () => void));
       }),
       removeCallback: jest.fn(),
     };
@@ -75,6 +75,10 @@ describe("BetterListsStyles", () => {
 
     await feature.load();
 
+    expect(settings.onChange).toHaveBeenCalledWith(
+      ["styleLists"],
+      expect.any(Function),
+    );
     expect(workspace.on).toHaveBeenCalledWith(
       "window-open",
       expect.any(Function),

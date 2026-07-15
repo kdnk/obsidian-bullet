@@ -49,7 +49,10 @@ export class VerticalLines implements Feature {
     this.synchronizeScrollPastEndExtension(false);
     this.plugin.registerEditorExtension(this.editorExtensions);
 
-    this.settings.onChange(this.updateBodyClasses);
+    this.settings.onChange(
+      ["listLines", "outerListLines", "listLineAction"],
+      this.updateBodyClasses,
+    );
     this.bodyClass.load();
     this.actionBodyClass.load();
   }

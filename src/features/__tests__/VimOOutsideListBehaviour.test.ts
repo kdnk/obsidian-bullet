@@ -129,19 +129,23 @@ describe("VimOBehaviourOverride outside lists", () => {
       const settings = {
         onChange: jest.fn(),
         overrideVimOBehaviour: true,
-      } as never;
+      };
       const operationPerformer = {
         perform: jest.fn().mockReturnValue(NO_OP_OUTCOME),
       };
       const feature = new VimOBehaviourOverride(
         plugin,
-        settings,
+        settings as never,
         {} as never,
         operationPerformer as never,
       );
 
       await feature.load();
 
+      expect(settings.onChange).toHaveBeenCalledWith(
+        ["betterVimO"],
+        expect.any(Function),
+      );
       const vim = (global.window as WindowWithVim).CodeMirrorAdapter.Vim;
       const action = vim.defineAction.mock.calls.find(
         ([name]) => name === "insertLineAfterBullet",

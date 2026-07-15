@@ -475,7 +475,10 @@ export class GuideFoldingPluginValue implements PluginValue {
       this.onPointerLeave,
       true,
     );
-    this.settings.onChange(this.onSettingsChange);
+    this.settings.onChange(
+      ["listLines", "outerListLines", "listLineAction"],
+      this.onSettingsChange,
+    );
     this.scheduleGuideSynchronization();
   }
 

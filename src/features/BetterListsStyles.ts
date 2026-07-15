@@ -24,7 +24,7 @@ export class BetterListsStyles implements Feature {
   }
 
   async load() {
-    this.settings.onChange(this.updateBodyClass);
+    this.settings.onChange(["styleLists"], this.updateBodyClass);
     this.plugin.registerEvent(
       this.plugin.app.workspace.on("css-change", this.updateBodyClass),
     );

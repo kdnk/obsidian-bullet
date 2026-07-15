@@ -59,7 +59,7 @@ export class DragAndDrop implements Feature {
   }
 
   private enableFeatureToggle() {
-    this.settings.onChange(this.handleSettingsChange);
+    this.settings.onChange(["dnd"], this.handleSettingsChange);
     this.handleSettingsChange();
   }
 

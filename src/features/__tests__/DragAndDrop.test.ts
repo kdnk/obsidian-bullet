@@ -120,6 +120,42 @@ describe("DragAndDrop", () => {
     };
   }
 
+  test("subscribes to drag-and-drop setting changes through its lifecycle", async () => {
+    const document = makeDocument();
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: document,
+    });
+    const settings = {
+      dragAndDrop: true,
+      onChange: jest.fn(),
+      removeCallback: jest.fn(),
+    };
+    const workspace = { on: jest.fn().mockReturnValue({}) };
+    const plugin = {
+      app: { workspace },
+      registerEditorExtension: jest.fn(),
+      registerEvent: jest.fn(),
+    };
+    const feature = new DragAndDrop(
+      plugin as never,
+      settings as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await feature.load();
+
+    expect(settings.onChange).toHaveBeenCalledWith(
+      ["dnd"],
+      expect.any(Function),
+    );
+
+    await feature.unload();
+    expect(settings.removeCallback).toHaveBeenCalledWith(expect.any(Function));
+  });
+
   interface DragMeasurement {
     renderedLineLeft?: number;
     scrollerLeft?: number;

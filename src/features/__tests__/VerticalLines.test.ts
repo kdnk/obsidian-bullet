@@ -86,8 +86,8 @@ describe("VerticalLines", () => {
     const settings = {
       verticalLines: true,
       verticalLinesAction: "toggle-folding",
-      onChange: jest.fn((callback: () => void) => {
-        settingsCallbacks.push(callback);
+      onChange: jest.fn((keys: unknown, callback?: () => void) => {
+        settingsCallbacks.push(callback ?? (keys as () => void));
       }),
       removeCallback: jest.fn(),
     };
@@ -100,6 +100,10 @@ describe("VerticalLines", () => {
 
     await feature.load();
 
+    expect(settings.onChange).toHaveBeenCalledWith(
+      ["listLines", "outerListLines", "listLineAction"],
+      expect.any(Function),
+    );
     expect(plugin.registerEditorExtension).toHaveBeenCalled();
     expect(workspace.on).toHaveBeenCalledWith(
       "window-open",
@@ -201,8 +205,8 @@ describe("VerticalLines", () => {
     const settings = {
       verticalLines: true,
       verticalLinesAction: "toggle-folding",
-      onChange: jest.fn((callback: () => void) => {
-        settingsCallbacks.push(callback);
+      onChange: jest.fn((keys: unknown, callback?: () => void) => {
+        settingsCallbacks.push(callback ?? (keys as () => void));
       }),
       removeCallback: jest.fn(),
     };
