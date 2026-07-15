@@ -33,9 +33,11 @@ jest.mock("ws", () => {
     sent: string[] = [];
     closeCalls = 0;
     sendError: Error | undefined;
+    url: string;
 
-    constructor() {
+    constructor(mockUrl: string) {
       super();
+      this.url = mockUrl;
       MockWebSocket.instances.push(this);
     }
 
@@ -92,6 +94,7 @@ interface ControlledSocket extends EventEmitter {
   receive(data: unknown): void;
   receiveRaw(data: string): void;
   sent: string[];
+  url: string;
 }
 
 interface ControlledEnvironment {
@@ -147,6 +150,40 @@ describe("Obsidian test WebSocket transport", () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  test("connects with the authenticated test-client role", async () => {
+    const originalPort = process.env.TEST_PLATFORM_WS_PORT;
+    const originalToken = process.env.TEST_PLATFORM_WS_TOKEN;
+    process.env.TEST_PLATFORM_WS_PORT = "43123";
+    process.env.TEST_PLATFORM_WS_TOKEN = "test token";
+    const environment = createEnvironment();
+    await environment.setup();
+    let initializationSettlement: Promise<unknown> | undefined;
+
+    try {
+      const initialization = environment.initWs();
+      initializationSettlement = initialization.catch(() => undefined);
+      const socket = currentSocket();
+      expect(socket.url).toBe(
+        "ws://127.0.0.1:43123/?role=test&token=test+token",
+      );
+      socket.open();
+      await initialization;
+    } finally {
+      await environment.teardown();
+      await initializationSettlement;
+      if (originalPort === undefined) {
+        delete process.env.TEST_PLATFORM_WS_PORT;
+      } else {
+        process.env.TEST_PLATFORM_WS_PORT = originalPort;
+      }
+      if (originalToken === undefined) {
+        delete process.env.TEST_PLATFORM_WS_TOKEN;
+      } else {
+        process.env.TEST_PLATFORM_WS_TOKEN = originalToken;
+      }
+    }
   });
 
   test("rejects initialization when the connection errors before opening", async () => {

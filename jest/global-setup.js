@@ -1,11 +1,13 @@
 const cp = require("child_process");
 const path = require("path");
 const fs = require("fs");
-const WebSocket = require("ws");
 const debug = require("debug")("jest-obsidian");
 const promisify = require("util").promisify;
 const levelup = require("levelup");
 const leveldown = require("leveldown");
+const { runObsidianBootstrap } = require("./obsidian-bootstrap-lifecycle");
+const { startObsidianGlobalLifecycle } = require("./obsidian-global-lifecycle");
+const { startObsidianRelay } = require("./obsidian-relay");
 const { getTestPluginId, getVaultPluginDir } = require("./test-config");
 
 const KILL_CMD =
@@ -39,26 +41,16 @@ function wait(t) {
 }
 
 function runForAWhile({ timeout, fileToCheck }) {
-  return new Promise(async (resolve, reject) => {
-    const start = Date.now();
-    const obsidian = cp.spawn(OBSIDIAN_APP_CMD[0], OBSIDIAN_APP_CMD.slice(1));
-    obsidian.on("error", reject);
-    const i = setInterval(() => {
-      if (fs.existsSync(fileToCheck)) {
-        clearInterval(i);
-        setTimeout(() => {
-          cp.spawnSync(KILL_CMD[0], KILL_CMD.slice(1));
-          resolve();
-        }, 1000);
-        return;
-      }
-      const diff = Date.now() - start;
-      if (diff > timeout) {
-        clearInterval(i);
-        cp.spawnSync(KILL_CMD[0], KILL_CMD.slice(1));
-        reject();
-      }
-    }, 1000);
+  return runObsidianBootstrap({
+    args: OBSIDIAN_APP_CMD.slice(1),
+    command: OBSIDIAN_APP_CMD[0],
+    fileExists: fs.existsSync,
+    fileToCheck,
+    killProcess: () => {
+      cp.spawnSync(KILL_CMD[0], KILL_CMD.slice(1));
+    },
+    spawnProcess: cp.spawn,
+    timeoutMs: timeout,
   });
 }
 
@@ -81,7 +73,8 @@ async function prepareObsidian() {
     await wait(2000);
   }
 
-  originalObsidianConfig = fs.readFileSync(OBSIDIAN_CONFIG_PATH, "utf-8");
+  const originalObsidianConfig = fs.readFileSync(OBSIDIAN_CONFIG_PATH, "utf-8");
+  global.originalObsidianConfig = originalObsidianConfig;
 
   const obsidianConfig = JSON.parse(originalObsidianConfig);
   for (const key of Object.keys(obsidianConfig.vaults)) {
@@ -164,63 +157,27 @@ module.exports = async () => {
   cp.spawnSync(KILL_CMD[0], KILL_CMD.slice(1));
   await wait(2000);
 
-  await prepareObsidian();
-  await prepareVault();
-
-  global.wss = new WebSocket.Server({
-    port: 0,
-  });
-  process.env.TEST_PLATFORM_WS_PORT = String(global.wss.address().port);
-
-  debug(`Running "${OBSIDIAN_APP_CMD[0]}"`);
-  const obsidian = cp.exec(OBSIDIAN_APP_CMD.join(" "), {
-    env: {
-      ...process.env,
-      TEST_PLATFORM: "1",
+  await startObsidianGlobalLifecycle({
+    env: process.env,
+    globals: global,
+    killObsidian: () => {
+      cp.spawnSync(KILL_CMD[0], KILL_CMD.slice(1));
     },
-  });
-  obsidian.on("exit", (code) => {
-    debug(`Obsidian exited with code ${code}`);
-  });
-
-  debug("Waiting for Obsidian WebSocket connection");
-  const obsidianWs = await new Promise((resolve) => {
-    wss.once("connection", (ws) => {
-      debug("Waiting for Obsidian ready message");
-      ws.once("message", (msg) => {
-        if (msg.toString() === "ready") {
-          resolve(ws);
-        }
+    launchObsidian: () => {
+      debug(`Running "${OBSIDIAN_APP_CMD[0]}"`);
+      return cp.exec(OBSIDIAN_APP_CMD.join(" "), {
+        env: {
+          ...process.env,
+          TEST_PLATFORM: "1",
+        },
       });
-    });
-  });
-  debug("Obsidian WebSocket ready");
-
-  const callbacks = new Map();
-
-  obsidianWs.on("message", (message) => {
-    const { id, data, error } = JSON.parse(message);
-    debug(`Response from Obsidian ${id}`);
-    const cb = callbacks.get(id);
-    if (cb) {
-      callbacks.delete(id);
-      cb(error, data);
-    } else {
-      debug(`Callback not found for ${id}`);
-      process.exit(1);
-    }
-  });
-
-  debug("Waiting for test environment connection");
-  wss.on("connection", (ws) => {
-    debug("Test environment connected");
-    ws.on("message", (message) => {
-      const { id, type, data } = JSON.parse(message);
-      debug(`Request to Obsidian ${type} ${id}`);
-      callbacks.set(id, (error, data) => {
-        ws.send(JSON.stringify({ id, error, data }));
-      });
-      obsidianWs.send(JSON.stringify({ id, type, data }));
-    });
+    },
+    prepareObsidian,
+    prepareVault,
+    restoreObsidianConfig: (config) => {
+      debug(`Restoring ${OBSIDIAN_CONFIG_PATH}`);
+      fs.writeFileSync(OBSIDIAN_CONFIG_PATH, config);
+    },
+    startRelay: startObsidianRelay,
   });
 };

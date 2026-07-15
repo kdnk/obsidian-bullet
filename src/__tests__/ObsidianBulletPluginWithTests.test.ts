@@ -1,6 +1,9 @@
 import ObsidianBulletPlugin from "../ObsidianBulletPlugin";
 import ObsidianBulletPluginWithTests from "../ObsidianBulletPluginWithTests";
 
+const RENDERER_TEST_CONNECT_DELAY_MS = 1_000;
+const RENDERER_TEST_CONNECT_TIMEOUT_MS = 10_000;
+
 type TestWindow = Window & {
   ObsidianBulletPlugin?: ObsidianBulletPluginWithTests;
 };
@@ -10,6 +13,69 @@ type GuideClickOptions = {
   kind: "indent" | "outer";
   prefix?: string;
 };
+
+class ControlledBrowserWebSocket {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+  static readonly instances: ControlledBrowserWebSocket[] = [];
+
+  readonly sent: string[] = [];
+  readonly listeners = new Map<string, Set<(event: unknown) => void>>();
+  readyState = ControlledBrowserWebSocket.CONNECTING;
+  closeCalls = 0;
+
+  constructor(readonly url: string) {
+    ControlledBrowserWebSocket.instances.push(this);
+  }
+
+  addEventListener(type: string, listener: (event: unknown) => void) {
+    const listeners = this.listeners.get(type) || new Set();
+    listeners.add(listener);
+    this.listeners.set(type, listeners);
+  }
+
+  removeEventListener(type: string, listener: (event: unknown) => void) {
+    const listeners = this.listeners.get(type);
+    listeners?.delete(listener);
+    if (listeners?.size === 0) {
+      this.listeners.delete(type);
+    }
+  }
+
+  send(data: string) {
+    if (this.readyState !== ControlledBrowserWebSocket.OPEN) {
+      throw new Error("Socket is not open");
+    }
+    this.sent.push(data);
+  }
+
+  close() {
+    this.closeCalls += 1;
+    this.readyState = ControlledBrowserWebSocket.CLOSING;
+  }
+
+  open() {
+    this.readyState = ControlledBrowserWebSocket.OPEN;
+    this.emit("open", { type: "open" });
+  }
+
+  fail(message: string) {
+    this.emit("error", { message, type: "error" });
+  }
+
+  closeFromPeer() {
+    this.readyState = ControlledBrowserWebSocket.CLOSED;
+    this.emit("close", { type: "close" });
+  }
+
+  private emit(type: string, event: unknown) {
+    for (const listener of [...(this.listeners.get(type) || [])]) {
+      listener(event);
+    }
+  }
+}
 
 class FakeTextNode {
   readonly nodeType = 3;
@@ -162,6 +228,7 @@ jest.mock("../ObsidianBulletPlugin", () => ({
 describe("ObsidianBulletPluginWithTests", () => {
   const originalTestPlatform = process.env.TEST_PLATFORM;
   const originalMouseEvent = global.MouseEvent;
+  const originalWebSocket = global.WebSocket;
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -175,6 +242,11 @@ describe("ObsidianBulletPluginWithTests", () => {
     Object.defineProperty(global, "MouseEvent", {
       configurable: true,
       value: FakeMouseEvent,
+    });
+    ControlledBrowserWebSocket.instances.length = 0;
+    Object.defineProperty(global, "WebSocket", {
+      configurable: true,
+      value: ControlledBrowserWebSocket,
     });
   });
 
@@ -192,9 +264,13 @@ describe("ObsidianBulletPluginWithTests", () => {
       configurable: true,
       value: originalMouseEvent,
     });
+    Object.defineProperty(global, "WebSocket", {
+      configurable: true,
+      value: originalWebSocket,
+    });
   });
 
-  test("connects from onload when running on the test platform", async () => {
+  test("connects after a bounded delay on the test platform", async () => {
     process.env.TEST_PLATFORM = "1";
 
     const parentOnload = jest
@@ -203,18 +279,131 @@ describe("ObsidianBulletPluginWithTests", () => {
     const plugin = Object.create(
       ObsidianBulletPluginWithTests.prototype,
     ) as ObsidianBulletPluginWithTests;
-    const wait = jest.fn().mockResolvedValue(undefined);
-    const connect = jest.fn();
-    plugin.wait = wait;
+    const connect = jest.fn().mockResolvedValue(undefined);
     plugin.connect = connect;
 
     await plugin.onload();
-    await jest.runAllTimersAsync();
+    await jest.advanceTimersByTimeAsync(RENDERER_TEST_CONNECT_DELAY_MS - 1);
 
     expect(parentOnload).toHaveBeenCalled();
     expect((window as TestWindow).ObsidianBulletPlugin).toBe(plugin);
-    expect(wait).toHaveBeenCalledWith(1000);
+    expect(connect).not.toHaveBeenCalled();
+
+    await jest.advanceTimersByTimeAsync(1);
     expect(connect).toHaveBeenCalled();
+  });
+
+  test("cancels the delayed connection when unloaded", async () => {
+    process.env.TEST_PLATFORM = "1";
+    const parentOnunload = jest.spyOn(
+      ObsidianBulletPlugin.prototype,
+      "onunload",
+    );
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
+    const connect = jest.fn();
+    plugin.connect = connect;
+
+    await plugin.onload();
+    plugin.onunload();
+    await jest.runAllTimersAsync();
+
+    expect(connect).not.toHaveBeenCalled();
+    expect(parentOnunload).toHaveBeenCalled();
+    expect((window as TestWindow).ObsidianBulletPlugin).toBeUndefined();
+  });
+
+  test("handles a rejected fire-and-forget renderer connection", async () => {
+    process.env.TEST_PLATFORM = "1";
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
+    const failure = new Error("relay unavailable");
+    plugin.connect = jest.fn().mockRejectedValue(failure);
+    const consoleError = jest.spyOn(console, "error").mockImplementation();
+
+    await plugin.onload();
+    await jest.advanceTimersByTimeAsync(RENDERER_TEST_CONNECT_DELAY_MS);
+
+    expect(consoleError).toHaveBeenCalledWith(
+      "Obsidian test renderer connection failed",
+      failure,
+    );
+  });
+
+  test("waits for open, sends ready, and closes the socket on unload", async () => {
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
+    plugin.prepareForTests = jest.fn().mockResolvedValue(undefined);
+
+    const connection = plugin.connect();
+    const socket = ControlledBrowserWebSocket.instances[0];
+    expect(socket).toBeDefined();
+    expect(socket.sent).toEqual([]);
+
+    socket.open();
+    await connection;
+    expect(socket.sent).toEqual(["ready"]);
+
+    plugin.onunload();
+    expect(socket.closeCalls).toBe(1);
+  });
+
+  test("closes a ready renderer socket when its transport errors", async () => {
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
+    plugin.prepareForTests = jest.fn().mockResolvedValue(undefined);
+    const connection = plugin.connect();
+    const socket = ControlledBrowserWebSocket.instances[0];
+    socket.open();
+    await connection;
+
+    socket.fail("runtime reset");
+
+    expect(socket.closeCalls).toBe(1);
+    plugin.onunload();
+    expect(socket.closeCalls).toBe(1);
+  });
+
+  test("bounds a renderer connection that never opens", async () => {
+    expect(RENDERER_TEST_CONNECT_TIMEOUT_MS).toBeLessThan(15_000);
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
+    plugin.prepareForTests = jest.fn().mockResolvedValue(undefined);
+    const connection = plugin.connect();
+    const rejection = expect(connection).rejects.toThrow(
+      "Obsidian test renderer connection timed out",
+    );
+
+    await jest.advanceTimersByTimeAsync(RENDERER_TEST_CONNECT_TIMEOUT_MS);
+
+    await rejection;
+    expect(ControlledBrowserWebSocket.instances[0].closeCalls).toBe(1);
+  });
+
+  test.each([
+    ["error", "Obsidian test renderer connection error: refused"],
+    ["close", "Obsidian test renderer connection closed before ready"],
+  ])("rejects a pre-ready renderer socket %s", async (event, expected) => {
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
+    plugin.prepareForTests = jest.fn().mockResolvedValue(undefined);
+    const connection = plugin.connect();
+    const rejection = expect(connection).rejects.toThrow(expected);
+    const socket = ControlledBrowserWebSocket.instances[0];
+
+    if (event === "error") {
+      socket.fail("refused");
+    } else {
+      socket.closeFromPeer();
+    }
+
+    await rejection;
   });
 
   test("dispatches applyState once through the command registry", async () => {

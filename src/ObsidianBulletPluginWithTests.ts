@@ -173,8 +173,33 @@ const keysMap: { [key: string]: number } = {
   KeyA: 65,
 };
 
+const RENDERER_TEST_CONNECT_DELAY_MS = 1_000;
+const RENDERER_TEST_CONNECT_TIMEOUT_MS = 10_000;
+
+function getRendererSocketErrorMessage(event: Event): string {
+  const message = (event as Event & { message?: unknown }).message;
+  return typeof message === "string" && message.length > 0
+    ? message
+    : "unknown error";
+}
+
+function closeRendererSocket(socket: WebSocket | undefined): void {
+  if (
+    socket &&
+    socket.readyState !== WebSocket.CLOSING &&
+    socket.readyState !== WebSocket.CLOSED
+  ) {
+    socket.close();
+  }
+}
+
 export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin {
   private editor!: MyEditor;
+  private testConnectTimer: number | undefined;
+  private rejectTestConnection: ((error: Error) => void) | undefined;
+  private testSocket: WebSocket | undefined;
+  private testSocketCleanup: (() => void) | undefined;
+  private testPlatformUnloaded = false;
 
   wait(time: number) {
     return new Promise((resolve) => window.setTimeout(resolve, time));
@@ -280,19 +305,37 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   async onload() {
     await super.onload();
 
+    this.testPlatformUnloaded = false;
     window.ObsidianBulletPlugin = this;
 
     if (process.env.TEST_PLATFORM) {
-      window.setTimeout(() => {
-        void (async () => {
-          await this.wait(1000);
-          await this.connect();
-        })();
-      }, 0);
+      this.testConnectTimer = window.setTimeout(() => {
+        this.testConnectTimer = undefined;
+        void this.connect().catch((error) => {
+          if (!this.testPlatformUnloaded) {
+            console.error("Obsidian test renderer connection failed", error);
+          }
+        });
+      }, RENDERER_TEST_CONNECT_DELAY_MS);
     }
   }
 
   onunload() {
+    this.testPlatformUnloaded = true;
+    if (this.testConnectTimer !== undefined) {
+      window.clearTimeout(this.testConnectTimer);
+      this.testConnectTimer = undefined;
+    }
+    this.rejectTestConnection?.(
+      new Error("Obsidian test renderer connection cancelled by unload"),
+    );
+    this.rejectTestConnection = undefined;
+    const socket = this.testSocket;
+    this.testSocketCleanup?.();
+    this.testSocketCleanup = undefined;
+    this.testSocket = undefined;
+    closeRendererSocket(socket);
+
     super.onunload();
 
     delete window.ObsidianBulletPlugin;
@@ -329,13 +372,127 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   }
 
   async connect() {
-    const ws = new WebSocket(getTestPlatformWsUrl());
-    await this.prepareForTests();
-    ws.send("ready");
+    if (this.testPlatformUnloaded) {
+      throw new Error("Obsidian test renderer connection cancelled by unload");
+    }
 
-    ws.addEventListener("message", (event) => {
-      void this.handleTestMessage(ws, event);
+    const ws = new WebSocket(getTestPlatformWsUrl());
+    this.testSocketCleanup?.();
+    closeRendererSocket(this.testSocket);
+    this.testSocket = ws;
+
+    let resolveOpen: (() => void) | undefined;
+    let rejectLifecycle: ((error: Error) => void) | undefined;
+    let lifecycleSettled = false;
+
+    const open = new Promise<void>((resolve) => {
+      resolveOpen = resolve;
     });
+    const lifecycleFailure = new Promise<never>((_resolve, reject) => {
+      rejectLifecycle = (error) => {
+        if (lifecycleSettled) {
+          return;
+        }
+        lifecycleSettled = true;
+        reject(error);
+      };
+    });
+    const fail = (error: Error) => rejectLifecycle?.(error);
+    const handleOpen = () => resolveOpen?.();
+    const handleError = (event: Event) =>
+      fail(
+        new Error(
+          `Obsidian test renderer connection error: ${getRendererSocketErrorMessage(event)}`,
+        ),
+      );
+    const handleClose = () =>
+      fail(new Error("Obsidian test renderer connection closed before ready"));
+    const timeout = window.setTimeout(
+      () => fail(new Error("Obsidian test renderer connection timed out")),
+      RENDERER_TEST_CONNECT_TIMEOUT_MS,
+    );
+    this.rejectTestConnection = fail;
+
+    ws.addEventListener("open", handleOpen);
+    ws.addEventListener("error", handleError);
+    ws.addEventListener("close", handleClose);
+    if (ws.readyState === WebSocket.OPEN) {
+      resolveOpen?.();
+    }
+
+    const prepareAndSignalReady = async () => {
+      await open;
+      if (this.testPlatformUnloaded || this.testSocket !== ws) {
+        throw new Error(
+          "Obsidian test renderer connection cancelled by unload",
+        );
+      }
+      await this.prepareForTests();
+      if (this.testPlatformUnloaded || this.testSocket !== ws) {
+        throw new Error(
+          "Obsidian test renderer connection cancelled by unload",
+        );
+      }
+      if (ws.readyState !== WebSocket.OPEN) {
+        throw new Error(
+          "Obsidian test renderer connection closed before ready",
+        );
+      }
+      try {
+        ws.send("ready");
+      } catch (error) {
+        const rendererError = new Error(
+          `Obsidian test renderer send error: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        (rendererError as Error & { cause: unknown }).cause = error;
+        throw rendererError;
+      }
+    };
+
+    try {
+      await Promise.race([prepareAndSignalReady(), lifecycleFailure]);
+      lifecycleSettled = true;
+    } catch (error) {
+      if (this.testSocket === ws) {
+        this.testSocket = undefined;
+      }
+      closeRendererSocket(ws);
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+      if (this.rejectTestConnection === fail) {
+        this.rejectTestConnection = undefined;
+      }
+      ws.removeEventListener("open", handleOpen);
+      ws.removeEventListener("error", handleError);
+      ws.removeEventListener("close", handleClose);
+    }
+
+    const handleMessage = (event: MessageEvent) => {
+      void this.handleTestMessage(ws, event).catch((error) => {
+        if (!this.testPlatformUnloaded && this.testSocket === ws) {
+          console.error("Obsidian test renderer message failed", error);
+        }
+      });
+    };
+    const releaseSocket = () => {
+      if (this.testSocket === ws) {
+        this.testSocket = undefined;
+        this.testSocketCleanup = undefined;
+      }
+      ws.removeEventListener("message", handleMessage);
+      ws.removeEventListener("error", handleRuntimeError);
+      ws.removeEventListener("close", handleRuntimeClose);
+    };
+    const handleRuntimeError = () => {
+      releaseSocket();
+      closeRendererSocket(ws);
+    };
+    const handleRuntimeClose = () => releaseSocket();
+    this.testSocketCleanup = releaseSocket;
+    ws.addEventListener("message", handleMessage);
+    ws.addEventListener("error", handleRuntimeError);
+    ws.addEventListener("close", handleRuntimeClose);
   }
 
   private async handleTestMessage(ws: WebSocket, event: MessageEvent) {
@@ -351,7 +508,9 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
       error = e instanceof Error ? e.stack || e.message : JSON.stringify(e);
     }
 
-    ws.send(JSON.stringify({ id, data: result, error }));
+    if (this.testSocket === ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ id, data: result, error }));
+    }
   }
 
   private async handleTestCommand(
