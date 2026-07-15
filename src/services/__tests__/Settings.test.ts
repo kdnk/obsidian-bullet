@@ -1,4 +1,4 @@
-import { Settings, SettingsObject } from "../Settings";
+import { Settings, SettingsChange, SettingsObject } from "../Settings";
 
 test("enables outer vertical lines when saved data predates the setting", async () => {
   const saved = {
@@ -22,4 +22,80 @@ test("enables outer vertical lines when saved data predates the setting", async 
   await settings.load();
 
   expect(settings.outerVerticalLines).toBe(true);
+});
+
+describe("change notifications", () => {
+  function createSettings() {
+    return new Settings({
+      loadData: jest.fn(async () => ({}) as SettingsObject),
+      saveData: jest.fn(async () => undefined),
+    });
+  }
+
+  test("does not notify when assigning the current value", () => {
+    const settings = createSettings();
+    const callback = jest.fn<void, [SettingsChange]>();
+    settings.onChange(["debug"], callback);
+
+    settings.debug = false;
+
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  test("notifies only subscriptions containing the changed key", () => {
+    const settings = createSettings();
+    const callback = jest.fn<void, [SettingsChange]>();
+    settings.onChange(["listLines"], callback);
+
+    settings.debug = true;
+    expect(callback).not.toHaveBeenCalled();
+
+    settings.verticalLines = false;
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback.mock.calls[0]?.[0].keys).toEqual(new Set(["listLines"]));
+  });
+
+  test("notifies a multi-key subscription when one dependency changes", () => {
+    const settings = createSettings();
+    const callback = jest.fn<void, [SettingsChange]>();
+    settings.onChange(["listLines", "outerListLines"], callback);
+
+    settings.outerVerticalLines = false;
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback.mock.calls[0]?.[0].keys).toEqual(
+      new Set(["outerListLines"]),
+    );
+  });
+
+  test("notifies once with every changed key when resetting", () => {
+    const settings = createSettings();
+    const callback = jest.fn<void, [SettingsChange]>();
+    settings.onChange(
+      ["debug", "listLines", "outerListLines", "betterEnter"],
+      callback,
+    );
+    settings.debug = true;
+    settings.verticalLines = false;
+    settings.outerVerticalLines = false;
+    callback.mockClear();
+
+    settings.reset();
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback.mock.calls[0]?.[0].keys).toEqual(
+      new Set(["debug", "listLines", "outerListLines"]),
+    );
+  });
+
+  test("does not notify after unsubscribing", () => {
+    const settings = createSettings();
+    const callback = jest.fn<void, [SettingsChange]>();
+    settings.onChange(["debug"], callback);
+
+    settings.removeCallback(callback);
+    settings.debug = true;
+
+    expect(callback).not.toHaveBeenCalled();
+  });
 });

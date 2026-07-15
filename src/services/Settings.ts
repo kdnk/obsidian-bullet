@@ -18,6 +18,12 @@ export interface SettingsObject {
   dnd: boolean;
 }
 
+export type SettingsKey = keyof SettingsObject;
+
+export interface SettingsChange {
+  keys: ReadonlySet<SettingsKey>;
+}
+
 const DEFAULT_SETTINGS: SettingsObject = {
   styleLists: true,
   debug: false,
@@ -37,16 +43,21 @@ export interface Storage {
   saveData(settings: SettingsObject): Promise<void>;
 }
 
-type Callback = () => void;
+type Callback = (change: SettingsChange) => void;
+
+interface Subscription {
+  readonly keys: ReadonlySet<SettingsKey>;
+  readonly callback: Callback;
+}
 
 export class Settings {
   private storage: Storage;
   private values: SettingsObject = { ...DEFAULT_SETTINGS };
-  private callbacks: Set<Callback>;
+  private subscriptions: Map<Callback, Subscription>;
 
   constructor(storage: Storage) {
     this.storage = storage;
-    this.callbacks = new Set();
+    this.subscriptions = new Map();
   }
 
   get keepCursorWithinContent() {
@@ -61,7 +72,7 @@ export class Settings {
   }
 
   set keepCursorWithinContent(value: KeepCursorWithinContent) {
-    this.set("stickCursor", value);
+    this.update({ stickCursor: value });
   }
 
   get overrideTabBehaviour() {
@@ -69,7 +80,7 @@ export class Settings {
   }
 
   set overrideTabBehaviour(value: boolean) {
-    this.set("betterTab", value);
+    this.update({ betterTab: value });
   }
 
   get overrideEnterBehaviour() {
@@ -77,7 +88,7 @@ export class Settings {
   }
 
   set overrideEnterBehaviour(value: boolean) {
-    this.set("betterEnter", value);
+    this.update({ betterEnter: value });
   }
 
   get overrideVimOBehaviour() {
@@ -85,7 +96,7 @@ export class Settings {
   }
 
   set overrideVimOBehaviour(value: boolean) {
-    this.set("betterVimO", value);
+    this.update({ betterVimO: value });
   }
 
   get overrideSelectAllBehaviour() {
@@ -93,7 +104,7 @@ export class Settings {
   }
 
   set overrideSelectAllBehaviour(value: boolean) {
-    this.set("selectAll", value);
+    this.update({ selectAll: value });
   }
 
   get betterListsStyles() {
@@ -101,7 +112,7 @@ export class Settings {
   }
 
   set betterListsStyles(value: boolean) {
-    this.set("styleLists", value);
+    this.update({ styleLists: value });
   }
 
   get verticalLines() {
@@ -109,7 +120,7 @@ export class Settings {
   }
 
   set verticalLines(value: boolean) {
-    this.set("listLines", value);
+    this.update({ listLines: value });
   }
 
   get outerVerticalLines() {
@@ -117,7 +128,7 @@ export class Settings {
   }
 
   set outerVerticalLines(value: boolean) {
-    this.set("outerListLines", value);
+    this.update({ outerListLines: value });
   }
 
   get verticalLinesAction() {
@@ -125,7 +136,7 @@ export class Settings {
   }
 
   set verticalLinesAction(value: VerticalLinesAction) {
-    this.set("listLineAction", value);
+    this.update({ listLineAction: value });
   }
 
   get dragAndDrop() {
@@ -133,7 +144,7 @@ export class Settings {
   }
 
   set dragAndDrop(value: boolean) {
-    this.set("dnd", value);
+    this.update({ dnd: value });
   }
 
   get debug() {
@@ -141,22 +152,22 @@ export class Settings {
   }
 
   set debug(value: boolean) {
-    this.set("debug", value);
+    this.update({ debug: value });
   }
 
-  onChange(cb: Callback) {
-    this.callbacks.add(cb);
+  onChange(keys: readonly SettingsKey[], callback: Callback): void {
+    this.subscriptions.set(callback, {
+      keys: new Set(keys),
+      callback,
+    });
   }
 
-  removeCallback(cb: Callback): void {
-    this.callbacks.delete(cb);
+  removeCallback(callback: Callback): void {
+    this.subscriptions.delete(callback);
   }
 
   reset() {
-    const keys = Object.keys(DEFAULT_SETTINGS) as (keyof SettingsObject)[];
-    for (const key of keys) {
-      this.set(key, DEFAULT_SETTINGS[key]);
-    }
+    this.update(DEFAULT_SETTINGS);
   }
 
   async load() {
@@ -179,17 +190,40 @@ export class Settings {
     key: T,
     value: SettingsObject[T],
   ): void {
-    this.set(key, value);
+    this.update({ [key]: value } as Pick<SettingsObject, T>);
   }
 
-  private set<T extends keyof SettingsObject>(
+  private assign<T extends SettingsKey>(
     key: T,
     value: SettingsObject[T],
+    changed: Set<SettingsKey>,
   ): void {
-    this.values[key] = value;
+    if (!Object.is(this.values[key], value)) {
+      this.values[key] = value;
+      changed.add(key);
+    }
+  }
 
-    for (const cb of this.callbacks) {
-      cb();
+  private update(patch: Partial<SettingsObject>): void {
+    const changed = new Set<SettingsKey>();
+    for (const key of Object.keys(patch) as SettingsKey[]) {
+      const value = patch[key];
+      if (value !== undefined) {
+        this.assign(key, value, changed);
+      }
+    }
+
+    if (changed.size > 0) {
+      this.notify(changed);
+    }
+  }
+
+  private notify(keys: ReadonlySet<SettingsKey>): void {
+    const change: SettingsChange = { keys };
+    for (const subscription of this.subscriptions.values()) {
+      if ([...keys].some((key) => subscription.keys.has(key))) {
+        subscription.callback(change);
+      }
     }
   }
 }
