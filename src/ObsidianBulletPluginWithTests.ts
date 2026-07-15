@@ -23,31 +23,46 @@ interface VaultWithConfig extends Vault {
   setConfig(key: string, value: unknown): void;
 }
 
-type TestMessage =
-  | { id: string; type: "applyState"; data: State | string | string[] }
-  | { id: string; type: "simulateKeydown"; data: string }
-  | { id: string; type: "insertText"; data: string }
-  | { id: string; type: "executeCommandById"; data: string }
-  | { id: string; type: "drag"; data: { from: MyEditorPosition } }
-  | {
-      id: string;
-      type: "move";
-      data: { to: MyEditorPosition; offsetX: number; offsetY: number };
-    }
-  | { id: string; type: "drop" }
-  | { id: string; type: "waitForIdle" }
-  | { id: string; type: "adjustSelection" }
-  | { id: string; type: "resetSettings" }
-  | {
-      id: string;
-      type: "setSetting";
-      data: {
-        k: keyof SettingsObject;
-        v: SettingsObject[keyof SettingsObject];
-      };
-    }
-  | { id: string; type: "parseState"; data: string | string[] }
-  | { id: string; type: "getCurrentState" };
+interface GuideClickOptions {
+  line: number;
+  kind: "indent" | "outer";
+  prefix?: string;
+}
+
+interface TestCommandMap {
+  applyState: State | string | string[];
+  simulateKeydown: string;
+  insertText: string;
+  executeCommandById: string;
+  drag: { from: MyEditorPosition };
+  move: { to: MyEditorPosition; offsetX: number; offsetY: number };
+  drop: undefined;
+  waitForIdle: undefined;
+  adjustSelection: undefined;
+  resetSettings: undefined;
+  setSetting: {
+    k: keyof SettingsObject;
+    v: SettingsObject[keyof SettingsObject];
+  };
+  parseState: string | string[];
+  getCurrentState: undefined;
+  clickGuide: GuideClickOptions;
+}
+
+type TestMessage = {
+  [K in keyof TestCommandMap]: {
+    id: string;
+    type: K;
+  } & (undefined extends TestCommandMap[K]
+    ? { data?: TestCommandMap[K] }
+    : { data: TestCommandMap[K] });
+}[keyof TestCommandMap];
+
+type TestCommandHandlers = {
+  [K in keyof TestCommandMap]: (
+    data: TestCommandMap[K],
+  ) => State | void | Promise<State | void>;
+};
 
 const keysMap: { [key: string]: number } = {
   Backspace: 8,
@@ -235,58 +250,48 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
 
   private async handleTestMessage(ws: WebSocket, event: MessageEvent) {
     const message = JSON.parse(String(event.data)) as TestMessage;
-    const { id, type } = message;
+    const { id, type, data } = message;
 
     let result: State | undefined;
     let error: string | undefined;
 
     try {
-      switch (type) {
-        case "applyState":
-          await this.applyState(message.data);
-          break;
-        case "simulateKeydown":
-          this.simulateKeydown(message.data);
-          break;
-        case "insertText":
-          this.insertText(message.data);
-          break;
-        case "executeCommandById":
-          this.executeCommandById(message.data);
-          break;
-        case "drag":
-          this.drag(message.data);
-          break;
-        case "move":
-          this.move(message.data);
-          break;
-        case "drop":
-          this.drop();
-          break;
-        case "waitForIdle":
-          await this.waitForIdle();
-          break;
-        case "adjustSelection":
-          await this.adjustSelection();
-          break;
-        case "resetSettings":
-          this.resetSettings();
-          break;
-        case "setSetting":
-          this.setSetting(message.data);
-          break;
-        case "parseState":
-          result = this.parseState(message.data);
-          break;
-        case "getCurrentState":
-          result = this.getCurrentState();
-          break;
-      }
+      result = await this.handleTestCommand(type, data);
     } catch (e) {
       error = e instanceof Error ? e.stack || e.message : JSON.stringify(e);
     }
 
     ws.send(JSON.stringify({ id, data: result, error }));
+  }
+
+  private async handleTestCommand(
+    type: string,
+    data: unknown,
+  ): Promise<State | undefined> {
+    const handlers: Partial<TestCommandHandlers> = {
+      applyState: async (state) => await this.applyState(state),
+      simulateKeydown: (keys) => this.simulateKeydown(keys),
+      insertText: (text) => this.insertText(text),
+      executeCommandById: (id) => this.executeCommandById(id),
+      drag: (options) => this.drag(options),
+      move: (options) => this.move(options),
+      drop: () => this.drop(),
+      waitForIdle: async () => await this.waitForIdle(),
+      adjustSelection: async () => await this.adjustSelection(),
+      resetSettings: () => this.resetSettings(),
+      setSetting: (setting) => this.setSetting(setting),
+      parseState: (state) => this.parseState(state),
+      getCurrentState: () => this.getCurrentState(),
+    };
+    const handler = handlers[type as keyof TestCommandMap];
+
+    if (!handler) {
+      throw new Error(`Unknown test command: ${type}`);
+    }
+
+    return (await (
+      handler as (data: unknown) => State | void | Promise<State | void>
+    )(data)) as State | undefined;
   }
 
   private drag(opts: { from: { line: number; ch: number } }) {

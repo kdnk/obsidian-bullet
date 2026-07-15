@@ -89,6 +89,47 @@ describe("ObsidianBulletPluginWithTests", () => {
     expect(connect).toHaveBeenCalled();
   });
 
+  test("dispatches applyState once through the command registry", async () => {
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
+    const applyState = jest
+      .spyOn(plugin, "applyState")
+      .mockResolvedValue(undefined);
+    const dispatch = (
+      plugin as unknown as {
+        handleTestCommand(
+          type: string,
+          data: unknown,
+        ): Promise<State | undefined>;
+      }
+    ).handleTestCommand.bind(plugin);
+    const state = ["- |one"];
+
+    await expect(dispatch("applyState", state)).resolves.toBeUndefined();
+
+    expect(applyState).toHaveBeenCalledTimes(1);
+    expect(applyState).toHaveBeenCalledWith(state);
+  });
+
+  test("rejects unknown test commands", async () => {
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
+    const dispatch = (
+      plugin as unknown as {
+        handleTestCommand(
+          type: string,
+          data: unknown,
+        ): Promise<State | undefined>;
+      }
+    ).handleTestCommand.bind(plugin);
+
+    await expect(dispatch("unknown", undefined)).rejects.toThrow(
+      "Unknown test command: unknown",
+    );
+  });
+
   test("keeps cursor before checkbox in bullet-only selection adjustment fallback", () => {
     const plugin = Object.create(
       ObsidianBulletPluginWithTests.prototype,
