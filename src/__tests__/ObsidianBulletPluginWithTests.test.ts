@@ -333,10 +333,11 @@ describe("ObsidianBulletPluginWithTests", () => {
   });
 
   test("waits for open, sends ready, and closes the socket on unload", async () => {
-    const plugin = Object.create(
-      ObsidianBulletPluginWithTests.prototype,
-    ) as ObsidianBulletPluginWithTests;
-    plugin.prepareForTests = jest.fn().mockResolvedValue(undefined);
+    const { plugin } = createPreparationPlugin({
+      existingFile: true,
+      openFile: jest.fn().mockResolvedValue(undefined),
+      wait: jest.fn().mockResolvedValue(undefined),
+    });
 
     const connection = plugin.connect();
     const socket = ControlledBrowserWebSocket.instances[0];
@@ -352,10 +353,11 @@ describe("ObsidianBulletPluginWithTests", () => {
   });
 
   test("closes a ready renderer socket when its transport errors", async () => {
-    const plugin = Object.create(
-      ObsidianBulletPluginWithTests.prototype,
-    ) as ObsidianBulletPluginWithTests;
-    plugin.prepareForTests = jest.fn().mockResolvedValue(undefined);
+    const { plugin } = createPreparationPlugin({
+      existingFile: true,
+      openFile: jest.fn().mockResolvedValue(undefined),
+      wait: jest.fn().mockResolvedValue(undefined),
+    });
     const connection = plugin.connect();
     const socket = ControlledBrowserWebSocket.instances[0];
     socket.open();
@@ -370,10 +372,11 @@ describe("ObsidianBulletPluginWithTests", () => {
 
   test("bounds a renderer connection that never opens", async () => {
     expect(RENDERER_TEST_CONNECT_TIMEOUT_MS).toBeLessThan(15_000);
-    const plugin = Object.create(
-      ObsidianBulletPluginWithTests.prototype,
-    ) as ObsidianBulletPluginWithTests;
-    plugin.prepareForTests = jest.fn().mockResolvedValue(undefined);
+    const { plugin } = createPreparationPlugin({
+      existingFile: true,
+      openFile: jest.fn().mockResolvedValue(undefined),
+      wait: jest.fn().mockResolvedValue(undefined),
+    });
     const connection = plugin.connect();
     const rejection = expect(connection).rejects.toThrow(
       "Obsidian test renderer connection timed out",
@@ -389,10 +392,11 @@ describe("ObsidianBulletPluginWithTests", () => {
     ["error", "Obsidian test renderer connection error: refused"],
     ["close", "Obsidian test renderer connection closed before ready"],
   ])("rejects a pre-ready renderer socket %s", async (event, expected) => {
-    const plugin = Object.create(
-      ObsidianBulletPluginWithTests.prototype,
-    ) as ObsidianBulletPluginWithTests;
-    plugin.prepareForTests = jest.fn().mockResolvedValue(undefined);
+    const { plugin } = createPreparationPlugin({
+      existingFile: true,
+      openFile: jest.fn().mockResolvedValue(undefined),
+      wait: jest.fn().mockResolvedValue(undefined),
+    });
     const connection = plugin.connect();
     const rejection = expect(connection).rejects.toThrow(expected);
     const socket = ControlledBrowserWebSocket.instances[0];
@@ -404,6 +408,119 @@ describe("ObsidianBulletPluginWithTests", () => {
     }
 
     await rejection;
+  });
+
+  test("stops preparation after an in-flight file creation resolves following unload", async () => {
+    const createdFile = createDeferred<TestMarkdownFile>();
+    const wait = jest.fn().mockResolvedValue(undefined);
+    const openFile = jest.fn().mockResolvedValue(undefined);
+    const { createFile, plugin } = createPreparationPlugin({
+      createFile: () => createdFile.promise,
+      openFile,
+      wait,
+    });
+    const connection = plugin.connect();
+    const rejection = expect(connection).rejects.toThrow(
+      "Obsidian test renderer connection cancelled by unload",
+    );
+    const socket = ControlledBrowserWebSocket.instances[0];
+
+    socket.open();
+    await flushAsyncContinuation();
+    expect(createFile).toHaveBeenCalledTimes(1);
+
+    plugin.onunload();
+    await rejection;
+    createdFile.resolve(TEST_MARKDOWN_FILE);
+    await flushAsyncContinuation();
+
+    expect(wait).not.toHaveBeenCalled();
+    expect(openFile).not.toHaveBeenCalled();
+  });
+
+  test("does not open the test file after transport cancellation during the pre-open wait", async () => {
+    const preOpenWait = createDeferred<void>();
+    const wait = jest.fn(() => preOpenWait.promise);
+    const openFile = jest.fn().mockResolvedValue(undefined);
+    const { plugin } = createPreparationPlugin({
+      existingFile: true,
+      openFile,
+      wait,
+    });
+    const connection = plugin.connect();
+    const rejection = expect(connection).rejects.toThrow(
+      "Obsidian test renderer connection error: reset",
+    );
+    const socket = ControlledBrowserWebSocket.instances[0];
+
+    socket.open();
+    await flushAsyncContinuation();
+    expect(wait).toHaveBeenCalledTimes(1);
+
+    socket.fail("reset");
+    await rejection;
+    preOpenWait.resolve();
+    await flushAsyncContinuation();
+
+    expect(openFile).not.toHaveBeenCalled();
+  });
+
+  test("does not start post-open preparation after an in-flight open resolves following unload", async () => {
+    const openedFile = createDeferred<void>();
+    const wait = jest.fn().mockResolvedValue(undefined);
+    const openFile = jest.fn(() => openedFile.promise);
+    const { getActiveViewOfType, plugin } = createPreparationPlugin({
+      existingFile: true,
+      openFile,
+      wait,
+    });
+    const connection = plugin.connect();
+    const rejection = expect(connection).rejects.toThrow(
+      "Obsidian test renderer connection cancelled by unload",
+    );
+    const socket = ControlledBrowserWebSocket.instances[0];
+
+    socket.open();
+    await flushAsyncContinuation();
+    expect(openFile).toHaveBeenCalledTimes(1);
+
+    plugin.onunload();
+    await rejection;
+    openedFile.resolve();
+    await flushAsyncContinuation();
+
+    expect(wait).toHaveBeenCalledTimes(1);
+    expect(getActiveViewOfType).not.toHaveBeenCalled();
+  });
+
+  test("does not initialize the editor after transport cancellation during the post-open wait", async () => {
+    const postOpenWait = createDeferred<void>();
+    const wait = jest
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockImplementationOnce(() => postOpenWait.promise);
+    const openFile = jest.fn().mockResolvedValue(undefined);
+    const { getActiveViewOfType, plugin } = createPreparationPlugin({
+      existingFile: true,
+      openFile,
+      wait,
+    });
+    const connection = plugin.connect();
+    const rejection = expect(connection).rejects.toThrow(
+      "Obsidian test renderer connection closed before ready",
+    );
+    const socket = ControlledBrowserWebSocket.instances[0];
+
+    socket.open();
+    await flushAsyncContinuation();
+    expect(wait).toHaveBeenCalledTimes(2);
+
+    socket.closeFromPeer();
+    await rejection;
+    postOpenWait.resolve();
+    await flushAsyncContinuation();
+
+    expect(getActiveViewOfType).not.toHaveBeenCalled();
   });
 
   test("dispatches applyState once through the command registry", async () => {
@@ -796,4 +913,57 @@ function callAssertNativeListBullet(
       assertNativeListBullet(options: { line: number }): void;
     }
   ).assertNativeListBullet(options);
+}
+
+interface TestMarkdownFile {
+  path: string;
+}
+
+const TEST_MARKDOWN_FILE: TestMarkdownFile = { path: "test.md" };
+
+function createPreparationPlugin(options: {
+  createFile?: () => Promise<TestMarkdownFile>;
+  existingFile?: boolean;
+  getActiveViewOfType?: () => unknown;
+  openFile: (file: TestMarkdownFile) => Promise<void>;
+  wait: (time: number) => Promise<void>;
+}) {
+  const createFile = jest.fn(
+    options.createFile ?? (() => Promise.resolve(TEST_MARKDOWN_FILE)),
+  );
+  const getActiveViewOfType = jest.fn(
+    options.getActiveViewOfType ?? (() => ({ editor: {} })),
+  );
+  const plugin = Object.create(
+    ObsidianBulletPluginWithTests.prototype,
+  ) as ObsidianBulletPluginWithTests;
+  const app = {
+    vault: {
+      create: createFile,
+      getMarkdownFiles: () =>
+        options.existingFile ? [TEST_MARKDOWN_FILE] : [],
+    },
+    workspace: {
+      getActiveViewOfType,
+      getLeaf: () => ({ openFile: options.openFile }),
+    },
+  };
+  (plugin as unknown as { app: typeof app }).app = app;
+  plugin.wait = options.wait;
+
+  return { createFile, getActiveViewOfType, plugin };
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
+
+async function flushAsyncContinuation() {
+  for (let i = 0; i < 5; i++) {
+    await Promise.resolve();
+  }
 }

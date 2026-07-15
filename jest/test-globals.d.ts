@@ -4,6 +4,23 @@ type SettingCommand = {
   [K in keyof SettingsObject]: { k: K; v: SettingsObject[K] };
 }[keyof SettingsObject];
 
+export type DeclaredSemanticDriverCommandName =
+  | "adjustSelection"
+  | "applyState"
+  | "assertNativeListBullet"
+  | "clickGuide"
+  | "drag"
+  | "drop"
+  | "executeCommandById"
+  | "getCurrentState"
+  | "insertText"
+  | "move"
+  | "parseState"
+  | "resetSettings"
+  | "setSetting"
+  | "simulateKeydown"
+  | "waitForIdle";
+
 declare global {
   namespace jest {
     interface Matchers<R> {
@@ -38,6 +55,7 @@ declare global {
   function setSetting(opts: SettingCommand): Promise<void>;
   function resetSettings(): Promise<void>;
   function waitForIdle(): Promise<void>;
+  function adjustSelection(): Promise<void>;
   function getCurrentState(): Promise<State>;
   function drag(opts: { from: { line: number; ch: number } }): Promise<void>;
   function move(opts: {

@@ -22,4 +22,4 @@ function installObsidianDriver(target, runCommand) {
   }
 }
 
-module.exports = { installObsidianDriver };
+module.exports = { COMMANDS, installObsidianDriver };

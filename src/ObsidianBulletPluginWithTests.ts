@@ -199,6 +199,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   private rejectTestConnection: ((error: Error) => void) | undefined;
   private testSocket: WebSocket | undefined;
   private testSocketCleanup: (() => void) | undefined;
+  private testPreparationToken: object | undefined;
   private testPlatformUnloaded = false;
 
   wait(time: number) {
@@ -322,6 +323,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
 
   onunload() {
     this.testPlatformUnloaded = true;
+    this.testPreparationToken = undefined;
     if (this.testConnectTimer !== undefined) {
       window.clearTimeout(this.testConnectTimer);
       this.testConnectTimer = undefined;
@@ -349,20 +351,25 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     }
   }
 
-  async prepareForTests() {
+  private async prepareForTests(preparationToken: object) {
+    this.assertTestPreparationActive(preparationToken);
     const filePath = `test.md`;
     let file = this.app.vault
       .getMarkdownFiles()
       .find((f) => f.path === filePath);
     if (!file) {
       file = await this.app.vault.create(filePath, "");
+      this.assertTestPreparationActive(preparationToken);
     }
     for (let i = 0; i < 10; i++) {
       await this.wait(1000);
+      this.assertTestPreparationActive(preparationToken);
       await this.app.workspace.getLeaf(false).openFile(file);
+      this.assertTestPreparationActive(preparationToken);
       break;
     }
     await this.wait(1000);
+    this.assertTestPreparationActive(preparationToken);
 
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (!view) {
@@ -371,15 +378,27 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     this.editor = new MyEditor(view.editor);
   }
 
+  private assertTestPreparationActive(preparationToken: object): void {
+    if (
+      this.testPlatformUnloaded ||
+      this.testPreparationToken !== preparationToken
+    ) {
+      throw new Error("Obsidian test renderer connection cancelled by unload");
+    }
+  }
+
   async connect() {
     if (this.testPlatformUnloaded) {
       throw new Error("Obsidian test renderer connection cancelled by unload");
     }
 
     const ws = new WebSocket(getTestPlatformWsUrl());
+    this.testPreparationToken = undefined;
     this.testSocketCleanup?.();
     closeRendererSocket(this.testSocket);
     this.testSocket = ws;
+    const preparationToken = {};
+    this.testPreparationToken = preparationToken;
 
     let resolveOpen: (() => void) | undefined;
     let rejectLifecycle: ((error: Error) => void) | undefined;
@@ -397,7 +416,15 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
         reject(error);
       };
     });
-    const fail = (error: Error) => rejectLifecycle?.(error);
+    const cancelPreparation = () => {
+      if (this.testPreparationToken === preparationToken) {
+        this.testPreparationToken = undefined;
+      }
+    };
+    const fail = (error: Error) => {
+      cancelPreparation();
+      rejectLifecycle?.(error);
+    };
     const handleOpen = () => resolveOpen?.();
     const handleError = (event: Event) =>
       fail(
@@ -427,7 +454,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
           "Obsidian test renderer connection cancelled by unload",
         );
       }
-      await this.prepareForTests();
+      await this.prepareForTests(preparationToken);
       if (this.testPlatformUnloaded || this.testSocket !== ws) {
         throw new Error(
           "Obsidian test renderer connection cancelled by unload",
@@ -452,7 +479,9 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     try {
       await Promise.race([prepareAndSignalReady(), lifecycleFailure]);
       lifecycleSettled = true;
+      cancelPreparation();
     } catch (error) {
+      cancelPreparation();
       if (this.testSocket === ws) {
         this.testSocket = undefined;
       }
