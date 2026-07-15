@@ -14,11 +14,6 @@ export interface MyEditorPosition {
   ch: number;
 }
 
-export interface MyEditorFoldTarget {
-  line: number;
-  fallbackCursor: MyEditorPosition;
-}
-
 export interface MyEditorRange {
   from: MyEditorPosition;
   to: MyEditorPosition;
@@ -67,83 +62,6 @@ function foldInside(view: EditorView, from: number, to: number) {
     if (!found || found.from > from) found = { from, to };
   });
   return found;
-}
-
-function stableScrollSnapshot(view: EditorView) {
-  const snapshot = view.scrollSnapshot();
-  const value: unknown = snapshot.value;
-  correctScrollSnapshotAnchor(view, value);
-  // CodeMirror stores the precise snapshot offset in this mutable margin.
-  // Snap it once so scrollTop rounding cannot accumulate across fold cycles.
-  if (
-    !value ||
-    typeof value !== "object" ||
-    !("yMargin" in value) ||
-    typeof value.yMargin !== "number" ||
-    !Number.isFinite(value.yMargin)
-  ) {
-    return snapshot;
-  }
-
-  const window = view.dom.ownerDocument.defaultView;
-  const devicePixelRatio = window?.devicePixelRatio ?? 1;
-  const pixelScale =
-    Number.isFinite(devicePixelRatio) && devicePixelRatio > 0
-      ? devicePixelRatio
-      : 1;
-  value.yMargin = Math.round(value.yMargin * pixelScale) / pixelScale;
-  return snapshot;
-}
-
-function correctScrollSnapshotAnchor(view: EditorView, value: unknown): void {
-  if (
-    !value ||
-    typeof value !== "object" ||
-    !("range" in value) ||
-    !("yMargin" in value) ||
-    typeof value.yMargin !== "number"
-  ) {
-    return;
-  }
-
-  const scaleY = view.scaleY;
-  const scrollTop = view.scrollDOM.scrollTop;
-  const scrollViewportTop = view.scrollDOM.getBoundingClientRect().top;
-  const documentTop = view.documentTop;
-  if (
-    !Number.isFinite(scaleY) ||
-    scaleY <= 0 ||
-    !Number.isFinite(scrollTop) ||
-    !Number.isFinite(scrollViewportTop) ||
-    !Number.isFinite(documentTop)
-  ) {
-    return;
-  }
-
-  const viewportDocumentTop = scrollViewportTop - documentTop;
-  const anchor = view.lineBlockAtHeight(Math.max(0, viewportDocumentTop + 8));
-  if (!Number.isFinite(anchor.from) || !Number.isFinite(anchor.top)) {
-    return;
-  }
-
-  value.range = EditorSelection.cursor(anchor.from);
-  value.yMargin = anchor.top - scrollTop;
-}
-
-function ensureScrollPastEndReserve(view: EditorView): void {
-  const expected =
-    view.scrollDOM.clientHeight -
-    view.defaultLineHeight -
-    view.documentPadding.top -
-    0.5;
-  const current = Number.parseFloat(view.contentDOM.style.paddingBottom);
-  if (
-    Number.isFinite(expected) &&
-    expected >= 0 &&
-    (!Number.isFinite(current) || current < expected)
-  ) {
-    view.contentDOM.style.paddingBottom = `${expected}px`;
-  }
 }
 
 export class MyEditor {
@@ -274,53 +192,6 @@ export class MyEditor {
     }
 
     view.dispatch({ effects });
-  }
-
-  setFoldedPreservingScroll(
-    targets: readonly MyEditorFoldTarget[],
-    folded: boolean,
-  ): boolean {
-    const { view } = this;
-    const resolved = targets.flatMap((target) => {
-      const line = view.lineBlockAt(view.state.doc.line(target.line + 1).from);
-      const range = folded
-        ? foldable(view.state, line.from, line.to)
-        : foldInside(view, line.from, line.to);
-
-      return range && range.from !== range.to ? [{ range, target }] : [];
-    });
-
-    if (resolved.length === 0) {
-      return false;
-    }
-
-    ensureScrollPastEndReserve(view);
-    const effects = [
-      stableScrollSnapshot(view),
-      ...resolved.map(({ range }) =>
-        (folded ? foldEffect : unfoldEffect).of(range),
-      ),
-    ];
-    const selectionHead = view.state.selection.main.head;
-    const selectedTarget = folded
-      ? resolved.find(
-          ({ range }) => range.from < selectionHead && selectionHead < range.to,
-        )
-      : undefined;
-
-    if (selectedTarget) {
-      const fallbackOffset = this.posToDocOffset(
-        selectedTarget.target.fallbackCursor,
-      );
-      view.dispatch({
-        selection: { anchor: fallbackOffset, head: fallbackOffset },
-        effects,
-      });
-    } else {
-      view.dispatch({ effects });
-    }
-
-    return true;
   }
 
   unfold(n: number): void {

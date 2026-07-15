@@ -1,4 +1,10 @@
-import { Extension, Text } from "@codemirror/state";
+import {
+  foldEffect,
+  foldable,
+  foldedRanges,
+  unfoldEffect,
+} from "@codemirror/language";
+import { EditorSelection, Extension, Text } from "@codemirror/state";
 import {
   Decoration,
   DecorationSet,
@@ -9,7 +15,7 @@ import {
   scrollPastEnd,
 } from "@codemirror/view";
 
-import { MyEditor, getEditorFromState } from "../editor";
+import { MyEditorPosition, getEditorFromState } from "../editor";
 import { List, Root } from "../root";
 import { Parser, Reader } from "../services/Parser";
 import { Settings } from "../services/Settings";
@@ -49,6 +55,11 @@ interface OuterListChunk {
   endLine: number;
   id: string;
   actionable: boolean;
+}
+
+interface GuideFoldTarget {
+  line: number;
+  fallbackCursor: MyEditorPosition;
 }
 
 class OuterListGuideWidget extends WidgetType {
@@ -170,15 +181,148 @@ function isOuterListChunkActionable(root: Root) {
   return root.getChildren().some(isFoldableTopLevelList);
 }
 
-function toggleOuterListChunk(
-  editor: Pick<MyEditor, "setFoldedPreservingScroll">,
-  root: Root,
-) {
+function foldInside(view: EditorView, from: number, to: number) {
+  let found: { from: number; to: number } | null = null;
+  foldedRanges(view.state).between(from, to, (from, to) => {
+    if (!found || found.from > from) found = { from, to };
+  });
+  return found;
+}
+
+function correctScrollSnapshotAnchor(view: EditorView, value: unknown): void {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("range" in value) ||
+    !("yMargin" in value) ||
+    typeof value.yMargin !== "number"
+  ) {
+    return;
+  }
+
+  const scaleY = view.scaleY;
+  const scrollTop = view.scrollDOM.scrollTop;
+  const scrollViewportTop = view.scrollDOM.getBoundingClientRect().top;
+  const documentTop = view.documentTop;
+  if (
+    !Number.isFinite(scaleY) ||
+    scaleY <= 0 ||
+    !Number.isFinite(scrollTop) ||
+    !Number.isFinite(scrollViewportTop) ||
+    !Number.isFinite(documentTop)
+  ) {
+    return;
+  }
+
+  const viewportDocumentTop = scrollViewportTop - documentTop;
+  const anchor = view.lineBlockAtHeight(Math.max(0, viewportDocumentTop + 8));
+  if (!Number.isFinite(anchor.from) || !Number.isFinite(anchor.top)) {
+    return;
+  }
+
+  value.range = EditorSelection.cursor(anchor.from);
+  value.yMargin = anchor.top - scrollTop;
+}
+
+function stableScrollSnapshot(view: EditorView) {
+  const snapshot = view.scrollSnapshot();
+  const value: unknown = snapshot.value;
+  correctScrollSnapshotAnchor(view, value);
+  // CodeMirror stores the precise snapshot offset in this mutable margin.
+  // Snap it once so scrollTop rounding cannot accumulate across fold cycles.
+  if (
+    !value ||
+    typeof value !== "object" ||
+    !("yMargin" in value) ||
+    typeof value.yMargin !== "number" ||
+    !Number.isFinite(value.yMargin)
+  ) {
+    return snapshot;
+  }
+
+  const window = view.dom.ownerDocument.defaultView;
+  const devicePixelRatio = window?.devicePixelRatio ?? 1;
+  const pixelScale =
+    Number.isFinite(devicePixelRatio) && devicePixelRatio > 0
+      ? devicePixelRatio
+      : 1;
+  value.yMargin = Math.round(value.yMargin * pixelScale) / pixelScale;
+  return snapshot;
+}
+
+function ensureScrollPastEndReserve(view: EditorView): void {
+  const expected =
+    view.scrollDOM.clientHeight -
+    view.defaultLineHeight -
+    view.documentPadding.top -
+    0.5;
+  const current = Number.parseFloat(view.contentDOM.style.paddingBottom);
+  if (
+    Number.isFinite(expected) &&
+    expected >= 0 &&
+    (!Number.isFinite(current) || current < expected)
+  ) {
+    view.contentDOM.style.paddingBottom = `${expected}px`;
+  }
+}
+
+function setGuideTargetsFolded(
+  view: EditorView,
+  targets: readonly GuideFoldTarget[],
+  folded: boolean,
+): boolean {
+  const resolved = targets.flatMap((target) => {
+    const line = view.lineBlockAt(view.state.doc.line(target.line + 1).from);
+    const range = folded
+      ? foldable(view.state, line.from, line.to)
+      : foldInside(view, line.from, line.to);
+
+    return range && range.from !== range.to ? [{ range, target }] : [];
+  });
+
+  if (resolved.length === 0) {
+    return false;
+  }
+
+  ensureScrollPastEndReserve(view);
+  const effects = [
+    stableScrollSnapshot(view),
+    ...resolved.map(({ range }) =>
+      (folded ? foldEffect : unfoldEffect).of(range),
+    ),
+  ];
+  const selectionHead = view.state.selection.main.head;
+  const selectedTarget = folded
+    ? resolved.find(
+        ({ range }) => range.from < selectionHead && selectionHead < range.to,
+      )
+    : undefined;
+
+  if (selectedTarget) {
+    const fallbackCursor = selectedTarget.target.fallbackCursor;
+    const fallbackLine = view.state.doc.line(fallbackCursor.line + 1);
+    const fallbackOffset = Math.min(
+      fallbackLine.from + fallbackCursor.ch,
+      fallbackLine.to,
+    );
+    view.dispatch({
+      selection: { anchor: fallbackOffset, head: fallbackOffset },
+      effects,
+    });
+  } else {
+    view.dispatch({ effects });
+  }
+
+  return true;
+}
+
+function toggleOuterListChunk(view: EditorView, root: Root) {
   const targets = root.getChildren().filter(isFoldableTopLevelList);
   if (targets.length === 0) return false;
 
   const shouldUnfold = targets.every((target) => target.isFolded());
-  return editor.setFoldedPreservingScroll(
+  return setGuideTargetsFolded(
+    view,
     targets.map((target) => {
       const fallbackCursor = target.getFirstLineContentStart();
       return { line: fallbackCursor.line, fallbackCursor };
@@ -283,17 +427,15 @@ function synchronizeHoveredIndentGuides(
   });
 }
 
-function toggleVerticalGuideTarget(
-  editor: Pick<MyEditor, "setFoldedPreservingScroll">,
-  list: List,
-) {
+function toggleVerticalGuideTarget(view: EditorView, list: List) {
   const children = list.getChildren().filter((child) => !child.isEmpty());
   if (children.length === 0) {
     return false;
   }
 
   const shouldUnfold = children.every((child) => child.isFolded());
-  return editor.setFoldedPreservingScroll(
+  return setGuideTargetsFolded(
+    view,
     children.map((child) => {
       const fallbackCursor = child.getFirstLineContentStart();
       return { line: fallbackCursor.line, fallbackCursor };
@@ -411,7 +553,7 @@ export class GuideFoldingPluginValue implements PluginValue {
         root.getContentStart().line !== startLine ||
         root.getContentEnd().line !== endLine ||
         !isOuterListChunkActionable(root) ||
-        (shouldToggle && !toggleOuterListChunk(editor, root))
+        (shouldToggle && !toggleOuterListChunk(view, root))
       ) {
         return false;
       }
@@ -451,7 +593,7 @@ export class GuideFoldingPluginValue implements PluginValue {
     if (
       !target ||
       !isVerticalGuideTargetActionable(target) ||
-      (shouldToggle && !toggleVerticalGuideTarget(editor, target))
+      (shouldToggle && !toggleVerticalGuideTarget(view, target))
     ) {
       return false;
     }

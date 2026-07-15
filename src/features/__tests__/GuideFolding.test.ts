@@ -1,4 +1,10 @@
-import { Text } from "@codemirror/state";
+import {
+  foldEffect,
+  foldable,
+  foldedRanges,
+  unfoldEffect,
+} from "@codemirror/language";
+import { EditorSelection, Text } from "@codemirror/state";
 import { Decoration, DecorationSet } from "@codemirror/view";
 
 import { readFileSync } from "node:fs";
@@ -24,6 +30,15 @@ jest.mock(
   }),
   { virtual: true },
 );
+
+jest.mock("@codemirror/language", () => ({
+  foldEffect: { of: jest.fn() },
+  foldable: jest.fn(),
+  foldedRanges: jest.fn(() => ({
+    between: jest.fn(),
+  })),
+  unfoldEffect: { of: jest.fn() },
+}));
 
 function makeClassList() {
   const values = new Set<string>();
@@ -96,7 +111,6 @@ function makeGuideDOM(elements: Array<ReturnType<typeof makeGuideElement>>) {
 }
 function makeFoldEditor() {
   return {
-    setFoldedPreservingScroll: jest.fn().mockReturnValue(true),
     lastLine: jest.fn().mockReturnValue(9),
   };
 }
@@ -817,8 +831,29 @@ describe("GuideFolding outer guide styles", () => {
 });
 
 describe("GuideFoldingPluginValue guide interactions", () => {
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- CodeMirror's mocked effect factory is intentionally stored for test setup and assertions.
+  const mockedFoldEffectOf = jest.mocked(foldEffect.of);
+  // eslint-disable-next-line @typescript-eslint/unbound-method -- CodeMirror's mocked effect factory is intentionally stored for test setup and assertions.
+  const mockedUnfoldEffectOf = jest.mocked(unfoldEffect.of);
+
   beforeEach(() => {
     jest.clearAllMocks();
+    jest
+      .mocked(foldable)
+      .mockImplementation((_state, from, to) => ({ from: from + 1, to }));
+    jest.mocked(foldedRanges).mockReturnValue({
+      between: (
+        from: number,
+        to: number,
+        callback: (from: number, to: number) => void,
+      ) => callback(from + 1, to),
+    } as never);
+    mockedFoldEffectOf.mockImplementation(
+      (range) => `fold-${range.from}` as never,
+    );
+    mockedUnfoldEffectOf.mockImplementation(
+      (range) => `unfold-${range.from}` as never,
+    );
     mockGetEditorFromState.mockReturnValue(null);
   });
 
@@ -831,14 +866,38 @@ describe("GuideFoldingPluginValue guide interactions", () => {
   }
 
   function makeView(lineNumber: number) {
+    const lines = Array.from({ length: 10 }, (_, index) => ({
+      from: index * 10,
+      to: index * 10 + 9,
+    }));
+    const scrollSnapshot = { value: {} };
     return {
+      contentDOM: { style: { paddingBottom: "1000px" } },
+      defaultLineHeight: 24,
+      documentPadding: { top: 0, bottom: 0 },
+      documentTop: 0,
+      dom: {
+        ownerDocument: { defaultView: { devicePixelRatio: 1 } },
+      },
+      scaleY: 1,
+      scrollDOM: {
+        clientHeight: 500,
+        scrollTop: 0,
+        getBoundingClientRect: jest.fn(() => ({ top: 0 })),
+      },
       state: {
         doc: {
           lines: 10,
+          line: jest.fn((number: number) => lines[number - 1]),
           lineAt: jest.fn().mockReturnValue({ number: lineNumber + 1 }),
         },
+        selection: { main: { head: -1 } },
       },
+      lineBlockAt: jest.fn((from: number) => lines[from / 10]),
+      lineBlockAtHeight: jest.fn(() => ({ from: 0, top: 0 })),
       posAtDOM: jest.fn().mockReturnValue(10),
+      scrollSnapshot: jest.fn().mockReturnValue(scrollSnapshot),
+      dispatch: jest.fn(),
     };
   }
 
@@ -868,6 +927,283 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     };
   }
 
+  function makeTransactionFixture(
+    selectionHead: number,
+    options: { devicePixelRatio?: number; targetsFolded?: boolean } = {},
+  ) {
+    const lines = [
+      { from: 0, to: 8 },
+      { from: 21, to: 29 },
+    ];
+    const scrollSnapshot = {
+      value: {
+        range: EditorSelection.cursor(0),
+        yMargin: -12.875,
+      },
+    };
+    const view = {
+      contentDOM: { style: { paddingBottom: "1138.5px" } },
+      defaultLineHeight: 24,
+      documentPadding: { top: 0, bottom: 0 },
+      documentTop: 0,
+      dom: {
+        ownerDocument: {
+          defaultView: {
+            devicePixelRatio: options.devicePixelRatio ?? 1,
+          },
+        },
+      },
+      scaleY: 1,
+      scrollDOM: {
+        clientHeight: 1163,
+        scrollTop: 100,
+        getBoundingClientRect: jest.fn(() => ({ top: 50 })),
+      },
+      state: {
+        doc: {
+          lines: 2,
+          line: jest.fn((number: number) => lines[number - 1]),
+        },
+        selection: { main: { head: selectionHead } },
+      },
+      lineBlockAt: jest.fn((from: number) =>
+        from === lines[0].from ? lines[0] : lines[1],
+      ),
+      lineBlockAtHeight: jest.fn(() => ({ from: 0, top: 87.125 })),
+      scrollSnapshot: jest.fn().mockReturnValue(scrollSnapshot),
+      dispatch: jest.fn(),
+      posAtDOM: jest.fn(),
+    };
+    const editor = makeFoldEditor();
+    editor.lastLine.mockReturnValue(1);
+    mockGetEditorFromState.mockReturnValue(editor);
+    const folded = options.targetsFolded ?? false;
+    const targets = [0, 1].map((line) => ({
+      getFirstLineContentStart: jest.fn(() => ({ line, ch: 2 })),
+      getLineCount: jest.fn(() => 2),
+      isEmpty: jest.fn(() => false),
+      isFolded: jest.fn(() => folded),
+    }));
+    const root = {
+      getChildren: jest.fn(() => targets),
+      getContentStart: jest.fn(() => ({ line: 0, ch: 0 })),
+      getContentEnd: jest.fn(() => ({ line: 1, ch: 0 })),
+    };
+    const pluginValue = makePluginValue(
+      {
+        verticalLines: true,
+        outerVerticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      { parseRange: jest.fn().mockReturnValue([root]) },
+    );
+    const interaction = makeEvent(
+      makeOuterGuideTarget({
+        "data-actionable": "true",
+        "data-chunk-start": "0",
+        "data-chunk-end": "1",
+      }),
+    );
+
+    return { editor, interaction, pluginValue, scrollSnapshot, view };
+  }
+
+  function setPaddingBottom(
+    view: ReturnType<typeof makeTransactionFixture>["view"],
+    value: string,
+  ) {
+    Object.defineProperty(view.contentDOM.style, "paddingBottom", {
+      configurable: true,
+      value,
+      writable: true,
+    });
+  }
+
+  describe("anchored fold transactions", () => {
+    const mockedFoldable = jest.mocked(foldable);
+    const mockedFoldedRanges = jest.mocked(foldedRanges);
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- CodeMirror's mocked effect factory is intentionally stored for test setup.
+    const mockedFoldEffectOf = jest.mocked(foldEffect.of);
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- CodeMirror's mocked effect factory is intentionally stored for test setup.
+    const mockedUnfoldEffectOf = jest.mocked(unfoldEffect.of);
+    const between = jest.fn();
+
+    beforeEach(() => {
+      mockedFoldedRanges.mockReturnValue({ between } as never);
+    });
+
+    test("folds every target with one scroll snapshot and a safe selection", () => {
+      mockedFoldable
+        .mockReturnValueOnce({ from: 8, to: 20 })
+        .mockReturnValueOnce({ from: 29, to: 40 });
+      mockedFoldEffectOf
+        .mockReturnValueOnce("fold-8" as never)
+        .mockReturnValueOnce("fold-29" as never);
+      const { interaction, pluginValue, scrollSnapshot, view } =
+        makeTransactionFixture(32);
+
+      expect(pluginValue.handleClick(interaction.event, view)).toBe(true);
+
+      expect(view.scrollSnapshot).toHaveBeenCalledTimes(1);
+      expect(view.dispatch).toHaveBeenCalledWith({
+        selection: { anchor: 23, head: 23 },
+        effects: [scrollSnapshot, "fold-8", "fold-29"],
+      });
+      expect(scrollSnapshot.value.yMargin).toBe(-13);
+      expect(view.dispatch).toHaveBeenCalledTimes(1);
+    });
+
+    test("keeps an outside selection while folding every target", () => {
+      mockedFoldable
+        .mockReturnValueOnce({ from: 8, to: 20 })
+        .mockReturnValueOnce({ from: 29, to: 40 });
+      mockedFoldEffectOf
+        .mockReturnValueOnce("fold-8" as never)
+        .mockReturnValueOnce("fold-29" as never);
+      const { interaction, pluginValue, scrollSnapshot, view } =
+        makeTransactionFixture(5);
+
+      pluginValue.handleClick(interaction.event, view);
+
+      expect(view.dispatch).toHaveBeenCalledWith({
+        effects: [scrollSnapshot, "fold-8", "fold-29"],
+      });
+      expect(view.dispatch).toHaveBeenCalledTimes(1);
+    });
+
+    test("unfolds every target with one scroll snapshot", () => {
+      between.mockImplementation(
+        (
+          from: number,
+          _to: number,
+          callback: (from: number, to: number) => void,
+        ) => {
+          if (from === 0) callback(8, 20);
+          if (from === 21) callback(29, 40);
+        },
+      );
+      mockedUnfoldEffectOf
+        .mockReturnValueOnce("unfold-8" as never)
+        .mockReturnValueOnce("unfold-29" as never);
+      const { interaction, pluginValue, scrollSnapshot, view } =
+        makeTransactionFixture(5, { targetsFolded: true });
+
+      expect(pluginValue.handleClick(interaction.event, view)).toBe(true);
+
+      expect(view.scrollSnapshot).toHaveBeenCalledTimes(1);
+      expect(view.dispatch).toHaveBeenCalledWith({
+        effects: [scrollSnapshot, "unfold-8", "unfold-29"],
+      });
+      expect(view.dispatch).toHaveBeenCalledTimes(1);
+    });
+
+    test("does not snapshot or dispatch when no target has a range", () => {
+      mockedFoldable.mockReturnValue(null);
+      const { interaction, pluginValue, view } = makeTransactionFixture(5);
+      setPaddingBottom(view, "100px");
+
+      expect(pluginValue.handleClick(interaction.event, view)).toBe(false);
+
+      expect(view.scrollSnapshot).not.toHaveBeenCalled();
+      expect(view.dispatch).not.toHaveBeenCalled();
+      expect(view.contentDOM.style.paddingBottom).toBe("100px");
+    });
+
+    test("anchors the snapshot to the visible document below properties", () => {
+      mockedFoldable.mockReturnValue({ from: 8, to: 20 });
+      mockedFoldEffectOf.mockReturnValue("fold-8" as never);
+      const { interaction, pluginValue, scrollSnapshot, view } =
+        makeTransactionFixture(5);
+      view.documentTop = -537.5625;
+      view.scrollDOM.scrollTop = 1400;
+      view.scrollDOM.getBoundingClientRect.mockReturnValue({ top: 78.75 });
+      view.lineBlockAtHeight.mockReturnValue({
+        from: 848,
+        top: 614.34375,
+      });
+      scrollSnapshot.value.range = EditorSelection.cursor(1570);
+      scrollSnapshot.value.yMargin = -17.34375;
+
+      pluginValue.handleClick(interaction.event, view);
+
+      expect(view.lineBlockAtHeight).toHaveBeenCalledWith(624.3125);
+      expect(scrollSnapshot.value.range.from).toBe(848);
+      expect(scrollSnapshot.value.range.to).toBe(848);
+      expect(scrollSnapshot.value.yMargin).toBe(-786);
+      expect(view.dispatch).toHaveBeenCalledTimes(1);
+    });
+
+    test("keeps line-block lookup in screen coordinates when the editor is scaled", () => {
+      mockedFoldable.mockReturnValue({ from: 8, to: 20 });
+      mockedFoldEffectOf.mockReturnValue("fold-8" as never);
+      const { interaction, pluginValue, view } = makeTransactionFixture(5);
+      view.documentTop = -537.5625;
+      view.scaleY = 2;
+      view.scrollDOM.scrollTop = 1400;
+      view.scrollDOM.getBoundingClientRect.mockReturnValue({ top: 78.75 });
+
+      pluginValue.handleClick(interaction.event, view);
+
+      expect(view.lineBlockAtHeight).toHaveBeenCalledWith(624.3125);
+      expect(view.dispatch).toHaveBeenCalledTimes(1);
+    });
+
+    test("falls back to the native snapshot when viewport geometry is invalid", () => {
+      mockedFoldable.mockReturnValue({ from: 8, to: 20 });
+      mockedFoldEffectOf.mockReturnValue("fold-8" as never);
+      const { interaction, pluginValue, scrollSnapshot, view } =
+        makeTransactionFixture(5);
+      view.scaleY = 0;
+      scrollSnapshot.value.range = EditorSelection.cursor(1570);
+      scrollSnapshot.value.yMargin = -17.34375;
+
+      pluginValue.handleClick(interaction.event, view);
+
+      expect(view.lineBlockAtHeight).not.toHaveBeenCalled();
+      expect(scrollSnapshot.value.range.from).toBe(1570);
+      expect(scrollSnapshot.value.yMargin).toBe(-17);
+      expect(view.dispatch).toHaveBeenCalledTimes(1);
+    });
+
+    test("restores the standard scroll reserve before folding", () => {
+      mockedFoldable.mockReturnValue({ from: 8, to: 20 });
+      mockedFoldEffectOf.mockReturnValue("fold-8" as never);
+      const { interaction, pluginValue, view } = makeTransactionFixture(5);
+      setPaddingBottom(view, "100px");
+
+      pluginValue.handleClick(interaction.event, view);
+
+      expect(view.contentDOM.style.paddingBottom).toBe("1138.5px");
+      expect(view.dispatch).toHaveBeenCalledTimes(1);
+    });
+
+    test("keeps a scroll reserve that already exceeds the standard value", () => {
+      mockedFoldable.mockReturnValue({ from: 8, to: 20 });
+      mockedFoldEffectOf.mockReturnValue("fold-8" as never);
+      const { interaction, pluginValue, view } = makeTransactionFixture(5);
+      setPaddingBottom(view, "1200px");
+
+      pluginValue.handleClick(interaction.event, view);
+
+      expect(view.contentDOM.style.paddingBottom).toBe("1200px");
+      expect(view.dispatch).toHaveBeenCalledTimes(1);
+    });
+
+    test("snaps the scroll margin to the physical-pixel grid", () => {
+      mockedFoldable.mockReturnValue({ from: 8, to: 20 });
+      mockedFoldEffectOf.mockReturnValue("fold-8" as never);
+      const { interaction, pluginValue, scrollSnapshot, view } =
+        makeTransactionFixture(5, { devicePixelRatio: 2 });
+      view.scaleY = 0;
+      scrollSnapshot.value.yMargin = -12.74;
+
+      pluginValue.handleClick(interaction.event, view);
+
+      expect(scrollSnapshot.value.yMargin).toBe(-12.5);
+      expect(view.dispatch).toHaveBeenCalledTimes(1);
+    });
+  });
+
   test("maps each standard indent guide to its exact real ancestor", () => {
     const root = makeRoot({
       editor: makeEditor({
@@ -892,25 +1228,17 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
     const { guides } = makeGuideLine(["    ", "    ", "    ", "    "]);
 
-    for (const guide of guides.slice(0, 3)) {
-      expect(pluginValue.handleClick(makeEvent(guide).event, makeView(4))).toBe(
-        true,
-      );
+    const views = guides.slice(0, 3).map(() => makeView(4));
+    for (const [index, guide] of guides.slice(0, 3).entries()) {
+      expect(
+        pluginValue.handleClick(makeEvent(guide).event, views[index]),
+      ).toBe(true);
     }
 
-    expect(editor.setFoldedPreservingScroll).toHaveBeenNthCalledWith(
-      1,
-      [expect.objectContaining({ line: 1 })],
-      true,
-    );
-    expect(editor.setFoldedPreservingScroll).toHaveBeenNthCalledWith(
-      2,
-      [expect.objectContaining({ line: 2 })],
-      true,
-    );
-    expect(editor.setFoldedPreservingScroll).toHaveBeenNthCalledWith(
-      3,
-      [expect.objectContaining({ line: 3 })],
+    expect(foldable).toHaveBeenNthCalledWith(1, expect.anything(), 10, 19);
+    expect(foldable).toHaveBeenNthCalledWith(2, expect.anything(), 20, 29);
+    expect(foldable).toHaveBeenNthCalledWith(3, expect.anything(), 30, 39);
+    expect(views.every((view) => view.dispatch.mock.calls.length === 1)).toBe(
       true,
     );
   });
@@ -939,23 +1267,17 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
     const { guides } = makeGuideLine(["    ", "  ", "  "]);
 
+    const firstView = makeView(4);
+    const secondView = makeView(4);
+    expect(pluginValue.handleClick(makeEvent(guides[0]).event, firstView)).toBe(
+      true,
+    );
     expect(
-      pluginValue.handleClick(makeEvent(guides[0]).event, makeView(4)),
-    ).toBe(true);
-    expect(
-      pluginValue.handleClick(makeEvent(guides[1]).event, makeView(4)),
+      pluginValue.handleClick(makeEvent(guides[1]).event, secondView),
     ).toBe(true);
 
-    expect(editor.setFoldedPreservingScroll).toHaveBeenNthCalledWith(
-      1,
-      [expect.objectContaining({ line: 1 })],
-      true,
-    );
-    expect(editor.setFoldedPreservingScroll).toHaveBeenNthCalledWith(
-      2,
-      [expect.objectContaining({ line: 3 })],
-      true,
-    );
+    expect(foldable).toHaveBeenNthCalledWith(1, expect.anything(), 10, 19);
+    expect(foldable).toHaveBeenNthCalledWith(2, expect.anything(), 30, 39);
   });
 
   test("ignores guide boundaries that match only shared leading indentation", () => {
@@ -982,7 +1304,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(
       pluginValue.handleClick(makeEvent(guides[1]).event, makeView(2)),
     ).toBe(false);
-    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
+    expect(foldable).not.toHaveBeenCalled();
   });
 
   test("ignores a guide outside a list-indent container", () => {
@@ -1007,7 +1329,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(
       pluginValue.handleClick(makeEvent(guides[0]).event, makeView(2)),
     ).toBe(false);
-    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
+    expect(foldable).not.toHaveBeenCalled();
   });
 
   test("folds each direct non-empty child when any branch is open", () => {
@@ -1036,16 +1358,13 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
     const { guides } = makeGuideLine(["    "]);
 
-    expect(
-      pluginValue.handleClick(makeEvent(guides[0]).event, makeView(2)),
-    ).toBe(true);
-    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
-      [
-        { line: 1, fallbackCursor: { line: 1, ch: 4 } },
-        { line: 4, fallbackCursor: { line: 4, ch: 4 } },
-      ],
+    const view = makeView(2);
+    expect(pluginValue.handleClick(makeEvent(guides[0]).event, view)).toBe(
       true,
     );
+    expect(foldable).toHaveBeenNthCalledWith(1, expect.anything(), 10, 19);
+    expect(foldable).toHaveBeenNthCalledWith(2, expect.anything(), 40, 49);
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
   });
 
   test("unfolds each direct non-empty child when every branch is folded", () => {
@@ -1074,16 +1393,19 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
     const { guides } = makeGuideLine(["    "]);
 
-    expect(
-      pluginValue.handleClick(makeEvent(guides[0]).event, makeView(2)),
-    ).toBe(true);
-    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
-      [
-        { line: 1, fallbackCursor: { line: 1, ch: 4 } },
-        { line: 4, fallbackCursor: { line: 4, ch: 4 } },
-      ],
-      false,
+    const view = makeView(2);
+    expect(pluginValue.handleClick(makeEvent(guides[0]).event, view)).toBe(
+      true,
     );
+    expect(mockedUnfoldEffectOf).toHaveBeenNthCalledWith(1, {
+      from: 11,
+      to: 19,
+    });
+    expect(mockedUnfoldEffectOf).toHaveBeenNthCalledWith(2, {
+      from: 41,
+      to: 49,
+    });
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
   });
 
   test("does nothing when the target has no non-empty children", () => {
@@ -1107,7 +1429,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(
       pluginValue.handleClick(makeEvent(guides[0]).event, makeView(1)),
     ).toBe(false);
-    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
+    expect(foldable).not.toHaveBeenCalled();
   });
 
   test("returns false when no fold range can be updated", () => {
@@ -1118,7 +1440,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       }),
     });
     const editor = makeFoldEditor();
-    editor.setFoldedPreservingScroll.mockReturnValue(false);
+    jest.mocked(foldable).mockReturnValue(null);
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makePluginValue(
       {
@@ -1130,8 +1452,10 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { guides } = makeGuideLine(["    "]);
     const { event, preventDefault } = makeEvent(guides[0]);
 
-    expect(pluginValue.handleClick(event, makeView(2))).toBe(false);
-    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
+    const view = makeView(2);
+    expect(pluginValue.handleClick(event, view)).toBe(false);
+    expect(foldable).toHaveBeenCalledTimes(1);
+    expect(view.dispatch).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
@@ -1923,11 +2247,8 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 2);
     expect(parser.parse).not.toHaveBeenCalled();
     expect(view.posAtDOM).not.toHaveBeenCalled();
-    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
-      [{ line: 0, fallbackCursor: { line: 0, ch: 2 } }],
-      true,
-    );
-    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
+    expect(foldable).toHaveBeenCalledWith(expect.anything(), 0, 9);
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
@@ -1956,15 +2277,17 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       }),
     );
 
-    expect(pluginValue.handleClick(event, makeView(1))).toBe(true);
-    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
-      [
-        { line: 0, fallbackCursor: { line: 0, ch: 2 } },
-        { line: 3, fallbackCursor: { line: 3, ch: 2 } },
-      ],
-      false,
-    );
-    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
+    const view = makeView(1);
+    expect(pluginValue.handleClick(event, view)).toBe(true);
+    expect(mockedUnfoldEffectOf).toHaveBeenNthCalledWith(1, {
+      from: 1,
+      to: 9,
+    });
+    expect(mockedUnfoldEffectOf).toHaveBeenNthCalledWith(2, {
+      from: 31,
+      to: 39,
+    });
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
@@ -1990,9 +2313,10 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
     const { event, preventDefault } = makeEvent(makeOuterGuideTarget());
 
-    expect(pluginValue.handleMouseDown(event, makeView(1))).toBe(true);
+    const view = makeView(1);
+    expect(pluginValue.handleMouseDown(event, view)).toBe(true);
     expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 2);
-    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
+    expect(view.dispatch).not.toHaveBeenCalled();
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
@@ -2016,9 +2340,10 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { guides } = makeGuideLine(["    ", "    "]);
     const { event, preventDefault } = makeEvent(guides[0]);
 
-    expect(pluginValue.handleMouseDown(event, makeView(2))).toBe(true);
+    const view = makeView(2);
+    expect(pluginValue.handleMouseDown(event, view)).toBe(true);
     expect(parser.parse).toHaveBeenCalledWith(editor, { line: 2, ch: 0 });
-    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
+    expect(view.dispatch).not.toHaveBeenCalled();
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
@@ -2130,9 +2455,10 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       }),
     );
 
-    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
+    const view = makeView(1);
+    expect(pluginValue.handleClick(event, view)).toBe(false);
     expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 1);
-    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
+    expect(view.dispatch).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
@@ -2142,7 +2468,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       cursor: { line: 0, ch: 0 },
     });
     const editor = makeFoldEditor();
-    editor.setFoldedPreservingScroll.mockReturnValue(false);
+    jest.mocked(foldable).mockReturnValue(null);
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makePluginValue(
       {
@@ -2164,8 +2490,10 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       }),
     );
 
-    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
-    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
+    const view = makeView(1);
+    expect(pluginValue.handleClick(event, view)).toBe(false);
+    expect(foldable).toHaveBeenCalledTimes(1);
+    expect(view.dispatch).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
@@ -2193,6 +2521,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       removeEventListener: jest.fn(),
       querySelector: jest.fn().mockReturnValue(null),
       querySelectorAll: jest.fn().mockReturnValue([]),
+      style: { paddingBottom: "1000px" },
     };
     const PluginValueWithView = GuideFoldingPluginValue as unknown as new (
       settings: unknown,
@@ -2201,15 +2530,11 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     ) => unknown;
     const root = makeRoot({ editor: sourceEditor });
     const parseRange = jest.fn().mockReturnValue([root]);
-    new PluginValueWithView(
-      settings,
-      { parseRange },
-      {
-        contentDOM,
-        state: { doc: Text.of(["- parent", "    - child"]) },
-        requestMeasure: jest.fn(),
-      },
-    );
+    const view = Object.assign(makeView(0), {
+      contentDOM,
+      requestMeasure: jest.fn(),
+    });
+    new PluginValueWithView(settings, { parseRange }, view);
     const mouseDownListener = addEventListener.mock.calls.find(
       ([eventName]) => eventName === "mousedown",
     )?.[1];
@@ -2232,7 +2557,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       preventDefault: mouseDownPreventDefault,
       stopPropagation: mouseDownStopPropagation,
     } as unknown as Event);
-    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
+    expect(view.dispatch).not.toHaveBeenCalled();
 
     clickListener?.({
       target,
@@ -2264,7 +2589,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(parseRange).toHaveBeenNthCalledWith(1, editor, 0, 1);
     expect(parseRange).toHaveBeenNthCalledWith(2, editor, 0, 1);
     expect(parseRange).toHaveBeenNthCalledWith(3, editor, 1, 1);
-    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
     expect(mouseDownPreventDefault).toHaveBeenCalledTimes(1);
     expect(mouseDownStopPropagation).toHaveBeenCalledTimes(1);
     expect(clickPreventDefault).toHaveBeenCalledTimes(1);
@@ -2296,8 +2621,9 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       }),
     );
 
-    expect(pluginValue.handleClick(event, makeView(1))).toBe(false);
-    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
+    const view = makeView(1);
+    expect(pluginValue.handleClick(event, view)).toBe(false);
+    expect(view.dispatch).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 
@@ -2332,14 +2658,9 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(pluginValue.handleClick(event, view)).toBe(true);
     expect(view.posAtDOM).toHaveBeenCalledWith(line);
     expect(parser.parse).toHaveBeenCalledWith(editor, { line: 2, ch: 0 });
-    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
-      [
-        { line: 1, fallbackCursor: { line: 1, ch: 4 } },
-        { line: 4, fallbackCursor: { line: 4, ch: 4 } },
-      ],
-      true,
-    );
-    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
+    expect(foldable).toHaveBeenNthCalledWith(1, expect.anything(), 10, 19);
+    expect(foldable).toHaveBeenNthCalledWith(2, expect.anything(), 40, 49);
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
@@ -2376,14 +2697,9 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(pluginValue.handleClick(event, view)).toBe(true);
     expect(view.posAtDOM).toHaveBeenCalledWith(line);
     expect(parser.parse).toHaveBeenCalledWith(editor, { line: 3, ch: 0 });
-    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledWith(
-      [
-        { line: 2, fallbackCursor: { line: 2, ch: 10 } },
-        { line: 4, fallbackCursor: { line: 4, ch: 10 } },
-      ],
-      true,
-    );
-    expect(editor.setFoldedPreservingScroll).toHaveBeenCalledTimes(1);
+    expect(foldable).toHaveBeenNthCalledWith(1, expect.anything(), 20, 29);
+    expect(foldable).toHaveBeenNthCalledWith(2, expect.anything(), 40, 49);
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
@@ -2470,7 +2786,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { event, preventDefault } = makeEvent(guides[0]);
 
     expect(pluginValue.handleClick(event, makeView(0))).toBe(false);
-    expect(editor.setFoldedPreservingScroll).not.toHaveBeenCalled();
+    expect(foldable).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 });
