@@ -141,6 +141,8 @@ export class VimOBehaviourOverride implements Feature {
   };
 
   async unload() {
+    this.settings.removeCallback(this.handleSettingsChange);
+
     if (!this.inited) {
       return;
     }
