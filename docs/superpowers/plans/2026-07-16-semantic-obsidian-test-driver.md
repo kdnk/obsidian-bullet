@@ -107,12 +107,19 @@ Commit: refactor(test): centralize Obsidian driver commands
 Test that applyState dispatches once through the registry and that an unknown command rejects with Unknown test command.
 
 ~~~ts
-await expect(plugin.handleTestCommandForTest("unknown", undefined)).rejects.toThrow(
+const dispatch = (
+  plugin as unknown as {
+    handleTestCommand(type: string, data: unknown): Promise<State | undefined>;
+  }
+).handleTestCommand.bind(plugin);
+await expect(dispatch("unknown", undefined)).rejects.toThrow(
   "Unknown test command: unknown",
 );
 ~~~
 
-Use a narrow test-only structural type to reach the private dispatcher, following the existing test style.
+Use this narrow structural type only in the test.
+
+Do not add a test-only production method.
 
 - [ ] **Step 2: Run the focused renderer test and confirm RED**
 
