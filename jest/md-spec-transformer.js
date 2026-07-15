@@ -105,6 +105,17 @@ function parseDrag(l) {
   };
 }
 
+function parseClickGuide(l) {
+  const options = JSON.parse(l.line.replace(/^- clickGuide:\s*/, ""));
+
+  l.nextNotEmpty();
+
+  return {
+    type: "clickGuide",
+    options,
+  };
+}
+
 function parseMove(l) {
   const { to, offsetX, offsetY } = JSON.parse(
     l.line.replace(/- move: `([^`]+)`/, "$1")
@@ -195,6 +206,8 @@ function parseAction(l) {
     return parsePlatform(l);
   } else if (l.line.startsWith("- drag:")) {
     return parseDrag(l);
+  } else if (l.line.startsWith("- clickGuide:")) {
+    return parseClickGuide(l);
   } else if (l.line.startsWith("- move:")) {
     return parseMove(l);
   } else if (l.line.startsWith("- drop")) {
@@ -303,6 +316,9 @@ module.exports.process = function process(sourceText, sourcePath, options) {
           break;
         case "drag":
           code += `    await drag(${s({ from: action.from })});\n`;
+          break;
+        case "clickGuide":
+          code += `    await clickGuide(${s(action.options)});\n`;
           break;
         case "move":
           code += `    await move(${s({
