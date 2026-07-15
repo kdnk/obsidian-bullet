@@ -19,6 +19,7 @@
     - デフォルトブランチへ取り込む前に全テストを実行し、すべて通ることを確認してください。全テストが通らない状態では取り込まないでください。
     - 取り込み後、デフォルトブランチに対して `npm version <major|minor|patch>` を実行し、新しいバージョンをリリースしてください。
 - テストについて
+    - `src` 配下の unit test だけを `npx jest` で直接実行するときは、必ず `SKIP_OBSIDIAN=1` を付けるか `npm run test:unit` を使ってください。付けない場合は Jest の global setup が実 Obsidian を終了し、`vault/test.md` を上書きします。
     - `.spec.md` の統合 spec やフルテストは `dist/main.js` を実行するため、`src` を変更した後に実行する場合は先に `npm run build-with-tests` を実行してください。
     - フルテストは `vault/test.md` をfixtureとして上書きします。手動検証用の内容がある場合は、フルテスト前にvault外へbackupしてください。テストcommandの終了直後はtest rendererの遅延終了処理がfixtureを再保存する場合があるため、`vault=vault` のrendererが終了したことを確認してからrestoreしてください。restore後は少し待ってfile sizeまたはhashがbackupと一致することを再確認してから実Obsidianの検証を続けてください。Obsidianのfile historyだけをbackupとして使わないでください。
     - `dist/main.js` は生成物としてgitignoreされています。検証用にbuildしても、`git add -f` で追跡対象へ追加しないでください。
