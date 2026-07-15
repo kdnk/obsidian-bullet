@@ -22,12 +22,48 @@ class FakeElement {
   readonly nodeType = 1;
   readonly childNodes: Array<FakeElement | FakeTextNode> = [];
   readonly dispatchedEvents: MouseEvent[] = [];
+  readonly ownerDocument: {
+    defaultView: {
+      getComputedStyle(element: FakeElement): {
+        display: string;
+        visibility: string;
+        opacity: string;
+      };
+    };
+  };
   parentElement: FakeElement | null = null;
+  private readonly hasLayout: boolean;
+  private readonly computedStyle: {
+    display: string;
+    visibility: string;
+    opacity: string;
+  };
 
   constructor(
     private readonly className: string,
-    private readonly visible = true,
-  ) {}
+    visibility:
+      | boolean
+      | {
+          hasLayout?: boolean;
+          display?: string;
+          visibility?: string;
+          opacity?: string;
+        } = true,
+  ) {
+    const options =
+      typeof visibility === "boolean" ? { hasLayout: visibility } : visibility;
+    this.hasLayout = options.hasLayout ?? true;
+    this.computedStyle = {
+      display: options.display ?? "inline",
+      visibility: options.visibility ?? "visible",
+      opacity: options.opacity ?? "1",
+    };
+    this.ownerDocument = {
+      defaultView: {
+        getComputedStyle: (element) => element.computedStyle,
+      },
+    };
+  }
 
   get textContent(): string {
     return this.childNodes.map((child) => child.textContent).join("");
@@ -70,7 +106,7 @@ class FakeElement {
   }
 
   getClientRects() {
-    return this.visible ? [{}] : [];
+    return this.hasLayout ? [{}] : [];
   }
 }
 
@@ -349,9 +385,39 @@ describe("ObsidianBulletPluginWithTests", () => {
 
     expect(() => callAssertNativeListBullet(plugin, { line: 0 })).not.toThrow();
     expect(() => callAssertNativeListBullet(plugin, { line: 0 })).toThrow(
-      "Unable to assert native list bullet on line 0: found 0 native .list-bullet elements",
+      "Unable to assert native list bullet on line 0: found 0 visible native .list-bullet elements",
     );
     expect(domAtPos).toHaveBeenCalledTimes(2);
+  });
+
+  test.each([
+    ["a zero layout rect", { hasLayout: false }],
+    ["display none", { display: "none" }],
+    ["hidden visibility", { visibility: "hidden" }],
+    ["collapsed visibility", { visibility: "collapse" }],
+    ["zero opacity", { opacity: "0" }],
+  ])("rejects a native list bullet with %s", (_description, visibility) => {
+    const line = createLineWithNativeListBullet(visibility);
+    const { plugin } = createPluginWithLineDom([line]);
+
+    expect(() => callAssertNativeListBullet(plugin, { line: 0 })).toThrow(
+      "Unable to assert native list bullet on line 0: found 0 visible native .list-bullet elements",
+    );
+  });
+
+  test("accepts at least one explicitly visible native list bullet", () => {
+    const line = createLineWithNativeListBullet({ display: "none" });
+    line.append(
+      new FakeElement("list-bullet", {
+        hasLayout: true,
+        display: "inline-block",
+        visibility: "visible",
+        opacity: "1",
+      }),
+    );
+    const { plugin } = createPluginWithLineDom([line]);
+
+    expect(() => callAssertNativeListBullet(plugin, { line: 0 })).not.toThrow();
   });
 
   test("rejects a visible raw formatting marker beside a native list bullet", () => {
@@ -369,6 +435,19 @@ describe("ObsidianBulletPluginWithTests", () => {
   test("ignores a hidden raw formatting marker beside a native list bullet", () => {
     const line = createLineWithNativeListBullet();
     const hiddenRawMarker = new FakeElement("cm-formatting-list", false);
+    hiddenRawMarker.append(new FakeTextNode("-"));
+    line.append(hiddenRawMarker);
+    const { plugin } = createPluginWithLineDom([line]);
+
+    expect(() => callAssertNativeListBullet(plugin, { line: 0 })).not.toThrow();
+  });
+
+  test("ignores a computed-style-hidden raw formatting marker", () => {
+    const line = createLineWithNativeListBullet();
+    const hiddenRawMarker = new FakeElement("cm-formatting-list", {
+      hasLayout: true,
+      visibility: "hidden",
+    });
     hiddenRawMarker.append(new FakeTextNode("-"));
     line.append(hiddenRawMarker);
     const { plugin } = createPluginWithLineDom([line]);
@@ -474,9 +553,11 @@ function createLineWithIndentGuide(prefix: string) {
   return line;
 }
 
-function createLineWithNativeListBullet() {
+function createLineWithNativeListBullet(
+  visibility?: ConstructorParameters<typeof FakeElement>[1],
+) {
   const line = new FakeElement("cm-line");
-  line.append(new FakeElement("list-bullet"));
+  line.append(new FakeElement("list-bullet", visibility));
   return line;
 }
 

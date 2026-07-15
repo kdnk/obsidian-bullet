@@ -400,10 +400,12 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
       );
     }
 
-    const nativeBullets = lineElement.querySelectorAll(".list-bullet");
-    if (nativeBullets.length === 0) {
+    const visibleNativeBullet = Array.from(
+      lineElement.querySelectorAll(".list-bullet"),
+    ).find(isElementVisible);
+    if (!visibleNativeBullet) {
       throw new Error(
-        `Unable to assert native list bullet on line ${options.line}: found 0 native .list-bullet elements`,
+        `Unable to assert native list bullet on line ${options.line}: found 0 visible native .list-bullet elements`,
       );
     }
 
@@ -909,22 +911,30 @@ function getGuideIndentPrefix(guide: Element): string | null {
 function isVisibleRawListMarker(marker: Element): boolean {
   if (
     marker.querySelector(".list-bullet") ||
-    (marker.textContent ?? "").trim().length === 0 ||
-    marker.getClientRects().length === 0
+    (marker.textContent ?? "").trim().length === 0
   ) {
     return false;
   }
 
-  const window = marker.ownerDocument?.defaultView;
-  if (!window) {
-    return true;
+  return isElementVisible(marker);
+}
+
+function isElementVisible(element: Element): boolean {
+  if (element.getClientRects().length === 0) {
+    return false;
   }
-  const style = window.getComputedStyle(marker);
+
+  const window = element.ownerDocument?.defaultView;
+  if (!window) {
+    return false;
+  }
+  const style = window.getComputedStyle(element);
+  const opacity = Number.parseFloat(style.opacity);
   return (
     style.display !== "none" &&
     style.visibility !== "hidden" &&
     style.visibility !== "collapse" &&
-    style.opacity !== "0"
+    (!Number.isFinite(opacity) || opacity > 0)
   );
 }
 
