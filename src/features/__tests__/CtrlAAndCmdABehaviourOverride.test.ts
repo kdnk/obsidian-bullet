@@ -36,10 +36,9 @@ test("should keep select-all cycle anchored across separate keypresses", async (
       cursor: ReturnType<MyEditor["getCursor"]>,
     ) => {
       const operation = createOperation(root);
-      operation.perform();
+      const outcome = operation.perform();
       return {
-        shouldUpdate: operation.shouldUpdate(),
-        shouldStopPropagation: operation.shouldStopPropagation(),
+        ...outcome,
         cursor,
       };
     },

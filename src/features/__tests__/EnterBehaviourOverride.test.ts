@@ -1,13 +1,8 @@
 import { Plugin } from "obsidian";
 
-import {
-  makeEditor,
-  makeLogger,
-  makeRoot,
-  makeSettings,
-} from "../../__mocks__";
+import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
+import { NO_OP_OUTCOME } from "../../operations/Operation";
 import { OperationPerformer } from "../../services/OperationPerformer";
-import { Parser } from "../../services/Parser";
 import { EnterBehaviourOverride } from "../EnterBehaviourOverride";
 
 jest.mock(
@@ -26,15 +21,15 @@ describe("EnterBehaviourOverride", () => {
       text: "9. item\n",
       cursor: { line: 0, ch: 7 },
     });
-    const logger = makeLogger();
     const settings = makeSettings();
-    const parser = new Parser(logger, settings);
-    const root = makeRoot({ editor, logger, settings });
+    const root = makeRoot({ editor, settings });
     const changesApplicator = {
       apply: jest.fn(),
     };
     const operationPerformer = new OperationPerformer(
-      parser,
+      {
+        parse: jest.fn().mockReturnValue(root),
+      } as unknown as ConstructorParameters<typeof OperationPerformer>[0],
       changesApplicator as unknown as ConstructorParameters<
         typeof OperationPerformer
       >[1],
@@ -51,9 +46,6 @@ describe("EnterBehaviourOverride", () => {
         getDefaultIndentChars: () => "  ",
         isSmartIndentListEnabled: () => false,
       } as ConstructorParameters<typeof EnterBehaviourOverride>[3],
-      {
-        parse: jest.fn().mockReturnValue(root),
-      } as unknown as ConstructorParameters<typeof EnterBehaviourOverride>[4],
       operationPerformer,
     );
 
@@ -66,10 +58,7 @@ describe("EnterBehaviourOverride", () => {
       }
     ).run(editor);
 
-    expect(result).toEqual({
-      shouldStopPropagation: false,
-      shouldUpdate: false,
-    });
+    expect(result).toBe(NO_OP_OUTCOME);
     expect(changesApplicator.apply).not.toHaveBeenCalled();
   });
 });

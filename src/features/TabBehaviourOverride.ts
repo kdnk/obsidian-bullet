@@ -11,7 +11,6 @@ import { OutdentList } from "../operations/OutdentList";
 import { IMEDetector } from "../services/IMEDetector";
 import { ObsidianSettings } from "../services/ObsidianSettings";
 import { OperationPerformer } from "../services/OperationPerformer";
-import { Parser } from "../services/Parser";
 import { Settings } from "../services/Settings";
 import { createKeymapRunCallback } from "../utils/createKeymapRunCallback";
 
@@ -23,7 +22,6 @@ export class TabBehaviourOverride implements Feature {
     private imeDetector: IMEDetector,
     private obsidianSettings: ObsidianSettings,
     private settings: Settings,
-    private parser: Parser,
     private operationPerformer: OperationPerformer,
   ) {}
 
@@ -59,47 +57,34 @@ export class TabBehaviourOverride implements Feature {
   };
 
   private runIndent(editor: MyEditor) {
-    const root = this.parser.parse(editor);
+    return this.operationPerformer.perform((root) => {
+      if (
+        !this.shouldHandleListEditing(root.getListUnderCursor().getBullet())
+      ) {
+        return null;
+      }
 
-    if (
-      !root ||
-      !this.shouldHandleListEditing(root.getListUnderCursor().getBullet())
-    ) {
-      return {
-        shouldUpdate: false,
-        shouldStopPropagation: false,
-      };
-    }
-
-    return this.operationPerformer.eval(
-      root,
-      new IndentList(
+      return new IndentList(
         root,
         this.obsidianSettings.getDefaultIndentChars(),
         this.obsidianSettings.isSmartIndentListEnabled(),
-      ),
-      editor,
-    );
+      );
+    }, editor);
   }
 
   private runOutdent(editor: MyEditor) {
-    const root = this.parser.parse(editor);
+    return this.operationPerformer.perform((root) => {
+      if (
+        !this.shouldHandleListEditing(root.getListUnderCursor().getBullet())
+      ) {
+        return null;
+      }
 
-    if (
-      !root ||
-      !this.shouldHandleListEditing(root.getListUnderCursor().getBullet())
-    ) {
-      return {
-        shouldUpdate: false,
-        shouldStopPropagation: false,
-      };
-    }
-
-    return this.operationPerformer.eval(
-      root,
-      new OutdentList(root, this.obsidianSettings.isSmartIndentListEnabled()),
-      editor,
-    );
+      return new OutdentList(
+        root,
+        this.obsidianSettings.isSmartIndentListEnabled(),
+      );
+    }, editor);
   }
 
   private shouldHandleListEditing(bullet: string) {

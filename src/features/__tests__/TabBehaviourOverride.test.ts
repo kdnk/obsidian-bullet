@@ -1,7 +1,10 @@
 import { Editor, Plugin } from "obsidian";
 
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
+import { NO_OP_OUTCOME, Operation } from "../../operations/Operation";
+import { Root } from "../../root";
 import { OperationPerformer } from "../../services/OperationPerformer";
+import { ShiftTabBehaviourOverride } from "../ShiftTabBehaviourOverride";
 import { TabBehaviourOverride } from "../TabBehaviourOverride";
 
 jest.mock(
@@ -79,14 +82,13 @@ describe("TabBehaviourOverride", () => {
       }),
       settings: makeSettings(),
     });
-    const parser = {
-      parse: jest.fn().mockReturnValue(root),
-    } as unknown as ConstructorParameters<typeof TabBehaviourOverride>[4];
     const changesApplicator = {
       apply: jest.fn(),
     };
     const operationPerformer = new OperationPerformer(
-      {} as ConstructorParameters<typeof OperationPerformer>[0],
+      {
+        parse: jest.fn().mockReturnValue(root),
+      } as unknown as ConstructorParameters<typeof OperationPerformer>[0],
       changesApplicator as unknown as ConstructorParameters<
         typeof OperationPerformer
       >[1],
@@ -96,7 +98,6 @@ describe("TabBehaviourOverride", () => {
       imeDetector,
       obsidianSettings,
       settings,
-      parser,
       operationPerformer,
     );
     const editor = makeRawEditor("- one\n- two", { line: 1, ch: 5 });
@@ -117,14 +118,13 @@ describe("TabBehaviourOverride", () => {
       }),
       settings: makeSettings(),
     });
-    const parser = {
-      parse: jest.fn().mockReturnValue(root),
-    } as unknown as ConstructorParameters<typeof TabBehaviourOverride>[4];
     const changesApplicator = {
       apply: jest.fn(),
     };
     const operationPerformer = new OperationPerformer(
-      {} as ConstructorParameters<typeof OperationPerformer>[0],
+      {
+        parse: jest.fn().mockReturnValue(root),
+      } as unknown as ConstructorParameters<typeof OperationPerformer>[0],
       changesApplicator as unknown as ConstructorParameters<
         typeof OperationPerformer
       >[1],
@@ -134,7 +134,6 @@ describe("TabBehaviourOverride", () => {
       imeDetector,
       obsidianSettings,
       settings,
-      parser,
       operationPerformer,
     );
     const editor = makeRawEditor("- one\n  - two", {
@@ -148,5 +147,82 @@ describe("TabBehaviourOverride", () => {
     expect(changesApplicator.apply).toHaveBeenCalled();
     expect(editor.execCalls).toEqual([]);
     await feature.unload();
+  });
+
+  test("should return no-op through a null factory for unsupported ordered lists", () => {
+    const editor = makeEditor({
+      text: "1. one\n2. two",
+      cursor: { line: 1, ch: 6 },
+    });
+    const root = makeRoot({
+      editor,
+      settings: makeSettings(),
+    });
+    const perform = jest.fn(
+      (createOperation: (root: Root) => Operation | null) => {
+        expect(createOperation(root)).toBeNull();
+        return NO_OP_OUTCOME;
+      },
+    );
+    const feature = new TabBehaviourOverride(
+      plugin,
+      imeDetector,
+      {
+        getDefaultIndentChars: () => "  ",
+        isSmartIndentListEnabled: () => false,
+      } as ConstructorParameters<typeof TabBehaviourOverride>[2],
+      settings,
+      { perform } as unknown as OperationPerformer,
+    );
+
+    const result = (
+      feature as unknown as {
+        run: (editor: ReturnType<typeof makeEditor>) => typeof NO_OP_OUTCOME;
+      }
+    ).run(editor);
+
+    expect(result).toBe(NO_OP_OUTCOME);
+    expect(perform).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ShiftTabBehaviourOverride", () => {
+  test("should return no-op through a null factory for unsupported ordered lists", () => {
+    const editor = makeEditor({
+      text: "1. one\n  1. child",
+      cursor: { line: 1, ch: 10 },
+    });
+    const root = makeRoot({
+      editor,
+      settings: makeSettings(),
+    });
+    const perform = jest.fn(
+      (createOperation: (root: Root) => Operation | null) => {
+        expect(createOperation(root)).toBeNull();
+        return NO_OP_OUTCOME;
+      },
+    );
+    const feature = new ShiftTabBehaviourOverride(
+      {} as Plugin,
+      { isOpened: () => false } as ConstructorParameters<
+        typeof ShiftTabBehaviourOverride
+      >[1],
+      {
+        isSmartIndentListEnabled: () => false,
+      } as ConstructorParameters<typeof ShiftTabBehaviourOverride>[2],
+      { overrideTabBehaviour: true } as ConstructorParameters<
+        typeof ShiftTabBehaviourOverride
+      >[3],
+      { perform } as unknown as OperationPerformer,
+    );
+
+    const result = (
+      feature as unknown as {
+        run: (editor: ReturnType<typeof makeEditor>) => typeof NO_OP_OUTCOME;
+      }
+    ).run(editor);
+
+    expect(result).toBe(NO_OP_OUTCOME);
+    expect(perform).toHaveBeenCalledTimes(1);
   });
 });

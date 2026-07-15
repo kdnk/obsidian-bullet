@@ -1,5 +1,6 @@
 import { insertPlainLine } from "src/utils/insertPlainLine";
 
+import { NO_OP_OUTCOME } from "../../operations/Operation";
 import { VimOBehaviourOverride } from "../VimOBehaviourOverride";
 
 jest.mock(
@@ -46,14 +47,6 @@ jest.mock(
   "src/services/OperationPerformer",
   () => ({
     OperationPerformer: class OperationPerformer {},
-  }),
-  { virtual: true },
-);
-
-jest.mock(
-  "src/services/Parser",
-  () => ({
-    Parser: class Parser {},
   }),
   { virtual: true },
 );
@@ -137,15 +130,14 @@ describe("VimOBehaviourOverride outside lists", () => {
         onChange: jest.fn(),
         overrideVimOBehaviour: true,
       } as never;
-      const parser = {
-        parse: jest.fn().mockReturnValue(null),
+      const operationPerformer = {
+        perform: jest.fn().mockReturnValue(NO_OP_OUTCOME),
       };
       const feature = new VimOBehaviourOverride(
         plugin,
         settings,
         {} as never,
-        parser as never,
-        {} as never,
+        operationPerformer as never,
       );
 
       await feature.load();
@@ -163,7 +155,7 @@ describe("VimOBehaviourOverride outside lists", () => {
       action(cm, { after });
 
       expect(vim.handleEx).toHaveBeenCalledWith(cm, "normal! A");
-      expect(parser.parse).toHaveBeenCalledTimes(1);
+      expect(operationPerformer.perform).toHaveBeenCalledTimes(1);
       expect(insertPlainLineMock).toHaveBeenCalledTimes(1);
       expect(insertPlainLineMock.mock.calls[0]?.[1]).toBe(after);
       expect(vim.enterInsertMode).toHaveBeenCalledWith(cm);

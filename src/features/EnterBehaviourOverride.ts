@@ -12,10 +12,10 @@ import { OutdentListIfItsEmpty } from "../operations/OutdentListIfItsEmpty";
 import { IMEDetector } from "../services/IMEDetector";
 import { ObsidianSettings } from "../services/ObsidianSettings";
 import { OperationPerformer } from "../services/OperationPerformer";
-import { Parser } from "../services/Parser";
 import { Settings } from "../services/Settings";
 import { createEditorCallback } from "../utils/createEditorCallback";
 import { createKeymapRunCallback } from "../utils/createKeymapRunCallback";
+import { isEmptyLineOrEmptyCheckbox } from "../utils/isEmptyLineOrEmptyCheckbox";
 
 export class EnterBehaviourOverride implements Feature {
   constructor(
@@ -23,7 +23,6 @@ export class EnterBehaviourOverride implements Feature {
     private settings: Settings,
     private imeDetector: IMEDetector,
     private obsidianSettings: ObsidianSettings,
-    private parser: Parser,
     private operationPerformer: OperationPerformer,
   ) {}
 
@@ -64,75 +63,46 @@ export class EnterBehaviourOverride implements Feature {
   };
 
   private run = (editor: MyEditor) => {
-    const root = this.parser.parse(editor);
+    return this.operationPerformer.perform((root) => {
+      const currentList = root.getListUnderCursor();
+      const orderedList = /^\d+\.$/.test(currentList.getBullet());
+      if (orderedList && !this.obsidianSettings.isSmartIndentListEnabled()) {
+        return null;
+      }
 
-    if (!root) {
-      return {
-        shouldUpdate: false,
-        shouldStopPropagation: false,
-      };
-    }
+      const lines = currentList.getLines();
+      const shouldOutdentEmptyList =
+        root.hasSingleCursor() &&
+        lines.length === 1 &&
+        isEmptyLineOrEmptyCheckbox(lines[0]) &&
+        currentList.getLevel() !== 1;
 
-    const currentList = root.getListUnderCursor();
-    const orderedList = /^\d+\.$/.test(currentList.getBullet());
-    if (orderedList && !this.obsidianSettings.isSmartIndentListEnabled()) {
-      return {
-        shouldUpdate: false,
-        shouldStopPropagation: false,
-      };
-    }
-
-    {
-      const res = this.operationPerformer.eval(
-        root,
-        new OutdentListIfItsEmpty(
+      if (shouldOutdentEmptyList) {
+        return new OutdentListIfItsEmpty(
           root,
           this.obsidianSettings.isSmartIndentListEnabled(),
-        ),
-        editor,
-      );
-
-      if (res.shouldStopPropagation) {
-        return res;
+        );
       }
-    }
 
-    {
       const defaultIndentChars = this.obsidianSettings.getDefaultIndentChars();
       const documentPrefixBeforeRoot = editor.getRange(
         { line: 0, ch: 0 },
         { line: root.getContentStart().line, ch: 0 },
       );
 
-      const res = this.operationPerformer.eval(
+      return new CreateNewItem(
         root,
-        new CreateNewItem(
-          root,
-          defaultIndentChars,
-          this.obsidianSettings.isSmartIndentListEnabled(),
-          true,
-          documentPrefixBeforeRoot,
-        ),
-        editor,
+        defaultIndentChars,
+        this.obsidianSettings.isSmartIndentListEnabled(),
+        true,
+        documentPrefixBeforeRoot,
       );
-
-      return res;
-    }
+    }, editor);
   };
 
   private runShiftEnter = (editor: MyEditor) => {
-    const root = this.parser.parse(editor);
-
-    if (!root) {
-      return {
-        shouldUpdate: false,
-        shouldStopPropagation: false,
-      };
-    }
-
-    return this.operationPerformer.eval(
-      root,
-      new InsertNewLineWithoutBullet(root),
+    return this.operationPerformer.perform(
+      (root) => new InsertNewLineWithoutBullet(root),
       editor,
     );
   };

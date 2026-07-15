@@ -4,7 +4,6 @@ import { MyEditor } from "src/editor";
 import { CreateNewItem } from "src/operations/CreateNewItem";
 import { ObsidianSettings } from "src/services/ObsidianSettings";
 import { OperationPerformer } from "src/services/OperationPerformer";
-import { Parser } from "src/services/Parser";
 import { Settings } from "src/services/Settings";
 import { insertPlainLine } from "src/utils/insertPlainLine";
 
@@ -43,7 +42,6 @@ export class VimOBehaviourOverride implements Feature {
     private plugin: Plugin,
     private settings: Settings,
     private obsidianSettings: ObsidianSettings,
-    private parser: Parser,
     private operationPerformer: OperationPerformer,
   ) {}
 
@@ -64,7 +62,6 @@ export class VimOBehaviourOverride implements Feature {
 
     const vim = window.CodeMirrorAdapter.Vim;
     const plugin = this.plugin;
-    const parser = this.parser;
     const obsidianSettings = this.obsidianSettings;
     const operationPerformer = this.operationPerformer;
     const settings = this.settings;
@@ -93,24 +90,15 @@ export class VimOBehaviourOverride implements Feature {
         }
 
         const editor = new MyEditor(view.editor);
-        const root = parser.parse(editor);
 
-        if (!root) {
-          insertPlainLine(editor, operatorArgs.after);
-          vim.enterInsertMode(cm);
-          return;
-        }
-
-        const defaultIndentChars = obsidianSettings.getDefaultIndentChars();
-
-        const res = operationPerformer.eval(
-          root,
-          new CreateNewItem(
-            root,
-            defaultIndentChars,
-            this.obsidianSettings.isSmartIndentListEnabled(),
-            operatorArgs.after,
-          ),
+        const res = operationPerformer.perform(
+          (root) =>
+            new CreateNewItem(
+              root,
+              obsidianSettings.getDefaultIndentChars(),
+              obsidianSettings.isSmartIndentListEnabled(),
+              operatorArgs.after,
+            ),
           editor,
         );
 
