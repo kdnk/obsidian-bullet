@@ -28,8 +28,18 @@ jest.mock(
 );
 
 describe("DragAndDrop", () => {
+  const originalWindow = Object.getOwnPropertyDescriptor(global, "window");
+
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    if (originalWindow) {
+      Object.defineProperty(global, "window", originalWindow);
+    } else {
+      delete (global as { window?: unknown }).window;
+    }
   });
 
   function makeClassList() {
@@ -109,6 +119,155 @@ describe("DragAndDrop", () => {
       removed,
     };
   }
+
+  interface DragMeasurement {
+    renderedLineLeft?: number;
+    scrollerLeft?: number;
+    scrollerPaddingLeft?: string;
+  }
+
+  interface TestDragAndDropState {
+    calculateNearestDropVariant: (x: number, y: number) => void;
+    getDropVariants: () => Array<{ left: number }>;
+  }
+
+  function createDragStateForMeasurement(
+    measurement: DragMeasurement,
+  ): TestDragAndDropState {
+    const editor = {
+      offsetToPos: jest.fn().mockReturnValue({ line: 1, ch: 0 }),
+      posToOffset: jest.fn(({ line }: { line: number }) => line * 10),
+    };
+    const draggedList = {
+      getFirstLineContentStart: jest.fn().mockReturnValue({ line: 1, ch: 0 }),
+      getContentEndIncludingChildren: jest
+        .fn()
+        .mockReturnValue({ line: 1, ch: 5 }),
+      getLevel: jest.fn().mockReturnValue(1),
+      isEmpty: jest.fn().mockReturnValue(true),
+    };
+    const root = {
+      getListUnderLine: jest.fn().mockReturnValue(draggedList),
+      getChildren: jest.fn().mockReturnValue([draggedList]),
+    };
+    const parser = {
+      parse: jest.fn().mockReturnValue(root),
+    };
+    const defaultView = {
+      getComputedStyle: jest.fn().mockReturnValue({
+        paddingLeft: measurement.scrollerPaddingLeft ?? "0",
+      }),
+    };
+    const ownerDocument = { defaultView };
+    const renderedLine =
+      measurement.renderedLineLeft === undefined
+        ? null
+        : {
+            ownerDocument,
+            getBoundingClientRect: jest.fn().mockReturnValue({
+              left: measurement.renderedLineLeft,
+            }),
+          };
+    const scroller =
+      measurement.scrollerLeft === undefined
+        ? null
+        : {
+            ownerDocument,
+            getBoundingClientRect: jest.fn().mockReturnValue({
+              left: measurement.scrollerLeft,
+            }),
+          };
+    Object.defineProperty(global, "window", {
+      configurable: true,
+      value: defaultView,
+    });
+    const feature = new DragAndDrop(
+      {} as never,
+      { dragAndDrop: true } as never,
+      {} as never,
+      parser as never,
+      {} as never,
+    );
+    const view = {
+      state: {},
+      defaultCharacterWidth: 7,
+      dom: {
+        ownerDocument,
+        querySelector: jest.fn((selector: string) => {
+          if (selector === ".cm-indent") {
+            return { offsetWidth: 14 };
+          }
+          if (selector === "div.cm-line") {
+            return renderedLine;
+          }
+          if (selector === "div.cm-scroller") {
+            return scroller;
+          }
+          return null;
+        }),
+      },
+      coordsAtPos: jest.fn().mockReturnValue({ left: 0, top: 100 }),
+      lineBlockAt: jest.fn().mockReturnValue({ height: 20 }),
+      posAtCoords: jest.fn().mockReturnValue(10),
+    };
+    mockGetEditorFromState.mockReturnValue(editor);
+
+    (feature as unknown as { preStart: unknown }).preStart = {
+      x: 10,
+      y: 20,
+      view,
+      target: null,
+    };
+    jest
+      .spyOn(
+        feature as unknown as { highlightDraggingLines: () => void },
+        "highlightDraggingLines",
+      )
+      .mockImplementation(() => {});
+
+    (feature as unknown as { startDragging: () => void }).startDragging();
+
+    const state = (feature as unknown as { state: TestDragAndDropState }).state;
+    state.calculateNearestDropVariant(0, 92);
+    return state;
+  }
+
+  test.each([
+    ["the scroller is unavailable", { renderedLineLeft: 88 }],
+    [
+      "the scroller is also measurable",
+      {
+        renderedLineLeft: 88,
+        scrollerLeft: 120,
+        scrollerPaddingLeft: "24px",
+      },
+    ],
+  ])("should position drop variants from a rendered line when %s", (_, dom) => {
+    const state = createDragStateForMeasurement(dom);
+
+    expect(state.getDropVariants()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ left: 88 })]),
+    );
+  });
+
+  test("should position drop variants from scroller padding when no line is rendered", () => {
+    const state = createDragStateForMeasurement({
+      scrollerLeft: 120,
+      scrollerPaddingLeft: "24px",
+    });
+
+    expect(state.getDropVariants()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ left: 144 })]),
+    );
+  });
+
+  test("should position drop variants at zero when measurement DOM is missing", () => {
+    const state = createDragStateForMeasurement({});
+
+    expect(state.getDropVariants()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ left: 0 })]),
+    );
+  });
 
   test("should stop dragging and show a notice when the list cannot be parsed", () => {
     const editor = {
