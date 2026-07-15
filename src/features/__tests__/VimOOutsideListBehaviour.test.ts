@@ -1,3 +1,6 @@
+import { Notice } from "obsidian";
+
+import type { Settings } from "src/services/Settings";
 import { insertPlainLine } from "src/utils/insertPlainLine";
 
 import { NO_OP_OUTCOME } from "../../operations/Operation";
@@ -7,7 +10,7 @@ jest.mock(
   "obsidian",
   () => ({
     MarkdownView: class MarkdownView {},
-    Notice: class Notice {},
+    Notice: jest.fn(),
     Plugin: class Plugin {},
   }),
   { virtual: true },
@@ -87,6 +90,12 @@ type WindowWithVim = Window &
     };
   };
 
+const createSettings = (overrideVimOBehaviour: boolean) => ({
+  onChange: jest.fn<void, Parameters<Settings["onChange"]>>(),
+  overrideVimOBehaviour,
+  removeCallback: jest.fn<void, Parameters<Settings["removeCallback"]>>(),
+});
+
 describe("VimOBehaviourOverride outside lists", () => {
   const insertPlainLineMock = insertPlainLine as jest.MockedFunction<
     typeof insertPlainLine
@@ -165,4 +174,66 @@ describe("VimOBehaviourOverride outside lists", () => {
       expect(vim.enterInsertMode).toHaveBeenCalledWith(cm);
     },
   );
+
+  test("unload removes the registered settings callback after Vim mappings are initialized", async () => {
+    const settings = createSettings(true);
+    const feature = new VimOBehaviourOverride(
+      {} as never,
+      settings as never,
+      {} as never,
+      {} as never,
+    );
+
+    await feature.load();
+    const settingsCallback = settings.onChange.mock.calls[0]?.[1];
+    await feature.unload();
+
+    expect(settingsCallback).toEqual(expect.any(Function));
+    expect(settings.removeCallback).toHaveBeenCalledTimes(1);
+    expect(settings.removeCallback).toHaveBeenCalledWith(settingsCallback);
+    expect(Notice).toHaveBeenCalledTimes(1);
+  });
+
+  test("unload removes the registered settings callback when the setting stays disabled", async () => {
+    const settings = createSettings(false);
+    const feature = new VimOBehaviourOverride(
+      {} as never,
+      settings as never,
+      {} as never,
+      {} as never,
+    );
+
+    await feature.load();
+    const settingsCallback = settings.onChange.mock.calls[0]?.[1];
+    await feature.unload();
+
+    expect(settingsCallback).toEqual(expect.any(Function));
+    expect(settings.removeCallback).toHaveBeenCalledTimes(1);
+    expect(settings.removeCallback).toHaveBeenCalledWith(settingsCallback);
+    expect(Notice).not.toHaveBeenCalled();
+  });
+
+  test("unload removes the registered settings callback when the Vim adapter is unavailable", async () => {
+    const consoleError = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    global.window = {} as Window & typeof globalThis;
+    const settings = createSettings(true);
+    const feature = new VimOBehaviourOverride(
+      {} as never,
+      settings as never,
+      {} as never,
+      {} as never,
+    );
+
+    await feature.load();
+    const settingsCallback = settings.onChange.mock.calls[0]?.[1];
+    await feature.unload();
+
+    expect(settingsCallback).toEqual(expect.any(Function));
+    expect(settings.removeCallback).toHaveBeenCalledTimes(1);
+    expect(settings.removeCallback).toHaveBeenCalledWith(settingsCallback);
+    expect(Notice).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
 });
