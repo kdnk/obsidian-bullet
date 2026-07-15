@@ -1,46 +1,36 @@
-import { Operation } from "./Operation";
+import {
+  NO_OP_OUTCOME,
+  Operation,
+  STOP_ONLY_OUTCOME,
+  UPDATED_OUTCOME,
+} from "./Operation";
 
 import { Root, recalculateNumericBullets } from "../root";
 
 export class OutdentList implements Operation {
-  private stopPropagation = false;
-  private updated = false;
-
   constructor(
     private root: Root,
     private numericBulletsEnabled: boolean,
   ) {}
 
-  shouldStopPropagation() {
-    return this.stopPropagation;
-  }
-
-  shouldUpdate() {
-    return this.updated;
-  }
-
   perform() {
     const { root } = this;
 
     if (!root.hasSingleCursor()) {
-      return;
+      return NO_OP_OUTCOME;
     }
-
-    this.stopPropagation = true;
 
     const list = root.getListUnderCursor();
     const parent = list.getParent();
     if (!parent) {
-      return;
+      return STOP_ONLY_OUTCOME;
     }
 
     const grandParent = parent.getParent();
 
     if (!grandParent) {
-      return;
+      return STOP_ONLY_OUTCOME;
     }
-
-    this.updated = true;
 
     const listStartLineBefore = root.getContentLinesRangeOf(list)[0];
     const indentRmFrom = parent.getFirstLineIndent().length;
@@ -61,5 +51,6 @@ export class OutdentList implements Operation {
     });
 
     recalculateNumericBullets(root, this.numericBulletsEnabled);
+    return UPDATED_OUTCOME;
   }
 }

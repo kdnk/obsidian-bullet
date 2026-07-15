@@ -1,26 +1,15 @@
-import { Operation } from "./Operation";
+import { NO_OP_OUTCOME, Operation, UPDATED_OUTCOME } from "./Operation";
 
 import { Root } from "../root";
 
 export class KeepCursorWithinListContent implements Operation {
-  private stopPropagation = false;
-  private updated = false;
-
   constructor(private root: Root) {}
-
-  shouldStopPropagation() {
-    return this.stopPropagation;
-  }
-
-  shouldUpdate() {
-    return this.updated;
-  }
 
   perform() {
     const { root } = this;
 
     if (!root.hasSingleCursor()) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const cursor = root.getCursor();
@@ -32,12 +21,13 @@ export class KeepCursorWithinListContent implements Operation {
         : list.getNotesIndentOrThrow().length;
 
     if (cursor.ch < linePrefix) {
-      this.updated = true;
-      this.stopPropagation = true;
       root.replaceCursor({
         line: cursor.line,
         ch: linePrefix,
       });
+      return UPDATED_OUTCOME;
     }
+
+    return NO_OP_OUTCOME;
   }
 }

@@ -1,24 +1,18 @@
-import { Operation } from "./Operation";
+import {
+  NO_OP_OUTCOME,
+  Operation,
+  STOP_ONLY_OUTCOME,
+  UPDATED_OUTCOME,
+} from "./Operation";
 
 import { Root, recalculateNumericBullets } from "../root";
 
 export class IndentList implements Operation {
-  private stopPropagation = false;
-  private updated = false;
-
   constructor(
     private root: Root,
     private defaultIndentChars: string,
     private numericBulletsEnabled: boolean,
   ) {}
-
-  shouldStopPropagation() {
-    return this.stopPropagation;
-  }
-
-  shouldUpdate() {
-    return this.updated;
-  }
 
   private getIndentWidth(indent: string) {
     let width = 0;
@@ -50,24 +44,20 @@ export class IndentList implements Operation {
     const { root } = this;
 
     if (!root.hasSingleCursor()) {
-      return;
+      return NO_OP_OUTCOME;
     }
-
-    this.stopPropagation = true;
 
     const list = root.getListUnderCursor();
     const parent = list.getParent();
     if (!parent) {
-      return;
+      return STOP_ONLY_OUTCOME;
     }
 
     const prev = parent.getPrevSiblingOf(list);
 
     if (!prev) {
-      return;
+      return STOP_ONLY_OUTCOME;
     }
-
-    this.updated = true;
 
     const listStartLineBefore = root.getContentLinesRangeOf(list)[0];
 
@@ -77,7 +67,7 @@ export class IndentList implements Operation {
     if (indentChars === "" && !prev.isEmpty()) {
       const firstPrevChild = prev.getChildren()[0];
       if (!firstPrevChild) {
-        return;
+        return STOP_ONLY_OUTCOME;
       }
       indentChars = firstPrevChild
         .getFirstLineIndent()
@@ -97,7 +87,7 @@ export class IndentList implements Operation {
     if (indentChars === "" && !list.isEmpty()) {
       const firstChild = list.getChildren()[0];
       if (!firstChild) {
-        return;
+        return STOP_ONLY_OUTCOME;
       }
       indentChars = firstChild
         .getFirstLineIndent()
@@ -122,5 +112,6 @@ export class IndentList implements Operation {
     });
 
     recalculateNumericBullets(root, this.numericBulletsEnabled);
+    return UPDATED_OUTCOME;
   }
 }

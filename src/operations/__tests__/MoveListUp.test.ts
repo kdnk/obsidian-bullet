@@ -1,5 +1,10 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { MoveListUp } from "../MoveListUp";
+import {
+  NO_OP_OUTCOME,
+  STOP_ONLY_OUTCOME,
+  UPDATED_OUTCOME,
+} from "../Operation";
 
 describe("MoveListUp operation", () => {
   test("should move a list item up before its sibling", () => {
@@ -12,8 +17,9 @@ describe("MoveListUp operation", () => {
     });
 
     const op = new MoveListUp(root, true);
-    op.perform();
+    const outcome = op.perform();
 
+    expect(outcome).toEqual(UPDATED_OUTCOME);
     expect(root.print()).toBe("- item 1\n- item 3\n- item 2");
     expect(root.getCursor().line).toBe(1);
     expect(root.getCursor().ch).toBe(5);
@@ -29,8 +35,9 @@ describe("MoveListUp operation", () => {
     });
 
     const op = new MoveListUp(root, true);
-    op.perform();
+    const outcome = op.perform();
 
+    expect(outcome).toEqual(UPDATED_OUTCOME);
     expect(root.print()).toBe(" - item 1\n - item 3\n - item 2");
     expect(root.getCursor().line).toBe(1);
     expect(root.getCursor().ch).toBe(6);
@@ -46,8 +53,9 @@ describe("MoveListUp operation", () => {
     });
 
     const op = new MoveListUp(root, true);
-    op.perform();
+    const outcome = op.perform();
 
+    expect(outcome).toEqual(UPDATED_OUTCOME);
     expect(root.print()).toBe(
       "- item 1\n- item 2\n  - item 2.2\n  - item 2.1\n- item 3",
     );
@@ -65,8 +73,9 @@ describe("MoveListUp operation", () => {
     });
 
     const op = new MoveListUp(root, true);
-    op.perform();
+    const outcome = op.perform();
 
+    expect(outcome).toEqual(STOP_ONLY_OUTCOME);
     expect(root.print()).toBe("- item 1\n- item 2\n- item 3");
     expect(root.getCursor().line).toBe(0);
     expect(root.getCursor().ch).toBe(5);
@@ -82,8 +91,9 @@ describe("MoveListUp operation", () => {
     });
 
     const op = new MoveListUp(root, true);
-    op.perform();
+    const outcome = op.perform();
 
+    expect(outcome).toEqual(UPDATED_OUTCOME);
     expect(root.print()).toBe("- item 1\n  - item 1.1\n  - item 2.1\n- item 2");
     expect(root.getCursor().line).toBe(2);
     expect(root.getCursor().ch).toBe(7);
@@ -99,8 +109,9 @@ describe("MoveListUp operation", () => {
     });
 
     const op = new MoveListUp(root, true);
-    op.perform();
+    const outcome = op.perform();
 
+    expect(outcome).toEqual(UPDATED_OUTCOME);
     expect(root.print()).toBe("1. item 1\n2. item 3\n3. item 2");
     expect(root.getCursor().line).toBe(1);
     expect(root.getCursor().ch).toBe(5);
@@ -124,8 +135,9 @@ describe("MoveListUp operation", () => {
     });
 
     const op = new MoveListUp(root, true);
-    op.perform();
+    const outcome = op.perform();
 
+    expect(outcome).toEqual(NO_OP_OUTCOME);
     expect(root.print()).toBe("- item 1\n- item 2\n- item 3");
   });
 
@@ -145,8 +157,9 @@ describe("MoveListUp operation", () => {
     });
 
     const op = new MoveListUp(root, true);
-    op.perform();
+    const outcome = op.perform();
 
+    expect(outcome).toEqual(UPDATED_OUTCOME);
     expect(root.print()).toBe("- item 1\n- item 3\n- item 2");
     expect(root.getSelections()).toEqual([
       { anchor: { line: 1, ch: 3 }, head: { line: 1, ch: 7 } },
@@ -169,8 +182,9 @@ describe("MoveListUp operation", () => {
     });
 
     const op = new MoveListUp(root, true);
-    op.perform();
+    const outcome = op.perform();
 
+    expect(outcome).toEqual(UPDATED_OUTCOME);
     expect(root.print()).toBe("- item 1\n- item 3\n- item 2");
     expect(root.getSelections()).toEqual([
       { anchor: { line: 0, ch: 2 }, head: { line: 1, ch: 5 } },
@@ -187,10 +201,9 @@ describe("MoveListUp operation", () => {
     });
 
     const op = new MoveListUp(root, true);
-    op.perform();
+    const outcome = op.perform();
 
-    expect(op.shouldStopPropagation()).toBe(true);
-    expect(op.shouldUpdate()).toBe(true);
+    expect(outcome).toEqual(UPDATED_OUTCOME);
   });
 
   test("should stop propagation but not update editor when operation fails", () => {
@@ -203,9 +216,8 @@ describe("MoveListUp operation", () => {
     });
 
     const op = new MoveListUp(root, true);
-    op.perform();
+    const outcome = op.perform();
 
-    expect(op.shouldStopPropagation()).toBe(true);
-    expect(op.shouldUpdate()).toBe(false);
+    expect(outcome).toEqual(STOP_ONLY_OUTCOME);
   });
 });

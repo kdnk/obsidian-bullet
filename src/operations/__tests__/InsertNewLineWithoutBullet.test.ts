@@ -1,5 +1,6 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { InsertNewLineWithoutBullet } from "../InsertNewLineWithoutBullet";
+import { UPDATED_OUTCOME } from "../Operation";
 
 describe("InsertNewLineWithoutBullet operation", () => {
   test("should create a note line below the current list item", () => {
@@ -12,7 +13,7 @@ describe("InsertNewLineWithoutBullet operation", () => {
     });
 
     const op = new InsertNewLineWithoutBullet(root);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n  \n- item 2");
     expect(root.getCursor().line).toBe(1);
@@ -29,7 +30,7 @@ describe("InsertNewLineWithoutBullet operation", () => {
     });
 
     const op = new InsertNewLineWithoutBullet(root);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- ite\n  m 1");
     expect(root.getCursor().line).toBe(1);
@@ -46,7 +47,7 @@ describe("InsertNewLineWithoutBullet operation", () => {
     });
 
     const op = new InsertNewLineWithoutBullet(root);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n  note \n  line\n- item 2");
     expect(root.getCursor().line).toBe(2);

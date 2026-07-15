@@ -1,5 +1,6 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { CreateNewItem } from "../CreateNewItem";
+import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 describe("CreateNewItem operation", () => {
   test("should create a new sibling bullet when cursor is at the end of line", () => {
@@ -12,7 +13,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- \n- item 2");
     expect(root.getCursor().line).toBe(1);
@@ -30,7 +31,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- one\n  - two\n- ");
   });
@@ -45,7 +46,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe(
       "- item 1\n  - \n  - child 1\n  - child 2\n- item 2",
@@ -64,7 +65,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true, false);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe(
       "- \n- item 1\n  - child 1\n  - child 2\n- item 2",
@@ -83,7 +84,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- long \n- item 2");
     expect(root.getCursor().line).toBe(2);
@@ -100,7 +101,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- [ ] task 1\n- [ ] \n- [ ] task 2");
     expect(root.getCursor().line).toBe(1);
@@ -117,7 +118,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- [ ] \n- [x] checked task");
     expect(root.getCursor().line).toBe(0);
@@ -134,7 +135,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- $-[a] est$\n- ");
     expect(root.getCursor().line).toBe(1);
@@ -153,7 +154,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- [\n-  ] one");
     expect(root.getCursor().line).toBe(1);
@@ -170,7 +171,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     const lines = root.print().split("\n");
     expect(lines[9]).toBe("10. ");
@@ -188,7 +189,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- \n- item 3");
   });
@@ -203,7 +204,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- [ ] \n- item 3");
   });
@@ -218,7 +219,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- item 2");
   });
@@ -241,7 +242,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- item 2");
   });
@@ -263,7 +264,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- item 2");
   });
@@ -278,10 +279,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
-
-    expect(op.shouldStopPropagation()).toBe(true);
-    expect(op.shouldUpdate()).toBe(true);
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
   });
 
   test("should transfer children from parent to new item", () => {
@@ -294,7 +292,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     // Adjust the expected output to match actual behavior
     expect(root.print()).toBe("- parent\n  - \n  - child 1\n  - child 2");
@@ -310,7 +308,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     // Adjust the expected output to match actual behavior
     expect(root.print()).toBe("- par\n- ent item\n  - child 1\n  - child 2");
@@ -328,11 +326,9 @@ describe("CreateNewItem operation", () => {
     expect(root).toBeTruthy();
 
     const op = new CreateNewItem(root, "  ", true, true, "```\n");
-    op.perform();
+    expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
     expect(root.print()).toBe("- code line");
-    expect(op.shouldStopPropagation()).toBe(false);
-    expect(op.shouldUpdate()).toBe(false);
   });
 
   test("should create another note line when pressing Enter on an existing note line", () => {
@@ -345,7 +341,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n  |A|B|\n  \n- item 2");
     expect(root.getCursor().line).toBe(2);
@@ -362,7 +358,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- one\n  - two\n    notes\n    - \n    - three");
     expect(root.getCursor().line).toBe(3);
@@ -379,7 +375,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- [ ] one\n  qwe\n- [ ] ");
     expect(root.getCursor().line).toBe(2);
@@ -396,7 +392,7 @@ describe("CreateNewItem operation", () => {
     });
 
     const op = new CreateNewItem(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- [ ] one\n  q\n- [ ] we");
     expect(root.getCursor().line).toBe(2);

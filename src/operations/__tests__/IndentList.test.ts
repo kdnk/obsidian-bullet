@@ -1,5 +1,10 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { IndentList } from "../IndentList";
+import {
+  NO_OP_OUTCOME,
+  STOP_ONLY_OUTCOME,
+  UPDATED_OUTCOME,
+} from "../Operation";
 
 describe("IndentList operation", () => {
   test("should indent a list item under the previous sibling", () => {
@@ -12,7 +17,7 @@ describe("IndentList operation", () => {
     });
 
     const op = new IndentList(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- item 2\n  - item 3");
     expect(root.getCursor().line).toBe(2);
@@ -29,7 +34,7 @@ describe("IndentList operation", () => {
     });
 
     const op = new IndentList(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(STOP_ONLY_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- item 2\n- item 3");
     expect(root.getCursor().line).toBe(0);
@@ -46,7 +51,7 @@ describe("IndentList operation", () => {
     });
 
     const op = new IndentList(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe(
       "- item 1\n- item 2\n  - item 3\n    - item 3.1\n    - item 3.2",
@@ -65,7 +70,7 @@ describe("IndentList operation", () => {
     });
 
     const op = new IndentList(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     // Instead of checking the exact string, check for the key aspects we care about
     const result = root.print();
@@ -89,7 +94,7 @@ describe("IndentList operation", () => {
     });
 
     const op = new IndentList(root, "    ", true); // Different default indent
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n  - item 1.1\n  - item 2");
     expect(root.getCursor().line).toBe(2);
@@ -106,7 +111,7 @@ describe("IndentList operation", () => {
     });
 
     const op = new IndentList(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n    - item 2\n      - item 3");
     expect(root.getCursor().line).toBe(2);
@@ -123,7 +128,7 @@ describe("IndentList operation", () => {
     });
 
     const op = new IndentList(root, "    ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n  - item 1.1\n    - item 2");
     expect(root.getCursor().line).toBe(2);
@@ -148,11 +153,9 @@ describe("IndentList operation", () => {
     });
 
     const op = new IndentList(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- item 2\n- item 3");
-    expect(op.shouldStopPropagation()).toBe(false);
-    expect(op.shouldUpdate()).toBe(false);
   });
 
   test("should stop propagation and update editor when successful", () => {
@@ -165,10 +168,7 @@ describe("IndentList operation", () => {
     });
 
     const op = new IndentList(root, "  ", true);
-    op.perform();
-
-    expect(op.shouldStopPropagation()).toBe(true);
-    expect(op.shouldUpdate()).toBe(true);
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
   });
 
   test("should indent properly when the list has complex nested structure", () => {
@@ -181,7 +181,7 @@ describe("IndentList operation", () => {
     });
 
     const op = new IndentList(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe(
       "- item 1\n  - item 1.1\n  - item 1.2\n- item 2\n  - item 2.1\n  - item 3",
@@ -198,7 +198,7 @@ describe("IndentList operation", () => {
     });
 
     const op = new IndentList(root, "  ", true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- parent\n  - **test** item");
     expect(root.getCursor()).toEqual({ line: 1, ch: 11 });

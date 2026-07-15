@@ -1,4 +1,4 @@
-import { Operation } from "./Operation";
+import { NO_OP_OUTCOME, Operation, UPDATED_OUTCOME } from "./Operation";
 
 import { List, Root, recalculateNumericBullets } from "../root";
 
@@ -9,9 +9,6 @@ interface CursorAnchor {
 }
 
 export class MoveListToDifferentPosition implements Operation {
-  private stopPropagation = false;
-  private updated = false;
-
   constructor(
     private root: Root,
     private listToMove: List,
@@ -21,27 +18,17 @@ export class MoveListToDifferentPosition implements Operation {
     private numericBulletsEnabled: boolean,
   ) {}
 
-  shouldStopPropagation() {
-    return this.stopPropagation;
-  }
-
-  shouldUpdate() {
-    return this.updated;
-  }
-
   perform() {
     if (this.listToMove === this.placeToMove) {
-      return;
+      return NO_OP_OUTCOME;
     }
-
-    this.stopPropagation = true;
-    this.updated = true;
 
     const cursorAnchor = this.calculateCursorAnchor();
     this.moveList();
     this.changeIndent();
     this.restoreCursor(cursorAnchor);
     recalculateNumericBullets(this.root, this.numericBulletsEnabled);
+    return UPDATED_OUTCOME;
   }
 
   private calculateCursorAnchor(): CursorAnchor | null {

@@ -1,5 +1,6 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { DeleteTillPreviousLineContentEnd } from "../DeleteTillPreviousLineContentEnd";
+import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 test("should merge current line with previous line when cursor is at start of line content", () => {
   const root = makeRoot({
@@ -11,7 +12,7 @@ test("should merge current line with previous line when cursor is at start of li
   });
 
   const op = new DeleteTillPreviousLineContentEnd(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
   expect(root.print()).toBe(
     "- item 1\n- item 2item 2.1\n    - item 2.2\n- item 3",
@@ -30,7 +31,7 @@ test("should merge with previous note line", () => {
   });
 
   const op = new DeleteTillPreviousLineContentEnd(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
   expect(root.print()).toBe("- item 1\n  note for item 1more notes\n- item 2");
   expect(root.getCursor().line).toBe(1);
@@ -47,7 +48,7 @@ test("should merge empty bullets with previous bullet", () => {
   });
 
   const op = new DeleteTillPreviousLineContentEnd(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
   expect(root.print()).toBe("- item 1\n- item 3");
   expect(root.getCursor().line).toBe(0);
@@ -64,7 +65,7 @@ test("should merge child bullet with parent if child is empty", () => {
   });
 
   const op = new DeleteTillPreviousLineContentEnd(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
   expect(root.print()).toBe("- item 1\n- item 3");
   expect(root.getCursor().line).toBe(0);
@@ -89,7 +90,7 @@ test("should not do anything if there are multiple selections", () => {
   });
 
   const op = new DeleteTillPreviousLineContentEnd(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
   // Should not change the text
   expect(root.print()).toBe(
@@ -107,7 +108,7 @@ test("should not merge the first item if it's the only one in the document", () 
   });
 
   const op = new DeleteTillPreviousLineContentEnd(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
   expect(root.print()).toBe("- item 1");
   expect(root.getCursor().line).toBe(0);
@@ -124,8 +125,5 @@ test("should stop propagation and update editor when merging", () => {
   });
 
   const op = new DeleteTillPreviousLineContentEnd(root, true);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 });

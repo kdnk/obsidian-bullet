@@ -1,60 +1,53 @@
-import { Operation } from "./Operation";
+import {
+  NO_OP_OUTCOME,
+  Operation,
+  STOP_ONLY_OUTCOME,
+  UPDATED_OUTCOME,
+} from "./Operation";
 
 import { Root, recalculateNumericBullets } from "../root";
 
 export class MoveListDown implements Operation {
-  private stopPropagation = false;
-  private updated = false;
-
   constructor(
     private root: Root,
     private numericBulletsEnabled: boolean,
   ) {}
 
-  shouldStopPropagation() {
-    return this.stopPropagation;
-  }
-
-  shouldUpdate() {
-    return this.updated;
-  }
-
   perform() {
     const { root } = this;
 
     if (!root.hasSingleSelection()) {
-      return;
+      return NO_OP_OUTCOME;
     }
-
-    this.stopPropagation = true;
 
     const list = root.getListUnderCursor();
     const parent = list.getParent();
     if (!parent) {
-      return;
+      return STOP_ONLY_OUTCOME;
     }
 
     const grandParent = parent.getParent();
     const next = parent.getNextSiblingOf(list);
 
     const listStartLineBefore = root.getContentLinesRangeOf(list)[0];
+    let moved = false;
 
     if (!next && grandParent) {
       const newParent = grandParent.getNextSiblingOf(parent);
 
       if (newParent) {
-        this.updated = true;
+        moved = true;
         parent.removeChild(list);
         newParent.addBeforeAll(list);
       }
     } else if (next) {
-      this.updated = true;
+      moved = true;
       parent.removeChild(list);
       parent.addAfter(next, list);
     }
 
-    if (!this.updated) {
-      return;
+    if (!moved) {
+      return STOP_ONLY_OUTCOME;
     }
 
     const listStartLineAfter = root.getContentLinesRangeOf(list)[0];
@@ -74,5 +67,6 @@ export class MoveListDown implements Operation {
     );
 
     recalculateNumericBullets(root, this.numericBulletsEnabled);
+    return UPDATED_OUTCOME;
   }
 }

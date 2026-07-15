@@ -1,4 +1,5 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
+import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 import { OutdentListIfItsEmpty } from "../OutdentListIfItsEmpty";
 
 test("should outdent empty list item", () => {
@@ -11,11 +12,9 @@ test("should outdent empty list item", () => {
   });
 
   const op = new OutdentListIfItsEmpty(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
   expect(root.print()).toBe("- one\n- \n  - three");
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
 });
 
 test("should outdent empty checkbox", () => {
@@ -28,11 +27,9 @@ test("should outdent empty checkbox", () => {
   });
 
   const op = new OutdentListIfItsEmpty(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
   expect(root.print()).toBe("- one\n- [ ] \n  - three");
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
 });
 
 test("should not outdent non-empty list item", () => {
@@ -45,11 +42,9 @@ test("should not outdent non-empty list item", () => {
   });
 
   const op = new OutdentListIfItsEmpty(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
   expect(root.print()).toBe("- one\n  - two\n    - three");
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
 });
 
 test("should not outdent item with multiple lines", () => {
@@ -62,11 +57,9 @@ test("should not outdent item with multiple lines", () => {
   });
 
   const op = new OutdentListIfItsEmpty(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
   expect(root.print()).toBe("- one\n  - \n    note\n    - three");
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
 });
 
 test("should not outdent if list level is 1", () => {
@@ -79,11 +72,9 @@ test("should not outdent if list level is 1", () => {
   });
 
   const op = new OutdentListIfItsEmpty(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
   expect(root.print()).toBe("- \n- two");
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
 });
 
 test("should not outdent if there are multiple selections", () => {
@@ -104,9 +95,7 @@ test("should not outdent if there are multiple selections", () => {
   });
 
   const op = new OutdentListIfItsEmpty(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
   expect(root.print()).toBe("- one\n  - \n    - three");
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
 });

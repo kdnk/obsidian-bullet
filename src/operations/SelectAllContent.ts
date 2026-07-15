@@ -1,24 +1,14 @@
-import { Operation } from "./Operation";
+import { NO_OP_OUTCOME, Operation, UPDATED_OUTCOME } from "./Operation";
 
 import { List, Position, Root, maxPos, minPos } from "../root";
 
 export class SelectAllContent implements Operation {
-  private stopPropagation = false;
-  private updated = false;
   private nextCycleCursor: Position | null = null;
 
   constructor(
     private root: Root,
     private cycleCursor: Position | null = null,
   ) {}
-
-  shouldStopPropagation() {
-    return this.stopPropagation;
-  }
-
-  shouldUpdate() {
-    return this.updated;
-  }
 
   getCycleCursor() {
     return this.nextCycleCursor;
@@ -28,7 +18,7 @@ export class SelectAllContent implements Operation {
     const { root } = this;
 
     if (!root.hasSingleSelection()) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const selection = root.getSelections()[0];
@@ -40,7 +30,7 @@ export class SelectAllContent implements Operation {
       selectionFrom.line < rootStart.line ||
       selectionTo.line > rootEnd.line
     ) {
-      return false;
+      return NO_OP_OUTCOME;
     }
 
     const list = this.getCycleListForSelection(
@@ -51,7 +41,7 @@ export class SelectAllContent implements Operation {
     );
 
     if (!list) {
-      return false;
+      return NO_OP_OUTCOME;
     }
 
     const contentStart = list.getFirstLineContentStartAfterCheckbox();
@@ -69,8 +59,6 @@ export class SelectAllContent implements Operation {
       rootEnd,
     );
 
-    this.stopPropagation = true;
-    this.updated = true;
     this.nextCycleCursor = contentStart;
 
     if (
@@ -95,13 +83,11 @@ export class SelectAllContent implements Operation {
     ) {
       root.replaceSelections([{ anchor: contentStart, head: contentEnd }]);
     } else {
-      this.stopPropagation = false;
-      this.updated = false;
       this.nextCycleCursor = null;
-      return false;
+      return NO_OP_OUTCOME;
     }
 
-    return true;
+    return UPDATED_OUTCOME;
   }
 
   private getExpansionScopeRange(

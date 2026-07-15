@@ -1,5 +1,10 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { MoveListDown } from "../MoveListDown";
+import {
+  NO_OP_OUTCOME,
+  STOP_ONLY_OUTCOME,
+  UPDATED_OUTCOME,
+} from "../Operation";
 
 describe("MoveListDown operation", () => {
   test("should move a list item down below its next sibling", () => {
@@ -12,7 +17,7 @@ describe("MoveListDown operation", () => {
     });
 
     const op = new MoveListDown(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- item 3\n- item 2");
     expect(root.getCursor().line).toBe(2);
@@ -29,7 +34,7 @@ describe("MoveListDown operation", () => {
     });
 
     const op = new MoveListDown(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 2\n- item 1\n  - item 1.1\n  - item 1.2");
     expect(root.getCursor().line).toBe(1);
@@ -46,7 +51,7 @@ describe("MoveListDown operation", () => {
     });
 
     const op = new MoveListDown(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe(" - item 2\n - item 1\n - item 3");
     expect(root.getCursor().line).toBe(1);
@@ -63,7 +68,7 @@ describe("MoveListDown operation", () => {
     });
 
     const op = new MoveListDown(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n\t- item 1.2\n    - item 1.1");
     expect(root.getCursor().line).toBe(2);
@@ -80,7 +85,7 @@ describe("MoveListDown operation", () => {
     });
 
     const op = new MoveListDown(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n  - item 1.1\n- item 2\n  - item 1.2");
     expect(root.getCursor().line).toBe(3);
@@ -97,7 +102,7 @@ describe("MoveListDown operation", () => {
     });
 
     const op = new MoveListDown(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(STOP_ONLY_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- item 2\n- item 3");
     expect(root.getCursor().line).toBe(2);
@@ -114,7 +119,7 @@ describe("MoveListDown operation", () => {
     });
 
     const op = new MoveListDown(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(STOP_ONLY_OUTCOME);
 
     expect(root.print()).toBe("- item 1");
     expect(root.getCursor().line).toBe(0);
@@ -131,7 +136,7 @@ describe("MoveListDown operation", () => {
     });
 
     const op = new MoveListDown(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("1. item 2\n2. item 1\n3. item 3");
     expect(root.getCursor().line).toBe(1);
@@ -156,11 +161,9 @@ describe("MoveListDown operation", () => {
     });
 
     const op = new MoveListDown(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- item 2\n- item 3");
-    expect(op.shouldStopPropagation()).toBe(false);
-    expect(op.shouldUpdate()).toBe(false);
   });
 
   test("should move a list item down when a single line has a text selection", () => {
@@ -179,7 +182,7 @@ describe("MoveListDown operation", () => {
     });
 
     const op = new MoveListDown(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- item 3\n- item 2");
     expect(root.getSelections()).toEqual([
@@ -203,7 +206,7 @@ describe("MoveListDown operation", () => {
     });
 
     const op = new MoveListDown(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- item 3\n- item 2");
     expect(root.getSelections()).toEqual([
@@ -221,9 +224,6 @@ describe("MoveListDown operation", () => {
     });
 
     const op = new MoveListDown(root, true);
-    op.perform();
-
-    expect(op.shouldStopPropagation()).toBe(true);
-    expect(op.shouldUpdate()).toBe(true);
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
   });
 });

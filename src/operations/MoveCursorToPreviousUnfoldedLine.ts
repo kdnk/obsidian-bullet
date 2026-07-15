@@ -1,30 +1,24 @@
-import { Operation } from "./Operation";
+import {
+  NO_OP_OUTCOME,
+  Operation,
+  STOP_ONLY_OUTCOME,
+  UPDATED_OUTCOME,
+} from "./Operation";
 
 import { MyEditor } from "../editor";
 import { ListLine, Position, Root } from "../root";
 
 export class MoveCursorToPreviousUnfoldedLine implements Operation {
-  private stopPropagation = false;
-  private updated = false;
-
   constructor(
     private root: Root,
     private editor: MyEditor,
   ) {}
 
-  shouldStopPropagation() {
-    return this.stopPropagation;
-  }
-
-  shouldUpdate() {
-    return this.updated;
-  }
-
   perform() {
     const { root } = this;
 
     if (!root.hasSingleCursor()) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const list = this.root.getListUnderCursor();
@@ -38,10 +32,12 @@ export class MoveCursorToPreviousUnfoldedLine implements Operation {
     });
 
     if (lineNo === 0) {
-      this.moveCursorToPreviousUnfoldedItem(root, cursor);
+      return this.moveCursorToPreviousUnfoldedItem(root, cursor);
     } else if (lineNo > 0) {
-      this.moveCursorToPreviousNoteLine(root, lines, lineNo);
+      return this.moveCursorToPreviousNoteLine(root, lines, lineNo);
     }
+
+    return NO_OP_OUTCOME;
   }
 
   private moveCursorToPreviousNoteLine(
@@ -49,15 +45,13 @@ export class MoveCursorToPreviousUnfoldedLine implements Operation {
     lines: ListLine[],
     lineNo: number,
   ) {
-    this.stopPropagation = true;
-    this.updated = true;
-
     const previousLine = lines[lineNo - 1];
     if (!previousLine) {
-      return;
+      return STOP_ONLY_OUTCOME;
     }
 
     root.replaceCursor(previousLine.to);
+    return UPDATED_OUTCOME;
   }
 
   private moveCursorToPreviousUnfoldedItem(root: Root, cursor: Position) {
@@ -65,30 +59,24 @@ export class MoveCursorToPreviousUnfoldedLine implements Operation {
 
     if (!prev) {
       if (cursor.line < 1) {
-        return;
+        return NO_OP_OUTCOME;
       }
-
-      this.stopPropagation = true;
-      this.updated = true;
 
       root.replaceCursor({
         line: cursor.line - 1,
         ch: this.editor.getLine(cursor.line - 1).length,
       });
-      return;
+      return UPDATED_OUTCOME;
     }
-
-    this.stopPropagation = true;
-    this.updated = true;
 
     if (prev.isFolded()) {
       const foldRoot = prev.getTopFoldRoot();
       if (!foldRoot) {
-        return;
+        return STOP_ONLY_OUTCOME;
       }
       const firstLine = foldRoot.getLinesInfo()[0];
       if (!firstLine) {
-        return;
+        return STOP_ONLY_OUTCOME;
       }
 
       const firstLineEnd = firstLine.to;
@@ -96,5 +84,7 @@ export class MoveCursorToPreviousUnfoldedLine implements Operation {
     } else {
       root.replaceCursor(prev.getLastLineContentEnd());
     }
+
+    return UPDATED_OUTCOME;
   }
 }

@@ -1,4 +1,5 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
+import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 import { RecoverCursorAfterFoldedNavigation } from "../RecoverCursorAfterFoldedNavigation";
 
 test("should move cursor to the next visible sibling after moving down from a folded list", () => {
@@ -19,10 +20,7 @@ test("should move cursor to the next visible sibling after moving down from a fo
     "ArrowDown",
   );
 
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
   expect(op.getRefoldLine()).toBe(0);
   expect(root.getCursor()).toEqual({ line: 2, ch: 2 });
 });
@@ -45,10 +43,7 @@ test("should not move cursor when the previous line was not folded", () => {
     "ArrowDown",
   );
 
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
   expect(op.getRefoldLine()).toBeNull();
   expect(root.getCursor()).toEqual({ line: 1, ch: 4 });
 });

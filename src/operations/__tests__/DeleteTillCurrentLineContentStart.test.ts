@@ -1,5 +1,6 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { DeleteTillCurrentLineContentStart } from "../DeleteTillCurrentLineContentStart";
+import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 test("should delete content from cursor to start of the line content and move cursor to content start", () => {
   const root = makeRoot({
@@ -11,7 +12,7 @@ test("should delete content from cursor to start of the line content and move cu
   });
 
   const op = new DeleteTillCurrentLineContentStart(root);
-  op.perform();
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
   expect(root.print()).toBe(
     "- item 1\n- m 2\n    - item 2.1\n    - item 2.2\n- item 3",
@@ -30,7 +31,7 @@ test("should delete all content when cursor is at the end of line", () => {
   });
 
   const op = new DeleteTillCurrentLineContentStart(root);
-  op.perform();
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
   expect(root.print()).toBe(
     "- item 1\n- \n    - item 2.1\n    - item 2.2\n- item 3",
@@ -49,7 +50,7 @@ test("should do nothing if cursor is already at the start of line content", () =
   });
 
   const op = new DeleteTillCurrentLineContentStart(root);
-  op.perform();
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
   expect(root.print()).toBe(
     "- item 1\n- item 2\n    - item 2.1\n    - item 2.2\n- item 3",
@@ -76,7 +77,7 @@ test("should not do anything if there are multiple selections", () => {
   });
 
   const op = new DeleteTillCurrentLineContentStart(root);
-  op.perform();
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
   // Should not change the text
   expect(root.print()).toBe(
@@ -94,8 +95,5 @@ test("should stop propagation and update editor", () => {
   });
 
   const op = new DeleteTillCurrentLineContentStart(root);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 });

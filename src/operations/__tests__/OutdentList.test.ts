@@ -1,4 +1,9 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
+import {
+  NO_OP_OUTCOME,
+  STOP_ONLY_OUTCOME,
+  UPDATED_OUTCOME,
+} from "../Operation";
 import { OutdentList } from "../OutdentList";
 
 describe("OutdentList operation", () => {
@@ -12,7 +17,7 @@ describe("OutdentList operation", () => {
     });
 
     const op = new OutdentList(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- parent\n  - child\n  - grandchild");
     expect(root.getCursor().line).toBe(2);
@@ -29,7 +34,7 @@ describe("OutdentList operation", () => {
     });
 
     const op = new OutdentList(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe(
       "- parent\n  - child\n  - grandchild\n    - great-grandchild",
@@ -48,12 +53,11 @@ describe("OutdentList operation", () => {
     });
 
     const op = new OutdentList(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(STOP_ONLY_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- item 2\n- item 3");
     expect(root.getCursor().line).toBe(1);
     expect(root.getCursor().ch).toBe(5);
-    expect(op.shouldUpdate()).toBe(false);
   });
 
   test("should recalculate numeric bullets after outdention", () => {
@@ -66,7 +70,7 @@ describe("OutdentList operation", () => {
     });
 
     const op = new OutdentList(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     // The numeric bullet for the outdented item should be adjusted
     const result = root.print();
@@ -92,11 +96,9 @@ describe("OutdentList operation", () => {
     });
 
     const op = new OutdentList(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
     expect(root.print()).toBe("- parent\n  - child\n    - grandchild");
-    expect(op.shouldStopPropagation()).toBe(false);
-    expect(op.shouldUpdate()).toBe(false);
   });
 
   test("should stop propagation and update editor when successful", () => {
@@ -109,10 +111,7 @@ describe("OutdentList operation", () => {
     });
 
     const op = new OutdentList(root, true);
-    op.perform();
-
-    expect(op.shouldStopPropagation()).toBe(true);
-    expect(op.shouldUpdate()).toBe(true);
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
   });
 
   test("should keep cursor at the same relative text position when outdenting text with delimiters", () => {
@@ -125,7 +124,7 @@ describe("OutdentList operation", () => {
     });
 
     const op = new OutdentList(root, true);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- parent\n- **test** item");
     expect(root.getCursor()).toEqual({ line: 1, ch: 9 });

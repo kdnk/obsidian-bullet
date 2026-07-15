@@ -1,4 +1,5 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
+import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 import { RecoverCursorAfterArrowUp } from "../RecoverCursorAfterArrowUp";
 
 test("should move cursor to the previous list item when ArrowUp gets stuck on a checkbox line", () => {
@@ -11,10 +12,7 @@ test("should move cursor to the previous list item when ArrowUp gets stuck on a 
   });
 
   const op = new RecoverCursorAfterArrowUp(root, { line: 1, ch: 6 });
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe(9);
 });
@@ -29,10 +27,7 @@ test("should do nothing when ArrowUp already moved to the previous line", () => 
   });
 
   const op = new RecoverCursorAfterArrowUp(root, { line: 1, ch: 6 });
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe(6);
 });
@@ -47,10 +42,7 @@ test("should move cursor to the previous root item when ArrowUp gets stuck befor
   });
 
   const op = new RecoverCursorAfterArrowUp(root, { line: 1, ch: 5 });
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe(5);
 });

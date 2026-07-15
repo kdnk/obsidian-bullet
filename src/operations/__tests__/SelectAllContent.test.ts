@@ -1,5 +1,6 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { Position } from "../../root";
+import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 import { SelectAllContent } from "../SelectAllContent";
 
 function performSelectAllCycle(root: ReturnType<typeof makeRoot>) {
@@ -7,9 +8,10 @@ function performSelectAllCycle(root: ReturnType<typeof makeRoot>) {
 
   return () => {
     const op = new SelectAllContent(root, cycleCursor);
-    const result = op.perform();
+    const outcome = op.perform();
+    expect(outcome).toEqual(UPDATED_OUTCOME);
     cycleCursor = op.getCycleCursor();
-    return { op, result };
+    return outcome;
   };
 }
 
@@ -25,19 +27,19 @@ describe("SelectAllContent operation", () => {
 
     const op = new SelectAllContent(root);
 
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
     expect(root.getSelection().anchor.line).toBe(1);
     expect(root.getSelection().anchor.ch).toBe(2);
     expect(root.getSelection().head.line).toBe(1);
     expect(root.getSelection().head.ch).toBe(8);
 
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
     expect(root.getSelection().anchor.line).toBe(1);
     expect(root.getSelection().anchor.ch).toBe(2);
     expect(root.getSelection().head.ch).toBe(14);
     expect(root.getSelection().head.line).toBe(3);
 
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
     expect(root.getSelection().anchor.line).toBe(0);
     expect(root.getSelection().anchor.ch).toBe(0);
     expect(root.getSelection().head.line).toBe(4);
@@ -55,13 +57,13 @@ describe("SelectAllContent operation", () => {
 
     const op = new SelectAllContent(root);
 
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
     expect(root.getSelection().anchor.line).toBe(4);
     expect(root.getSelection().anchor.ch).toBe(2);
     expect(root.getSelection().head.line).toBe(4);
     expect(root.getSelection().head.ch).toBe(8);
 
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
     expect(root.getSelection().anchor.line).toBe(0);
     expect(root.getSelection().anchor.ch).toBe(0);
     expect(root.getSelection().head.line).toBe(4);
@@ -86,11 +88,9 @@ describe("SelectAllContent operation", () => {
     });
 
     const op = new SelectAllContent(root);
-    op.perform();
+    expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
     // Should not update
-    expect(op.shouldUpdate()).toBe(false);
-    expect(op.shouldStopPropagation()).toBe(false);
   });
 
   test("should select list item content with a checkbox", () => {
@@ -105,7 +105,7 @@ describe("SelectAllContent operation", () => {
     root.getListUnderCursor().getCheckboxLength = () => 4;
 
     const op = new SelectAllContent(root);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     // Should select just the content after checkbox
     expect(root.getSelection().anchor.line).toBe(1);
@@ -124,7 +124,7 @@ describe("SelectAllContent operation", () => {
     });
 
     const op = new SelectAllContent(root);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     // Should select list item and its notes
     expect(root.getSelection().anchor.line).toBe(0);
@@ -155,9 +155,7 @@ describe("SelectAllContent operation", () => {
     expect(root.getSelection().anchor).toEqual({ line: 0, ch: 0 });
     expect(root.getSelection().head).toEqual({ line: 4, ch: 8 });
 
-    const { op, result } = perform();
-    expect(result).toBe(true);
-    expect(op.shouldStopPropagation()).toBe(true);
+    perform();
     expect(root.getSelection().anchor).toEqual({ line: 1, ch: 2 });
     expect(root.getSelection().head).toEqual({ line: 1, ch: 8 });
   });
@@ -180,9 +178,7 @@ describe("SelectAllContent operation", () => {
     expect(root.getSelection().anchor).toEqual({ line: 0, ch: 0 });
     expect(root.getSelection().head).toEqual({ line: 4, ch: 8 });
 
-    const { op, result } = perform();
-    expect(result).toBe(true);
-    expect(op.shouldStopPropagation()).toBe(true);
+    perform();
     expect(root.getSelection().anchor).toEqual({ line: 4, ch: 2 });
     expect(root.getSelection().head).toEqual({ line: 4, ch: 8 });
   });
@@ -205,9 +201,7 @@ describe("SelectAllContent operation", () => {
     expect(root.getSelection().anchor).toEqual({ line: 2, ch: 0 });
     expect(root.getSelection().head).toEqual({ line: 4, ch: 13 });
 
-    const { op, result } = perform();
-    expect(result).toBe(true);
-    expect(op.shouldStopPropagation()).toBe(true);
+    perform();
     expect(root.getSelection().anchor).toEqual({ line: 3, ch: 4 });
     expect(root.getSelection().head).toEqual({ line: 3, ch: 13 });
   });
@@ -228,11 +222,9 @@ describe("SelectAllContent operation", () => {
     });
 
     const op = new SelectAllContent(root, { line: 1, ch: 2 });
-    const result = op.perform();
+    const outcome = op.perform();
 
-    expect(result).toBe(true);
-    expect(op.shouldUpdate()).toBe(true);
-    expect(op.shouldStopPropagation()).toBe(true);
+    expect(outcome).toEqual(UPDATED_OUTCOME);
     expect(root.getSelection().anchor).toEqual({ line: 1, ch: 2 });
     expect(root.getSelection().head).toEqual({ line: 1, ch: 8 });
   });
@@ -255,8 +247,7 @@ describe("SelectAllContent operation", () => {
     expect(root.getSelection().anchor).toEqual({ line: 0, ch: 0 });
     expect(root.getSelection().head).toEqual({ line: 1, ch: 29 });
 
-    const { op } = perform();
-    expect(op.shouldStopPropagation()).toBe(true);
+    perform();
     expect(root.getSelection().anchor).toEqual({ line: 1, ch: 6 });
     expect(root.getSelection().head).toEqual({ line: 1, ch: 29 });
   });
@@ -279,8 +270,7 @@ describe("SelectAllContent operation", () => {
     expect(root.getSelection().anchor).toEqual({ line: 0, ch: 0 });
     expect(root.getSelection().head).toEqual({ line: 3, ch: 8 });
 
-    const { op } = perform();
-    expect(op.shouldStopPropagation()).toBe(true);
+    perform();
     expect(root.getSelection().anchor).toEqual({ line: 0, ch: 2 });
     expect(root.getSelection().head).toEqual({ line: 2, ch: 14 });
   });
@@ -295,7 +285,7 @@ describe("SelectAllContent operation", () => {
     });
 
     const op = new SelectAllContent(root);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     // Should select the empty content
     expect(root.getSelection().anchor.line).toBe(0);
@@ -321,7 +311,7 @@ describe("SelectAllContent operation", () => {
     });
 
     const op = new SelectAllContent(root);
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     // Should extend to select the whole content
     expect(root.getSelection().anchor.line).toBe(0);
@@ -340,9 +330,6 @@ describe("SelectAllContent operation", () => {
     });
 
     const op = new SelectAllContent(root);
-    op.perform();
-
-    expect(op.shouldStopPropagation()).toBe(true);
-    expect(op.shouldUpdate()).toBe(true);
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
   });
 });

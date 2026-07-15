@@ -1,5 +1,6 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { KeepCursorWithinListContent } from "../KeepCursorWithinListContent";
+import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 test("should move cursor to the start of content if cursor is before content start", () => {
   const root = makeRoot({
@@ -11,10 +12,7 @@ test("should move cursor to the start of content if cursor is before content sta
   });
 
   const op = new KeepCursorWithinListContent(root);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe(2); // At the start of content after bullet
 });
@@ -29,10 +27,7 @@ test("should move cursor to the start of content if cursor is on the bullet", ()
   });
 
   const op = new KeepCursorWithinListContent(root);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe(2); // At the start of content after bullet
 });
@@ -55,11 +50,9 @@ test("should mock getFirstLineContentStartAfterCheckbox appropriately", () => {
     getFirstLineContentStartAfterCheckbox;
 
   const op = new KeepCursorWithinListContent(root);
-  op.perform();
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
   expect(getFirstLineContentStartAfterCheckbox).toHaveBeenCalled();
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe(6); // The mocked position after checkbox
 });
@@ -74,10 +67,7 @@ test("should move cursor to the start of indented notes content if cursor is bef
   });
 
   const op = new KeepCursorWithinListContent(root);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
   expect(root.getCursor().line).toBe(1);
   expect(root.getCursor().ch).toBe(2); // At the start of note's indentation
 });
@@ -92,10 +82,7 @@ test("should not do anything if cursor is already within content", () => {
   });
 
   const op = new KeepCursorWithinListContent(root);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe(5); // Unchanged
 });
@@ -113,10 +100,7 @@ test("should move cursor after the bullet but before a custom checkbox in bullet
   });
 
   const op = new KeepCursorWithinListContent(root);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
   expect(root.getCursor()).toStrictEqual({ line: 0, ch: 2 });
 });
 
@@ -138,8 +122,5 @@ test("should not do anything if there are multiple cursors", () => {
   });
 
   const op = new KeepCursorWithinListContent(root);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 });

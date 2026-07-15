@@ -1,10 +1,8 @@
-import { Operation } from "./Operation";
+import { NO_OP_OUTCOME, Operation, UPDATED_OUTCOME } from "./Operation";
 
 import { Position, Root } from "../root";
 
 export class RecoverCursorAfterFoldedNavigation implements Operation {
-  private stopPropagation = false;
-  private updated = false;
   private refoldLine: number | null = null;
 
   constructor(
@@ -13,14 +11,6 @@ export class RecoverCursorAfterFoldedNavigation implements Operation {
     private previousFoldedLines: number[],
     private pressedKey: string | null,
   ) {}
-
-  shouldStopPropagation() {
-    return this.stopPropagation;
-  }
-
-  shouldUpdate() {
-    return this.updated;
-  }
 
   getRefoldLine() {
     return this.refoldLine;
@@ -34,40 +24,38 @@ export class RecoverCursorAfterFoldedNavigation implements Operation {
       !previousCursor ||
       pressedKey !== "ArrowDown"
     ) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     if (!previousFoldedLines.includes(previousCursor.line)) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const cursor = root.getCursor();
 
     if (cursor.line <= previousCursor.line) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const previousList = root.getListUnderLine(previousCursor.line);
 
     if (!previousList) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const foldedContentEnd = previousList.getContentEndIncludingChildren();
 
     if (cursor.line > foldedContentEnd.line) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const nextList = root.getListUnderLine(foldedContentEnd.line + 1);
 
     if (!nextList) {
-      return;
+      return NO_OP_OUTCOME;
     }
-
-    this.stopPropagation = true;
-    this.updated = true;
     this.refoldLine = previousCursor.line;
     root.replaceCursor(nextList.getFirstLineContentStartAfterCheckbox());
+    return UPDATED_OUTCOME;
   }
 }

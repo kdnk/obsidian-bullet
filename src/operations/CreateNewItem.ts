@@ -1,13 +1,15 @@
-import { Operation } from "./Operation";
+import {
+  NO_OP_OUTCOME,
+  Operation,
+  STOP_ONLY_OUTCOME,
+  UPDATED_OUTCOME,
+} from "./Operation";
 
 import { List, Root, recalculateNumericBullets } from "../root";
 import { checkboxRe } from "../utils/checkboxRe";
 import { isEmptyLineOrEmptyCheckbox } from "../utils/isEmptyLineOrEmptyCheckbox";
 
 export class CreateNewItem implements Operation {
-  private stopPropagation = false;
-  private updated = false;
-
   constructor(
     private root: Root,
     private defaultIndentChars: string,
@@ -16,42 +18,34 @@ export class CreateNewItem implements Operation {
     private documentPrefixBeforeRoot: string = "",
   ) {}
 
-  shouldStopPropagation() {
-    return this.stopPropagation;
-  }
-
-  shouldUpdate() {
-    return this.updated;
-  }
-
   perform() {
     const { root } = this;
 
     if (!root.hasSingleSelection()) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const selection = root.getSelection();
     if (!selection || selection.anchor.line !== selection.head.line) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const list = root.getListUnderCursor();
     const lines = list.getLinesInfo();
 
     if (lines.length === 1 && isEmptyLineOrEmptyCheckbox(lines[0].text)) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const cursor = root.getCursor();
     const lineUnderCursor = lines.find((l) => l.from.line === cursor.line);
     const lineIndex = lines.findIndex((l) => l.from.line === cursor.line);
     if (!lineUnderCursor || lineIndex < 0) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     if (cursor.ch < lineUnderCursor.from.ch) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const checkboxAtContentStart = new RegExp(`^${checkboxRe}`).exec(
@@ -104,17 +98,14 @@ export class CreateNewItem implements Operation {
       (codeBlockBacticksBeforeRoot + codeBlockBacticks) % 2 !== 0;
 
     if (isInsideCodeblock) {
-      return;
+      return NO_OP_OUTCOME;
     }
-
-    this.stopPropagation = true;
-    this.updated = true;
 
     if (lineIndex > 0 && list.isEmpty() && !hasCheckbox) {
       const lineOffset = cursor.ch - lineUnderCursor.from.ch;
       const line = lines[lineIndex];
       if (!line) {
-        return;
+        return STOP_ONLY_OUTCOME;
       }
 
       const lineText = line.text;
@@ -130,7 +121,7 @@ export class CreateNewItem implements Operation {
         ch: list.getNotesIndentOrThrow().length,
       });
 
-      return;
+      return UPDATED_OUTCOME;
     }
 
     const hasChildren = !list.isEmpty();
@@ -204,5 +195,6 @@ export class CreateNewItem implements Operation {
       line: newListStart.line,
       ch: newListStart.ch + prefix.length,
     });
+    return UPDATED_OUTCOME;
   }
 }

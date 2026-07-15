@@ -1,5 +1,5 @@
 import { DeleteTillPreviousLineContentEnd } from "./DeleteTillPreviousLineContentEnd";
-import { Operation } from "./Operation";
+import { NO_OP_OUTCOME, Operation } from "./Operation";
 
 import { Root } from "../root";
 
@@ -14,19 +14,11 @@ export class DeleteTillNextLineContentStart implements Operation {
       new DeleteTillPreviousLineContentEnd(root, numericBulletsEnabled);
   }
 
-  shouldStopPropagation() {
-    return this.deleteTillPreviousLineContentEnd.shouldStopPropagation();
-  }
-
-  shouldUpdate() {
-    return this.deleteTillPreviousLineContentEnd.shouldUpdate();
-  }
-
   perform() {
     const { root } = this;
 
     if (!root.hasSingleCursor()) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const list = root.getListUnderCursor();
@@ -41,13 +33,15 @@ export class DeleteTillNextLineContentStart implements Operation {
       const nextLine = lines[lineNo].to.line + 1;
       const nextList = root.getListUnderLine(nextLine);
       if (!nextList) {
-        return;
+        return NO_OP_OUTCOME;
       }
       root.replaceCursor(nextList.getFirstLineContentStart());
-      this.deleteTillPreviousLineContentEnd.perform();
+      return this.deleteTillPreviousLineContentEnd.perform();
     } else if (lineNo >= 0) {
       root.replaceCursor(lines[lineNo + 1].from);
-      this.deleteTillPreviousLineContentEnd.perform();
+      return this.deleteTillPreviousLineContentEnd.perform();
     }
+
+    return NO_OP_OUTCOME;
   }
 }

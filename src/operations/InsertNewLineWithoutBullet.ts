@@ -1,31 +1,20 @@
-import { Operation } from "./Operation";
+import { NO_OP_OUTCOME, Operation, UPDATED_OUTCOME } from "./Operation";
 
 import { List, Root } from "../root";
 
 export class InsertNewLineWithoutBullet implements Operation {
-  private stopPropagation = false;
-  private updated = false;
-
   constructor(private root: Root) {}
-
-  shouldStopPropagation() {
-    return this.stopPropagation;
-  }
-
-  shouldUpdate() {
-    return this.updated;
-  }
 
   perform() {
     const { root } = this;
 
     if (!root.hasSingleSelection()) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const selection = root.getSelection();
     if (!selection || selection.anchor.line !== selection.head.line) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const list = root.getListUnderCursor();
@@ -34,20 +23,17 @@ export class InsertNewLineWithoutBullet implements Operation {
     const lineIndex = lines.findIndex((line) => line.from.line === cursor.line);
 
     if (lineIndex < 0) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const lineUnderCursor = lines[lineIndex];
     if (!lineUnderCursor) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     if (cursor.ch < lineUnderCursor.from.ch) {
-      return;
+      return NO_OP_OUTCOME;
     }
-
-    this.stopPropagation = true;
-    this.updated = true;
 
     const lineOffset = cursor.ch - lineUnderCursor.from.ch;
     const lineText = lineUnderCursor.text;
@@ -67,6 +53,7 @@ export class InsertNewLineWithoutBullet implements Operation {
       line: cursor.line + 1,
       ch: list.getNotesIndentOrThrow().length,
     });
+    return UPDATED_OUTCOME;
   }
 
   private createNotesIndent(list: List) {

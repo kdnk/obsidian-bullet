@@ -1,5 +1,6 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { MoveListToDifferentPosition } from "../MoveListToDifferentPosition";
+import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 describe("MoveListToDifferentPosition operation", () => {
   test("should move list before another list", () => {
@@ -22,11 +23,9 @@ describe("MoveListToDifferentPosition operation", () => {
       "  ",
       true,
     );
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 3\n- item 1\n- item 2");
-    expect(op.shouldStopPropagation()).toBe(true);
-    expect(op.shouldUpdate()).toBe(true);
   });
 
   test("should move list after another list", () => {
@@ -49,7 +48,7 @@ describe("MoveListToDifferentPosition operation", () => {
       "  ",
       true,
     );
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 2\n- item 1\n- item 3");
   });
@@ -74,7 +73,7 @@ describe("MoveListToDifferentPosition operation", () => {
       "  ",
       true,
     );
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n  - item 3\n- item 2");
   });
@@ -99,7 +98,7 @@ describe("MoveListToDifferentPosition operation", () => {
       "  ",
       true,
     );
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n  - item 1.1\n    - item 2");
   });
@@ -124,7 +123,7 @@ describe("MoveListToDifferentPosition operation", () => {
       "  ",
       true,
     );
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe(
       "- item 1\n- item 3\n- item 2\n  - item 2.1\n  - item 2.2",
@@ -151,11 +150,9 @@ describe("MoveListToDifferentPosition operation", () => {
       "  ",
       true,
     );
-    op.perform();
+    expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
     expect(root.print()).toBe("- item 1\n- item 2\n- item 3");
-    expect(op.shouldStopPropagation()).toBe(false);
-    expect(op.shouldUpdate()).toBe(false);
   });
 
   test("should recalculate numeric bullets after moving a list", () => {
@@ -178,7 +175,7 @@ describe("MoveListToDifferentPosition operation", () => {
       "  ",
       true,
     );
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe("1. item 2\n2. item 3\n3. item 1");
   });
@@ -203,7 +200,7 @@ describe("MoveListToDifferentPosition operation", () => {
       "  ",
       true,
     );
-    op.perform();
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.getCursor().line).toBe(0); // cursor now at first line (moved with item 3)
     expect(root.getCursor().ch).toBe(5); // ch position maintained

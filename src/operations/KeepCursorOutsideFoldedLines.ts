@@ -1,51 +1,41 @@
-import { Operation } from "./Operation";
+import { NO_OP_OUTCOME, Operation, UPDATED_OUTCOME } from "./Operation";
 
 import { Root } from "../root";
 
 export class KeepCursorOutsideFoldedLines implements Operation {
-  private stopPropagation = false;
-  private updated = false;
-
   constructor(private root: Root) {}
-
-  shouldStopPropagation() {
-    return this.stopPropagation;
-  }
-
-  shouldUpdate() {
-    return this.updated;
-  }
 
   perform() {
     const { root } = this;
 
     if (!root.hasSingleCursor()) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const cursor = root.getCursor();
 
     const list = root.getListUnderCursor();
     if (!list.isFolded()) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const foldRoot = list.getTopFoldRoot();
     if (!foldRoot) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const firstLine = foldRoot.getLinesInfo()[0];
     if (!firstLine) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const firstLineEnd = firstLine.to;
 
     if (cursor.line > firstLineEnd.line) {
-      this.updated = true;
-      this.stopPropagation = true;
       root.replaceCursor(firstLineEnd);
+      return UPDATED_OUTCOME;
     }
+
+    return NO_OP_OUTCOME;
   }
 }

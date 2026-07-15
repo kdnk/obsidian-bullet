@@ -1,30 +1,16 @@
-import { Operation } from "./Operation";
+import { NO_OP_OUTCOME, Operation, UPDATED_OUTCOME } from "./Operation";
 
 import { Root } from "../root";
 
 export class DeleteTillCurrentLineContentStart implements Operation {
-  private stopPropagation = false;
-  private updated = false;
-
   constructor(private root: Root) {}
-
-  shouldStopPropagation() {
-    return this.stopPropagation;
-  }
-
-  shouldUpdate() {
-    return this.updated;
-  }
 
   perform() {
     const { root } = this;
 
     if (!root.hasSingleCursor()) {
-      return;
+      return NO_OP_OUTCOME;
     }
-
-    this.stopPropagation = true;
-    this.updated = true;
 
     const cursor = root.getCursor();
     const list = root.getListUnderCursor();
@@ -37,5 +23,6 @@ export class DeleteTillCurrentLineContentStart implements Operation {
 
     list.replaceLines(lines.map((l) => l.text));
     root.replaceCursor(lines[lineNo].from);
+    return UPDATED_OUTCOME;
   }
 }

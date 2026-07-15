@@ -1,4 +1,9 @@
-import { Operation } from "./Operation";
+import {
+  NO_OP_OUTCOME,
+  Operation,
+  STOP_ONLY_OUTCOME,
+  UPDATED_OUTCOME,
+} from "./Operation";
 
 import {
   List,
@@ -9,27 +14,16 @@ import {
 } from "../root";
 
 export class DeleteTillPreviousLineContentEnd implements Operation {
-  private stopPropagation = false;
-  private updated = false;
-
   constructor(
     private root: Root,
     private numericBulletsEnabled: boolean,
   ) {}
 
-  shouldStopPropagation() {
-    return this.stopPropagation;
-  }
-
-  shouldUpdate() {
-    return this.updated;
-  }
-
   perform() {
     const { root } = this;
 
     if (!root.hasSingleCursor()) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const list = root.getListUnderCursor();
@@ -41,10 +35,12 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
     );
 
     if (lineNo === 0) {
-      this.mergeWithPreviousItem(root, cursor, list);
+      return this.mergeWithPreviousItem(root, cursor, list);
     } else if (lineNo > 0) {
-      this.mergeNotes(root, cursor, list, lines, lineNo);
+      return this.mergeNotes(root, cursor, list, lines, lineNo);
     }
+
+    return NO_OP_OUTCOME;
   }
 
   private mergeNotes(
@@ -54,9 +50,6 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
     lines: ListLine[],
     lineNo: number,
   ) {
-    this.stopPropagation = true;
-    this.updated = true;
-
     const prevLineNo = lineNo - 1;
 
     root.replaceCursor({
@@ -68,19 +61,18 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
     lines.splice(lineNo, 1);
 
     list.replaceLines(lines.map((l) => l.text));
+    return UPDATED_OUTCOME;
   }
 
   private mergeWithPreviousItem(root: Root, cursor: Position, list: List) {
     if (root.getChildren()[0] === list && list.isEmpty()) {
-      return;
+      return NO_OP_OUTCOME;
     }
-
-    this.stopPropagation = true;
 
     const prev = root.getListUnderLine(cursor.line - 1);
 
     if (!prev) {
-      return;
+      return STOP_ONLY_OUTCOME;
     }
 
     const bothAreEmpty = prev.isEmpty() && list.isEmpty();
@@ -90,14 +82,13 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
       list.isEmpty() && prev.getLevel() === list.getLevel() - 1;
 
     if (bothAreEmpty || prevIsEmptyAndSameLevel || listIsEmptyAndPrevIsParent) {
-      this.updated = true;
-
       const parent = list.getParent();
       if (!parent) {
-        return;
+        return STOP_ONLY_OUTCOME;
       }
 
       const prevEnd = prev.getLastLineContentEnd();
+      let mutated = false;
 
       if (!prev.getNotesIndent() && list.getNotesIndent()) {
         prev.setNotesIndent(
@@ -106,6 +97,7 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
               .getNotesIndentOrThrow()
               .slice(list.getFirstLineIndent().length),
         );
+        mutated = true;
       }
 
       const oldLines = prev.getLines();
@@ -113,7 +105,7 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
       const lastOldLine = oldLines[oldLines.length - 1];
       const firstNewLine = newLines[0];
       if (lastOldLine === undefined || firstNewLine === undefined) {
-        return;
+        return mutated ? UPDATED_OUTCOME : STOP_ONLY_OUTCOME;
       }
 
       oldLines[oldLines.length - 1] = lastOldLine + firstNewLine;
@@ -130,6 +122,9 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
       root.replaceCursor(prevEnd);
 
       recalculateNumericBullets(root, this.numericBulletsEnabled);
+      return UPDATED_OUTCOME;
     }
+
+    return STOP_ONLY_OUTCOME;
   }
 }

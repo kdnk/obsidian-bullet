@@ -1,5 +1,6 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { KeepCursorOutsideFoldedLines } from "../KeepCursorOutsideFoldedLines";
+import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 test("should move cursor to the end of the first line if cursor is inside folded content", () => {
   const editor = makeEditor({
@@ -29,10 +30,7 @@ test("should move cursor to the end of the first line if cursor is inside folded
   listUnderCursor.getTopFoldRoot = () => foldRoot;
 
   const op = new KeepCursorOutsideFoldedLines(root);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe(7);
 });
@@ -65,10 +63,7 @@ test("should not move cursor if it's not inside folded content", () => {
   listUnderCursor.getTopFoldRoot = () => foldRoot;
 
   const op = new KeepCursorOutsideFoldedLines(root);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe(5);
 });
@@ -89,10 +84,7 @@ test("should not do anything if list is not folded", () => {
   listUnderCursor.isFolded = () => false;
 
   const op = new KeepCursorOutsideFoldedLines(root);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 });
 
 test("should not do anything if there are multiple cursors", () => {
@@ -113,8 +105,5 @@ test("should not do anything if there are multiple cursors", () => {
   });
 
   const op = new KeepCursorOutsideFoldedLines(root);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 });

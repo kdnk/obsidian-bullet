@@ -1,4 +1,4 @@
-import { Operation } from "./Operation";
+import { NO_OP_OUTCOME, Operation } from "./Operation";
 import { OutdentList } from "./OutdentList";
 
 import { Root } from "../root";
@@ -14,19 +14,11 @@ export class OutdentListIfItsEmpty implements Operation {
     this.outdentList = new OutdentList(root, numericBulletsEnabled);
   }
 
-  shouldStopPropagation() {
-    return this.outdentList.shouldStopPropagation();
-  }
-
-  shouldUpdate() {
-    return this.outdentList.shouldUpdate();
-  }
-
   perform() {
     const { root } = this;
 
     if (!root.hasSingleCursor()) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
     const list = root.getListUnderCursor();
@@ -37,9 +29,9 @@ export class OutdentListIfItsEmpty implements Operation {
       !isEmptyLineOrEmptyCheckbox(lines[0]) ||
       list.getLevel() === 1
     ) {
-      return;
+      return NO_OP_OUTCOME;
     }
 
-    this.outdentList.perform();
+    return this.outdentList.perform();
   }
 }

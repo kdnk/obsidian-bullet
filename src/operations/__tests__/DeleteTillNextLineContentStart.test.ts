@@ -1,5 +1,6 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { DeleteTillNextLineContentStart } from "../DeleteTillNextLineContentStart";
+import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 test("should delete content from cursor to start of next line content when cursor is at end of a line", () => {
   const root = makeRoot({
@@ -11,7 +12,7 @@ test("should delete content from cursor to start of next line content when curso
   });
 
   const op = new DeleteTillNextLineContentStart(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
   expect(root.print()).toBe(
     "- item 1item 2\n    - item 2.1\n    - item 2.2\n- item 3",
@@ -30,7 +31,7 @@ test("should not do anything if cursor is in the middle of a line", () => {
   });
 
   const op = new DeleteTillNextLineContentStart(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
   // Since cursor is not at end of line, operation does nothing
   expect(root.print()).toBe(
@@ -50,7 +51,7 @@ test("should delete content from cursor to start of next sublist item content", 
   });
 
   const op = new DeleteTillNextLineContentStart(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
   expect(root.print()).toBe(
     "- item 1\n- item 2item 2.1\n    - item 2.2\n- item 3",
@@ -69,7 +70,7 @@ test("should delete content from cursor to start of next line when next line is 
   });
 
   const op = new DeleteTillNextLineContentStart(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
   expect(root.print()).toBe(
     "- item 1\n- item 2\n    - item 2.1\n    - item 2.2item 3",
@@ -88,7 +89,7 @@ test("should do nothing when cursor is at the end of the last line", () => {
   });
 
   const op = new DeleteTillNextLineContentStart(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
   expect(root.print()).toBe(
     "- item 1\n- item 2\n    - item 2.1\n    - item 2.2\n- item 3",
@@ -107,7 +108,7 @@ test("should not do anything if the cursor is not at the end of a line", () => {
   });
 
   const op = new DeleteTillNextLineContentStart(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
   // In this case, cursor is not at the end of the line, so the operation does nothing
   // according to the implementation that checks for cursor.ch === l.to.ch
@@ -136,7 +137,7 @@ test("should not do anything if there are multiple selections", () => {
   });
 
   const op = new DeleteTillNextLineContentStart(root, true);
-  op.perform();
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
   // Should not change the text
   expect(root.print()).toBe(
@@ -154,8 +155,5 @@ test("should stop propagation and update editor", () => {
   });
 
   const op = new DeleteTillNextLineContentStart(root, true);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
 });

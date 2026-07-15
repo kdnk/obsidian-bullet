@@ -1,5 +1,6 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { MoveCursorToPreviousUnfoldedLine } from "../MoveCursorToPreviousUnfoldedLine";
+import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 test("should move cursor to end of previous note line in the same list", () => {
   const editor = makeEditor({
@@ -13,10 +14,7 @@ test("should move cursor to end of previous note line in the same list", () => {
   });
 
   const op = new MoveCursorToPreviousUnfoldedLine(root, editor);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
   expect(root.getCursor().line).toBe(1);
   expect(root.getCursor().ch).toBe(17);
 });
@@ -36,10 +34,7 @@ test("should move cursor to end of previous list item", () => {
   root.getListUnderCursor().getCheckboxLength = () => 0;
 
   const op = new MoveCursorToPreviousUnfoldedLine(root, editor);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe(8);
 });
@@ -75,10 +70,7 @@ test("should move cursor to end of first line in previous folded list", () => {
   root.getListUnderCursor().getCheckboxLength = () => 0;
 
   const op = new MoveCursorToPreviousUnfoldedLine(root, editor);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe(8);
 });
@@ -95,10 +87,7 @@ test("should do nothing when cursor is not at the beginning of content", () => {
   });
 
   const op = new MoveCursorToPreviousUnfoldedLine(root, editor);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
   expect(root.getCursor().line).toBe(1);
   expect(root.getCursor().ch).toBe(5);
 });
@@ -117,10 +106,7 @@ test("should do nothing when there is no previous line", () => {
   root.getListUnderCursor().getCheckboxLength = () => 0;
 
   const op = new MoveCursorToPreviousUnfoldedLine(root, editor);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe(2);
 });
@@ -139,10 +125,7 @@ test("should move cursor to the end of a previous non-list line", () => {
   root.getListUnderCursor().getCheckboxLength = () => 0;
 
   const op = new MoveCursorToPreviousUnfoldedLine(root, editor);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(true);
-  expect(op.shouldUpdate()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
   expect(root.getCursor().line).toBe(0);
   expect(root.getCursor().ch).toBe("intro paragraph".length);
 });
@@ -167,8 +150,5 @@ test("should do nothing when there are multiple selections", () => {
   root.getListUnderCursor().getCheckboxLength = () => 0;
 
   const op = new MoveCursorToPreviousUnfoldedLine(root, editor);
-  op.perform();
-
-  expect(op.shouldStopPropagation()).toBe(false);
-  expect(op.shouldUpdate()).toBe(false);
+  expect(op.perform()).toEqual(NO_OP_OUTCOME);
 });
