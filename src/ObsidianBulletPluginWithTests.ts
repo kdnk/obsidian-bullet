@@ -282,6 +282,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
       setSetting: (setting) => this.setSetting(setting),
       parseState: (state) => this.parseState(state),
       getCurrentState: () => this.getCurrentState(),
+      clickGuide: async (options) => await this.clickGuide(options),
     };
     const handler = handlers[type as keyof TestCommandMap];
 
@@ -292,6 +293,71 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     return (await (
       handler as (data: unknown) => State | void | Promise<State | void>
     )(data)) as State | undefined;
+  }
+
+  async clickGuide(options: GuideClickOptions): Promise<void> {
+    const lineCount = this.editor.getValue().split("\n").length;
+    if (
+      !Number.isInteger(options.line) ||
+      options.line < 0 ||
+      options.line >= lineCount
+    ) {
+      throw new Error(
+        `Unable to click ${options.kind} guide on line ${options.line}: line must be between 0 and ${lineCount - 1}`,
+      );
+    }
+    if (options.kind === "indent" && typeof options.prefix !== "string") {
+      throw new Error(
+        `Unable to click indent guide on line ${options.line}: prefix is required`,
+      );
+    }
+
+    const view = this.editor.getCodeMirrorView();
+    const offset = this.editor.posToOffset({ line: options.line, ch: 0 });
+    const { node } = view.domAtPos(offset);
+    let lineElement =
+      node.nodeType === 1 ? (node as Element) : node.parentElement;
+    while (lineElement && !lineElement.matches(".cm-line")) {
+      lineElement = lineElement.parentElement;
+    }
+    if (!lineElement) {
+      throw new Error(
+        `Unable to click ${options.kind} guide on line ${options.line}: found 0 guide candidates because the rendered line is missing`,
+      );
+    }
+
+    let target: Element | undefined;
+    if (options.kind === "indent") {
+      const candidates = Array.from(
+        lineElement.querySelectorAll(".cm-indent"),
+      ).filter((guide) => guide.parentElement?.matches(".cm-hmd-list-indent"));
+      target = candidates.find(
+        (guide) => getGuideIndentPrefix(guide) === options.prefix,
+      );
+      if (!target) {
+        throw new Error(
+          `Unable to click indent guide on line ${options.line} with prefix ${JSON.stringify(options.prefix)}: found ${candidates.length} indent guide candidates`,
+        );
+      }
+    } else {
+      const candidates = Array.from(
+        lineElement.querySelectorAll(".bullet-plugin-outer-list-guide"),
+      );
+      target = candidates[0];
+      if (!target) {
+        throw new Error(
+          `Unable to click outer guide on line ${options.line}: found ${candidates.length} outer guide candidates`,
+        );
+      }
+    }
+
+    for (const type of ["mousedown", "mouseup", "click"]) {
+      target.dispatchEvent(
+        new MouseEvent(type, { bubbles: true, cancelable: true }),
+      );
+    }
+
+    await this.waitForIdle();
   }
 
   private drag(opts: { from: { line: number; ch: number } }) {
@@ -694,4 +760,21 @@ function advancePosition(
     line: position.line + lines.length - 1,
     ch: lines[lines.length - 1].length,
   };
+}
+
+function getGuideIndentPrefix(guide: Element): string | null {
+  const indentContainer = guide.parentElement;
+  if (!indentContainer?.matches(".cm-hmd-list-indent")) {
+    return null;
+  }
+
+  let prefix = "";
+  for (const child of Array.from(indentContainer.childNodes)) {
+    if (child === guide) {
+      return prefix;
+    }
+    prefix += child.textContent ?? "";
+  }
+
+  return null;
 }

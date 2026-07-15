@@ -41,3 +41,8 @@ declare function move(opts: {
   offsetY: number;
 }): Promise<void>;
 declare function drop(): Promise<void>;
+declare function clickGuide(options: {
+  line: number;
+  kind: "indent" | "outer";
+  prefix?: string;
+}): Promise<void>;
