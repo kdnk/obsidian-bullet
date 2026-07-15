@@ -1,5 +1,6 @@
 const { TestEnvironment } = require("jest-environment-node");
 const WebSocket = require("ws");
+const { installObsidianDriver } = require("./obsidian-driver");
 
 let idSeq = 1;
 const DEFAULT_TEST_PLATFORM_WS_PORT = "8080";
@@ -16,24 +17,7 @@ module.exports = class CustomEnvironment extends TestEnvironment {
     await super.setup();
 
     this.callbacks = new Map();
-
-    this.createCommand("applyState");
-    this.createCommand("simulateKeydown");
-    this.createCommand("insertText");
-    this.createCommand("executeCommandById");
-    this.createCommand("setSetting");
-    this.createCommand("resetSettings");
-    this.createCommand("parseState");
-    this.createCommand("getCurrentState");
-    this.createCommand("drag");
-    this.createCommand("move");
-    this.createCommand("drop");
-    this.createCommand("waitForIdle");
-    this.createCommand("adjustSelection");
-  }
-
-  createCommand(type) {
-    this.global[type] = (data) => this.runCommand(type, data);
+    installObsidianDriver(this.global, this.runCommand.bind(this));
   }
 
   async initWs() {
