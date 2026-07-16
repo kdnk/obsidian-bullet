@@ -121,6 +121,10 @@ const settingCommandDecoders = {
     k: "listLineAction",
     v: decodeListLineActionSetting(value),
   }),
+  mobileRightFoldControls: (value) => ({
+    k: "mobileRightFoldControls",
+    v: decodeBooleanSetting("mobileRightFoldControls", value),
+  }),
   dnd: (value) => ({
     k: "dnd",
     v: decodeBooleanSetting("dnd", value),

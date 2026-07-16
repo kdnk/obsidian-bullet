@@ -12,7 +12,7 @@ test("enables outer vertical lines when saved data predates the setting", async 
     listLines: true,
     listLineAction: "toggle-folding",
     dnd: true,
-  } as Omit<SettingsObject, "outerListLines">;
+  } as Omit<SettingsObject, "outerListLines" | "mobileRightFoldControls">;
   const storage = {
     loadData: jest.fn(async () => saved as SettingsObject),
     saveData: jest.fn(async () => undefined),
@@ -22,6 +22,18 @@ test("enables outer vertical lines when saved data predates the setting", async 
   await settings.load();
 
   expect(settings.outerVerticalLines).toBe(true);
+});
+
+test("enables mobile right fold controls when saved data predates the setting", async () => {
+  const storage = {
+    loadData: jest.fn(async () => ({}) as SettingsObject),
+    saveData: jest.fn(async () => undefined),
+  };
+  const settings = new Settings(storage);
+
+  await settings.load();
+
+  expect(settings.mobileRightFoldControls).toBe(true);
 });
 
 describe("change notifications", () => {
@@ -65,6 +77,19 @@ describe("change notifications", () => {
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback.mock.calls[0]?.[0].keys).toEqual(
       new Set(["outerListLines"]),
+    );
+  });
+
+  test("notifies subscribers when mobile right fold controls change", () => {
+    const settings = createSettings();
+    const callback = jest.fn<void, [SettingsChange]>();
+    settings.onChange(["mobileRightFoldControls"], callback);
+
+    settings.mobileRightFoldControls = false;
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback.mock.calls[0]?.[0].keys).toEqual(
+      new Set(["mobileRightFoldControls"]),
     );
   });
 

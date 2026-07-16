@@ -15,6 +15,7 @@ export interface SettingsObject {
   listLines: boolean;
   outerListLines: boolean;
   listLineAction: VerticalLinesAction;
+  mobileRightFoldControls: boolean;
   dnd: boolean;
 }
 
@@ -35,6 +36,7 @@ const DEFAULT_SETTINGS: SettingsObject = {
   listLines: true,
   outerListLines: true,
   listLineAction: "toggle-folding",
+  mobileRightFoldControls: true,
   dnd: true,
 };
 
@@ -137,6 +139,14 @@ export class Settings {
 
   set verticalLinesAction(value: VerticalLinesAction) {
     this.update({ listLineAction: value });
+  }
+
+  get mobileRightFoldControls() {
+    return this.values.mobileRightFoldControls;
+  }
+
+  set mobileRightFoldControls(value: boolean) {
+    this.update({ mobileRightFoldControls: value });
   }
 
   get dragAndDrop() {

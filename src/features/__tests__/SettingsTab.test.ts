@@ -95,6 +95,7 @@ describe("SettingsTab", () => {
       verticalLines: true,
       outerVerticalLines: true,
       verticalLinesAction: "toggle-folding",
+      mobileRightFoldControls: true,
       dragAndDrop: true,
       debug: false,
       save: jest.fn(),
@@ -118,6 +119,9 @@ describe("SettingsTab", () => {
       (setting) =>
         setting.name === "Fold lists from vertical indentation lines",
     );
+    const mobileFoldControlsSetting = mockSettingsRecords.find(
+      (setting) => setting.name === "Show fold controls on the right on mobile",
+    );
     const verticalLinesSettingIndex = mockSettingsRecords.findIndex(
       (setting) => setting.name === "Draw vertical indentation lines",
     );
@@ -134,6 +138,10 @@ describe("SettingsTab", () => {
     );
     expect(actionSetting?.dropdownAdded).toBe(false);
     expect(actionSetting?.toggleCallbacks).toHaveLength(1);
+    expect(mobileFoldControlsSetting?.desc).toBe(
+      "Move fold controls to the right edge in Live Preview on mobile.",
+    );
+    expect(mobileFoldControlsSetting?.toggleValue).toBe(true);
     expect(outerSettingIndex).toBe(verticalLinesSettingIndex + 1);
     expect(actionSettingIndex).toBe(outerSettingIndex + 1);
     expect(mockSettingsRecords[outerSettingIndex]?.toggleValue).toBe(true);
@@ -147,5 +155,9 @@ describe("SettingsTab", () => {
 
     await actionSetting!.toggleCallbacks[0](true);
     expect(settings.verticalLinesAction).toBe("toggle-folding");
+
+    await mobileFoldControlsSetting!.toggleCallbacks[0](false);
+    expect(settings.mobileRightFoldControls).toBe(false);
+    expect(settings.save).toHaveBeenCalled();
   });
 });

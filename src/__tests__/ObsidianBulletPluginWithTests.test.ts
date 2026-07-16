@@ -570,6 +570,7 @@ describe("ObsidianBulletPluginWithTests", () => {
     ["move", { to: { line: 0, ch: 0 }, offsetX: "0", offsetY: 0 }],
     ["setSetting", { k: "listLines", v: "true" }],
     ["setSetting", { k: "listLineAction", v: true }],
+    ["setSetting", { k: "mobileRightFoldControls", v: "true" }],
     ["clickGuide", { line: 0, kind: "middle", prefix: "" }],
   ])("rejects malformed %s command data", async (type, data) => {
     const plugin = Object.create(

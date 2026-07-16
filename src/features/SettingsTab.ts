@@ -141,6 +141,20 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName("Show fold controls on the right on mobile")
+      .setDesc(
+        "Move fold controls to the right edge in Live Preview on mobile.",
+      )
+      .addToggle((toggle) => {
+        toggle
+          .setValue(this.settings.mobileRightFoldControls)
+          .onChange(async (value) => {
+            this.settings.mobileRightFoldControls = value;
+            await this.settings.save();
+          });
+      });
+
+    new Setting(containerEl)
       .setName("Drag-and-Drop")
       .setDesc(
         "Move list items on desktop by dragging a bullet, fold indicator, or checkbox.",
