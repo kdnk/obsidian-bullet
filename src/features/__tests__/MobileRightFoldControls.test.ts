@@ -3,7 +3,10 @@ import { Platform } from "obsidian";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { MobileRightFoldControls } from "../MobileRightFoldControls";
+import {
+  MobileRightFoldControls,
+  MobileRightFoldControlsPluginValue,
+} from "../MobileRightFoldControls";
 
 jest.mock(
   "obsidian",
@@ -46,6 +49,7 @@ function makePlugin() {
     eventHandlers,
     plugin: {
       app: { workspace },
+      registerEditorExtension: jest.fn(),
       registerEvent: jest.fn(),
     },
   };
@@ -155,6 +159,127 @@ describe("MobileRightFoldControls", () => {
         "bullet-plugin-mobile-right-fold-controls",
       ),
     ).toBe(false);
+  });
+
+  test("restores scroll reserve before a native list fold click", () => {
+    const listeners = new Map<string, (event: Event) => void>();
+    const readScrollHeight = jest.fn(() => 2000);
+    const scrollDOM = { clientHeight: 1163 };
+    Object.defineProperty(scrollDOM, "scrollHeight", {
+      get: readScrollHeight,
+    });
+    const contentDOM = {
+      addEventListener: jest.fn(
+        (eventName: string, listener: (event: Event) => void) => {
+          listeners.set(eventName, listener);
+        },
+      ),
+      removeEventListener: jest.fn(),
+      style: { paddingBottom: "100px" },
+    };
+    const view = {
+      contentDOM,
+      defaultLineHeight: 24,
+      documentPadding: { top: 0 },
+      dom: {
+        ownerDocument: {
+          body: {
+            classList: {
+              contains: (className: string) =>
+                className === "bullet-plugin-mobile-right-fold-controls",
+            },
+          },
+        },
+      },
+      scrollDOM,
+    };
+    const pluginValue = new MobileRightFoldControlsPluginValue(view as never);
+    const preventDefault = jest.fn();
+    const stopPropagation = jest.fn();
+    const target = {
+      closest: jest.fn((selector: string) =>
+        selector === ".HyperMD-list-line .cm-fold-indicator .collapse-indicator"
+          ? {}
+          : null,
+      ),
+    };
+
+    listeners.get("pointerdown")?.({
+      target,
+      preventDefault,
+      stopPropagation,
+    } as unknown as MouseEvent);
+
+    expect(contentDOM.style.paddingBottom).toBe("1138.5px");
+    expect(readScrollHeight).toHaveBeenCalledTimes(1);
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(stopPropagation).not.toHaveBeenCalled();
+    expect(contentDOM.addEventListener).toHaveBeenCalledWith(
+      "pointerdown",
+      expect.any(Function),
+      true,
+    );
+    pluginValue.destroy();
+
+    expect(contentDOM.removeEventListener).toHaveBeenCalledWith(
+      "click",
+      expect.any(Function),
+      true,
+    );
+    expect(contentDOM.removeEventListener).toHaveBeenCalledWith(
+      "pointerdown",
+      expect.any(Function),
+      true,
+    );
+  });
+
+  test("leaves scroll reserve unchanged outside the mobile control", () => {
+    const listeners = new Map<string, (event: Event) => void>();
+    const contentDOM = {
+      addEventListener: jest.fn(
+        (eventName: string, listener: (event: Event) => void) => {
+          listeners.set(eventName, listener);
+        },
+      ),
+      removeEventListener: jest.fn(),
+      style: { paddingBottom: "100px" },
+    };
+    const classNames = new Set<string>();
+    const view = {
+      contentDOM,
+      defaultLineHeight: 24,
+      documentPadding: { top: 0 },
+      dom: {
+        ownerDocument: {
+          body: {
+            classList: {
+              contains: (className: string) => classNames.has(className),
+            },
+          },
+        },
+      },
+      scrollDOM: { clientHeight: 1163 },
+    };
+    const pluginValue = new MobileRightFoldControlsPluginValue(view as never);
+    const target = {
+      closest: jest.fn().mockReturnValue({}),
+    };
+
+    listeners.get("click")?.({
+      target,
+    } as unknown as MouseEvent);
+
+    expect(contentDOM.style.paddingBottom).toBe("100px");
+
+    classNames.add("bullet-plugin-mobile-right-fold-controls");
+    target.closest.mockReturnValue(null);
+    listeners.get("click")?.({
+      target,
+    } as unknown as MouseEvent);
+
+    expect(contentDOM.style.paddingBottom).toBe("100px");
+
+    pluginValue.destroy();
   });
 });
 

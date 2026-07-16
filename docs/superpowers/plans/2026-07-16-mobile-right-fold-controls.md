@@ -4,7 +4,7 @@
 
 **Goal:** Move each native fold control to the right edge of its foldable list row in mobile Live Preview, behind a default-on setting that users can disable.
 
-**Architecture:** Add one persisted boolean setting and one independent `MobileRightFoldControls` feature that manages a body class through the existing `DocumentBodyClass` helper. Use CSS to reposition Obsidian's native `.collapse-indicator` relative to its `.cm-line`, preserving native folding events and state while overriding the vertical-line chevron suppression only when the mobile feature is active.
+**Architecture:** Add one persisted boolean setting and one independent `MobileRightFoldControls` feature that manages a body class through the existing `DocumentBodyClass` helper. Use CSS to reposition Obsidian's native `.collapse-indicator` relative to its `.cm-line`, and use a capture-phase ViewPlugin to restore CodeMirror's bottom scroll reserve before native pointer interaction without replacing the native fold transaction.
 
 **Tech Stack:** TypeScript 5.9, Obsidian API 1.12, Obsidian Live Preview DOM, CSS, Jest 30, Rollup.
 
@@ -17,7 +17,9 @@
 - The persisted key is `mobileRightFoldControls`, its type is `boolean`, and its default is `true`.
 - Apply the feature only when `Platform.isMobile` is true and the setting is enabled.
 - Affect only Live Preview list rows that contain a native `.cm-fold-indicator`.
-- Reuse the native `.collapse-indicator`; do not add DOM, decorations, overlays, event handlers, folding transactions, timers, coordinate measurement, or scroll synchronization.
+- Reuse the native `.collapse-indicator`; do not add DOM, decorations, overlays, folding transactions, timers, coordinate measurement, or delayed scroll synchronization.
+- Observe `pointerdown` in the capture phase and retain `click` as a fallback, but do not prevent default or stop propagation.
+- Before native folding, restore the CodeMirror bottom reserve only when the real DOM value is smaller, then read `scrollDOM.scrollHeight` so the reserve reaches layout before the native handler changes document height.
 - Use a 48px-wide right-edge control and reserve the same inline-end width on foldable rows.
 - Keep the expanded icon pointing down and override the collapsed icon to point left with `rotate(90deg)`.
 - Restore `visibility: visible` and `pointer-events: auto` while the mobile feature is active so vertical-line settings cannot suppress the right-edge control.
@@ -40,6 +42,8 @@
 - Modify `src/ObsidianBulletPluginWithTests.ts`: decode the new boolean in the renderer test command bridge.
 - Modify `src/__tests__/ObsidianBulletPluginWithTests.test.ts`: reject malformed values for the new bridge key.
 - Create `src/features/MobileRightFoldControls.ts`: own the mobile-and-setting body-class lifecycle.
+- Create `src/features/FoldScroll.ts`: share the bottom-reserve calculation between guide folding and native mobile chevrons.
+- Modify `src/features/GuideFolding.ts`: consume the shared bottom-reserve module.
 - Create `src/features/__tests__/MobileRightFoldControls.test.ts`: verify platform gating, settings updates, document lifecycle, unload cleanup, and CSS contracts.
 - Modify `src/ObsidianBulletPlugin.ts`: register the new feature.
 - Modify `src/__tests__/ObsidianBulletPlugin.test.ts`: lock the feature wiring.
@@ -726,7 +730,154 @@ Expected: commit succeeds and the worktree is clean.
 
 ---
 
-### Task 4: Verify the complete behavior and push
+### Task 4: Preserve vertical position during native folding
+
+**Files:**
+
+- Create: `src/features/FoldScroll.ts`
+- Modify: `src/features/GuideFolding.ts`
+- Modify: `src/features/MobileRightFoldControls.ts`
+- Modify: `src/features/__tests__/MobileRightFoldControls.test.ts`
+
+**Interfaces:**
+
+- Produces: `ensureFoldScrollReserve(view: EditorView): void`.
+- Consumes: `bullet-plugin-mobile-right-fold-controls` as the interaction enablement marker.
+- Preserves: Obsidian's native fold and unfold transaction.
+
+- [ ] **Step 1: Write the failing native interaction test**
+
+Instantiate `MobileRightFoldControlsPluginValue` with a fake `EditorView` whose `contentDOM.style.paddingBottom` is `100px`, `scrollDOM.clientHeight` is `1163`, `defaultLineHeight` is `24`, and `documentPadding.top` is `0`.
+
+Dispatch the captured `pointerdown` listener from a target whose `closest()` resolves the native list control selector.
+
+Assert:
+
+```ts
+expect(contentDOM.style.paddingBottom).toBe("1138.5px");
+expect(readScrollHeight).toHaveBeenCalledTimes(1);
+expect(preventDefault).not.toHaveBeenCalled();
+expect(stopPropagation).not.toHaveBeenCalled();
+```
+
+Also verify that an absent mobile body class or a non-list target leaves `100px` unchanged, and `destroy()` removes the `pointerdown` and `click` capture listeners.
+
+- [ ] **Step 2: Run the focused test and verify RED**
+
+Run:
+
+```bash
+SKIP_OBSIDIAN=1 npx jest \
+  src/features/__tests__/MobileRightFoldControls.test.ts \
+  --runInBand
+```
+
+Expected: FAIL because the ViewPlugin interaction and shared scroll-reserve module do not exist.
+
+- [ ] **Step 3: Extract the shared reserve module**
+
+Create `src/features/FoldScroll.ts`:
+
+```ts
+import { EditorView } from "@codemirror/view";
+
+export function ensureFoldScrollReserve(view: EditorView): void {
+  const expected =
+    view.scrollDOM.clientHeight -
+    view.defaultLineHeight -
+    view.documentPadding.top -
+    0.5;
+  const current = Number.parseFloat(view.contentDOM.style.paddingBottom);
+  if (
+    Number.isFinite(expected) &&
+    expected >= 0 &&
+    (!Number.isFinite(current) || current < expected)
+  ) {
+    view.contentDOM.style.paddingBottom = `${expected}px`;
+  }
+}
+```
+
+Import and call this function from `GuideFolding` instead of retaining a private duplicate.
+
+- [ ] **Step 4: Prepare the native click without consuming it**
+
+In `MobileRightFoldControlsPluginValue`, register capture listeners for `pointerdown` and `click`.
+
+When the feature body class is present and the event target resolves:
+
+```ts
+".HyperMD-list-line .cm-fold-indicator .collapse-indicator";
+```
+
+call:
+
+```ts
+ensureFoldScrollReserve(this.view);
+void this.view.scrollDOM.scrollHeight;
+```
+
+Do not call `preventDefault()` or `stopPropagation()`.
+
+- [ ] **Step 5: Run focused verification**
+
+Run:
+
+```bash
+SKIP_OBSIDIAN=1 npx jest \
+  src/features/__tests__/MobileRightFoldControls.test.ts \
+  src/features/__tests__/GuideFolding.test.ts \
+  src/features/__tests__/VerticalLines.test.ts \
+  --runInBand
+npm run lint
+npx tsc --noEmit
+```
+
+Expected: every command exits 0.
+
+- [ ] **Step 6: Verify the original end-of-document reproduction**
+
+In `vault=vault`, use a note with 80 rows before a foldable parent and 80 child rows at the document end.
+
+Set `contentDOM.style.paddingBottom` to `100px`, place the parent near the viewport top, and dispatch:
+
+```text
+pointerdown → pointerup → click
+```
+
+For fold and unfold, assert both:
+
+```text
+deltaTop = 0
+deltaScroll = 0
+```
+
+- [ ] **Step 7: Commit the scroll stability fix**
+
+```bash
+git add \
+  AGENTS.md \
+  docs/superpowers/specs/2026-07-16-mobile-right-fold-controls-design.md \
+  docs/superpowers/plans/2026-07-16-mobile-right-fold-controls.md \
+  src/features/FoldScroll.ts \
+  src/features/GuideFolding.ts \
+  src/features/MobileRightFoldControls.ts \
+  src/features/__tests__/MobileRightFoldControls.test.ts
+git commit -m "fix(mobile): stabilize native fold scrolling" -m "Why:
+- Obsidian replaces CodeMirror's bottom reserve with 100px after opening an editor.
+- Native folding near the document end then clamps or bottom-anchors scroll position.
+
+What:
+- Share the fold scroll reserve calculation with guide folding.
+- Restore and commit the reserve on native pointerdown without replacing the native transaction.
+- Cover event scope, cleanup, and the end-of-document fold and unfold regression."
+```
+
+Expected: commit succeeds and the worktree is clean.
+
+---
+
+### Task 5: Verify the complete behavior and push
 
 **Files:**
 

@@ -43,6 +43,9 @@
     - fold前後のheight差がsub-pixelの場合、`scrollSnapshot()` の `yMargin` をそのまま繰り返すとscroll elementの丸め誤差が累積します。snapshot effectを同じtransactionへ入れる前に、marginを `devicePixelRatio` に対応する物理pixel gridへ正規化してください。開閉中に1物理pixel未満の差が出ても、往復後に元位置へ戻り、誤差が蓄積しないことを長いリストで確認してください。
     - `.cm-indent::before` は Obsidian / CodeMirror が配置・仮想化・スクロールする描画源です。独立したスクロール overlay や座標 cache を再導入せず、描画の実確認が必要な変更では `npm run build-with-tests` 後に実 Obsidian の長い多段リストで上端と下端を確認してください。
     - outer guide は document chunk の開始・終了行を key とする CodeMirror widget decoration として各行へ配置してください。空行・空白だけの行・見出しで chunk を分割し、同じ chunk id の表示中 segment だけを一括 hover / toggle の対象にしてください。独立 overlay、screen 座標測定、座標 cache は追加しないでください。
+- モバイルの右端折りたたみコントロールについて
+    - Obsidian 1.13 系の Live Preview は、非activeかつ非taskのリスト行に対して詳細度の高いselectorでnative `.collapse-indicator`へ `padding-inline-end: var(--list-bullet-end-padding)` と負の `inset-inline-end` を適用します。右端へ移動するときは `.markdown-source-view.mod-cm6.is-live-preview .cm-line.HyperMD-list-line` まで対象を限定し、同等以上の詳細度で `padding-inline-end` と `inset-inline-end` の両方を0へ戻してください。検証では表示幅だけでなく、indicator右端とlist行右端の実座標差が0であることを確認してください。
+    - 文末付近のnative chevron操作でもclicked bulletより上を固定してください。Obsidianが `contentDOM` の下端余白を `100px` へ戻すため、mobile controlの `pointerdown` capture時にCodeMirror標準値より小さい場合だけ余白を復元し、`scrollDOM.scrollHeight`を読んでlayoutへ反映してからnative clickへ渡してください。`mousedown`はObsidian側で `contentDOM` より前に止まるため主経路に使わず、`click`はkeyboardまたはprogrammatic操作のfallbackとして扱ってください。native fold transactionを置き換えず、eventをpreventまたはstopせず、foldとunfoldの両方を `pointerdown` → `pointerup` → `click` で検証し、clicked rowの画面上Y座標差と `scrollTop` 差が0であることを確認してください。
 - エージェント向けのローカル指示について
     - 作業中に、このファイルや同等のエージェント向け指示に不足、矛盾、繰り返し確認を生む表現を見つけた場合は、ユーザーに追加確認せず、同じ変更範囲に含めて改善してください。
     - 作業中に「指示通りに進められない」「ツールやコマンドが失敗する」「どの手順を使うべきか不明」といった状況に当たった場合は、ユーザーに繰り返し確認せず、まずローカルのヘルプ、CLI の `--help`、プロジェクト内ドキュメント、利用可能なスキル/プラグインの説明を自分で調べてください。
