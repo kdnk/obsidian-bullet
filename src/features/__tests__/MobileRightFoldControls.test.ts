@@ -351,7 +351,7 @@ describe("MobileRightFoldControls", () => {
 test("mirrors native mobile list fold controls beyond the right edge", () => {
   const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
   const rowDeclarations = styles.match(
-    /\.bullet-plugin-mobile-right-fold-controls\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s*\{([^}]*)\}/,
+    /\.bullet-plugin-mobile-right-fold-controls\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s*\{([^}]*)\}/,
   )?.[1];
   const parentDeclarations = styles.match(
     /\.bullet-plugin-mobile-right-fold-controls\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-list-line\s+\.cm-fold-indicator\s*\{([^}]*)\}/,
@@ -365,6 +365,9 @@ test("mirrors native mobile list fold controls beyond the right edge", () => {
 
   expect(rowDeclarations).toContain("box-sizing: border-box;");
   expect(rowDeclarations).toContain("padding-inline-end: 13px;");
+  expect(styles).not.toMatch(
+    /\.bullet-plugin-mobile-right-fold-controls[^{]*\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s*\{[^}]*padding-inline-end/,
+  );
   expect(parentDeclarations).toContain("position: static;");
   expect(controlDeclarations).toContain("display: flex;");
   expect(controlDeclarations).toContain("align-items: center;");
@@ -372,7 +375,10 @@ test("mirrors native mobile list fold controls beyond the right edge", () => {
   expect(controlDeclarations).toContain("top: 0;");
   expect(controlDeclarations).toContain("inset-inline-end: -35px;");
   expect(controlDeclarations).toContain("width: 48px;");
-  expect(controlDeclarations).toContain("height: 100%;");
+  expect(controlDeclarations).toMatch(
+    /height:\s*calc\(\s*1lh\s*\+\s*var\(--list-spacing,\s*0px\)\s*\+\s*var\(--list-spacing,\s*0px\)\s*\);/,
+  );
+  expect(controlDeclarations).not.toContain("height: 100%;");
   expect(controlDeclarations).toContain("padding-inline-end: 0;");
   expect(controlDeclarations).not.toContain("translate");
   expect(controlDeclarations).toContain("opacity: 1;");

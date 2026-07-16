@@ -4,7 +4,7 @@
 
 **Goal:** Keep mobile fold chevrons and their touch targets on the first visual line while preserving identical text wrapping for list rows with and without children.
 
-**Architecture:** Keep the native `.collapse-indicator`, its 48px inline target, right-edge offset, fold transaction, and scroll anchoring. Remove only the plugin-owned full-row height override, and move the 13px text reserve from foldable rows to every mobile Live Preview list row.
+**Architecture:** Keep the native `.collapse-indicator`, its 48px inline target, right-edge offset, fold transaction, and scroll anchoring. Override Obsidian's full-row `height: 100%` with one line height plus the row's block spacing, and move the 13px text reserve from foldable rows to every mobile Live Preview list row.
 
 **Tech Stack:** CSS, TypeScript/Jest CSS contract tests, Obsidian 1.13.2, Obsidian CLI, Chrome DevTools Protocol, GitButler CLI.
 
@@ -13,7 +13,7 @@
 - Use `but` for every version-control write.
 - Work on `codex/mobile-fold-control-first-line`.
 - Keep `width: 48px` and `inset-inline-end: -35px`.
-- Do not set a plugin-owned height on the right-side `.collapse-indicator`.
+- Set the right-side `.collapse-indicator` height to `calc(1lh + var(--list-spacing, 0px) + var(--list-spacing, 0px))`.
 - Do not translate the chevron SVG independently from its touch target.
 - Apply `padding-inline-end: 13px` to every mobile Live Preview list row.
 - Do not change native fold transactions or the existing scroll snapshot correction.
@@ -35,7 +35,7 @@
 - Consumes: the existing CSS contract test for `.bullet-plugin-mobile-right-fold-controls`.
 - Produces: regression assertions for uniform row width and native target height.
 
-- [ ] **Step 1: Change the row selector contract**
+- [x] **Step 1: Change the row selector contract**
 
 Replace the current `rowDeclarations` lookup with:
 
@@ -45,7 +45,7 @@ const rowDeclarations = styles.match(
 )?.[1];
 ```
 
-- [ ] **Step 2: Add the non-foldable width assertion**
+- [x] **Step 2: Add the non-foldable width assertion**
 
 Keep the existing `padding-inline-end: 13px` assertion and add:
 
@@ -55,7 +55,7 @@ expect(styles).not.toMatch(
 );
 ```
 
-- [ ] **Step 3: Replace the full-height expectation**
+- [x] **Step 3: Replace the full-height expectation**
 
 Replace:
 
@@ -66,7 +66,10 @@ expect(controlDeclarations).toContain("height: 100%;");
 with:
 
 ```ts
-expect(controlDeclarations).not.toMatch(/(?:^|\s)height\s*:/);
+expect(controlDeclarations).toMatch(
+  /height:\s*calc\(\s*1lh\s*\+\s*var\(--list-spacing,\s*0px\)\s*\+\s*var\(--list-spacing,\s*0px\)\s*\);/,
+);
+expect(controlDeclarations).not.toContain("height: 100%;");
 ```
 
 Keep:
@@ -75,7 +78,7 @@ Keep:
 expect(controlDeclarations).not.toContain("translate");
 ```
 
-- [ ] **Step 4: Run the focused test and verify RED**
+- [x] **Step 4: Run the focused test and verify RED**
 
 Run:
 
@@ -87,7 +90,7 @@ Expected: FAIL because the stylesheet still limits the row reserve to `:has(.cm-
 
 ---
 
-### Task 2: Restore native first-line height and stable text width
+### Task 2: Limit the target to the first line and stabilize text width
 
 **Files:**
 
@@ -99,9 +102,9 @@ Expected: FAIL because the stylesheet still limits the row reserve to `:has(.cm-
 **Interfaces:**
 
 - Consumes: the failing CSS contract from Task 1.
-- Produces: a 48px-wide native first-line target and a stable 13px reserve on every list row.
+- Produces: a 48px-wide first-line target and a stable 13px reserve on every list row.
 
-- [ ] **Step 1: Apply the reserve to every Live Preview list row**
+- [x] **Step 1: Apply the reserve to every Live Preview list row**
 
 Replace:
 
@@ -125,17 +128,23 @@ with:
 }
 ```
 
-- [ ] **Step 2: Restore the native target height**
+- [x] **Step 2: Limit the target to the first-line box**
 
-Delete only this declaration from the right-side `.collapse-indicator` rule:
+Replace this declaration in the right-side `.collapse-indicator` rule:
 
 ```css
 height: 100%;
 ```
 
-Do not add another `height`, block-axis inset, margin, transform, or icon-specific offset.
+with:
 
-- [ ] **Step 3: Run the focused test and verify GREEN**
+```css
+height: calc(1lh + var(--list-spacing, 0px) + var(--list-spacing, 0px));
+```
+
+Do not add another block-axis inset, margin, transform, or icon-specific offset.
+
+- [x] **Step 3: Run the focused test and verify GREEN**
 
 Run:
 
@@ -145,25 +154,25 @@ SKIP_OBSIDIAN=1 npx jest src/features/__tests__/MobileRightFoldControls.test.ts 
 
 Expected: 7 tests pass.
 
-- [ ] **Step 4: Update the durable design documents**
+- [x] **Step 4: Update the durable design documents**
 
 Record these requirements in both existing mobile control specifications:
 
 - the 13px reserve applies to every Live Preview list row;
 - fold indicator appearance must not change a parent row's text width;
-- the plugin must not override native control height;
+- the plugin must override native `height: 100%` with one line height plus both list-spacing paddings;
 - the chevron and touch target remain together on the first visual line;
 - tapping below the first-line target must not fold the row.
 
-- [ ] **Step 5: Update the agent instruction**
+- [x] **Step 5: Update the agent instruction**
 
 Extend the first mobile-control bullet in `AGENTS.md` with:
 
 ```text
-本文幅を子要素の有無で変えないため、13pxの`padding-inline-end`はfold indicatorのある行だけでなく、機能が有効なLive Previewの全リスト行へ適用してください。折り返し行ではnative controlの高さを上書きせず、シェブロンと操作領域を1行目へ揃えてください。
+本文幅を子要素の有無で変えないため、13pxの`padding-inline-end`はfold indicatorのある行だけでなく、機能が有効なLive Previewの全リスト行へ適用してください。折り返し行ではnative controlの`height: 100%`を1行分のline heightと上下のlist spacingを足した高さで上書きし、シェブロンと操作領域を1行目へ揃えてください。
 ```
 
-- [ ] **Step 6: Run focused static verification**
+- [x] **Step 6: Run focused static verification**
 
 Run:
 
@@ -200,7 +209,7 @@ Expected: every command exits 0.
 - Consumes: the CSS contract from Task 2.
 - Produces: measured geometry, text wrapping, touch targeting, and scroll anchoring evidence.
 
-- [ ] **Step 1: Run the complete automated verification**
+- [x] **Step 1: Run the complete automated verification**
 
 Run:
 
@@ -213,7 +222,7 @@ npm run build-with-tests
 
 Expected: every command exits 0.
 
-- [ ] **Step 2: Back up the full-test fixture**
+- [x] **Step 2: Back up the full-test fixture**
 
 Run:
 
@@ -225,7 +234,7 @@ shasum -a 256 "$backup_dir/test.md"
 
 Record the directory and SHA-256.
 
-- [ ] **Step 3: Run the full suite and production build**
+- [x] **Step 3: Run the full suite and production build**
 
 Run:
 
@@ -236,11 +245,11 @@ npm run build
 
 Expected: the full Jest suite and production build exit 0.
 
-- [ ] **Step 4: Restore the fixture safely**
+- [x] **Step 4: Restore the fixture safely**
 
 Wait until no `vault=vault` test renderer remains, restore the backup, wait briefly, and verify that the restored SHA-256 matches Step 2.
 
-- [ ] **Step 5: Install the production plugin and create the manual fixture**
+- [x] **Step 5: Install the production plugin and create the manual fixture**
 
 Copy `dist/main.js`, `manifest.json`, and `styles.css` to `vault/.obsidian/plugins/bullet/`.
 
@@ -252,7 +261,7 @@ Create `vault/mobile-fold-control-first-line.md` with two identical long parent 
 - This deliberately long parent item wraps across multiple visual lines on a narrow mobile viewport so its fold control and text width can be measured.
 ```
 
-- [ ] **Step 6: Enable real mobile and touch emulation**
+- [x] **Step 6: Enable real mobile and touch emulation**
 
 Open only the repository `vault`.
 Before every UI action, confirm that the fresh title contains `vault` and does not contain `base`.
@@ -264,7 +273,7 @@ Apply:
 - device scale factor 3
 - touch emulation with five touch points
 
-- [ ] **Step 7: Measure first-line geometry and stable wrapping**
+- [x] **Step 7: Measure first-line geometry and stable wrapping**
 
 For the foldable and non-foldable parent rows, record:
 
@@ -279,18 +288,18 @@ For the foldable row, record:
 - row height;
 - control top minus row top;
 - icon center minus row top;
-- computed control height declaration.
+- computed control height and `--list-spacing`.
 
 Expected:
 
 - both parent rows have `padding-inline-end: 13px`;
 - both parent rows wrap identically;
 - control width is 48px;
-- control height is the native first-line height and is smaller than a wrapped row's height;
+- control height equals `1lh + 2 × --list-spacing` and is smaller than a wrapped row's height;
 - the control begins on the first visual line;
 - the icon center matches the first-line text center within one physical pixel.
 
-- [ ] **Step 8: Verify the touch boundary**
+- [x] **Step 8: Verify the touch boundary**
 
 Dispatch a real touch sequence inside the visible chevron:
 
@@ -304,7 +313,7 @@ Unfold it, then dispatch the same sequence at the same X coordinate but below th
 
 Expected: the row does not fold.
 
-- [ ] **Step 9: Re-run scroll anchoring checks**
+- [x] **Step 9: Re-run scroll anchoring checks**
 
 At viewport-top offsets 100px, 160px, and 400px, fold and unfold through the visible chevron.
 
@@ -314,7 +323,7 @@ Expected for every operation:
 - editor `scrollTop` delta is 0;
 - the event sequence uses `pointerType="touch"`.
 
-- [ ] **Step 10: Clean up manual state**
+- [x] **Step 10: Clean up manual state**
 
 Delete `vault/mobile-fold-control-first-line.md`, call `app.emulateMobile(false)`, clear device metrics and touch emulation, and verify that `vault/test.md` still matches the backup hash.
 
