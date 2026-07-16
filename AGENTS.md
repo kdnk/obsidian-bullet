@@ -1,7 +1,8 @@
-- git の操作は、このリポジトリでは `but` (GitButler) を使わず、通常の `git` を使ってください。
-    - 基本的にデフォルトブランチで作業し、必要な検証後にデフォルトブランチへ直接 push してください。
-    - 作業開始時、リリース作業前、長めの作業の区切りでは定期的に `git fetch` / `git pull --ff-only` で upstream を取り込んでください。
-    - `fetch.pruneTags=true` の環境では、remoteにまだ存在しないrelease tagを作成した後の `git fetch --prune` がlocal tagを削除します。release前のfetch/pullは `npm version` より前に済ませ、tagを最初にpushするまではfetchしないでください。
+- version controlの書き込み操作には、このリポジトリでは`but`（GitButler）を使ってください。通常の`git`はread-onlyの調査だけに使えます。
+    - 作業ごとにGitButler上で`codex/` prefixの新しいbranchを作成し、変更はそのbranchへcommitしてください。
+    - 作業開始時、release作業前、長めの作業の区切りでは`but pull --check`を実行し、問題がなければ`but pull`でupstreamを取り込んでください。
+    - 必要な検証がすべて通った後、pull requestを作らずにdefault branchへ反映するときは`but land <branch-id> --yes`を使ってください。
+    - `git add`、`git commit`、`git push`、`git checkout`、`git merge`、`git rebase`、`git stash`、`git cherry-pick`は使わないでください。
 - github の URL に直接アクセス禁止。必要な GitHub 操作は `gh` CLI を使ってください。
 - commit について
     - commit するときは、Conventional Commits に従ってください。英語で commit メッセージを書いてください。
@@ -15,9 +16,12 @@
         1. major
         2. minor
         3. patch
-    - リリース種別の回答を受けたら、デフォルトブランチへ直接 commit / push してください。pull request の作成は不要です。
-    - デフォルトブランチへ取り込む前に全テストを実行し、すべて通ることを確認してください。全テストが通らない状態では取り込まないでください。
-    - 取り込み後、デフォルトブランチに対して `npm version <major|minor|patch>` を実行し、新しいバージョンをリリースしてください。
+    - リリース種別の回答を受けたら、GitButler上で`codex/release-<version>` branchを作成してください。pull requestの作成は不要です。
+    - `npm version <major|minor|patch> --no-git-tag-version --ignore-scripts`でpackage metadataを更新し、`node release.mjs`で`manifest.json`と`versions.json`を同期してください。`npm version`のlifecycle scriptに含まれる`git add`は実行しないでください。
+    - リリースbranchをdefault branchへ取り込む前に全テストを実行し、すべて通ることを確認してください。全テストが通らない状態では取り込まないでください。
+    - version変更をGitButlerでcommitした後、`but land <branch-id> --yes`でdefault branchへ反映してください。
+    - GitButlerはtagを管理しないため、land後のdefault branch commitを指すannotated tagを`gh api`で作成してください。localの`git tag`や`git push`は使わないでください。
+    - tag pushで起動したrelease workflowが成功し、同じversionのGitHub releaseが公開されたことを`gh` CLIで確認してください。
 - テストについて
     - `src` 配下の unit test だけを `npx jest` で直接実行するときは、必ず `SKIP_OBSIDIAN=1` を付けるか `npm run test:unit` を使ってください。付けない場合は Jest の global setup が実 Obsidian を終了し、`vault/test.md` を上書きします。
     - `.spec.md` の統合 spec やフルテストは `dist/main.js` を実行するため、`src` を変更した後に実行する場合は先に `npm run build-with-tests` を実行してください。
