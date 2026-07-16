@@ -1,6 +1,6 @@
 import { MyEditor } from "./editor";
 import { Root } from "./root";
-import { Logger } from "./services/Logger";
+import { LogSink, Logger } from "./services/Logger";
 import { Parser } from "./services/Parser";
 import { Settings } from "./services/Settings";
 
@@ -26,21 +26,13 @@ export function makeEditor(params: EditorMockParams): MyEditor {
   return editor;
 }
 
-export function makeLogger(): Logger {
-  const log = jest.fn<void, [string, ...unknown[]]>();
-
-  const logger: Pick<Logger, "log" | "bind"> = {
-    log,
-    bind: (method: string) => {
-      return (...args: unknown[]) => log(method, ...args);
-    },
-  };
-
-  return logger as Logger;
+export function makeLogger(sink: LogSink = () => undefined): Logger {
+  return new Logger(makeSettings(), sink);
 }
 
 export function makeSettings(): Settings {
   const settings = {
+    debug: true,
     stickCursor: "bullet-and-checkbox",
     keepCursorWithinContent: "bullet-and-checkbox",
   } as unknown as Settings;

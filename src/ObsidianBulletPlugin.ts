@@ -38,8 +38,6 @@ export default class ObsidianBulletPlugin extends Plugin {
   private imeDetector!: IMEDetector;
 
   async onload() {
-    console.log(`Loading obsidian-bullet`);
-
     await this.prepareSettings();
 
     this.obsidianSettings = new ObsidianSettings(this.app);
@@ -171,8 +169,6 @@ export default class ObsidianBulletPlugin extends Plugin {
   }
 
   private async unloadFeatures() {
-    console.log(`Unloading obsidian-bullet`);
-
     await this.imeDetector.unload();
 
     for (const feature of this.features) {

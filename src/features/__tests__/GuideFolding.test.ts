@@ -489,12 +489,14 @@ describe("GuideFoldingPluginValue decorations", () => {
           };
         }
       ).widget;
-      const createElement = jest.fn(() => element);
+      const createSpan = jest.fn(() => element);
 
-      expect(widget.toDOM({ dom: { ownerDocument: { createElement } } })).toBe(
-        element,
-      );
-      expect(createElement).toHaveBeenCalledWith("span");
+      expect(
+        widget.toDOM({
+          dom: { ownerDocument: { win: { createSpan } } },
+        }),
+      ).toBe(element);
+      expect(createSpan).toHaveBeenCalledTimes(1);
       expect(widget.ignoreEvent()).toBe(false);
       segments.push(element);
     }

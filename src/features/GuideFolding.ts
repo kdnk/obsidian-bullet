@@ -4,7 +4,7 @@ import {
   foldedRanges,
   unfoldEffect,
 } from "@codemirror/language";
-import { Extension, Text } from "@codemirror/state";
+import { Extension, Range, Text } from "@codemirror/state";
 import {
   Decoration,
   DecorationSet,
@@ -21,6 +21,7 @@ import {
 } from "./FoldScroll";
 
 import { MyEditorPosition, getEditorFromState } from "../editor";
+import { getObsidianDomWindow } from "../obsidianDom";
 import { List, Root } from "../root";
 import { Parser, Reader } from "../services/Parser";
 import { Settings } from "../services/Settings";
@@ -86,7 +87,7 @@ class OuterListGuideWidget extends WidgetType {
   }
 
   toDOM(view: EditorView) {
-    const element = view.dom.ownerDocument.createElement("span");
+    const element = getObsidianDomWindow(view.dom.ownerDocument).createSpan();
     element.className = OUTER_LIST_GUIDE_CLASS;
     element.dataset.chunkId = this.chunk.id;
     element.dataset.chunkStart = String(this.chunk.startLine);
@@ -118,13 +119,13 @@ function synchronizeHoveredOuterListGuides(
   guides: Iterable<Element>,
 ) {
   const next = new Set(guides);
-  contentDOM
-    .querySelectorAll(HOVERED_OUTER_LIST_GUIDE_SELECTOR)
-    .forEach((element) => {
-      if (!next.has(element)) {
-        element.classList.remove(HOVERED_OUTER_LIST_GUIDE_CLASS);
-      }
-    });
+  for (const element of Array.from(
+    contentDOM.querySelectorAll(HOVERED_OUTER_LIST_GUIDE_SELECTOR),
+  )) {
+    if (!next.has(element)) {
+      element.classList.remove(HOVERED_OUTER_LIST_GUIDE_CLASS);
+    }
+  }
   next.forEach((element) =>
     element.classList.add(HOVERED_OUTER_LIST_GUIDE_CLASS),
   );
@@ -134,14 +135,17 @@ function buildOuterListGuideDecorations(
   doc: Text,
   chunks: readonly OuterListChunk[],
 ) {
-  const ranges = chunks.flatMap((chunk) =>
-    Array.from({ length: chunk.endLine - chunk.startLine + 1 }, (_, index) =>
-      Decoration.widget({
-        widget: new OuterListGuideWidget(chunk),
-        side: -1,
-      }).range(doc.line(chunk.startLine + index + 1).from),
-    ),
-  );
+  const ranges: Range<Decoration>[] = [];
+  for (const chunk of chunks) {
+    for (let line = chunk.startLine; line <= chunk.endLine; line++) {
+      ranges.push(
+        Decoration.widget({
+          widget: new OuterListGuideWidget(chunk),
+          side: -1,
+        }).range(doc.line(line + 1).from),
+      );
+    }
+  }
   return Decoration.set(ranges, true);
 }
 
@@ -199,14 +203,20 @@ function setGuideTargetsFolded(
   targets: readonly GuideFoldTarget[],
   folded: boolean,
 ): boolean {
-  const resolved = targets.flatMap((target) => {
+  const resolved: Array<{
+    range: { from: number; to: number };
+    target: GuideFoldTarget;
+  }> = [];
+  for (const target of targets) {
     const line = view.lineBlockAt(view.state.doc.line(target.line + 1).from);
     const range = folded
       ? foldable(view.state, line.from, line.to)
       : foldInside(view, line.from, line.to);
 
-    return range && range.from !== range.to ? [{ range, target }] : [];
-  });
+    if (range && range.from !== range.to) {
+      resolved.push({ range, target });
+    }
+  }
 
   if (resolved.length === 0) {
     return false;
@@ -264,17 +274,19 @@ function synchronizePersistentIndentGuides(
   enabled: boolean,
 ) {
   if (enabled) {
-    contentDOM
-      .querySelectorAll(PERSISTENT_GUIDE_CANDIDATE_SELECTOR)
-      .forEach((element) => {
-        element.classList.add("cm-indent", PERSISTENT_GUIDE_MARKER);
-      });
+    for (const element of Array.from(
+      contentDOM.querySelectorAll(PERSISTENT_GUIDE_CANDIDATE_SELECTOR),
+    )) {
+      element.classList.add("cm-indent", PERSISTENT_GUIDE_MARKER);
+    }
     return;
   }
 
-  contentDOM.querySelectorAll(PERSISTENT_GUIDE_SELECTOR).forEach((element) => {
+  for (const element of Array.from(
+    contentDOM.querySelectorAll(PERSISTENT_GUIDE_SELECTOR),
+  )) {
     element.classList.remove("cm-indent", PERSISTENT_GUIDE_MARKER);
-  });
+  }
 }
 
 function getGuideIndentPrefix(pressedGuide: Element): string | null {
@@ -345,11 +357,13 @@ function synchronizeHoveredIndentGuides(
   highlightedGuides: Iterable<Element>,
 ) {
   const highlighted = new Set(highlightedGuides);
-  contentDOM.querySelectorAll(HOVERED_GUIDE_SELECTOR).forEach((element) => {
+  for (const element of Array.from(
+    contentDOM.querySelectorAll(HOVERED_GUIDE_SELECTOR),
+  )) {
     if (!highlighted.has(element)) {
       element.classList.remove(HOVERED_GUIDE_MARKER);
     }
-  });
+  }
   highlighted.forEach((element) => {
     element.classList.add(HOVERED_GUIDE_MARKER);
   });

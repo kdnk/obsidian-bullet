@@ -28,6 +28,7 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-call": "warn",
       "@typescript-eslint/no-unsafe-member-access": "warn",
       "@typescript-eslint/no-unsafe-return": "warn",
+      "@typescript-eslint/no-unnecessary-type-assertion": "warn",
       "@typescript-eslint/require-await": "off",
       "@typescript-eslint/unbound-method": "warn",
       "@eslint-community/eslint-comments/disable-enable-pair": [
@@ -40,10 +41,21 @@ export default tseslint.config(
       ],
       "@eslint-community/eslint-comments/require-description": "error",
       "obsidianmd/no-static-styles-assignment": "error",
+      "obsidianmd/no-global-this": "warn",
       "obsidianmd/prefer-active-doc": "warn",
+      "obsidianmd/prefer-create-el": "warn",
       "obsidianmd/prefer-instanceof": "warn",
       "obsidianmd/prefer-window-timers": "warn",
       "obsidianmd/commands/no-default-hotkeys": "warn",
+      "obsidianmd/settings-tab/prefer-setting-definitions": "warn",
+      "obsidianmd/settings-tab/require-display": "warn",
+      "no-console": ["warn", { allow: ["warn", "error", "debug"] }],
+    },
+  },
+  {
+    files: ["src/**/__tests__/**/*.ts"],
+    rules: {
+      "obsidianmd/no-global-this": "off",
     },
   },
 );

@@ -18,6 +18,25 @@ interface AppHiddenProps {
   };
 }
 
+interface RuntimeProcessWindow extends Window {
+  process?: {
+    arch?: unknown;
+    platform?: unknown;
+  };
+}
+
+export function getRuntimeProcessInfo(win: Window): {
+  arch: string | null;
+  platform: string | null;
+} {
+  const processInfo = (win as RuntimeProcessWindow).process;
+  return {
+    arch: typeof processInfo?.arch === "string" ? processInfo.arch : null,
+    platform:
+      typeof processInfo?.platform === "string" ? processInfo.platform : null,
+  };
+}
+
 class SystemInfoModal extends Modal {
   constructor(
     app: App,
@@ -30,11 +49,12 @@ class SystemInfoModal extends Modal {
     this.titleEl.setText("System Information");
 
     const app = this.app as unknown as AppHiddenProps;
+    const processInfo = getRuntimeProcessInfo(this.contentEl.win);
 
     const data = {
       process: {
-        arch: process.arch,
-        platform: process.platform,
+        arch: processInfo.arch,
+        platform: processInfo.platform,
       },
       app: {
         internalPlugins: {

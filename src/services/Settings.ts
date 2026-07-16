@@ -200,7 +200,11 @@ export class Settings {
     key: T,
     value: SettingsObject[T],
   ): void {
-    this.update({ [key]: value } as Pick<SettingsObject, T>);
+    const changed = new Set<SettingsKey>();
+    this.assign(key, value, changed);
+    if (changed.size > 0) {
+      this.notify(changed);
+    }
   }
 
   private assign<T extends SettingsKey>(

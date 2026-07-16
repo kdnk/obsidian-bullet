@@ -15,9 +15,8 @@ jest.mock(
     Setting: class Setting {
       name = "";
       desc = "";
-      dropdownAdded = false;
-      toggleValue?: boolean;
-      toggleCallbacks: Array<(value: boolean) => Promise<void>> = [];
+      dropdown?: FakeDropdownRecord;
+      toggle?: FakeToggleRecord;
 
       constructor() {
         mockSettingsRecords.push(this);
@@ -33,26 +32,48 @@ jest.mock(
         return this;
       }
 
-      addDropdown() {
-        this.dropdownAdded = true;
+      addDropdown(configure: (dropdown: FakeDropdown) => void) {
+        const record: FakeDropdownRecord = {
+          options: {},
+          value: "",
+          callbacks: [],
+        };
+        const dropdown: FakeDropdown = {
+          addOptions(options) {
+            record.options = options;
+            return this;
+          },
+          setValue(value) {
+            record.value = value;
+            return this;
+          },
+          onChange(callback) {
+            record.callbacks.push(callback);
+            return this;
+          },
+        };
+        configure(dropdown);
+        this.dropdown = record;
         return this;
       }
 
       addToggle(configure: (toggle: FakeToggle) => void) {
-        const record = this;
+        const record: FakeToggleRecord = {
+          value: false,
+          callbacks: [],
+        };
         const toggle: FakeToggle = {
-          callbacks: [] as Array<(value: boolean) => Promise<void>>,
-          setValue(value: boolean) {
-            record.toggleValue = value;
+          setValue(value) {
+            record.value = value;
             return this;
           },
-          onChange(callback: (value: boolean) => Promise<void>) {
-            this.callbacks.push(callback);
+          onChange(callback) {
+            record.callbacks.push(callback);
             return this;
           },
         };
         configure(toggle);
-        this.toggleCallbacks = toggle.callbacks;
+        this.toggle = record;
         return this;
       }
     },
@@ -63,19 +84,88 @@ jest.mock(
 interface FakeSetting {
   name: string;
   desc: string;
-  dropdownAdded: boolean;
-  toggleValue?: boolean;
-  toggleCallbacks: Array<(value: boolean) => Promise<void>>;
+  dropdown?: FakeDropdownRecord;
+  toggle?: FakeToggleRecord;
+}
+
+interface FakeDropdownRecord {
+  options: Record<string, string>;
+  value: string;
+  callbacks: Array<(value: string) => Promise<void>>;
+}
+
+interface FakeDropdown {
+  addOptions(options: Record<string, string>): FakeDropdown;
+  setValue(value: string): FakeDropdown;
+  onChange(callback: (value: string) => Promise<void>): FakeDropdown;
+}
+
+interface FakeToggleRecord {
+  value: boolean;
+  callbacks: Array<(value: boolean) => Promise<void>>;
 }
 
 interface FakeToggle {
-  callbacks: Array<(value: boolean) => Promise<void>>;
   setValue(value: boolean): FakeToggle;
   onChange(callback: (value: boolean) => Promise<void>): FakeToggle;
 }
 
-interface DisplayableSettingsTab {
+type FakeControl =
+  | {
+      type: "dropdown";
+      key: string;
+      options: Record<string, string>;
+    }
+  | {
+      type: "toggle";
+      key: string;
+    };
+
+interface FakeSettingDefinition {
+  name: string;
+  desc?: string;
+  control: FakeControl;
+}
+
+interface TestableSettingsTab {
   display(): void;
+  getSettingDefinitions(): FakeSettingDefinition[];
+  getControlValue(key: string): unknown;
+  setControlValue(key: string, value: unknown): Promise<void>;
+}
+
+function makeSettings() {
+  return {
+    keepCursorWithinContent: "bullet-and-checkbox",
+    overrideTabBehaviour: true,
+    overrideEnterBehaviour: true,
+    overrideVimOBehaviour: true,
+    overrideSelectAllBehaviour: true,
+    betterListsStyles: true,
+    verticalLines: true,
+    outerVerticalLines: true,
+    verticalLinesAction: "toggle-folding",
+    mobileRightFoldControls: true,
+    dragAndDrop: true,
+    debug: false,
+    save: jest.fn(async () => undefined),
+  };
+}
+
+async function loadTab(
+  settings: ReturnType<typeof makeSettings>,
+): Promise<TestableSettingsTab> {
+  const addSettingTab = jest.fn<void, [TestableSettingsTab]>();
+  await new SettingsTab(
+    { app: {}, addSettingTab } as never,
+    settings as never,
+  ).load();
+
+  const tab = addSettingTab.mock.calls[0]?.[0];
+  if (!tab) {
+    throw new Error("Expected settings tab to be registered");
+  }
+  return tab;
 }
 
 describe("SettingsTab", () => {
@@ -83,81 +173,100 @@ describe("SettingsTab", () => {
     mockSettingsRecords.length = 0;
   });
 
-  test("should configure vertical indentation line action with a toggle", async () => {
-    const addSettingTab = jest.fn<void, [DisplayableSettingsTab]>();
-    const settings = {
-      keepCursorWithinContent: "bullet-and-checkbox",
-      overrideTabBehaviour: true,
-      overrideEnterBehaviour: true,
-      overrideVimOBehaviour: true,
-      overrideSelectAllBehaviour: true,
-      betterListsStyles: true,
-      verticalLines: true,
-      outerVerticalLines: true,
-      verticalLinesAction: "toggle-folding",
-      mobileRightFoldControls: true,
-      dragAndDrop: true,
-      debug: false,
-      save: jest.fn(),
-    };
+  test("exposes searchable declarative settings in the legacy display order", async () => {
+    const tab = await loadTab(makeSettings());
 
-    await new SettingsTab(
-      { app: {}, addSettingTab } as never,
-      settings as never,
-    ).load();
+    const definitions = tab.getSettingDefinitions();
 
-    const tab = addSettingTab.mock.calls[0]?.[0];
-    if (!tab) {
-      throw new Error("Expected settings tab to be registered");
-    }
+    expect(definitions.map((definition) => definition.name)).toEqual([
+      "Stick the cursor to the content",
+      "Enhance the Tab key",
+      "Enhance the Enter key",
+      "Vim-mode o/O inserts bullets",
+      "Enhance the Ctrl+A or Cmd+A behavior",
+      "Improve the style of your lists",
+      "Draw vertical indentation lines",
+      "Draw outer list lines",
+      "Fold lists from vertical indentation lines",
+      "Show fold controls on the right on mobile",
+      "Drag-and-Drop",
+      "Debug mode",
+    ]);
+    expect(definitions[0]?.control).toEqual({
+      type: "dropdown",
+      key: "keepCursorWithinContent",
+      options: {
+        never: "Never",
+        "bullet-only": "Stick cursor out of bullets",
+        "bullet-and-checkbox": "Stick cursor out of bullets and checkboxes",
+      },
+    });
+    expect(definitions[8]?.control).toEqual({
+      type: "toggle",
+      key: "verticalLinesActionEnabled",
+    });
+  });
+
+  test("reads and persists declarative control values through Settings", async () => {
+    const settings = makeSettings();
+    const tab = await loadTab(settings);
+
+    expect(tab.getControlValue("verticalLinesActionEnabled")).toBe(true);
+    expect(tab.getControlValue("keepCursorWithinContent")).toBe(
+      "bullet-and-checkbox",
+    );
+
+    await tab.setControlValue("verticalLinesActionEnabled", false);
+    await tab.setControlValue("keepCursorWithinContent", "bullet-only");
+
+    expect(settings.verticalLinesAction).toBe("none");
+    expect(settings.keepCursorWithinContent).toBe("bullet-only");
+    expect(settings.save).toHaveBeenCalledTimes(2);
+  });
+
+  test("rejects invalid declarative control values", async () => {
+    const tab = await loadTab(makeSettings());
+
+    await expect(
+      tab.setControlValue("keepCursorWithinContent", "invalid"),
+    ).rejects.toThrow("keepCursorWithinContent");
+    await expect(tab.setControlValue("debug", "true")).rejects.toThrow("debug");
+  });
+
+  test("keeps the imperative display fallback for pre-1.13 Obsidian", async () => {
+    const settings = makeSettings();
+    const tab = await loadTab(settings);
+
     tab.display();
 
-    const verticalLinesSetting = mockSettingsRecords.find(
-      (setting) => setting.name === "Draw vertical indentation lines",
-    );
-    const actionSetting = mockSettingsRecords.find(
-      (setting) =>
-        setting.name === "Fold lists from vertical indentation lines",
-    );
-    const mobileFoldControlsSetting = mockSettingsRecords.find(
-      (setting) => setting.name === "Show fold controls on the right on mobile",
-    );
-    const verticalLinesSettingIndex = mockSettingsRecords.findIndex(
-      (setting) => setting.name === "Draw vertical indentation lines",
-    );
-    const outerSettingIndex = mockSettingsRecords.findIndex(
-      (setting) => setting.name === "Draw outer list lines",
-    );
-    const actionSettingIndex = mockSettingsRecords.findIndex(
-      (setting) =>
-        setting.name === "Fold lists from vertical indentation lines",
+    expect(mockSettingsRecords.map((setting) => setting.name)).toEqual(
+      tab.getSettingDefinitions().map((definition) => definition.name),
     );
 
-    expect(verticalLinesSetting?.desc).toBe(
-      "Show guide lines that connect nested list items by indentation level.",
-    );
-    expect(actionSetting?.dropdownAdded).toBe(false);
-    expect(actionSetting?.toggleCallbacks).toHaveLength(1);
-    expect(mobileFoldControlsSetting?.desc).toBe(
-      "Move fold controls to the right edge in Live Preview on mobile.",
-    );
-    expect(mobileFoldControlsSetting?.toggleValue).toBe(true);
-    expect(outerSettingIndex).toBe(verticalLinesSettingIndex + 1);
-    expect(actionSettingIndex).toBe(outerSettingIndex + 1);
-    expect(mockSettingsRecords[outerSettingIndex]?.toggleValue).toBe(true);
+    const cursorSetting = mockSettingsRecords[0];
+    const outerSetting = mockSettingsRecords[7];
+    const actionSetting = mockSettingsRecords[8];
+    const mobileSetting = mockSettingsRecords[9];
 
-    await mockSettingsRecords[outerSettingIndex].toggleCallbacks[0](false);
+    expect(cursorSetting?.dropdown?.value).toBe("bullet-and-checkbox");
+    expect(outerSetting?.toggle?.value).toBe(true);
+    expect(actionSetting?.toggle?.value).toBe(true);
+    expect(mobileSetting?.toggle?.value).toBe(true);
+
+    if (
+      !outerSetting.toggle ||
+      !actionSetting.toggle ||
+      !mobileSetting.toggle
+    ) {
+      throw new Error("Expected legacy toggle controls");
+    }
+    await outerSetting.toggle.callbacks[0](false);
+    await actionSetting.toggle.callbacks[0](false);
+    await mobileSetting.toggle.callbacks[0](false);
+
     expect(settings.outerVerticalLines).toBe(false);
-    expect(settings.save).toHaveBeenCalled();
-
-    await actionSetting!.toggleCallbacks[0](false);
     expect(settings.verticalLinesAction).toBe("none");
-
-    await actionSetting!.toggleCallbacks[0](true);
-    expect(settings.verticalLinesAction).toBe("toggle-folding");
-
-    await mobileFoldControlsSetting!.toggleCallbacks[0](false);
     expect(settings.mobileRightFoldControls).toBe(false);
-    expect(settings.save).toHaveBeenCalled();
+    expect(settings.save).toHaveBeenCalledTimes(3);
   });
 });

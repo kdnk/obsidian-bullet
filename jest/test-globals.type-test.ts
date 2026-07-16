@@ -13,8 +13,8 @@ type IsExact<A, B> =
       : false
     : false;
 type IsCallableDriverGlobal<K extends SemanticDriverCommandName> =
-  K extends keyof typeof globalThis
-    ? (typeof globalThis)[K] extends (...args: never[]) => Promise<unknown>
+  K extends keyof typeof window
+    ? (typeof window)[K] extends (...args: never[]) => Promise<unknown>
       ? true
       : false
     : false;
