@@ -74,6 +74,48 @@
   pointer-events: none;
 }
 
+.bullet-plugin-mobile-right-fold-controls
+  .markdown-source-view.mod-cm6
+  .HyperMD-list-line:has(.cm-fold-indicator) {
+  box-sizing: border-box;
+  padding-inline-end: 48px;
+}
+
+.bullet-plugin-mobile-right-fold-controls
+  .markdown-source-view.mod-cm6
+  .HyperMD-list-line
+  .cm-fold-indicator {
+  position: static;
+}
+
+.bullet-plugin-mobile-right-fold-controls
+  .markdown-source-view.mod-cm6
+  .HyperMD-list-line
+  .cm-fold-indicator
+  .collapse-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  top: 0;
+  inset-inline-end: 0;
+  width: 48px;
+  height: 100%;
+  padding-inline-end: 0;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  z-index: 2;
+}
+
+.bullet-plugin-mobile-right-fold-controls
+  .markdown-source-view.mod-cm6
+  .HyperMD-list-line
+  .cm-fold-indicator.is-collapsed
+  .collapse-indicator
+  svg.svg-icon {
+  transform: rotate(90deg);
+}
+
 .bullet-plugin-vertical-lines
   .markdown-source-view.mod-cm6
   .cm-indent-spacing.bullet-plugin-persistent-indent-guide {
