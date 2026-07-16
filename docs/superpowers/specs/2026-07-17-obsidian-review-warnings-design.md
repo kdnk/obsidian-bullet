@@ -114,6 +114,46 @@ Jestのcompile-only global contractもlint対象へ含める。
 
 test implementationへObsidian runtime固有の規則を過剰適用しないよう、既存のtest lint範囲は維持する。
 
+## 追加監査で見つかった推薦
+
+release候補の再監査では、`styles.css`の二つの`!important`と、production bundle内のClipboard Access、Dynamic Code Executionが残った。
+
+Clipboard Accessは、System Information modalの`navigator.clipboard.writeText()`による実際の書込である。
+
+Dynamic Code Executionは、組み立てた文字列を実行する処理ではない。
+
+`OperationPerformer.eval()`という通常のmethod名がbundleへ残り、scannerがbuilt-inの`eval()`と区別せず検出している。
+
+## 追加推薦への方針
+
+警告の説明だけをreviewerへ添える方法は、runtime動作を維持できるものの、再監査の推薦を残すため採用しない。
+
+Clipboard書込を`document.execCommand("copy")`などの別APIへ置き換える方法も、system clipboardへ書き込む性質が変わらず、deprecated APIを増やすため採用しない。
+
+自動Clipboard書込を除き、誤検出されるmethod名とCSS cascadeを修正する。
+
+System Information modalはJSON表示を維持し、`Copy and Close` buttonを`Close`へ変更する。
+
+利用者は表示内容を通常のtext selectionで参照できるが、pluginはsystem clipboardを読み書きしない。
+
+`OperationPerformer.eval()`は、既存の`Operation`を一度実行して変更を反映する役割に合わせて`execute()`へ改名する。
+
+呼出順、`OperationOutcome`、変更反映の条件は変えない。
+
+drag cursorのCSSはpluginのbody classに加えてLive Preview editorのclassまでselectorを限定し、Obsidian側の通常cursorより高い詳細度を得る。
+
+drag中のbody cursorは、すでに`html`、`body`、二つのplugin classで限定されているため、そのselectorを維持したまま`!important`だけを除く。
+
+## 追加推薦の回帰検出
+
+source policy testは、`styles.css`に`!important`がないこと、System Information sourceにClipboard APIがないこと、production sourceに`.eval(` callがないことを検査する。
+
+検査語そのものがscannerへ誤検出されないよう、test内ではtokenを分割して組み立てる。
+
+OperationPerformerの既存testは`execute()`を使用し、operationが一度だけ実行され、更新時だけchanges applicatorが呼ばれるcontractを維持する。
+
+production build後はbundleを直接検索し、Clipboard API、`.eval(`、`new Function`が含まれないことを確かめる。
+
 ## 検証
 
 - review warningを再現するfocused lintが修正前に失敗し、修正後に通る。
@@ -123,6 +163,8 @@ test implementationへObsidian runtime固有の規則を過剰適用しないよ
 - declarative settings definitionsが全設定を同じ順序で公開する。
 - declarative controlの読取、更新、保存、`verticalLinesAction`変換を検証する。
 - legacy `display()`の既存挙動を維持する。
+- CSSとrestricted APIのsource policy testが修正前に失敗し、修正後に通る。
+- production bundleにClipboard API、`.eval(`、`new Function`が残らない。
 - unit test、lint、TypeScript、production build、test build、full testを実行する。
 
 ## 完了条件
@@ -130,5 +172,7 @@ test implementationへObsidian runtime固有の規則を過剰適用しないよ
 - ユーザーが列挙したwarning箇所に該当規則が残らない。
 - `minAppVersion`と保存済みsettings形式を変更しない。
 - production bundleはNode globalへ依存しない。
+- production bundleはsystem clipboardへアクセスせず、動的コード実行と誤検出される`.eval(`も含まない。
+- `styles.css`は`!important`を含まない。
 - popout windowで生成先documentを維持する。
 - 既存の未コミット変更を今回のbranchへ含めない。
