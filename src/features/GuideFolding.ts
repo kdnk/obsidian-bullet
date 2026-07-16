@@ -4,7 +4,7 @@ import {
   foldedRanges,
   unfoldEffect,
 } from "@codemirror/language";
-import { EditorSelection, Extension, Text } from "@codemirror/state";
+import { Extension, Text } from "@codemirror/state";
 import {
   Decoration,
   DecorationSet,
@@ -15,7 +15,10 @@ import {
   scrollPastEnd,
 } from "@codemirror/view";
 
-import { ensureFoldScrollReserve } from "./FoldScroll";
+import {
+  ensureFoldScrollReserve,
+  stableFoldScrollSnapshot,
+} from "./FoldScroll";
 
 import { MyEditorPosition, getEditorFromState } from "../editor";
 import { List, Root } from "../root";
@@ -191,67 +194,6 @@ function foldInside(view: EditorView, from: number, to: number) {
   return found;
 }
 
-function correctScrollSnapshotAnchor(view: EditorView, value: unknown): void {
-  if (
-    !value ||
-    typeof value !== "object" ||
-    !("range" in value) ||
-    !("yMargin" in value) ||
-    typeof value.yMargin !== "number"
-  ) {
-    return;
-  }
-
-  const scaleY = view.scaleY;
-  const scrollTop = view.scrollDOM.scrollTop;
-  const scrollViewportTop = view.scrollDOM.getBoundingClientRect().top;
-  const documentTop = view.documentTop;
-  if (
-    !Number.isFinite(scaleY) ||
-    scaleY <= 0 ||
-    !Number.isFinite(scrollTop) ||
-    !Number.isFinite(scrollViewportTop) ||
-    !Number.isFinite(documentTop)
-  ) {
-    return;
-  }
-
-  const viewportDocumentTop = scrollViewportTop - documentTop;
-  const anchor = view.lineBlockAtHeight(Math.max(0, viewportDocumentTop + 8));
-  if (!Number.isFinite(anchor.from) || !Number.isFinite(anchor.top)) {
-    return;
-  }
-
-  value.range = EditorSelection.cursor(anchor.from);
-  value.yMargin = anchor.top - scrollTop;
-}
-
-function stableScrollSnapshot(view: EditorView) {
-  const snapshot = view.scrollSnapshot();
-  const value: unknown = snapshot.value;
-  correctScrollSnapshotAnchor(view, value);
-  // CodeMirror stores the precise snapshot offset in this mutable margin.
-  // Snap it once so scrollTop rounding cannot accumulate across fold cycles.
-  if (
-    !value ||
-    typeof value !== "object" ||
-    !("yMargin" in value) ||
-    typeof value.yMargin !== "number" ||
-    !Number.isFinite(value.yMargin)
-  ) {
-    return snapshot;
-  }
-
-  const window = view.dom.ownerDocument.defaultView;
-  const devicePixelRatio = window?.devicePixelRatio ?? 1;
-  const pixelScale =
-    Number.isFinite(devicePixelRatio) && devicePixelRatio > 0
-      ? devicePixelRatio
-      : 1;
-  value.yMargin = Math.round(value.yMargin * pixelScale) / pixelScale;
-  return snapshot;
-}
-
 function setGuideTargetsFolded(
   view: EditorView,
   targets: readonly GuideFoldTarget[],
@@ -272,7 +214,7 @@ function setGuideTargetsFolded(
 
   ensureFoldScrollReserve(view);
   const effects = [
-    stableScrollSnapshot(view),
+    stableFoldScrollSnapshot(view),
     ...resolved.map(({ range }) =>
       (folded ? foldEffect : unfoldEffect).of(range),
     ),

@@ -1,9 +1,13 @@
 import { Platform } from "obsidian";
 
+import { foldEffect, unfoldEffect } from "@codemirror/language";
+import { EditorState, StateEffect } from "@codemirror/state";
+
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
+  MobileNativeFoldScroll,
   MobileRightFoldControls,
   MobileRightFoldControlsPluginValue,
 } from "../MobileRightFoldControls";
@@ -49,7 +53,7 @@ function makePlugin() {
     eventHandlers,
     plugin: {
       app: { workspace },
-      registerEditorExtension: jest.fn(),
+      registerEditorExtension: jest.fn<void, [unknown[]]>(),
       registerEvent: jest.fn(),
     },
   };
@@ -84,6 +88,9 @@ describe("MobileRightFoldControls", () => {
 
     await feature.load();
 
+    const registeredExtensions =
+      plugin.registerEditorExtension.mock.calls[0]?.[0];
+    expect(registeredExtensions).toHaveLength(2);
     expect(settings.onChange).toHaveBeenCalledWith(
       ["mobileRightFoldControls"],
       expect.any(Function),
@@ -193,7 +200,11 @@ describe("MobileRightFoldControls", () => {
       },
       scrollDOM,
     };
-    const pluginValue = new MobileRightFoldControlsPluginValue(view as never);
+    const nativeFoldScroll = { prepare: jest.fn() };
+    const pluginValue = new MobileRightFoldControlsPluginValue(
+      view as never,
+      nativeFoldScroll as never,
+    );
     const preventDefault = jest.fn();
     const stopPropagation = jest.fn();
     const target = {
@@ -208,10 +219,12 @@ describe("MobileRightFoldControls", () => {
       target,
       preventDefault,
       stopPropagation,
+      type: "pointerdown",
     } as unknown as MouseEvent);
 
     expect(contentDOM.style.paddingBottom).toBe("1138.5px");
     expect(readScrollHeight).toHaveBeenCalledTimes(1);
+    expect(nativeFoldScroll.prepare).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
     expect(stopPropagation).not.toHaveBeenCalled();
     expect(contentDOM.addEventListener).toHaveBeenCalledWith(
@@ -219,6 +232,17 @@ describe("MobileRightFoldControls", () => {
       expect.any(Function),
       true,
     );
+
+    listeners.get("click")?.({
+      target,
+      preventDefault,
+      stopPropagation,
+      type: "click",
+    } as unknown as MouseEvent);
+
+    expect(readScrollHeight).toHaveBeenCalledTimes(2);
+    expect(nativeFoldScroll.prepare).toHaveBeenCalledWith(view);
+    expect(nativeFoldScroll.prepare).toHaveBeenCalledTimes(1);
     pluginValue.destroy();
 
     expect(contentDOM.removeEventListener).toHaveBeenCalledWith(
@@ -260,7 +284,10 @@ describe("MobileRightFoldControls", () => {
       },
       scrollDOM: { clientHeight: 1163 },
     };
-    const pluginValue = new MobileRightFoldControlsPluginValue(view as never);
+    const pluginValue = new MobileRightFoldControlsPluginValue(
+      view as never,
+      { prepare: jest.fn() } as never,
+    );
     const target = {
       closest: jest.fn().mockReturnValue({}),
     };
@@ -281,6 +308,44 @@ describe("MobileRightFoldControls", () => {
 
     pluginValue.destroy();
   });
+
+  test.each([
+    ["fold", foldEffect],
+    ["unfold", unfoldEffect],
+  ])(
+    "keeps a corrected scroll snapshot for the asynchronous native %s transaction",
+    async (_name, nativeEffect) => {
+      const snapshotType = StateEffect.define<string>();
+      const snapshot = snapshotType.of("viewport");
+      const nativeFoldScroll = new MobileNativeFoldScroll(
+        jest.fn().mockReturnValue(snapshot),
+      );
+      const state = EditorState.create({
+        doc: "- parent\n  - child",
+        extensions: [nativeFoldScroll.extension],
+      });
+      const view = {
+        dom: {
+          ownerDocument: {
+            defaultView: { setTimeout: jest.fn() },
+          },
+        },
+        state,
+      };
+
+      nativeFoldScroll.prepare(view as never);
+      await Promise.resolve();
+      const transaction = state.update({
+        effects: nativeEffect.of({ from: 8, to: 17 }),
+      });
+
+      expect(transaction.effects).toHaveLength(2);
+      expect(transaction.effects).toContain(snapshot);
+      expect(
+        transaction.effects.some((effect) => effect.is(nativeEffect)),
+      ).toBe(true);
+    },
+  );
 });
 
 test("moves native list fold controls to the right edge", () => {

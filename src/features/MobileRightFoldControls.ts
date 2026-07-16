@@ -1,10 +1,15 @@
 import { Platform, Plugin } from "obsidian";
 
+import { foldEffect, unfoldEffect } from "@codemirror/language";
+import { EditorState, Extension } from "@codemirror/state";
 import { EditorView, PluginValue, ViewPlugin } from "@codemirror/view";
 
 import { DocumentBodyClass } from "./DocumentBodyClass";
 import { Feature } from "./Feature";
-import { ensureFoldScrollReserve } from "./FoldScroll";
+import {
+  ensureFoldScrollReserve,
+  stableFoldScrollSnapshot,
+} from "./FoldScroll";
 
 import { Settings } from "../services/Settings";
 
@@ -24,8 +29,48 @@ function hasClosest(target: EventTarget | null): target is EventTarget & {
   );
 }
 
+type FoldScrollSnapshot = ReturnType<EditorView["scrollSnapshot"]>;
+type FoldScrollSnapshotFactory = (view: EditorView) => FoldScrollSnapshot;
+
+export class MobileNativeFoldScroll {
+  private pendingSnapshots = new WeakMap<EditorState, FoldScrollSnapshot>();
+
+  readonly extension: Extension = EditorState.transactionExtender.of(
+    (transaction) => {
+      const snapshot = this.pendingSnapshots.get(transaction.startState);
+      if (
+        !snapshot ||
+        !transaction.effects.some(
+          (effect) => effect.is(foldEffect) || effect.is(unfoldEffect),
+        )
+      ) {
+        return null;
+      }
+
+      this.pendingSnapshots.delete(transaction.startState);
+      return { effects: snapshot };
+    },
+  );
+
+  constructor(
+    private createSnapshot: FoldScrollSnapshotFactory = stableFoldScrollSnapshot,
+  ) {}
+
+  prepare(view: EditorView): void {
+    const state = view.state;
+    this.pendingSnapshots.set(state, this.createSnapshot(view));
+    view.dom.ownerDocument.defaultView?.setTimeout(
+      () => this.pendingSnapshots.delete(state),
+      0,
+    );
+  }
+}
+
 export class MobileRightFoldControlsPluginValue implements PluginValue {
-  constructor(private view: EditorView) {
+  constructor(
+    private view: EditorView,
+    private nativeFoldScroll: MobileNativeFoldScroll,
+  ) {
     this.view.contentDOM.addEventListener(
       "pointerdown",
       this.prepareNativeFoldScroll,
@@ -66,11 +111,15 @@ export class MobileRightFoldControlsPluginValue implements PluginValue {
     // Commit the restored reserve to layout before Obsidian's native handler
     // changes document height, otherwise bottom anchoring can move the row.
     void this.view.scrollDOM.scrollHeight;
+    if (event.type === "click") {
+      this.nativeFoldScroll.prepare(this.view);
+    }
   };
 }
 
 export class MobileRightFoldControls implements Feature {
   private bodyClass: DocumentBodyClass;
+  private nativeFoldScroll = new MobileNativeFoldScroll();
 
   constructor(
     private plugin: Plugin,
@@ -84,9 +133,13 @@ export class MobileRightFoldControls implements Feature {
   }
 
   async load() {
-    this.plugin.registerEditorExtension(
-      ViewPlugin.define((view) => new MobileRightFoldControlsPluginValue(view)),
-    );
+    this.plugin.registerEditorExtension([
+      this.nativeFoldScroll.extension,
+      ViewPlugin.define(
+        (view) =>
+          new MobileRightFoldControlsPluginValue(view, this.nativeFoldScroll),
+      ),
+    ]);
     this.settings.onChange(["mobileRightFoldControls"], this.updateBodyClass);
     this.bodyClass.load();
   }
