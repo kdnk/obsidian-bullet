@@ -348,7 +348,7 @@ describe("MobileRightFoldControls", () => {
   );
 });
 
-test("moves native list fold controls to the right edge", () => {
+test("mirrors native mobile list fold controls beyond the right edge", () => {
   const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
   const rowDeclarations = styles.match(
     /\.bullet-plugin-mobile-right-fold-controls\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s*\{([^}]*)\}/,
@@ -364,16 +364,17 @@ test("moves native list fold controls to the right edge", () => {
   )?.[1];
 
   expect(rowDeclarations).toContain("box-sizing: border-box;");
-  expect(rowDeclarations).toContain("padding-inline-end: 48px;");
+  expect(rowDeclarations).toContain("padding-inline-end: 13px;");
   expect(parentDeclarations).toContain("position: static;");
   expect(controlDeclarations).toContain("display: flex;");
   expect(controlDeclarations).toContain("align-items: center;");
   expect(controlDeclarations).toContain("justify-content: center;");
   expect(controlDeclarations).toContain("top: 0;");
-  expect(controlDeclarations).toContain("inset-inline-end: 0;");
+  expect(controlDeclarations).toContain("inset-inline-end: -35px;");
   expect(controlDeclarations).toContain("width: 48px;");
   expect(controlDeclarations).toContain("height: 100%;");
   expect(controlDeclarations).toContain("padding-inline-end: 0;");
+  expect(controlDeclarations).not.toContain("translate");
   expect(controlDeclarations).toContain("opacity: 1;");
   expect(controlDeclarations).toContain("visibility: visible;");
   expect(controlDeclarations).toContain("pointer-events: auto;");

@@ -78,7 +78,7 @@
   .markdown-source-view.mod-cm6
   .HyperMD-list-line:has(.cm-fold-indicator) {
   box-sizing: border-box;
-  padding-inline-end: 48px;
+  padding-inline-end: 13px;
 }
 
 .bullet-plugin-mobile-right-fold-controls
@@ -97,7 +97,7 @@
   align-items: center;
   justify-content: center;
   top: 0;
-  inset-inline-end: 0;
+  inset-inline-end: -35px;
   width: 48px;
   height: 100%;
   padding-inline-end: 0;
