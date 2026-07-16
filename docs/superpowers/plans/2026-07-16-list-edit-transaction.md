@@ -30,7 +30,7 @@
 - Produces: NO_OP_OUTCOME, STOP_ONLY_OUTCOME, UPDATED_OUTCOME
 - Changes: Operation.perform(): OperationOutcome
 
-- [ ] **Step 1: Write failing transaction tests**
+- [x] **Step 1: Write failing transaction tests**
 
 Test no root, nullable factory, stop-only outcome, updated outcome, and one-time execution.
 
@@ -45,13 +45,13 @@ expect(changesApplicator.apply).toHaveBeenCalledWith(editor, expect.anything(), 
 expect(result).toEqual({ shouldUpdate: true, shouldStopPropagation: true });
 ~~~
 
-- [ ] **Step 2: Run the focused test and confirm RED**
+- [x] **Step 2: Run the focused test and confirm RED**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/services/__tests__/OperationPerformer.test.ts --runInBand
 
 Expected: FAIL because Operation.perform returns void and nullable factories are unsupported.
 
-- [ ] **Step 3: Add the outcome interface and constants**
+- [x] **Step 3: Add the outcome interface and constants**
 
 ~~~ts
 export interface OperationOutcome {
@@ -77,7 +77,7 @@ export interface Operation {
 }
 ~~~
 
-- [ ] **Step 4: Update OperationPerformer**
+- [x] **Step 4: Update OperationPerformer**
 
 Call perform once, apply the diff from the returned outcome, and return that same object.
 
@@ -91,13 +91,13 @@ perform(
 ): OperationOutcome
 ~~~
 
-- [ ] **Step 5: Run the focused test and confirm GREEN**
+- [x] **Step 5: Run the focused test and confirm GREEN**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/services/__tests__/OperationPerformer.test.ts --runInBand
 
 Expected: PASS after a temporary test operation uses the new interface.
 
-- [ ] **Step 6: Commit the transaction contract**
+- [x] **Step 6: Commit the transaction contract**
 
 Commit: refactor(editor): return list operation outcomes
 
@@ -111,7 +111,7 @@ Commit: refactor(editor): return list operation outcomes
 - Consumes: OperationOutcome constants from Operation.ts
 - Removes: shouldUpdate() and shouldStopPropagation() methods
 
-- [ ] **Step 1: Convert one operation test to RED**
+- [x] **Step 1: Convert one operation test to RED**
 
 Start with MoveListUp.
 
@@ -123,25 +123,25 @@ expect(root.print()).toBe("- item 1\n- item 3\n- item 2");
 
 Delete assertions against mutable getters.
 
-- [ ] **Step 2: Run MoveListUp tests and confirm RED**
+- [x] **Step 2: Run MoveListUp tests and confirm RED**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/operations/__tests__/MoveListUp.test.ts --runInBand
 
 Expected: FAIL because perform returns void.
 
-- [ ] **Step 3: Convert MoveListUp to returned outcomes**
+- [x] **Step 3: Convert MoveListUp to returned outcomes**
 
 Return NO_OP_OUTCOME before the event is owned, STOP_ONLY_OUTCOME after ownership but before mutation, and UPDATED_OUTCOME after mutation.
 
 Do not store updated or stopPropagation fields.
 
-- [ ] **Step 4: Run MoveListUp tests and confirm GREEN**
+- [x] **Step 4: Run MoveListUp tests and confirm GREEN**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/operations/__tests__/MoveListUp.test.ts --runInBand
 
 Expected: PASS.
 
-- [ ] **Step 5: Apply the same explicit-return pattern to remaining operations**
+- [x] **Step 5: Apply the same explicit-return pattern to remaining operations**
 
 Migrate CreateNewItem, delete operations, IndentList, InsertNewLineWithoutBullet, cursor operations, MoveListDown, MoveListToDifferentPosition, OutdentList, OutdentListIfItsEmpty, and SelectAllContent.
 
@@ -153,19 +153,19 @@ perform() {
 }
 ~~~
 
-- [ ] **Step 6: Update direct operation tests**
+- [x] **Step 6: Update direct operation tests**
 
 Capture perform results and compare explicit outcomes.
 
 Keep all Root.print and cursor assertions unchanged.
 
-- [ ] **Step 7: Run the entire operation test directory**
+- [x] **Step 7: Run the entire operation test directory**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/operations --runInBand
 
 Expected: all operation suites pass.
 
-- [ ] **Step 8: Commit the operation migration**
+- [x] **Step 8: Commit the operation migration**
 
 Commit: refactor(editor): make operation results immutable
 
@@ -183,19 +183,19 @@ Commit: refactor(editor): make operation results immutable
 - Consumes: OperationPerformer.perform factory returning Operation or null
 - Removes: Parser constructor dependency from common single-operation features
 
-- [ ] **Step 1: Update feature tests to omit Parser**
+- [x] **Step 1: Update feature tests to omit Parser**
 
 Change Tab, Shift-Tab, Enter, and Vim O fixtures so they provide a real or mocked OperationPerformer but no Parser argument.
 
 Assert guard conditions return NO_OP_OUTCOME through a null factory.
 
-- [ ] **Step 2: Run the four feature suites and confirm RED**
+- [x] **Step 2: Run the four feature suites and confirm RED**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/features/__tests__/TabBehaviourOverride.test.ts src/features/__tests__/EnterBehaviourOverride.test.ts src/features/__tests__/VimOBehaviourOverride.test.ts --runInBand
 
 Expected: FAIL because constructors still require Parser.
 
-- [ ] **Step 3: Move parse-dependent guards into factories**
+- [x] **Step 3: Move parse-dependent guards into factories**
 
 Use this pattern in each feature:
 
@@ -212,19 +212,19 @@ For Enter, select OutdentListIfItsEmpty, CreateNewItem, or InsertNewLineWithoutB
 
 For Vim O, choose CreateNewItem only when the parsed Root and Vim state permit it.
 
-- [ ] **Step 4: Remove obsolete Parser wiring**
+- [x] **Step 4: Remove obsolete Parser wiring**
 
 Remove Parser parameters from the migrated feature constructors and their creation in ObsidianBulletPlugin.
 
 Retain Parser for VerticalLines, DragAndDrop, and EditorSelectionsBehaviourOverride because those paths use parsed documents outside a single operation.
 
-- [ ] **Step 5: Run feature and plugin tests and confirm GREEN**
+- [x] **Step 5: Run feature and plugin tests and confirm GREEN**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/features src/__tests__/ObsidianBulletPlugin.test.ts --runInBand
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the feature locality change**
+- [x] **Step 6: Commit the feature locality change**
 
 Commit: refactor(editor): deepen list edit transactions
 
@@ -236,19 +236,19 @@ Commit: refactor(editor): deepen list edit transactions
 **Interfaces:**
 - No new interface
 
-- [ ] **Step 1: Run all unit tests**
+- [x] **Step 1: Run all unit tests**
 
 Run: npm run test:unit -- --runInBand
 
 Expected: all suites pass.
 
-- [ ] **Step 2: Run lint**
+- [x] **Step 2: Run lint**
 
 Run: npm run lint
 
 Expected: Prettier and ESLint pass with zero warnings.
 
-- [ ] **Step 3: Build and run full integration tests**
+- [x] **Step 3: Build and run full integration tests**
 
 Backup vault/test.md outside the vault and record its hash.
 
@@ -260,8 +260,16 @@ Expected: all Markdown specs pass.
 
 Wait for the vault renderer to exit, restore the fixture, wait, and confirm the original hash.
 
-- [ ] **Step 4: Commit any added regression fixture**
+- [x] **Step 4: Commit any added regression fixture**
 
 Commit only when a missing regression required a spec change.
 
 Commit: test(editor): cover list edit transaction path
+
+## Execution evidence
+
+- Completed across `542170d`, `53dc1bf`, and `cf43c88`; operations now return explicit outcomes and parse-dependent guards live with their operation factories.
+- Final fresh verification at `36326fd`: 44/44 unit suites and 414/414 tests passed; lint, TypeScript, production build, and test build exited zero. The full integration run passed 63/63 suites with 529 passed and 14 skipped tests.
+- The full-run fixture was restored after renderer exit and a delayed-save window to the original 4,588-byte SHA-256 `3b41a8cfcfc20a345fa3b2d33a909f1fb00bdd00d2302223bedefc0ed9c96f0b`.
+- No additional Markdown fixture was required. Vim `o`/`O` end-to-end coverage remains a harness backlog because the Markdown driver has no Vim-mode or `KeyO` action; the production transaction path is covered by operation, feature, plugin, and full integration suites.
+- The complete range `5686196..36326fd` received final review approval with no Critical, Important, or Minor findings.

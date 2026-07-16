@@ -29,7 +29,7 @@
 - Consumes: runCommand(type: string, data: unknown): Promise<unknown>
 - Produces: installObsidianDriver(target: object, runCommand: function): void
 
-- [ ] **Step 1: Write the failing driver registration test**
+- [x] **Step 1: Write the failing driver registration test**
 
 Add a test that loads jest/obsidian-driver.js, installs it into an empty object, and asserts that applyState, clickGuide, parseState, drag, move, and drop are functions.
 
@@ -43,13 +43,13 @@ expect(Object.keys(target)).toEqual(
 );
 ~~~
 
-- [ ] **Step 2: Run the focused test and confirm RED**
+- [x] **Step 2: Run the focused test and confirm RED**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/__tests__/jestTestConfig.test.ts --runInBand
 
 Expected: FAIL because jest/obsidian-driver.js does not exist.
 
-- [ ] **Step 3: Implement the driver**
+- [x] **Step 3: Implement the driver**
 
 Create a driver whose method names are the only Node-side command registry.
 
@@ -82,13 +82,13 @@ module.exports = { installObsidianDriver };
 
 Replace the repeated createCommand calls in the Jest environment with one install call bound to runCommand.
 
-- [ ] **Step 4: Run the focused test and confirm GREEN**
+- [x] **Step 4: Run the focused test and confirm GREEN**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/__tests__/jestTestConfig.test.ts --runInBand
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the Node driver**
+- [x] **Step 5: Commit the Node driver**
 
 Commit: refactor(test): centralize Obsidian driver commands
 
@@ -102,7 +102,7 @@ Commit: refactor(test): centralize Obsidian driver commands
 - Consumes: TestMessage with id, type, and data
 - Produces: handleTestCommand(type: string, data: unknown): Promise<State | undefined>
 
-- [ ] **Step 1: Add failing tests for registry dispatch**
+- [x] **Step 1: Add failing tests for registry dispatch**
 
 Test that applyState dispatches once through the registry and that an unknown command rejects with Unknown test command.
 
@@ -121,13 +121,13 @@ Use this narrow structural type only in the test.
 
 Do not add a test-only production method.
 
-- [ ] **Step 2: Run the focused renderer test and confirm RED**
+- [x] **Step 2: Run the focused renderer test and confirm RED**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/__tests__/ObsidianBulletPluginWithTests.test.ts --runInBand
 
 Expected: FAIL because the registry dispatcher does not exist.
 
-- [ ] **Step 3: Replace the switch with a handler registry**
+- [x] **Step 3: Replace the switch with a handler registry**
 
 Define command data in TestCommandMap and derive TestMessage from it.
 
@@ -154,13 +154,13 @@ Build one handler object in handleTestCommand and reject missing keys before inv
 
 Keep WebSocket response formatting in handleTestMessage.
 
-- [ ] **Step 4: Run renderer tests and confirm GREEN**
+- [x] **Step 4: Run renderer tests and confirm GREEN**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/__tests__/ObsidianBulletPluginWithTests.test.ts --runInBand
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the renderer registry**
+- [x] **Step 5: Commit the renderer registry**
 
 Commit: refactor(test): dispatch renderer commands from registry
 
@@ -175,7 +175,7 @@ Commit: refactor(test): dispatch renderer commands from registry
 - Produces: GuideClickOptions = { line: number; kind: "indent" | "outer"; prefix?: string }
 - Produces: clickGuide(options: GuideClickOptions): Promise<void>
 
-- [ ] **Step 1: Add failing resolver tests**
+- [x] **Step 1: Add failing resolver tests**
 
 Create fake line DOM with two cm-indent children whose preceding text is different.
 
@@ -187,13 +187,13 @@ expect(events).toEqual(["mousedown", "mouseup", "click"]);
 
 Add invalid line, missing prefix, and missing outer guide cases that assert descriptive errors.
 
-- [ ] **Step 2: Run the focused test and confirm RED**
+- [x] **Step 2: Run the focused test and confirm RED**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/__tests__/ObsidianBulletPluginWithTests.test.ts --runInBand
 
 Expected: FAIL because clickGuide is not implemented.
 
-- [ ] **Step 3: Implement fresh line and guide lookup**
+- [x] **Step 3: Implement fresh line and guide lookup**
 
 Resolve the line from EditorView.domAtPos on every call.
 
@@ -203,7 +203,7 @@ For outer guides, query bullet-plugin-outer-list-guide on the resolved line.
 
 Dispatch new MouseEvent instances with bubbles and cancelable enabled.
 
-- [ ] **Step 4: Add the typed Jest global**
+- [x] **Step 4: Add the typed Jest global**
 
 ~~~ts
 declare function clickGuide(options: {
@@ -213,13 +213,13 @@ declare function clickGuide(options: {
 }): Promise<void>;
 ~~~
 
-- [ ] **Step 5: Run renderer tests and confirm GREEN**
+- [x] **Step 5: Run renderer tests and confirm GREEN**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/__tests__/ObsidianBulletPluginWithTests.test.ts --runInBand
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the semantic action**
+- [x] **Step 6: Commit the semantic action**
 
 Commit: feat(test): drive native vertical guide clicks
 
@@ -234,7 +234,7 @@ Commit: feat(test): drive native vertical guide clicks
 - Consumes: - clickGuide: JSON
 - Produces: generated clickGuide({...}) call
 
-- [ ] **Step 1: Add a failing transformer test**
+- [x] **Step 1: Add a failing transformer test**
 
 Transform a Markdown test containing:
 
@@ -244,31 +244,31 @@ Transform a Markdown test containing:
 
 Assert that generated code calls clickGuide with the parsed object.
 
-- [ ] **Step 2: Run the transformer test and confirm RED**
+- [x] **Step 2: Run the transformer test and confirm RED**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/__tests__/jestTestConfig.test.ts --runInBand
 
 Expected: FAIL because clickGuide is an unknown action.
 
-- [ ] **Step 3: Add parser and code generation**
+- [x] **Step 3: Add parser and code generation**
 
 Add parseClickGuide beside parseDrag and a clickGuide case beside the other generated actions.
 
 Reject malformed JSON through the existing transformer error path.
 
-- [ ] **Step 4: Run unit tests and confirm GREEN**
+- [x] **Step 4: Run unit tests and confirm GREEN**
 
 Run: npm run test:unit -- --runInBand
 
 Expected: 39 or more suites pass with zero failures.
 
-- [ ] **Step 5: Add the integration regression**
+- [x] **Step 5: Add the integration regression**
 
 Create a Markdown fixture that starts with a saved folded branch, clicks its persistent guide with the full sequence, and asserts the child becomes visible.
 
 Add a second click and assert the child folds again.
 
-- [ ] **Step 6: Build and run the focused Markdown spec**
+- [x] **Step 6: Build and run the focused Markdown spec**
 
 Backup vault/test.md outside the vault.
 
@@ -280,6 +280,16 @@ Expected: PASS.
 
 Confirm the vault renderer has exited, restore vault/test.md, wait, and verify the restored hash.
 
-- [ ] **Step 7: Commit the Markdown action**
+- [x] **Step 7: Commit the Markdown action**
 
 Commit: test(vertical-lines): cover native guide interactions
+
+## Execution evidence
+
+- Completed across `e2f66c6`, `a260cd0`, `3f25ee4`, and `4239162`, with protocol and lifecycle hardening through `bc421f4`, `14b9c12`, `3287fba`, and `36326fd`.
+- Renderer payloads are decoded at runtime. Renderer registry keys, driver commands and forwarding calls, Jest globals, overload counts, and the shared test-only command contract are checked for exact agreement; unsupported AST member shapes fail the test instead of being ignored.
+- The loopback relay uses per-run authentication and explicit renderer/test roles, rejects binary protocol frames, bounds every startup/request/close phase, and cleans setup failures transactionally. `SKIP_OBSIDIAN=1` makes teardown a complete no-op.
+- Final fresh verification at `36326fd`: 44/44 unit suites and 414/414 tests passed; lint, TypeScript, production build, test build, and the production relay-marker isolation scan exited zero. The full integration run passed 63/63 suites with 529 passed and 14 skipped tests.
+- The saved-fold regression and manual Computer Use check both exercised native guides with a full click sequence. Visible native `.list-bullet` markers were present after reopen, and no raw marker text remained.
+- The fixture was restored after renderer exit and a delayed-save window to 4,588 bytes and SHA-256 `3b41a8cfcfc20a345fa3b2d33a909f1fb00bdd00d2302223bedefc0ed9c96f0b`.
+- The complete range `5686196..36326fd` received final review approval with no Critical, Important, or Minor findings.

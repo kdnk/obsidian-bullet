@@ -27,7 +27,7 @@
 - Consumes: existing DragAndDrop and DragAndDropState test fixtures
 - Produces: no production interface
 
-- [ ] **Step 1: Add failing planning assertions**
+- [x] **Step 1: Add failing planning assertions**
 
 Add three fixtures for rendered line, scroller fallback, and missing DOM.
 
@@ -41,19 +41,19 @@ expect(state.getDropVariants()).toEqual(
 
 If the current fixture cannot reach state, observe the drop-zone left style after mouse movement instead.
 
-- [ ] **Step 2: Run DragAndDrop tests and confirm RED**
+- [x] **Step 2: Run DragAndDrop tests and confirm RED**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/features/__tests__/DragAndDrop.test.ts --runInBand
 
 Expected: at least one new assertion fails before the fixture supplies the fallback DOM.
 
-- [ ] **Step 3: Complete the integrated fixture**
+- [x] **Step 3: Complete the integrated fixture**
 
 Provide cm-line, cm-scroller, getBoundingClientRect, ownerDocument.defaultView, and computed padding through the existing fake EditorView.
 
 Confirm the three tests fail if getDragAndDropLeftPadding always returns zero.
 
-- [ ] **Step 4: Run DragAndDrop tests and confirm GREEN with current production code**
+- [x] **Step 4: Run DragAndDrop tests and confirm GREEN with current production code**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/features/__tests__/DragAndDrop.test.ts --runInBand
 
@@ -69,23 +69,23 @@ Expected: PASS.
 - Removes: getDragAndDropLeftPadding export
 - Adds: private file-local getDragAndDropLeftPadding
 
-- [ ] **Step 1: Move the helper implementation**
+- [x] **Step 1: Move the helper implementation**
 
 Move getDragAndDropLeftPadding, isElementLike, and getComputedStyleFor into DragAndDrop.ts near DragAndDropState.
 
 Remove the import from dragAndDropMeasurements.
 
-- [ ] **Step 2: Delete the shallow files**
+- [x] **Step 2: Delete the shallow files**
 
 Delete dragAndDropMeasurements.ts and its direct test file.
 
-- [ ] **Step 3: Run focused tests**
+- [x] **Step 3: Run focused tests**
 
 Run: SKIP_OBSIDIAN=1 npx jest src/features/__tests__/DragAndDrop.test.ts --runInBand
 
 Expected: PASS with the integrated measurement cases.
 
-- [ ] **Step 4: Run unit tests and lint**
+- [x] **Step 4: Run unit tests and lint**
 
 Run: npm run test:unit -- --runInBand
 
@@ -93,6 +93,13 @@ Run: npm run lint
 
 Expected: zero failures and no stale imports.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Commit: refactor(drag-and-drop): localize layout measurement
+
+## Execution evidence
+
+- Completed in `f0c1d21` and `f75f0f6`; the direct measurement module and its direct test were removed, and rendered-line, scroller-padding, and missing-DOM behavior now run through `DragAndDrop`.
+- Final fresh verification at `36326fd`: `npm run test:unit -- --runInBand` passed 44/44 suites and 414/414 tests; `npm run lint`, `npx tsc --noEmit --pretty false`, `npm run build`, and `npm run build-with-tests` exited zero.
+- The final full integration run passed 63/63 suites with 529 passed and 14 skipped tests.
+- The complete range `5686196..36326fd` received final review approval with no Critical, Important, or Minor findings.
