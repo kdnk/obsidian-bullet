@@ -35,7 +35,7 @@
 - Produces: `npm run lint` coverage for `src/**/*.ts` and `jest/*.ts`.
 - Produces: local failures for `obsidianmd/no-global-this`, `obsidianmd/prefer-create-el`, `obsidianmd/settings-tab/prefer-setting-definitions`, console logging, unsafe operations, and unnecessary assertions.
 
-- [ ] **Step 1: Upgrade the Obsidian ESLint plugin**
+- [x] **Step 1: Upgrade the Obsidian ESLint plugin**
 
 Run:
 
@@ -45,7 +45,7 @@ npm install --save-dev eslint-plugin-obsidianmd@^0.4.1
 
 Expected: `package.json` requests `^0.4.1`, and the lockfile resolves 0.4.1.
 
-- [ ] **Step 2: Extend the lint contract**
+- [x] **Step 2: Extend the lint contract**
 
 Change the script to:
 
@@ -66,7 +66,7 @@ Add these rules to the typed TypeScript configuration:
 
 Keep the existing project-aware parser options and unsafe-value rules.
 
-- [ ] **Step 3: Run lint and verify RED**
+- [x] **Step 3: Run lint and verify RED**
 
 Run:
 
@@ -76,7 +76,7 @@ npm run lint
 
 Expected: FAIL with the reported `globalThis`, console, `createElement`, and missing `getSettingDefinitions()` warnings.
 
-- [ ] **Step 4: Commit the lint contract after the production fixes are green**
+- [x] **Step 4: Commit the lint contract after the production fixes are green**
 
 Do not commit yet.
 
@@ -109,7 +109,7 @@ The dependency and lint configuration belong in the final warning-cleanup commit
 - Changes: `getTestPlatformWsUrl(environment?: TestPlatformEnvironment): string`.
 - Produces: `getRuntimeProcessInfo(win: Window): { arch: string | null; platform: string | null }`.
 
-- [ ] **Step 1: Write failing Logger tests**
+- [x] **Step 1: Write failing Logger tests**
 
 Add:
 
@@ -133,7 +133,7 @@ test("forwards debug logs through the injected sink", () => {
 });
 ```
 
-- [ ] **Step 2: Write failing runtime-environment tests**
+- [x] **Step 2: Write failing runtime-environment tests**
 
 Extend `testPlatform.test.ts` so URL generation receives an explicit environment object.
 
@@ -164,7 +164,7 @@ expect(getRuntimeProcessInfo({} as Window)).toEqual({
 });
 ```
 
-- [ ] **Step 3: Run focused tests and verify RED**
+- [x] **Step 3: Run focused tests and verify RED**
 
 Run:
 
@@ -178,7 +178,7 @@ npm run test:unit -- --runInBand \
 
 Expected: FAIL because the injectable sink and runtime helpers do not exist.
 
-- [ ] **Step 4: Implement the Logger seam**
+- [x] **Step 4: Implement the Logger seam**
 
 Use:
 
@@ -207,7 +207,7 @@ Change `makeLogger` to accept an optional `LogSink` and construct a real Logger 
 
 Parser tests pass a Jest mock as the sink instead of casting `Logger.log` to a Jest function.
 
-- [ ] **Step 5: Implement the test-platform environment module**
+- [x] **Step 5: Implement the test-platform environment module**
 
 Augment the test window locally:
 
@@ -231,7 +231,7 @@ Use one environment value in both `onload()` and `prepareSettings()`.
 
 Do not reference the global `process` from production source files.
 
-- [ ] **Step 6: Implement safe System Information metadata**
+- [x] **Step 6: Implement safe System Information metadata**
 
 Use the modal's owning window:
 
@@ -251,13 +251,13 @@ export function getRuntimeProcessInfo(win: Window) {
 
 Call it with `this.contentEl.win`.
 
-- [ ] **Step 7: Remove routine plugin lifecycle logs**
+- [x] **Step 7: Remove routine plugin lifecycle logs**
 
 Delete the `console.log` calls from `onload()` and `unloadFeatures()`.
 
 Keep existing error logging.
 
-- [ ] **Step 8: Run focused tests and verify GREEN**
+- [x] **Step 8: Run focused tests and verify GREEN**
 
 Run the command from Step 3.
 
@@ -281,7 +281,7 @@ Expected: all focused tests pass.
 - No new external interface.
 - Preserves guide decoration order, folding transaction order, drag-zone structure, and parser fold-root semantics.
 
-- [ ] **Step 1: Update DOM ownership tests first**
+- [x] **Step 1: Update DOM ownership tests first**
 
 Change GuideFolding's document mock from `ownerDocument.createElement` to:
 
@@ -303,7 +303,7 @@ win: {
 
 Assert that two divs are created for the drag zone and one span is created for each outer guide widget.
 
-- [ ] **Step 2: Run DOM-focused tests and verify RED**
+- [x] **Step 2: Run DOM-focused tests and verify RED**
 
 Run:
 
@@ -315,7 +315,7 @@ npm run test:unit -- --runInBand \
 
 Expected: FAIL because production still calls native `createElement`.
 
-- [ ] **Step 3: Replace native DOM creation**
+- [x] **Step 3: Replace native DOM creation**
 
 Use:
 
@@ -327,7 +327,7 @@ const dropZone = doc.win.createDiv();
 
 Keep all existing classes, data attributes, styles, and append order.
 
-- [ ] **Step 4: Replace `flatMap` without changing order**
+- [x] **Step 4: Replace `flatMap` without changing order**
 
 Build decoration ranges with nested loops:
 
@@ -347,7 +347,7 @@ for (const chunk of chunks) {
 
 Build resolved fold targets with a typed array and `push`.
 
-- [ ] **Step 5: Replace `NodeList.forEach`**
+- [x] **Step 5: Replace `NodeList.forEach`**
 
 Use:
 
@@ -361,7 +361,7 @@ Change every `querySelectorAll(...).forEach` in GuideFolding.
 
 Set iteration can remain unchanged because it is part of ES2015.
 
-- [ ] **Step 6: Replace array `includes`**
+- [x] **Step 6: Replace array `includes`**
 
 Use:
 
@@ -372,7 +372,7 @@ previousFoldedLines.indexOf(previousCursor.line) === -1
 
 Preserve the existing booleans and branches.
 
-- [ ] **Step 7: Run focused tests and lint**
+- [x] **Step 7: Run focused tests and lint**
 
 Run:
 
@@ -412,7 +412,7 @@ Expected: focused tests pass, and no unsafe or `prefer-create-el` warning remain
 - Produces: `setControlValue(key: string, value: unknown): Promise<void>`.
 - Retains: `display(): void` for Obsidian before 1.13.0.
 
-- [ ] **Step 1: Rewrite the settings-tab test contract**
+- [x] **Step 1: Rewrite the settings-tab test contract**
 
 Extend the Obsidian mock's `PluginSettingTab` with callable `getSettingDefinitions`, `getControlValue`, and `setControlValue` surfaces.
 
@@ -444,7 +444,7 @@ Assert `setControlValue` updates the matching Settings property, converts the ve
 
 Keep the existing `display()` test to cover Obsidian 1.12.7.
 
-- [ ] **Step 2: Add a failing generic setValue test**
+- [x] **Step 2: Add a failing generic setValue test**
 
 Add:
 
@@ -461,7 +461,7 @@ test("setValue updates and notifies one generic key", () => {
 });
 ```
 
-- [ ] **Step 3: Run settings tests and verify RED**
+- [x] **Step 3: Run settings tests and verify RED**
 
 Run:
 
@@ -473,7 +473,7 @@ npm run test:unit -- --runInBand \
 
 Expected: FAIL because declarative definitions and control storage overrides do not exist.
 
-- [ ] **Step 4: Define typed control metadata**
+- [x] **Step 4: Define typed control metadata**
 
 Use a typed constant for cursor options:
 
@@ -487,7 +487,7 @@ const KEEP_CURSOR_OPTIONS = {
 
 Return declarative dropdown and toggle controls in the existing visual order.
 
-- [ ] **Step 5: Implement safe custom storage**
+- [x] **Step 5: Implement safe custom storage**
 
 Use exhaustive `switch` statements in `getControlValue` and `setControlValue`.
 
@@ -506,13 +506,13 @@ Validate `KeepCursorWithinContent` by checking membership in `KEEP_CURSOR_OPTION
 
 Save exactly once after a successful mutation.
 
-- [ ] **Step 6: Keep the legacy display fallback**
+- [x] **Step 6: Keep the legacy display fallback**
 
 Keep `display()` and reuse `KEEP_CURSOR_OPTIONS` instead of an assertion.
 
 Do not raise `minAppVersion`.
 
-- [ ] **Step 7: Remove the generic patch assertion**
+- [x] **Step 7: Remove the generic patch assertion**
 
 Implement `setValue` as a direct single-key update:
 
@@ -526,7 +526,7 @@ setValue<T extends SettingsKey>(key: T, value: SettingsObject[T]): void {
 }
 ```
 
-- [ ] **Step 8: Run settings tests and verify GREEN**
+- [x] **Step 8: Run settings tests and verify GREEN**
 
 Run the command from Step 3.
 
@@ -547,7 +547,7 @@ Expected: all settings tests pass.
 - Preserves compile-only verification that every semantic driver global is callable.
 - Preserves both string and string-array `parseState` overloads.
 
-- [ ] **Step 1: Change the compile-only global type**
+- [x] **Step 1: Change the compile-only global type**
 
 Replace:
 
@@ -563,7 +563,7 @@ keyof typeof window
 (typeof window)[K]
 ```
 
-- [ ] **Step 2: Normalize parseState input without reassignment**
+- [x] **Step 2: Normalize parseState input without reassignment**
 
 Use:
 
@@ -574,7 +574,7 @@ const acc = lines.reduce(/* existing reducer */);
 
 Keep the overloads and returned State unchanged.
 
-- [ ] **Step 3: Run type and focused lint checks**
+- [x] **Step 3: Run type and focused lint checks**
 
 Run:
 
@@ -604,7 +604,7 @@ Expected: zero errors and zero warnings.
 
 - No new interface.
 
-- [ ] **Step 1: Run formatting and lint**
+- [x] **Step 1: Run formatting and lint**
 
 Run:
 
@@ -614,7 +614,7 @@ npm run lint
 
 Expected: zero warnings because `--max-warnings=0` is active.
 
-- [ ] **Step 2: Run TypeScript**
+- [x] **Step 2: Run TypeScript**
 
 Run:
 
@@ -624,7 +624,7 @@ npx tsc --noEmit --pretty false
 
 Expected: exit zero.
 
-- [ ] **Step 3: Run unit tests**
+- [x] **Step 3: Run unit tests**
 
 Run:
 
@@ -634,7 +634,7 @@ npm run test:unit -- --runInBand
 
 Expected: all unit suites pass.
 
-- [ ] **Step 4: Build production and test bundles**
+- [x] **Step 4: Build production and test bundles**
 
 Run:
 
@@ -645,7 +645,7 @@ npm run build-with-tests
 
 Expected: both Rollup builds exit zero.
 
-- [ ] **Step 5: Protect the full-test fixture**
+- [x] **Step 5: Protect the full-test fixture**
 
 Copy `vault/test.md` outside the vault and record its SHA-256 hash.
 
@@ -659,7 +659,7 @@ Expected: the full suite passes.
 
 Wait until the `vault=vault` renderer exits, restore the fixture, wait for delayed saves, and verify the restored hash again.
 
-- [ ] **Step 6: Review the final diff**
+- [x] **Step 6: Review the final diff**
 
 Confirm:
 
@@ -671,11 +671,23 @@ Confirm:
 - SettingsTab implements both `getSettingDefinitions()` and `display()`;
 - no unsafe-rule suppression comment was added.
 
-- [ ] **Step 7: Update this plan with execution evidence**
+- [x] **Step 7: Update this plan with execution evidence**
 
 Record exact test counts, build results, fixture hash restoration, and any AGENTS.md improvement.
 
-- [ ] **Step 8: Commit all selected changes**
+Execution evidence:
+
+- `npm run lint`: passed with zero warnings.
+- `npx tsc --noEmit --pretty false`: passed.
+- `npm run test:unit -- --runInBand`: 47 suites and 438 tests passed.
+- `npm run build`: production bundle built successfully.
+- `npm run build-with-tests`: test bundle built successfully.
+- `npm test -- --runInBand`: 66 suites passed; 553 tests passed and 14 were skipped.
+- `vault/test.md`: restored after the renderer exited; SHA-256 matched the pre-test backup at `3b41a8cfcfc20a345fa3b2d33a909f1fb00bdd00d2302223bedefc0ed9c96f0b`, with both files at 4588 bytes.
+- Review: no Critical or Important findings; aligned `lint:fix` with the expanded lint scope.
+- `AGENTS.md`: documented `getObsidianDomWindow(doc)` as the single adapter for owner-window DOM helpers missing from the current Obsidian `Window` type.
+
+- [x] **Step 8: Commit all selected changes**
 
 Use `but diff` to obtain only this task's file and hunk IDs.
 
@@ -691,6 +703,6 @@ What:
 Adopt searchable dual-version settings, safe runtime adapters, Obsidian DOM helpers, ES2015-compatible collection logic, and matching lint coverage.
 ```
 
-- [ ] **Step 9: Inspect the returned GitButler workspace state**
+- [x] **Step 9: Inspect the returned GitButler workspace state**
 
 Expected: `codex/obsidian-review-warnings` owns only this plan, its design, and the warning-cleanup changes.

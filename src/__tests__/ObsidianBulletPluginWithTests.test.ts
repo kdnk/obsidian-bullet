@@ -235,6 +235,7 @@ describe("ObsidianBulletPluginWithTests", () => {
     Object.defineProperty(global, "window", {
       configurable: true,
       value: {
+        process: { env: process.env },
         setTimeout: global.setTimeout,
         clearTimeout: global.clearTimeout,
       },
@@ -291,6 +292,27 @@ describe("ObsidianBulletPluginWithTests", () => {
 
     await jest.advanceTimersByTimeAsync(1);
     expect(connect).toHaveBeenCalled();
+  });
+
+  test("does not connect without a renderer test environment", async () => {
+    process.env.TEST_PLATFORM = "1";
+    Object.defineProperty(global, "window", {
+      configurable: true,
+      value: {
+        setTimeout: global.setTimeout,
+        clearTimeout: global.clearTimeout,
+      },
+    });
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
+    const connect = jest.fn().mockResolvedValue(undefined);
+    plugin.connect = connect;
+
+    await plugin.onload();
+    await jest.advanceTimersByTimeAsync(RENDERER_TEST_CONNECT_DELAY_MS);
+
+    expect(connect).not.toHaveBeenCalled();
   });
 
   test("cancels the delayed connection when unloaded", async () => {

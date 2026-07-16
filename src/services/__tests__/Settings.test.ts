@@ -123,4 +123,26 @@ describe("change notifications", () => {
 
     expect(callback).not.toHaveBeenCalled();
   });
+
+  test("updates and notifies through the generic setting API", () => {
+    const settings = createSettings();
+    const callback = jest.fn<void, [SettingsChange]>();
+    settings.onChange(["debug"], callback);
+
+    settings.setValue("debug", true);
+
+    expect(settings.debug).toBe(true);
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback.mock.calls[0]?.[0].keys).toEqual(new Set(["debug"]));
+  });
+
+  test("does not notify through the generic setting API when unchanged", () => {
+    const settings = createSettings();
+    const callback = jest.fn<void, [SettingsChange]>();
+    settings.onChange(["debug"], callback);
+
+    settings.setValue("debug", false);
+
+    expect(callback).not.toHaveBeenCalled();
+  });
 });

@@ -27,7 +27,7 @@ export class RecoverCursorAfterFoldedNavigation implements Operation {
       return NO_OP_OUTCOME;
     }
 
-    if (!previousFoldedLines.includes(previousCursor.line)) {
+    if (previousFoldedLines.indexOf(previousCursor.line) === -1) {
       return NO_OP_OUTCOME;
     }
 

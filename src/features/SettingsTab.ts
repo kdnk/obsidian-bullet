@@ -1,8 +1,159 @@
-import { App, Plugin, PluginSettingTab, Setting } from "obsidian";
+import {
+  App,
+  Plugin,
+  PluginSettingTab,
+  Setting,
+  SettingDefinitionControl,
+  SettingDefinitionItem,
+} from "obsidian";
 
 import { Feature } from "./Feature";
 
 import { KeepCursorWithinContent, Settings } from "../services/Settings";
+
+type SettingsControlKey =
+  | "keepCursorWithinContent"
+  | "overrideTabBehaviour"
+  | "overrideEnterBehaviour"
+  | "overrideVimOBehaviour"
+  | "overrideSelectAllBehaviour"
+  | "betterListsStyles"
+  | "verticalLines"
+  | "outerVerticalLines"
+  | "verticalLinesActionEnabled"
+  | "mobileRightFoldControls"
+  | "dragAndDrop"
+  | "debug";
+
+type BulletSettingDefinition = SettingDefinitionControl<SettingsControlKey> & {
+  desc: string;
+};
+
+const KEEP_CURSOR_OPTIONS = {
+  never: "Never",
+  "bullet-only": "Stick cursor out of bullets",
+  "bullet-and-checkbox": "Stick cursor out of bullets and checkboxes",
+} satisfies Record<KeepCursorWithinContent, string>;
+
+const SETTING_DEFINITIONS = [
+  {
+    name: "Stick the cursor to the content",
+    desc: "Keep the caret in the editable text instead of the markdown prefix. Use Never to edit bullets and checkboxes directly, Bullets to stay out of `- ` or `1. `, or Bullets and checkboxes to also stay out of `[ ]` / `[x]` markup.",
+    control: {
+      type: "dropdown",
+      key: "keepCursorWithinContent",
+      options: KEEP_CURSOR_OPTIONS,
+    },
+  },
+  {
+    name: "Enhance the Tab key",
+    desc: "Make Tab and Shift-Tab behave the same as other outliners.",
+    control: {
+      type: "toggle",
+      key: "overrideTabBehaviour",
+    },
+  },
+  {
+    name: "Enhance the Enter key",
+    desc: "Make the Enter key behave the same as other outliners.",
+    control: {
+      type: "toggle",
+      key: "overrideEnterBehaviour",
+    },
+  },
+  {
+    name: "Vim-mode o/O inserts bullets",
+    desc: "Create a bullet when pressing o or O in Vim mode.",
+    control: {
+      type: "toggle",
+      key: "overrideVimOBehaviour",
+    },
+  },
+  {
+    name: "Enhance the Ctrl+A or Cmd+A behavior",
+    desc: "Press the hotkey once to select the current list item. Press the hotkey twice to select the entire list.",
+    control: {
+      type: "toggle",
+      key: "overrideSelectAllBehaviour",
+    },
+  },
+  {
+    name: "Improve the style of your lists",
+    desc: "Styles are only compatible with built-in Obsidian themes and may not be compatible with other themes.",
+    control: {
+      type: "toggle",
+      key: "betterListsStyles",
+    },
+  },
+  {
+    name: "Draw vertical indentation lines",
+    desc: "Show guide lines that connect nested list items by indentation level.",
+    control: {
+      type: "toggle",
+      key: "verticalLines",
+    },
+  },
+  {
+    name: "Draw outer list lines",
+    desc: "Show a root-level guide beside each contiguous list chunk.",
+    control: {
+      type: "toggle",
+      key: "outerVerticalLines",
+    },
+  },
+  {
+    name: "Fold lists from vertical indentation lines",
+    desc: "Click a vertical indentation line to fold or unfold that list.",
+    control: {
+      type: "toggle",
+      key: "verticalLinesActionEnabled",
+    },
+  },
+  {
+    name: "Show fold controls on the right on mobile",
+    desc: "Move fold controls to the right edge in Live Preview on mobile.",
+    control: {
+      type: "toggle",
+      key: "mobileRightFoldControls",
+    },
+  },
+  {
+    name: "Drag-and-Drop",
+    desc: "Move list items on desktop by dragging a bullet, fold indicator, or checkbox.",
+    control: {
+      type: "toggle",
+      key: "dragAndDrop",
+    },
+  },
+  {
+    name: "Debug mode",
+    desc: "Open DevTools (Command+Option+I or Control+Shift+I) to copy the debug logs.",
+    control: {
+      type: "toggle",
+      key: "debug",
+    },
+  },
+] satisfies BulletSettingDefinition[];
+
+function decodeBooleanControl(key: string, value: unknown): boolean {
+  if (typeof value !== "boolean") {
+    throw new TypeError(`Expected ${key} to be a boolean`);
+  }
+  return value;
+}
+
+function decodeKeepCursorWithinContent(
+  value: unknown,
+): KeepCursorWithinContent {
+  if (
+    value === "never" ||
+    value === "bullet-only" ||
+    value === "bullet-and-checkbox"
+  ) {
+    return value;
+  }
+  throw new TypeError("Expected keepCursorWithinContent to be a known option");
+}
 
 class ObsidianBulletPluginSettingTab extends PluginSettingTab {
   constructor(
@@ -13,170 +164,130 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
     super(app, plugin);
   }
 
+  getSettingDefinitions(): SettingDefinitionItem<SettingsControlKey>[] {
+    return SETTING_DEFINITIONS;
+  }
+
+  getControlValue(key: string): unknown {
+    switch (key) {
+      case "keepCursorWithinContent":
+        return this.settings.keepCursorWithinContent;
+      case "overrideTabBehaviour":
+        return this.settings.overrideTabBehaviour;
+      case "overrideEnterBehaviour":
+        return this.settings.overrideEnterBehaviour;
+      case "overrideVimOBehaviour":
+        return this.settings.overrideVimOBehaviour;
+      case "overrideSelectAllBehaviour":
+        return this.settings.overrideSelectAllBehaviour;
+      case "betterListsStyles":
+        return this.settings.betterListsStyles;
+      case "verticalLines":
+        return this.settings.verticalLines;
+      case "outerVerticalLines":
+        return this.settings.outerVerticalLines;
+      case "verticalLinesActionEnabled":
+        return this.settings.verticalLinesAction === "toggle-folding";
+      case "mobileRightFoldControls":
+        return this.settings.mobileRightFoldControls;
+      case "dragAndDrop":
+        return this.settings.dragAndDrop;
+      case "debug":
+        return this.settings.debug;
+      default:
+        throw new Error(`Unknown settings control: ${key}`);
+    }
+  }
+
+  async setControlValue(key: string, value: unknown): Promise<void> {
+    switch (key) {
+      case "keepCursorWithinContent":
+        this.settings.keepCursorWithinContent =
+          decodeKeepCursorWithinContent(value);
+        break;
+      case "overrideTabBehaviour":
+        this.settings.overrideTabBehaviour = decodeBooleanControl(key, value);
+        break;
+      case "overrideEnterBehaviour":
+        this.settings.overrideEnterBehaviour = decodeBooleanControl(key, value);
+        break;
+      case "overrideVimOBehaviour":
+        this.settings.overrideVimOBehaviour = decodeBooleanControl(key, value);
+        break;
+      case "overrideSelectAllBehaviour":
+        this.settings.overrideSelectAllBehaviour = decodeBooleanControl(
+          key,
+          value,
+        );
+        break;
+      case "betterListsStyles":
+        this.settings.betterListsStyles = decodeBooleanControl(key, value);
+        break;
+      case "verticalLines":
+        this.settings.verticalLines = decodeBooleanControl(key, value);
+        break;
+      case "outerVerticalLines":
+        this.settings.outerVerticalLines = decodeBooleanControl(key, value);
+        break;
+      case "verticalLinesActionEnabled":
+        this.settings.verticalLinesAction = decodeBooleanControl(key, value)
+          ? "toggle-folding"
+          : "none";
+        break;
+      case "mobileRightFoldControls":
+        this.settings.mobileRightFoldControls = decodeBooleanControl(
+          key,
+          value,
+        );
+        break;
+      case "dragAndDrop":
+        this.settings.dragAndDrop = decodeBooleanControl(key, value);
+        break;
+      case "debug":
+        this.settings.debug = decodeBooleanControl(key, value);
+        break;
+      default:
+        throw new Error(`Unknown settings control: ${key}`);
+    }
+
+    await this.settings.save();
+  }
+
   display(): void {
-    const { containerEl } = this;
+    this.containerEl.empty();
 
-    containerEl.empty();
+    for (const definition of SETTING_DEFINITIONS) {
+      const setting = new Setting(this.containerEl)
+        .setName(definition.name)
+        .setDesc(definition.desc);
+      const control = definition.control;
+      const currentValue = this.getControlValue(control.key);
 
-    new Setting(containerEl)
-      .setName("Stick the cursor to the content")
-      .setDesc(
-        "Keep the caret in the editable text instead of the markdown prefix. Use Never to edit bullets and checkboxes directly, Bullets to stay out of `- ` or `1. `, or Bullets and checkboxes to also stay out of `[ ]` / `[x]` markup.",
-      )
-      .addDropdown((dropdown) => {
-        dropdown
-          .addOptions({
-            never: "Never",
-            "bullet-only": "Stick cursor out of bullets",
-            "bullet-and-checkbox": "Stick cursor out of bullets and checkboxes",
-          } as { [key in KeepCursorWithinContent]: string })
-          .setValue(this.settings.keepCursorWithinContent)
-          .onChange(async (value) => {
-            this.settings.keepCursorWithinContent =
-              value as KeepCursorWithinContent;
-            await this.settings.save();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Enhance the Tab key")
-      .setDesc("Make Tab and Shift-Tab behave the same as other outliners.")
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.settings.overrideTabBehaviour)
-          .onChange(async (value) => {
-            this.settings.overrideTabBehaviour = value;
-            await this.settings.save();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Enhance the Enter key")
-      .setDesc("Make the Enter key behave the same as other outliners.")
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.settings.overrideEnterBehaviour)
-          .onChange(async (value) => {
-            this.settings.overrideEnterBehaviour = value;
-            await this.settings.save();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Vim-mode o/O inserts bullets")
-      .setDesc("Create a bullet when pressing o or O in Vim mode.")
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.settings.overrideVimOBehaviour)
-          .onChange(async (value) => {
-            this.settings.overrideVimOBehaviour = value;
-            await this.settings.save();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Enhance the Ctrl+A or Cmd+A behavior")
-      .setDesc(
-        "Press the hotkey once to select the current list item. Press the hotkey twice to select the entire list.",
-      )
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.settings.overrideSelectAllBehaviour)
-          .onChange(async (value) => {
-            this.settings.overrideSelectAllBehaviour = value;
-            await this.settings.save();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Improve the style of your lists")
-      .setDesc(
-        "Styles are only compatible with built-in Obsidian themes and may not be compatible with other themes.",
-      )
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.settings.betterListsStyles)
-          .onChange(async (value) => {
-            this.settings.betterListsStyles = value;
-            await this.settings.save();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Draw vertical indentation lines")
-      .setDesc(
-        "Show guide lines that connect nested list items by indentation level.",
-      )
-      .addToggle((toggle) => {
-        toggle.setValue(this.settings.verticalLines).onChange(async (value) => {
-          this.settings.verticalLines = value;
-          await this.settings.save();
+      if (control.type === "dropdown") {
+        if (typeof currentValue !== "string") {
+          throw new TypeError(`Expected ${control.key} to resolve to a string`);
+        }
+        setting.addDropdown((dropdown) => {
+          dropdown
+            .addOptions(control.options)
+            .setValue(currentValue)
+            .onChange(async (value) => {
+              await this.setControlValue(control.key, value);
+            });
         });
-      });
-
-    new Setting(containerEl)
-      .setName("Draw outer list lines")
-      .setDesc("Show a root-level guide beside each contiguous list chunk.")
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.settings.outerVerticalLines)
-          .onChange(async (value) => {
-            this.settings.outerVerticalLines = value;
-            await this.settings.save();
+      } else {
+        if (typeof currentValue !== "boolean") {
+          throw new TypeError(
+            `Expected ${control.key} to resolve to a boolean`,
+          );
+        }
+        setting.addToggle((toggle) => {
+          toggle.setValue(currentValue).onChange(async (value) => {
+            await this.setControlValue(control.key, value);
           });
-      });
-
-    new Setting(containerEl)
-      .setName("Fold lists from vertical indentation lines")
-      .setDesc("Click a vertical indentation line to fold or unfold that list.")
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.settings.verticalLinesAction === "toggle-folding")
-          .onChange(async (value) => {
-            this.settings.verticalLinesAction = value
-              ? "toggle-folding"
-              : "none";
-            await this.settings.save();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Show fold controls on the right on mobile")
-      .setDesc(
-        "Move fold controls to the right edge in Live Preview on mobile.",
-      )
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.settings.mobileRightFoldControls)
-          .onChange(async (value) => {
-            this.settings.mobileRightFoldControls = value;
-            await this.settings.save();
-          });
-      });
-
-    new Setting(containerEl)
-      .setName("Drag-and-Drop")
-      .setDesc(
-        "Move list items on desktop by dragging a bullet, fold indicator, or checkbox.",
-      )
-      .addToggle((toggle) => {
-        toggle.setValue(this.settings.dragAndDrop).onChange(async (value) => {
-          this.settings.dragAndDrop = value;
-          await this.settings.save();
         });
-      });
-
-    new Setting(containerEl)
-      .setName("Debug mode")
-      .setDesc(
-        "Open DevTools (Command+Option+I or Control+Shift+I) to copy the debug logs.",
-      )
-      .addToggle((toggle) => {
-        toggle.setValue(this.settings.debug).onChange(async (value) => {
-          this.settings.debug = value;
-          await this.settings.save();
-        });
-      });
+      }
+    }
   }
 }
 

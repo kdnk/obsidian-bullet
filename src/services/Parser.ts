@@ -225,7 +225,7 @@ export class Parser {
           currentIndentWidth = indentWidth;
         }
 
-        const foldRoot = foldedLines.includes(l);
+        const foldRoot = foldedLines.indexOf(l) !== -1;
 
         currentList = new List(
           root,

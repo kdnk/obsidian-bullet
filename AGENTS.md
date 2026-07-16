@@ -31,6 +31,8 @@
     - 手動検証用のplugin IDは `bullet` です。build artifactは `vault/.obsidian/plugins/bullet/` へ配置し、別のpluginディレクトリを作らないでください。
     - テスト用 vault を開く操作と plugin の再読込は、Obsidian CLI で `vault=vault` を明示してください。UI 操作前にウィンドウタイトルが `vault` を示すことを確認し、`base` が表示された場合は操作を止めてください。
     - Obsidian の複数 window が開いている場合、open 後の 1 回だけのタイトル確認では不十分です。Computer Use の各 UI action 直前に `obsidian-cli vault=vault eval code='window.focus()'` で test vault renderer を focus し、fresh state のタイトルが test vault であることを確認してください。過去の element index や座標を再利用せず、対象 window を保証できない場合は action を実行しないでください。
+- Obsidian の DOM helper について
+    - owner `Document` から detached element を作る場合は、native `document.createElement` や global helper を使わず、`src/obsidianDom.ts` の `getObsidianDomWindow(doc)` から `createDiv()` / `createSpan()` を呼んでください。Obsidian runtime は `Document.win` に helper を公開しますが、現在の `obsidian` 型定義では `Window` 上の helper が宣言されていないため、局所的な cast を増やさずこの adapter に集約してください。
 - 縦線ガイドについて
     - 保存済みfoldを再オープンした直後の縦線操作は、`mousedown` 中に開閉すると、Obsidianが再表示したlist markerを一時的なraw `-` のまま残す場合があります。capture phaseの `mousedown` はCodeMirrorのselection移動を防ぐためだけにconsumeし、実際の開閉はcapture phaseの `click` で実行してください。検証では `mousedown` → `mouseup` → `click` の全sequenceを使い、再表示されたmarkerがnative `.list-bullet` であることを確認してください。transientなraw markerをCSSや独自bulletで描き直さないでください。
     - Obsidian 1.13 系の Live Preview では、複数のインデント単位が 1 個の `.cm-indent` にまとめられる場合も、複数の `.cm-indent` として表示される場合もあります。guide 数がネスト階層数と一致すると仮定しないでください。

@@ -100,6 +100,7 @@ describe("DragAndDrop", () => {
     const body = makeElement();
     const appended: unknown[] = [];
     const removed: unknown[] = [];
+    const createDiv = jest.fn(() => makeElement());
 
     body.appendChild = jest.fn((child: unknown) => {
       appended.push(child);
@@ -112,7 +113,7 @@ describe("DragAndDrop", () => {
 
     return {
       body,
-      createElement: jest.fn(() => makeElement()),
+      win: { createDiv },
       addEventListener: jest.fn(),
       removeEventListener: jest.fn(),
       appended,
@@ -443,6 +444,7 @@ describe("DragAndDrop", () => {
     expect(popoutDocument.body.classList.contains("bullet-plugin-dnd")).toBe(
       true,
     );
+    expect(popoutDocument.win.createDiv).toHaveBeenCalledTimes(2);
     expect(popoutDocument.appended).toHaveLength(1);
     expect(popoutDocument.addEventListener).toHaveBeenCalledTimes(4);
 

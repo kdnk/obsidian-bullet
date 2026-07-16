@@ -5,7 +5,10 @@ import { MyEditor, MyEditorPosition, MyEditorSelection } from "./editor";
 import { EditorSelectionsBehaviourOverride } from "./features/EditorSelectionsBehaviourOverride";
 import { KeepCursorWithinListContent } from "./operations/KeepCursorWithinListContent";
 import { SettingsObject } from "./services/Settings";
-import { getTestPlatformWsUrl } from "./testPlatform";
+import {
+  getTestPlatformEnvironment,
+  getTestPlatformWsUrl,
+} from "./testPlatform";
 
 declare global {
   interface Window {
@@ -31,6 +34,13 @@ interface GuideClickOptions {
 
 interface NativeListBulletAssertionOptions {
   line: number;
+}
+
+interface ParsedStateAccumulator {
+  anchor: MyEditorPosition | null;
+  head: MyEditorPosition | null;
+  lines: string[];
+  folds: number[];
 }
 
 type SettingCommand = {
@@ -313,7 +323,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
     this.testPlatformUnloaded = false;
     window.ObsidianBulletPlugin = this;
 
-    if (process.env.TEST_PLATFORM) {
+    if (getTestPlatformEnvironment(window).TEST_PLATFORM) {
       this.testConnectTimer = window.setTimeout(() => {
         this.testConnectTimer = undefined;
         void this.connect().catch((error) => {
@@ -350,7 +360,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   protected async prepareSettings() {
     await super.prepareSettings();
 
-    if (process.env.TEST_PLATFORM) {
+    if (getTestPlatformEnvironment(window).TEST_PLATFORM) {
       this.resetSettings();
     }
   }
@@ -1006,14 +1016,12 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
   parseState(content: string): State;
   parseState(content: string | string[]): State;
   parseState(content: string | string[]): State {
-    if (typeof content === "string") {
-      content = content.split("\n");
-    }
+    const lines = typeof content === "string" ? content.split("\n") : content;
 
-    const acc = content.reduce(
+    const acc = lines.reduce<ParsedStateAccumulator>(
       (acc, line, lineNo) => {
         if (line.includes("#folded")) {
-          line = line.replace("#folded", "").trimEnd();
+          line = line.replace("#folded", "").replace(/\s+$/, "");
           acc.folds.push(lineNo);
         }
 
@@ -1044,10 +1052,10 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
         return acc;
       },
       {
-        anchor: null as MyEditorPosition | null,
-        head: null as MyEditorPosition | null,
-        lines: [] as string[],
-        folds: [] as number[],
+        anchor: null,
+        head: null,
+        lines: [],
+        folds: [],
       },
     );
     if (!acc.anchor) {

@@ -1,5 +1,5 @@
 import { makeEditor, makeLogger, makeSettings } from "../../__mocks__";
-import { Logger } from "../Logger";
+import { LogSink, Logger } from "../Logger";
 import { Parser } from "../Parser";
 import { Settings } from "../Settings";
 
@@ -18,11 +18,8 @@ function makeParser(
   return new Parser(logger, settings);
 }
 
-function getMockLog(logger: Logger) {
-  const { log } = logger as unknown as {
-    log: jest.MockedFunction<Logger["log"]>;
-  };
-  return log;
+function makeLogSink() {
+  return jest.fn<void, Parameters<LogSink>>();
 }
 
 describe("parseList", () => {
@@ -100,8 +97,8 @@ describe("parseList", () => {
   });
 
   test("should parse mixed spaces and tabs without failing", () => {
-    const logger = makeLogger();
-    const log = getMockLog(logger);
+    const log = makeLogSink();
+    const logger = makeLogger(log);
     const parser = makeParser({ logger });
     const editor = makeEditor({
       text: "- one\n  - two\n\t- three",
@@ -116,8 +113,8 @@ describe("parseList", () => {
   });
 
   test("should error if note indent is not match", () => {
-    const logger = makeLogger();
-    const log = getMockLog(logger);
+    const log = makeLogSink();
+    const logger = makeLogger(log);
     const parser = makeParser({ logger });
     const editor = makeEditor({
       text: "- one\n\t- two\n  three",
@@ -134,8 +131,8 @@ describe("parseList", () => {
   });
 
   test("should parse list with tab just after the list", () => {
-    const logger = makeLogger();
-    const log = getMockLog(logger);
+    const log = makeLogSink();
+    const logger = makeLogger(log);
     const parser = makeParser({ logger });
     const editor = makeEditor({
       text: "- one\n\t- two\n\t\n",

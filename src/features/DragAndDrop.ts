@@ -7,6 +7,7 @@ import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 import { Feature } from "./Feature";
 
 import { MyEditor, getEditorFromState } from "../editor";
+import { getObsidianDomWindow } from "../obsidianDom";
 import { MoveListToDifferentPosition } from "../operations/MoveListToDifferentPosition";
 import { List, Root, cmpPos } from "../root";
 import { ObsidianSettings } from "../services/ObsidianSettings";
@@ -83,9 +84,10 @@ export class DragAndDrop implements Feature {
       return;
     }
 
-    const dropZonePadding = doc.createElement("div");
+    const domWindow = getObsidianDomWindow(doc);
+    const dropZonePadding = domWindow.createDiv();
     dropZonePadding.classList.add("bullet-plugin-drop-zone-padding");
-    const dropZone = doc.createElement("div");
+    const dropZone = domWindow.createDiv();
     dropZone.classList.add("bullet-plugin-drop-zone");
     dropZone.setCssStyles({ display: "none" });
     dropZone.appendChild(dropZonePadding);
