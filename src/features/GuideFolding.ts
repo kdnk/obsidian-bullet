@@ -15,6 +15,8 @@ import {
   scrollPastEnd,
 } from "@codemirror/view";
 
+import { ensureFoldScrollReserve } from "./FoldScroll";
+
 import { MyEditorPosition, getEditorFromState } from "../editor";
 import { List, Root } from "../root";
 import { Parser, Reader } from "../services/Parser";
@@ -250,22 +252,6 @@ function stableScrollSnapshot(view: EditorView) {
   return snapshot;
 }
 
-function ensureScrollPastEndReserve(view: EditorView): void {
-  const expected =
-    view.scrollDOM.clientHeight -
-    view.defaultLineHeight -
-    view.documentPadding.top -
-    0.5;
-  const current = Number.parseFloat(view.contentDOM.style.paddingBottom);
-  if (
-    Number.isFinite(expected) &&
-    expected >= 0 &&
-    (!Number.isFinite(current) || current < expected)
-  ) {
-    view.contentDOM.style.paddingBottom = `${expected}px`;
-  }
-}
-
 function setGuideTargetsFolded(
   view: EditorView,
   targets: readonly GuideFoldTarget[],
@@ -284,7 +270,7 @@ function setGuideTargetsFolded(
     return false;
   }
 
-  ensureScrollPastEndReserve(view);
+  ensureFoldScrollReserve(view);
   const effects = [
     stableScrollSnapshot(view),
     ...resolved.map(({ range }) =>
