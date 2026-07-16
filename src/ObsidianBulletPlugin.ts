@@ -12,6 +12,7 @@ import { Feature } from "./features/Feature";
 import { ListsFoldingCommands } from "./features/ListsFoldingCommands";
 import { ListsMovementCommands } from "./features/ListsMovementCommands";
 import { MetaBackspaceBehaviourOverride } from "./features/MetaBackspaceBehaviourOverride";
+import { MobileRightFoldControls } from "./features/MobileRightFoldControls";
 import { SettingsTab } from "./features/SettingsTab";
 import { ShiftTabBehaviourOverride } from "./features/ShiftTabBehaviourOverride";
 import { SystemInfo } from "./features/SystemInfo";
@@ -143,6 +144,9 @@ export default class ObsidianBulletPlugin extends Plugin {
 
       // features based on settings.betterListsStyles
       new BetterListsStyles(this, this.settings, this.obsidianSettings),
+
+      // features based on settings.mobileRightFoldControls
+      new MobileRightFoldControls(this, this.settings),
 
       // features based on settings.verticalLines
       new VerticalLines(this, this.settings, this.parser),

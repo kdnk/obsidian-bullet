@@ -10,4 +10,15 @@ describe("ObsidianBulletPlugin wiring", () => {
 
     expect(source).not.toContain("ReleaseNotesAnnouncement");
   });
+
+  test("loads mobile right fold controls as an independent feature", () => {
+    const source = readFileSync(
+      join(__dirname, "../ObsidianBulletPlugin.ts"),
+      "utf-8",
+    );
+
+    expect(source).toContain(
+      "new MobileRightFoldControls(this, this.settings)",
+    );
+  });
 });
