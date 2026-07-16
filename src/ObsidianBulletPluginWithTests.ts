@@ -824,7 +824,7 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
 
       if (root) {
         const op = new KeepCursorWithinListContent(root);
-        this.operationPerformer.eval(root, op, this.editor);
+        this.operationPerformer.execute(root, op, this.editor);
 
         targetSelections = root.getSelections();
       } else {

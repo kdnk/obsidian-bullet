@@ -284,7 +284,7 @@ export class DragAndDrop implements Feature {
       return;
     }
 
-    this.operationPerformer.eval(
+    this.operationPerformer.execute(
       root,
       new MoveListToDifferentPosition(
         root,

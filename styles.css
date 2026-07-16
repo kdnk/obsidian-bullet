@@ -177,13 +177,16 @@
   height: 4px;
 }
 
-body.bullet-plugin-dnd:not(.bullet-plugin-dragging) .cm-formatting-list,
 body.bullet-plugin-dnd:not(.bullet-plugin-dragging)
+  .markdown-source-view.mod-cm6
+  .cm-formatting-list,
+body.bullet-plugin-dnd:not(.bullet-plugin-dragging)
+  .markdown-source-view.mod-cm6
   .cm-fold-indicator
   .collapse-indicator {
-  cursor: grab !important;
+  cursor: grab;
 }
 
 html body.bullet-plugin-dnd.bullet-plugin-dragging {
-  cursor: grabbing !important;
+  cursor: grabbing;
 }

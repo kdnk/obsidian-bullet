@@ -167,7 +167,7 @@ export class EditorSelectionsBehaviourOverride implements Feature {
         previousFoldedLines,
         pressedKey,
       );
-      const { shouldStopPropagation } = this.operationPerformer.eval(
+      const { shouldStopPropagation } = this.operationPerformer.execute(
         root,
         recovery,
         editor,
@@ -185,7 +185,7 @@ export class EditorSelectionsBehaviourOverride implements Feature {
     }
 
     {
-      const { shouldStopPropagation } = this.operationPerformer.eval(
+      const { shouldStopPropagation } = this.operationPerformer.execute(
         root,
         new KeepCursorOutsideFoldedLines(root),
         editor,
@@ -197,7 +197,7 @@ export class EditorSelectionsBehaviourOverride implements Feature {
     }
 
     if (pressedKey === "ArrowUp" && previousCursor) {
-      const { shouldStopPropagation } = this.operationPerformer.eval(
+      const { shouldStopPropagation } = this.operationPerformer.execute(
         root,
         new RecoverCursorAfterArrowUp(root, previousCursor),
         editor,
@@ -208,7 +208,7 @@ export class EditorSelectionsBehaviourOverride implements Feature {
       }
     }
 
-    this.operationPerformer.eval(
+    this.operationPerformer.execute(
       root,
       new KeepCursorWithinListContent(root),
       editor,

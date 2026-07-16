@@ -15,7 +15,7 @@ export class OperationPerformer {
     private changesApplicator: ChangesApplicator,
   ) {}
 
-  eval(root: Root, op: Operation, editor: MyEditor): OperationOutcome {
+  execute(root: Root, op: Operation, editor: MyEditor): OperationOutcome {
     const prevRoot = root.clone();
     const outcome = op.perform();
 
@@ -42,6 +42,6 @@ export class OperationPerformer {
       return NO_OP_OUTCOME;
     }
 
-    return this.eval(root, op, editor);
+    return this.execute(root, op, editor);
   }
 }

@@ -92,9 +92,8 @@ class SystemInfoModal extends Modal {
     });
 
     const button = this.contentEl.createEl("button");
-    button.setText("Copy and Close");
+    button.setText("Close");
     button.onClickEvent(() => {
-      void navigator.clipboard.writeText("```json\n" + text + "\n```");
       this.close();
     });
   }

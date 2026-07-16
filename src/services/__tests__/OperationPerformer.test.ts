@@ -70,7 +70,7 @@ describe("OperationPerformer", () => {
     const { apply, editor, performer } = makeSubject();
     const { operation } = makeOperation(STOP_ONLY_OUTCOME);
 
-    const result = performer.eval(root, operation, editor);
+    const result = performer.execute(root, operation, editor);
 
     expect(apply).not.toHaveBeenCalled();
     expect(result).toBe(STOP_ONLY_OUTCOME);
@@ -81,7 +81,7 @@ describe("OperationPerformer", () => {
     const { apply, editor, performer } = makeSubject();
     const { operation } = makeOperation(UPDATED_OUTCOME);
 
-    const result = performer.eval(root, operation, editor);
+    const result = performer.execute(root, operation, editor);
 
     expect(apply).toHaveBeenCalledWith(editor, previousRoot, root);
     expect(result).toBe(UPDATED_OUTCOME);
@@ -96,7 +96,7 @@ describe("OperationPerformer", () => {
     };
     const { operation, perform } = makeOperation(outcome);
 
-    const result = performer.eval(root, operation, editor);
+    const result = performer.execute(root, operation, editor);
 
     expect(perform).toHaveBeenCalledTimes(1);
     expect(result).toBe(outcome);
