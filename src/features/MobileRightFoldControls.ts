@@ -15,8 +15,10 @@ import { Settings } from "../services/Settings";
 
 const MOBILE_RIGHT_FOLD_CONTROLS_BODY_CLASS =
   "bullet-plugin-mobile-right-fold-controls";
-const NATIVE_LIST_FOLD_CONTROL_SELECTOR =
-  ".HyperMD-list-line .cm-fold-indicator .collapse-indicator";
+const NATIVE_FOLD_CONTROL_SELECTOR = [
+  ".HyperMD-list-line .cm-fold-indicator .collapse-indicator",
+  ".HyperMD-header .cm-fold-indicator .collapse-indicator",
+].join(", ");
 
 function hasClosest(target: EventTarget | null): target is EventTarget & {
   closest(selector: string): Element | null;
@@ -102,7 +104,7 @@ export class MobileRightFoldControlsPluginValue implements PluginValue {
         MOBILE_RIGHT_FOLD_CONTROLS_BODY_CLASS,
       ) ||
       !hasClosest(event.target) ||
-      !event.target.closest(NATIVE_LIST_FOLD_CONTROL_SELECTOR)
+      !event.target.closest(NATIVE_FOLD_CONTROL_SELECTOR)
     ) {
       return;
     }

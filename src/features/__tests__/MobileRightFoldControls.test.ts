@@ -192,94 +192,98 @@ describe("MobileRightFoldControls", () => {
     ).toBe(false);
   });
 
-  test("restores scroll reserve before a native list fold click", () => {
-    const listeners = new Map<string, (event: Event) => void>();
-    const readScrollHeight = jest.fn(() => 2000);
-    const scrollDOM = { clientHeight: 1163 };
-    Object.defineProperty(scrollDOM, "scrollHeight", {
-      get: readScrollHeight,
-    });
-    const contentDOM = {
-      addEventListener: jest.fn(
-        (eventName: string, listener: (event: Event) => void) => {
-          listeners.set(eventName, listener);
-        },
-      ),
-      removeEventListener: jest.fn(),
-      style: { paddingBottom: "100px" },
-    };
-    const view = {
-      contentDOM,
-      defaultLineHeight: 24,
-      documentPadding: { top: 0 },
-      dom: {
-        ownerDocument: {
-          body: {
-            classList: {
-              contains: (className: string) =>
-                className === "bullet-plugin-mobile-right-fold-controls",
+  test.each([
+    ["list", ".HyperMD-list-line .cm-fold-indicator .collapse-indicator"],
+    ["heading", ".HyperMD-header .cm-fold-indicator .collapse-indicator"],
+  ])(
+    "restores scroll reserve before a native %s fold click",
+    (_name, matchingSelector) => {
+      const listeners = new Map<string, (event: Event) => void>();
+      const readScrollHeight = jest.fn(() => 2000);
+      const scrollDOM = { clientHeight: 1163 };
+      Object.defineProperty(scrollDOM, "scrollHeight", {
+        get: readScrollHeight,
+      });
+      const contentDOM = {
+        addEventListener: jest.fn(
+          (eventName: string, listener: (event: Event) => void) => {
+            listeners.set(eventName, listener);
+          },
+        ),
+        removeEventListener: jest.fn(),
+        style: { paddingBottom: "100px" },
+      };
+      const view = {
+        contentDOM,
+        defaultLineHeight: 24,
+        documentPadding: { top: 0 },
+        dom: {
+          ownerDocument: {
+            body: {
+              classList: {
+                contains: (className: string) =>
+                  className === "bullet-plugin-mobile-right-fold-controls",
+              },
             },
           },
         },
-      },
-      scrollDOM,
-    };
-    const nativeFoldScroll = { prepare: jest.fn() };
-    const pluginValue = new MobileRightFoldControlsPluginValue(
-      view as never,
-      nativeFoldScroll as never,
-    );
-    const preventDefault = jest.fn();
-    const stopPropagation = jest.fn();
-    const target = {
-      closest: jest.fn((selector: string) =>
-        selector === ".HyperMD-list-line .cm-fold-indicator .collapse-indicator"
-          ? {}
-          : null,
-      ),
-    };
+        scrollDOM,
+      };
+      const nativeFoldScroll = { prepare: jest.fn() };
+      const pluginValue = new MobileRightFoldControlsPluginValue(
+        view as never,
+        nativeFoldScroll as never,
+      );
+      const preventDefault = jest.fn();
+      const stopPropagation = jest.fn();
+      const target = {
+        closest: jest.fn((selector: string) =>
+          selector.includes(matchingSelector) ? {} : null,
+        ),
+      };
 
-    listeners.get("pointerdown")?.({
-      target,
-      preventDefault,
-      stopPropagation,
-      type: "pointerdown",
-    } as unknown as MouseEvent);
+      listeners.get("pointerdown")?.({
+        target,
+        preventDefault,
+        stopPropagation,
+        type: "pointerdown",
+      } as unknown as MouseEvent);
 
-    expect(contentDOM.style.paddingBottom).toBe("1138.5px");
-    expect(readScrollHeight).toHaveBeenCalledTimes(1);
-    expect(nativeFoldScroll.prepare).not.toHaveBeenCalled();
-    expect(preventDefault).not.toHaveBeenCalled();
-    expect(stopPropagation).not.toHaveBeenCalled();
-    expect(contentDOM.addEventListener).toHaveBeenCalledWith(
-      "pointerdown",
-      expect.any(Function),
-      true,
-    );
+      expect(contentDOM.style.paddingBottom).toBe("1138.5px");
+      expect(readScrollHeight).toHaveBeenCalledTimes(1);
+      expect(nativeFoldScroll.prepare).not.toHaveBeenCalled();
+      expect(preventDefault).not.toHaveBeenCalled();
+      expect(stopPropagation).not.toHaveBeenCalled();
+      expect(contentDOM.addEventListener).toHaveBeenCalledWith(
+        "pointerdown",
+        expect.any(Function),
+        true,
+      );
 
-    listeners.get("click")?.({
-      target,
-      preventDefault,
-      stopPropagation,
-      type: "click",
-    } as unknown as MouseEvent);
+      listeners.get("click")?.({
+        target,
+        preventDefault,
+        stopPropagation,
+        type: "click",
+      } as unknown as MouseEvent);
 
-    expect(readScrollHeight).toHaveBeenCalledTimes(2);
-    expect(nativeFoldScroll.prepare).toHaveBeenCalledWith(view);
-    expect(nativeFoldScroll.prepare).toHaveBeenCalledTimes(1);
-    pluginValue.destroy();
+      expect(readScrollHeight).toHaveBeenCalledTimes(2);
+      expect(nativeFoldScroll.prepare).toHaveBeenCalledWith(view);
+      expect(nativeFoldScroll.prepare).toHaveBeenCalledTimes(1);
+      pluginValue.destroy();
 
-    expect(contentDOM.removeEventListener).toHaveBeenCalledWith(
-      "click",
-      expect.any(Function),
-      true,
-    );
-    expect(contentDOM.removeEventListener).toHaveBeenCalledWith(
-      "pointerdown",
-      expect.any(Function),
-      true,
-    );
-  });
+      expect(contentDOM.removeEventListener).toHaveBeenCalledWith(
+        "click",
+        expect.any(Function),
+        true,
+      );
+      expect(contentDOM.removeEventListener).toHaveBeenCalledWith(
+        "pointerdown",
+        expect.any(Function),
+        true,
+      );
+    },
+  );
 
   test("leaves scroll reserve unchanged outside the mobile control", () => {
     const listeners = new Map<string, (event: Event) => void>();
