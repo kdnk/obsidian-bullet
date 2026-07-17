@@ -22,7 +22,9 @@
     - version変更をGitButlerでcommitした後、`but land <branch-id> --yes`でdefault branchへ反映してください。
     - GitButlerはtagを管理しないため、land後のdefault branch commitを指すannotated tagを`gh api`で作成してください。localの`git tag`や`git push`は使わないでください。
     - tag pushで起動したrelease workflowが成功し、同じversionのGitHub releaseが公開されたことを`gh` CLIで確認してください。
+    - 中断したreleaseを再開するとき、default branchの`manifest.json`が示すversionに対応するtagまたはGitHub releaseだけが欠けている場合は、`npm version`を再実行して次versionへ進めないでください。現在のdefault branch commitで全テストを再実行し、そのcommitへ既存versionのannotated tagを`gh api`で作成してrelease workflowを完了させてください。
 - テストについて
+    - local verificationは、CIと同じNode.js 22系のうち22.23.1以上を使ってください。Node.js 22.22.3や26.3.1では、Jestのfake timer解除後にglobal timerが消え、`obsidianRelay.test.ts`が`ReferenceError: setTimeout is not defined`で失敗します。このerrorが出た場合はsourceを変更する前に`node --version`を確認し、対応runtimeで再実行してください。
     - `src` 配下の unit test だけを `npx jest` で直接実行するときは、必ず `SKIP_OBSIDIAN=1` を付けるか `npm run test:unit` を使ってください。付けない場合は Jest の global setup が実 Obsidian を終了し、`vault/test.md` を上書きします。
     - `.spec.md` の統合 spec やフルテストは `dist/main.js` を実行するため、`src` を変更した後に実行する場合は先に `npm run build-with-tests` を実行してください。
     - フルテストは `vault/test.md` をfixtureとして上書きします。手動検証用の内容がある場合は、フルテスト前にvault外へbackupしてください。テストcommandの終了直後はtest rendererの遅延終了処理がfixtureを再保存する場合があるため、`vault=vault` のrendererが終了したことを確認してからrestoreしてください。restore後は少し待ってfile sizeまたはhashがbackupと一致することを再確認してから実Obsidianの検証を続けてください。Obsidianのfile historyだけをbackupとして使わないでください。
