@@ -1,5 +1,7 @@
 # Mobile Fold Control First-Line Alignment Implementation Plan
 
+> **Superseded:** The 48px, `-35px`, and 13px geometry in this plan was replaced by the [heading-mirror implementation plan](./2026-07-17-mobile-fold-control-heading-mirror.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Keep mobile fold chevrons and their touch targets on the first visual line while preserving identical text wrapping for list rows with and without children.

@@ -1,5 +1,7 @@
 # Mobile Fold Control Edge Alignment Implementation Plan
 
+> **Superseded:** The 48px, `-35px`, and 13px geometry in this plan was replaced by the [heading-mirror implementation plan](./2026-07-17-mobile-fold-control-heading-mirror.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Move the mobile list chevron and its 48px-wide native target outward so the icon mirrors the native left-side header chevron while preserving row-scoped hit testing.

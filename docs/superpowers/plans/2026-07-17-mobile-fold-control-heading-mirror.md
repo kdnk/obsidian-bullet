@@ -197,7 +197,7 @@ scrollLeft after attempting horizontal scroll = 0
 
 - [ ] **Step 5: Verify touch and wrapping behavior**
 
-Dispatch `pointerType="touch"` taps inside the first-line control to fold and unfold. Confirm that taps to its right and below the first line do not fold, foldable and non-foldable rows wrap at the same position, and the clicked row's screen Y position and `scrollTop` remain unchanged.
+Dispatch `pointerType="touch"` taps inside the first-line control to fold and unfold. Confirm that `elementFromPoint` does not return the control outside its 15px box, while Chromium's native touch adjustment behaves symmetrically with the 15px heading control. Confirm that taps below the first line do not fold, foldable and non-foldable rows have the same width and end padding, and the clicked row's screen Y position and `scrollTop` remain unchanged.
 
 - [ ] **Step 6: Commit and land with GitButler**
 

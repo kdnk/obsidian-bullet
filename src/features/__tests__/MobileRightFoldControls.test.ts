@@ -37,6 +37,30 @@ function makeDocument() {
   return { body: { classList: makeClassList() } };
 }
 
+function parseCssRules(styles: string) {
+  const withoutComments = styles.replace(/\/\*[\s\S]*?\*\//g, "");
+  return [...withoutComments.matchAll(/([^{}]+)\{([^{}]*)\}/g)].flatMap(
+    ([, selectors, declarations]) =>
+      selectors.split(",").map((selector) => ({
+        declarations,
+        selector: selector.replace(/\s+/g, " ").trim(),
+      })),
+  );
+}
+
+function hasCssProperty(
+  declarations: string,
+  propertyPattern: RegExp,
+): boolean {
+  return declarations.split(";").some((declaration) => {
+    const separator = declaration.indexOf(":");
+    return (
+      separator >= 0 &&
+      propertyPattern.test(declaration.slice(0, separator).trim())
+    );
+  });
+}
+
 function makePlugin() {
   type WorkspaceHandler = (...args: never[]) => void;
   const eventHandlers = new Map<string, WorkspaceHandler[]>();
@@ -348,11 +372,24 @@ describe("MobileRightFoldControls", () => {
   );
 });
 
-test("mirrors native mobile list fold controls beyond the right edge", () => {
+test("mirrors native mobile heading fold controls without widening the editor", () => {
   const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
-  const rowDeclarations = styles.match(
-    /\.bullet-plugin-mobile-right-fold-controls\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s*\{([^}]*)\}/,
-  )?.[1];
+  const featureRules = parseCssRules(styles).filter(({ selector }) =>
+    selector.includes(".bullet-plugin-mobile-right-fold-controls"),
+  );
+  const rowPaddingRules = featureRules.filter(({ declarations, selector }) => {
+    const compounds = selector.split(" ");
+    const targetCompound = compounds[compounds.length - 1];
+    return (
+      targetCompound.includes(".HyperMD-list-line") &&
+      hasCssProperty(declarations, /^padding-inline-end$/)
+    );
+  });
+  const editorOverflowRules = featureRules.filter(
+    ({ declarations, selector }) =>
+      (selector.includes(".cm-scroller") || selector.includes(".cm-content")) &&
+      hasCssProperty(declarations, /^overflow(?:-[xy])?$/),
+  );
   const parentDeclarations = styles.match(
     /\.bullet-plugin-mobile-right-fold-controls\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-list-line\s+\.cm-fold-indicator\s*\{([^}]*)\}/,
   )?.[1];
@@ -363,22 +400,20 @@ test("mirrors native mobile list fold controls beyond the right edge", () => {
     /\.bullet-plugin-mobile-right-fold-controls\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-list-line\s+\.cm-fold-indicator\.is-collapsed\s+\.collapse-indicator\s+svg\.svg-icon\s*\{([^}]*)\}/,
   )?.[1];
 
-  expect(rowDeclarations).toContain("box-sizing: border-box;");
-  expect(rowDeclarations).toContain("padding-inline-end: 13px;");
-  expect(styles).not.toMatch(
-    /\.bullet-plugin-mobile-right-fold-controls[^{]*\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s*\{[^}]*padding-inline-end/,
-  );
+  expect(rowPaddingRules).toEqual([]);
   expect(parentDeclarations).toContain("position: static;");
   expect(controlDeclarations).toContain("display: flex;");
+  expect(controlDeclarations).toContain("box-sizing: border-box;");
   expect(controlDeclarations).toContain("align-items: center;");
-  expect(controlDeclarations).toContain("justify-content: center;");
+  expect(controlDeclarations).toContain("justify-content: flex-start;");
   expect(controlDeclarations).toContain("top: 0;");
-  expect(controlDeclarations).toContain("inset-inline-end: -35px;");
-  expect(controlDeclarations).toContain("width: 48px;");
+  expect(controlDeclarations).toContain("inset-inline-end: -15px;");
+  expect(controlDeclarations).toContain("width: 15px;");
   expect(controlDeclarations).toMatch(
     /height:\s*calc\(\s*1lh\s*\+\s*var\(--list-spacing,\s*0px\)\s*\+\s*var\(--list-spacing,\s*0px\)\s*\);/,
   );
   expect(controlDeclarations).not.toContain("height: 100%;");
+  expect(controlDeclarations).toContain("padding-inline-start: 5px;");
   expect(controlDeclarations).toContain("padding-inline-end: 0;");
   expect(controlDeclarations).not.toContain("translate");
   expect(controlDeclarations).toContain("opacity: 1;");
@@ -389,4 +424,5 @@ test("mirrors native mobile list fold controls beyond the right edge", () => {
   expect(styles).not.toMatch(
     /\.bullet-plugin-mobile-right-fold-controls[^{]*\.markdown-preview-view/,
   );
+  expect(editorOverflowRules).toEqual([]);
 });

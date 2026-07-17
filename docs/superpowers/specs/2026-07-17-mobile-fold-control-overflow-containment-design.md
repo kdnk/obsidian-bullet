@@ -76,7 +76,9 @@ CSS contract testでは、次を確認する。
 - controlの左端が366px、右端が381px、幅が15pxである。
 - SVGの左端が371px、右端が381px、中心が約376pxである。
 - controlの1行目を`pointerType="touch"`でtapするとfoldとunfoldが動作する。
-- controlより右側、または折り返した1行目より下をtapしてもfoldしない。
+- `elementFromPoint`ではcontrol外をpointer targetとして取得しない。
+- Chromiumがcontrol外のtouchを近くのclickable targetへ補正する場合は、nativeヘッダーと同じ補正を許容する。CSSでtouch領域を追加拡張しない。
+- 折り返した1行目より下をtapしてもfoldしない。
 - foldable行とnon-foldable行で同じ本文の折り返し位置が一致する。
 - foldとunfoldの前後で画面上の行位置と`scrollTop`が変わらない。
 
