@@ -16,10 +16,10 @@
         1. major
         2. minor
         3. patch
-    - リリース種別の回答を受けたら、GitButler上で`codex/release-<version>` branchを作成してください。pull requestの作成は不要です。
-    - `npm version <major|minor|patch> --no-git-tag-version --ignore-scripts`でpackage metadataを更新し、`node release.mjs`で`manifest.json`と`versions.json`を同期してください。`npm version`のlifecycle scriptに含まれる`git add`は実行しないでください。
+    - リリース種別の回答を受けたら、次versionを算出し、`but branch new codex/release-<version>`でGitButler上にrelease branchを作成してください。pull requestの作成は不要です。
+    - `.npmrc`の`git-tag-version=false`により、`npm version <major|minor|patch>`はGit commitやtagを作成しません。このcommandでpackage metadataを更新し、`version` lifecycleの`node release.mjs`で`manifest.json`と`versions.json`も同期してください。`--ignore-scripts`は付けず、lifecycleを実行してください。
     - リリースbranchをdefault branchへ取り込む前に全テストを実行し、すべて通ることを確認してください。全テストが通らない状態では取り込まないでください。
-    - version変更をGitButlerでcommitした後、`but land <branch-id> --yes`でdefault branchへ反映してください。
+    - version変更の四つのmetadata fileだけをGitButlerでrelease branchへcommitした後、`but land <branch-id> --yes`でdefault branchへ反映してください。
     - GitButlerはtagを管理しないため、land後のdefault branch commitを指すannotated tagを`gh api`で作成してください。localの`git tag`や`git push`は使わないでください。
     - tag pushで起動したrelease workflowが成功し、同じversionのGitHub releaseが公開されたことを`gh` CLIで確認してください。
     - 中断したreleaseを再開するとき、default branchの`manifest.json`が示すversionに対応するtagまたはGitHub releaseだけが欠けている場合は、`npm version`を再実行して次versionへ進めないでください。現在のdefault branch commitで全テストを再実行し、そのcommitへ既存versionのannotated tagを`gh api`で作成してrelease workflowを完了させてください。

@@ -11,7 +11,7 @@
     "lint:fix": "prettier --write src jest/*.ts && eslint src jest/*.ts --fix",
     "test": "jest --forceExit",
     "test:unit": "SKIP_OBSIDIAN=1 jest src",
-    "version": "node release.mjs && git add manifest.json versions.json",
+    "version": "node release.mjs",
     "prepare": "husky"
   },
   "author": "Kodai Nakamura",
