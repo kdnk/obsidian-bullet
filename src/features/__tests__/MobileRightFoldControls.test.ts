@@ -410,6 +410,9 @@ describe("MobileRightFoldControls", () => {
     });
 
     expect(foldedRanges(selectionTransaction.state).size).toBe(0);
+    expect(
+      selectionTransaction.effects.some((effect) => effect.is(unfoldEffect)),
+    ).toBe(false);
     expect(selectionTransaction.effects).toContain(snapshot);
   });
 
