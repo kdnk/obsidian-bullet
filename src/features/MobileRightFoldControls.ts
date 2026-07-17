@@ -1,7 +1,7 @@
 import { Platform, Plugin } from "obsidian";
 
-import { foldEffect, unfoldEffect } from "@codemirror/language";
-import { EditorState, Extension } from "@codemirror/state";
+import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language";
+import { EditorState, Extension, RangeSet } from "@codemirror/state";
 import { EditorView, PluginValue, ViewPlugin } from "@codemirror/view";
 
 import { DocumentBodyClass } from "./DocumentBodyClass";
@@ -57,6 +57,10 @@ export class MobileNativeFoldScroll {
       if (
         transaction.effects.some(
           (effect) => effect.is(foldEffect) || effect.is(unfoldEffect),
+        ) ||
+        !RangeSet.eq(
+          [foldedRanges(transaction.startState)],
+          [foldedRanges(transaction.state)],
         )
       ) {
         pending.active = false;
