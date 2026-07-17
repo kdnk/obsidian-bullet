@@ -1,6 +1,11 @@
 import { Platform } from "obsidian";
 
-import { foldEffect, unfoldEffect } from "@codemirror/language";
+import {
+  codeFolding,
+  foldEffect,
+  foldedRanges,
+  unfoldEffect,
+} from "@codemirror/language";
 import { EditorState, StateEffect } from "@codemirror/state";
 
 import { readFileSync } from "node:fs";
@@ -374,6 +379,39 @@ describe("MobileRightFoldControls", () => {
       ).toBe(true);
     },
   );
+
+  test("keeps a corrected scroll snapshot when moving the selection implicitly unfolds its range", () => {
+    const snapshotType = StateEffect.define<string>();
+    const snapshot = snapshotType.of("viewport");
+    const nativeFoldScroll = new MobileNativeFoldScroll(
+      jest.fn().mockReturnValue(snapshot),
+    );
+    const state = EditorState.create({
+      doc: "- parent\n  - child",
+      extensions: [codeFolding(), nativeFoldScroll.extension],
+      selection: { anchor: 10 },
+    });
+    const foldedState = state.update({
+      effects: foldEffect.of({ from: 8, to: 17 }),
+    }).state;
+    const view = {
+      dom: {
+        ownerDocument: {
+          defaultView: { setTimeout: jest.fn() },
+        },
+      },
+      state: foldedState,
+    };
+
+    expect(foldedRanges(foldedState).size).toBe(1);
+    nativeFoldScroll.prepare(view as never);
+    const selectionTransaction = foldedState.update({
+      selection: { anchor: 10 },
+    });
+
+    expect(foldedRanges(selectionTransaction.state).size).toBe(0);
+    expect(selectionTransaction.effects).toContain(snapshot);
+  });
 
   test.each([
     ["fold", foldEffect],
