@@ -34,23 +34,38 @@ function hasClosest(target: EventTarget | null): target is EventTarget & {
 type FoldScrollSnapshot = ReturnType<EditorView["scrollSnapshot"]>;
 type FoldScrollSnapshotFactory = (view: EditorView) => FoldScrollSnapshot;
 
+interface PendingFoldScrollSnapshot {
+  active: boolean;
+  snapshot: FoldScrollSnapshot;
+  state: EditorState;
+}
+
 export class MobileNativeFoldScroll {
-  private pendingSnapshots = new WeakMap<EditorState, FoldScrollSnapshot>();
+  private pendingSnapshots = new WeakMap<
+    EditorState,
+    PendingFoldScrollSnapshot
+  >();
 
   readonly extension: Extension = EditorState.transactionExtender.of(
     (transaction) => {
-      const snapshot = this.pendingSnapshots.get(transaction.startState);
-      if (
-        !snapshot ||
-        !transaction.effects.some(
-          (effect) => effect.is(foldEffect) || effect.is(unfoldEffect),
-        )
-      ) {
+      const pending = this.pendingSnapshots.get(transaction.startState);
+      if (!pending || !pending.active) {
         return null;
       }
 
       this.pendingSnapshots.delete(transaction.startState);
-      return { effects: snapshot };
+      if (
+        transaction.effects.some(
+          (effect) => effect.is(foldEffect) || effect.is(unfoldEffect),
+        )
+      ) {
+        pending.active = false;
+        return { effects: pending.snapshot };
+      }
+
+      pending.state = transaction.state;
+      this.pendingSnapshots.set(pending.state, pending);
+      return null;
     },
   );
 
@@ -59,12 +74,23 @@ export class MobileNativeFoldScroll {
   ) {}
 
   prepare(view: EditorView): void {
-    const state = view.state;
-    this.pendingSnapshots.set(state, this.createSnapshot(view));
+    const pending: PendingFoldScrollSnapshot = {
+      active: true,
+      snapshot: this.createSnapshot(view),
+      state: view.state,
+    };
+    this.pendingSnapshots.set(pending.state, pending);
     view.dom.ownerDocument.defaultView?.setTimeout(
-      () => this.pendingSnapshots.delete(state),
+      () => this.expire(pending),
       0,
     );
+  }
+
+  private expire(pending: PendingFoldScrollSnapshot): void {
+    pending.active = false;
+    if (this.pendingSnapshots.get(pending.state) === pending) {
+      this.pendingSnapshots.delete(pending.state);
+    }
   }
 }
 

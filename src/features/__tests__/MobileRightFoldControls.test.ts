@@ -374,6 +374,133 @@ describe("MobileRightFoldControls", () => {
       ).toBe(true);
     },
   );
+
+  test.each([
+    ["fold", foldEffect],
+    ["unfold", unfoldEffect],
+  ])(
+    "carries a corrected scroll snapshot across an intermediate selection transaction before native %s",
+    (_name, nativeEffect) => {
+      const snapshotType = StateEffect.define<string>();
+      const snapshot = snapshotType.of("viewport");
+      const nativeFoldScroll = new MobileNativeFoldScroll(
+        jest.fn().mockReturnValue(snapshot),
+      );
+      const state = EditorState.create({
+        doc: "- parent\n  - child",
+        extensions: [nativeFoldScroll.extension],
+      });
+      const view = {
+        dom: {
+          ownerDocument: {
+            defaultView: { setTimeout: jest.fn() },
+          },
+        },
+        state,
+      };
+
+      nativeFoldScroll.prepare(view as never);
+      const selectionTransaction = state.update({
+        selection: { anchor: 2 },
+      });
+      const nativeTransaction = selectionTransaction.state.update({
+        effects: nativeEffect.of({ from: 8, to: 17 }),
+      });
+
+      expect(nativeTransaction.effects).toHaveLength(2);
+      expect(nativeTransaction.effects).toContain(snapshot);
+      expect(
+        nativeTransaction.effects.some((effect) => effect.is(nativeEffect)),
+      ).toBe(true);
+    },
+  );
+
+  test.each([
+    ["fold", foldEffect],
+    ["unfold", unfoldEffect],
+  ])(
+    "expires a corrected scroll snapshot after an intermediate selection before later %s",
+    (_name, nativeEffect) => {
+      const snapshotType = StateEffect.define<string>();
+      const snapshot = snapshotType.of("viewport");
+      const timeoutCallbacks: Array<() => void> = [];
+      const nativeFoldScroll = new MobileNativeFoldScroll(
+        jest.fn().mockReturnValue(snapshot),
+      );
+      const state = EditorState.create({
+        doc: "- parent\n  - child",
+        extensions: [nativeFoldScroll.extension],
+      });
+      const view = {
+        dom: {
+          ownerDocument: {
+            defaultView: {
+              setTimeout: jest.fn((callback: () => void) => {
+                timeoutCallbacks.push(callback);
+                return 1;
+              }),
+            },
+          },
+        },
+        state,
+      };
+
+      nativeFoldScroll.prepare(view as never);
+      const selectionTransaction = state.update({
+        selection: { anchor: 2 },
+      });
+      timeoutCallbacks[0]?.();
+      const nativeTransaction = selectionTransaction.state.update({
+        effects: nativeEffect.of({ from: 8, to: 17 }),
+      });
+
+      expect(nativeTransaction.effects).toHaveLength(1);
+      expect(nativeTransaction.effects).not.toContain(snapshot);
+      expect(
+        nativeTransaction.effects.some((effect) => effect.is(nativeEffect)),
+      ).toBe(true);
+    },
+  );
+
+  test("does not let an older timeout expire a newer snapshot for the same state", () => {
+    const snapshotType = StateEffect.define<string>();
+    const oldSnapshot = snapshotType.of("old viewport");
+    const newSnapshot = snapshotType.of("new viewport");
+    const timeoutCallbacks: Array<() => void> = [];
+    const nativeFoldScroll = new MobileNativeFoldScroll(
+      jest
+        .fn()
+        .mockReturnValueOnce(oldSnapshot)
+        .mockReturnValueOnce(newSnapshot),
+    );
+    const state = EditorState.create({
+      doc: "- parent\n  - child",
+      extensions: [nativeFoldScroll.extension],
+    });
+    const view = {
+      dom: {
+        ownerDocument: {
+          defaultView: {
+            setTimeout: jest.fn((callback: () => void) => {
+              timeoutCallbacks.push(callback);
+              return timeoutCallbacks.length;
+            }),
+          },
+        },
+      },
+      state,
+    };
+
+    nativeFoldScroll.prepare(view as never);
+    nativeFoldScroll.prepare(view as never);
+    timeoutCallbacks[0]?.();
+    const nativeTransaction = state.update({
+      effects: foldEffect.of({ from: 8, to: 17 }),
+    });
+
+    expect(nativeTransaction.effects).toContain(newSnapshot);
+    expect(nativeTransaction.effects).not.toContain(oldSnapshot);
+  });
 });
 
 test("mirrors native mobile heading fold controls without widening the editor", () => {
