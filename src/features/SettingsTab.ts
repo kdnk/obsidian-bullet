@@ -4,6 +4,7 @@ import {
   PluginSettingTab,
   Setting,
   SettingDefinitionControl,
+  SettingDefinitionGroup,
   SettingDefinitionItem,
 } from "obsidian";
 
@@ -29,111 +30,140 @@ type BulletSettingDefinition = SettingDefinitionControl<SettingsControlKey> & {
   desc: string;
 };
 
+type BulletSettingGroup = SettingDefinitionGroup<SettingsControlKey> & {
+  heading: string;
+  items: BulletSettingDefinition[];
+};
+
 const KEEP_CURSOR_OPTIONS = {
   never: "Never",
   "bullet-only": "Stick cursor out of bullets",
   "bullet-and-checkbox": "Stick cursor out of bullets and checkboxes",
 } satisfies Record<KeepCursorWithinContent, string>;
 
-const SETTING_DEFINITIONS = [
+const SETTING_GROUPS = [
   {
-    name: "Stick the cursor to the content",
-    desc: "Keep the caret in the editable text instead of the markdown prefix. Use Never to edit bullets and checkboxes directly, Bullets to stay out of `- ` or `1. `, or Bullets and checkboxes to also stay out of `[ ]` / `[x]` markup.",
-    control: {
-      type: "dropdown",
-      key: "keepCursorWithinContent",
-      options: KEEP_CURSOR_OPTIONS,
-    },
+    type: "group",
+    heading: "Editing",
+    items: [
+      {
+        name: "Stick the cursor to the content",
+        desc: "Keep the caret in the editable text instead of the markdown prefix. Use Never to edit bullets and checkboxes directly, Bullets to stay out of `- ` or `1. `, or Bullets and checkboxes to also stay out of `[ ]` / `[x]` markup.",
+        control: {
+          type: "dropdown",
+          key: "keepCursorWithinContent",
+          options: KEEP_CURSOR_OPTIONS,
+        },
+      },
+      {
+        name: "Enhance the Tab key",
+        desc: "Make Tab and Shift-Tab behave the same as other outliners.",
+        control: {
+          type: "toggle",
+          key: "overrideTabBehaviour",
+        },
+      },
+      {
+        name: "Enhance the Enter key",
+        desc: "Make the Enter key behave the same as other outliners.",
+        control: {
+          type: "toggle",
+          key: "overrideEnterBehaviour",
+        },
+      },
+      {
+        name: "Vim-mode o/O inserts bullets",
+        desc: "Create a bullet when pressing o or O in Vim mode.",
+        control: {
+          type: "toggle",
+          key: "overrideVimOBehaviour",
+        },
+      },
+      {
+        name: "Enhance the Ctrl+A or Cmd+A behavior",
+        desc: "Press the hotkey once to select the current list item. Press the hotkey twice to select the entire list.",
+        control: {
+          type: "toggle",
+          key: "overrideSelectAllBehaviour",
+        },
+      },
+      {
+        name: "Drag-and-Drop",
+        desc: "Move list items on desktop by dragging a bullet, fold indicator, or checkbox.",
+        control: {
+          type: "toggle",
+          key: "dragAndDrop",
+        },
+      },
+    ],
   },
   {
-    name: "Enhance the Tab key",
-    desc: "Make Tab and Shift-Tab behave the same as other outliners.",
-    control: {
-      type: "toggle",
-      key: "overrideTabBehaviour",
-    },
+    type: "group",
+    heading: "Appearance",
+    items: [
+      {
+        name: "Improve the style of your lists",
+        desc: "Styles are only compatible with built-in Obsidian themes and may not be compatible with other themes.",
+        control: {
+          type: "toggle",
+          key: "betterListsStyles",
+        },
+      },
+      {
+        name: "Draw vertical indentation lines",
+        desc: "Show guide lines that connect nested list items by indentation level.",
+        control: {
+          type: "toggle",
+          key: "verticalLines",
+        },
+      },
+      {
+        name: "Draw outer list lines",
+        desc: "Show a root-level guide beside each contiguous list chunk.",
+        control: {
+          type: "toggle",
+          key: "outerVerticalLines",
+        },
+      },
+    ],
   },
   {
-    name: "Enhance the Enter key",
-    desc: "Make the Enter key behave the same as other outliners.",
-    control: {
-      type: "toggle",
-      key: "overrideEnterBehaviour",
-    },
+    type: "group",
+    heading: "Folding",
+    items: [
+      {
+        name: "Fold lists from vertical indentation lines",
+        desc: "Click a vertical indentation line to fold or unfold that list.",
+        control: {
+          type: "toggle",
+          key: "verticalLinesActionEnabled",
+        },
+      },
+      {
+        name: "Show fold controls on the right on mobile",
+        desc: "Move fold controls to the right edge in Live Preview on mobile.",
+        control: {
+          type: "toggle",
+          key: "mobileRightFoldControls",
+        },
+      },
+    ],
   },
   {
-    name: "Vim-mode o/O inserts bullets",
-    desc: "Create a bullet when pressing o or O in Vim mode.",
-    control: {
-      type: "toggle",
-      key: "overrideVimOBehaviour",
-    },
+    type: "group",
+    heading: "Advanced",
+    items: [
+      {
+        name: "Debug mode",
+        desc: "Open DevTools (Command+Option+I or Control+Shift+I) to copy the debug logs.",
+        control: {
+          type: "toggle",
+          key: "debug",
+        },
+      },
+    ],
   },
-  {
-    name: "Enhance the Ctrl+A or Cmd+A behavior",
-    desc: "Press the hotkey once to select the current list item. Press the hotkey twice to select the entire list.",
-    control: {
-      type: "toggle",
-      key: "overrideSelectAllBehaviour",
-    },
-  },
-  {
-    name: "Improve the style of your lists",
-    desc: "Styles are only compatible with built-in Obsidian themes and may not be compatible with other themes.",
-    control: {
-      type: "toggle",
-      key: "betterListsStyles",
-    },
-  },
-  {
-    name: "Draw vertical indentation lines",
-    desc: "Show guide lines that connect nested list items by indentation level.",
-    control: {
-      type: "toggle",
-      key: "verticalLines",
-    },
-  },
-  {
-    name: "Draw outer list lines",
-    desc: "Show a root-level guide beside each contiguous list chunk.",
-    control: {
-      type: "toggle",
-      key: "outerVerticalLines",
-    },
-  },
-  {
-    name: "Fold lists from vertical indentation lines",
-    desc: "Click a vertical indentation line to fold or unfold that list.",
-    control: {
-      type: "toggle",
-      key: "verticalLinesActionEnabled",
-    },
-  },
-  {
-    name: "Show fold controls on the right on mobile",
-    desc: "Move fold controls to the right edge in Live Preview on mobile.",
-    control: {
-      type: "toggle",
-      key: "mobileRightFoldControls",
-    },
-  },
-  {
-    name: "Drag-and-Drop",
-    desc: "Move list items on desktop by dragging a bullet, fold indicator, or checkbox.",
-    control: {
-      type: "toggle",
-      key: "dragAndDrop",
-    },
-  },
-  {
-    name: "Debug mode",
-    desc: "Open DevTools (Command+Option+I or Control+Shift+I) to copy the debug logs.",
-    control: {
-      type: "toggle",
-      key: "debug",
-    },
-  },
-] satisfies BulletSettingDefinition[];
+] satisfies BulletSettingGroup[];
 
 function decodeBooleanControl(key: string, value: unknown): boolean {
   if (typeof value !== "boolean") {
@@ -165,7 +195,7 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
   }
 
   getSettingDefinitions(): SettingDefinitionItem<SettingsControlKey>[] {
-    return SETTING_DEFINITIONS;
+    return SETTING_GROUPS;
   }
 
   getControlValue(key: string): unknown {
@@ -256,38 +286,44 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
   display(): void {
     this.containerEl.empty();
 
-    for (const definition of SETTING_DEFINITIONS) {
-      const setting = new Setting(this.containerEl)
-        .setName(definition.name)
-        .setDesc(definition.desc);
-      const control = definition.control;
-      const currentValue = this.getControlValue(control.key);
-
-      if (control.type === "dropdown") {
-        if (typeof currentValue !== "string") {
-          throw new TypeError(`Expected ${control.key} to resolve to a string`);
-        }
-        setting.addDropdown((dropdown) => {
-          dropdown
-            .addOptions(control.options)
-            .setValue(currentValue)
-            .onChange(async (value) => {
-              await this.setControlValue(control.key, value);
-            });
-        });
-      } else {
-        if (typeof currentValue !== "boolean") {
-          throw new TypeError(
-            `Expected ${control.key} to resolve to a boolean`,
-          );
-        }
-        setting.addToggle((toggle) => {
-          toggle.setValue(currentValue).onChange(async (value) => {
-            await this.setControlValue(control.key, value);
-          });
-        });
+    for (const group of SETTING_GROUPS) {
+      new Setting(this.containerEl).setName(group.heading).setHeading();
+      for (const definition of group.items) {
+        this.renderSetting(definition);
       }
     }
+  }
+
+  private renderSetting(definition: BulletSettingDefinition): void {
+    const setting = new Setting(this.containerEl)
+      .setName(definition.name)
+      .setDesc(definition.desc);
+    const control = definition.control;
+    const currentValue = this.getControlValue(control.key);
+
+    if (control.type === "dropdown") {
+      if (typeof currentValue !== "string") {
+        throw new TypeError(`Expected ${control.key} to resolve to a string`);
+      }
+      setting.addDropdown((dropdown) => {
+        dropdown
+          .addOptions(control.options)
+          .setValue(currentValue)
+          .onChange(async (value) => {
+            await this.setControlValue(control.key, value);
+          });
+      });
+      return;
+    }
+
+    if (typeof currentValue !== "boolean") {
+      throw new TypeError(`Expected ${control.key} to resolve to a boolean`);
+    }
+    setting.addToggle((toggle) => {
+      toggle.setValue(currentValue).onChange(async (value) => {
+        await this.setControlValue(control.key, value);
+      });
+    });
   }
 }
 

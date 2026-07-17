@@ -15,6 +15,7 @@ jest.mock(
     Setting: class Setting {
       name = "";
       desc = "";
+      heading = false;
       dropdown?: FakeDropdownRecord;
       toggle?: FakeToggleRecord;
 
@@ -29,6 +30,11 @@ jest.mock(
 
       setDesc(desc: string) {
         this.desc = desc;
+        return this;
+      }
+
+      setHeading() {
+        this.heading = true;
         return this;
       }
 
@@ -84,6 +90,7 @@ jest.mock(
 interface FakeSetting {
   name: string;
   desc: string;
+  heading: boolean;
   dropdown?: FakeDropdownRecord;
   toggle?: FakeToggleRecord;
 }
@@ -127,9 +134,15 @@ interface FakeSettingDefinition {
   control: FakeControl;
 }
 
+interface FakeSettingGroup {
+  type: "group";
+  heading: string;
+  items: FakeSettingDefinition[];
+}
+
 interface TestableSettingsTab {
   display(): void;
-  getSettingDefinitions(): FakeSettingDefinition[];
+  getSettingDefinitions(): FakeSettingGroup[];
   getControlValue(key: string): unknown;
   setControlValue(key: string, value: unknown): Promise<void>;
 }
@@ -173,26 +186,40 @@ describe("SettingsTab", () => {
     mockSettingsRecords.length = 0;
   });
 
-  test("exposes searchable declarative settings in the legacy display order", async () => {
+  test("groups searchable declarative settings by purpose", async () => {
     const tab = await loadTab(makeSettings());
 
-    const definitions = tab.getSettingDefinitions();
+    const groups = tab.getSettingDefinitions();
 
-    expect(definitions.map((definition) => definition.name)).toEqual([
-      "Stick the cursor to the content",
-      "Enhance the Tab key",
-      "Enhance the Enter key",
-      "Vim-mode o/O inserts bullets",
-      "Enhance the Ctrl+A or Cmd+A behavior",
-      "Improve the style of your lists",
-      "Draw vertical indentation lines",
-      "Draw outer list lines",
-      "Fold lists from vertical indentation lines",
-      "Show fold controls on the right on mobile",
-      "Drag-and-Drop",
-      "Debug mode",
+    expect(groups.map((group) => group.heading)).toEqual([
+      "Editing",
+      "Appearance",
+      "Folding",
+      "Advanced",
     ]);
-    expect(definitions[0]?.control).toEqual({
+    expect(
+      groups.map((group) => group.items.map((definition) => definition.name)),
+    ).toEqual([
+      [
+        "Stick the cursor to the content",
+        "Enhance the Tab key",
+        "Enhance the Enter key",
+        "Vim-mode o/O inserts bullets",
+        "Enhance the Ctrl+A or Cmd+A behavior",
+        "Drag-and-Drop",
+      ],
+      [
+        "Improve the style of your lists",
+        "Draw vertical indentation lines",
+        "Draw outer list lines",
+      ],
+      [
+        "Fold lists from vertical indentation lines",
+        "Show fold controls on the right on mobile",
+      ],
+      ["Debug mode"],
+    ]);
+    expect(groups[0]?.items[0]?.control).toEqual({
       type: "dropdown",
       key: "keepCursorWithinContent",
       options: {
@@ -201,7 +228,7 @@ describe("SettingsTab", () => {
         "bullet-and-checkbox": "Stick cursor out of bullets and checkboxes",
       },
     });
-    expect(definitions[8]?.control).toEqual({
+    expect(groups[2]?.items[0]?.control).toEqual({
       type: "toggle",
       key: "verticalLinesActionEnabled",
     });
@@ -239,14 +266,37 @@ describe("SettingsTab", () => {
 
     tab.display();
 
-    expect(mockSettingsRecords.map((setting) => setting.name)).toEqual(
-      tab.getSettingDefinitions().map((definition) => definition.name),
-    );
+    expect(
+      mockSettingsRecords.map(
+        (setting) =>
+          `${setting.heading ? "heading" : "setting"}:${setting.name}`,
+      ),
+    ).toEqual([
+      "heading:Editing",
+      "setting:Stick the cursor to the content",
+      "setting:Enhance the Tab key",
+      "setting:Enhance the Enter key",
+      "setting:Vim-mode o/O inserts bullets",
+      "setting:Enhance the Ctrl+A or Cmd+A behavior",
+      "setting:Drag-and-Drop",
+      "heading:Appearance",
+      "setting:Improve the style of your lists",
+      "setting:Draw vertical indentation lines",
+      "setting:Draw outer list lines",
+      "heading:Folding",
+      "setting:Fold lists from vertical indentation lines",
+      "setting:Show fold controls on the right on mobile",
+      "heading:Advanced",
+      "setting:Debug mode",
+    ]);
 
-    const cursorSetting = mockSettingsRecords[0];
-    const outerSetting = mockSettingsRecords[7];
-    const actionSetting = mockSettingsRecords[8];
-    const mobileSetting = mockSettingsRecords[9];
+    const settingRecords = mockSettingsRecords.filter(
+      (setting) => !setting.heading,
+    );
+    const cursorSetting = settingRecords[0];
+    const outerSetting = settingRecords[8];
+    const actionSetting = settingRecords[9];
+    const mobileSetting = settingRecords[10];
 
     expect(cursorSetting?.dropdown?.value).toBe("bullet-and-checkbox");
     expect(outerSetting?.toggle?.value).toBe(true);
