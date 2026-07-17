@@ -10,7 +10,9 @@
 
 この機能はモバイルのLive Previewだけを変更する。
 
-デスクトップ、閲覧モード、見出しの折りたたみコントロールは変更しない。
+見出しのnative折りたたみコントロールも、同じ右端へ移動する。
+
+デスクトップ、閲覧モード、Propertiesの折りたたみコントロールは変更しない。
 
 縦線の表示設定と縦線クリックによる折りたたみ設定には依存しない。
 
@@ -49,6 +51,10 @@ Obsidianのnative `height: 100%`は、1行分のline heightと上下のlist spac
 コントロールのうち行内に残る13pxを、機能が有効なLive Previewの全リスト行で本文の右側余白として確保する。
 
 fold indicatorの有無で余白を変えず、子項目を追加または削除しても親項目の本文幅と折り返し位置を維持する。
+
+見出しではnative `.cm-fold-indicator`を`position: static`へ変更し、内側の`.collapse-indicator`を15px幅、`inset-inline-end: -15px`、`height: 1lh`で右端へ配置する。
+
+折りたたみ中の見出しシェブロンは`rotate(90deg)`で左を向き、展開中は下を向く。
 
 タップ時はObsidian標準のシェブロンと同じ処理を使い、その行の子孫全体を開閉する。
 
@@ -160,4 +166,5 @@ clicked rowはviewport上端から100px、160px、400pxに置き、child数とbr
 - 折り返した親項目では、シェブロンとタップ領域が1行目にだけ配置される。
 - 文末branchのfoldとunfoldで、clicked bulletとそれより上の表示位置が動かない。
 - 新設定はデフォルトで有効になり、無効化すると既存表示へ戻る。
-- デスクトップ、閲覧モード、見出し、縦線の折りたたみ動作に回帰がない。
+- モバイルのLive Previewで、見出しとリストのnative controlが同じ右端に並ぶ。
+- デスクトップ、閲覧モード、Properties、縦線の折りたたみ動作に回帰がない。

@@ -426,3 +426,34 @@ test("mirrors native mobile heading fold controls without widening the editor", 
   );
   expect(editorOverflowRules).toEqual([]);
 });
+
+test("moves native mobile heading fold controls to the right edge", () => {
+  const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+  const parentDeclarations = styles.match(
+    /\.bullet-plugin-mobile-right-fold-controls\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-header\s+\.cm-fold-indicator\s*\{([^}]*)\}/,
+  )?.[1];
+  const controlDeclarations = styles.match(
+    /\.bullet-plugin-mobile-right-fold-controls\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-header:has\(\.cm-fold-indicator\)\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
+  )?.[1];
+  const collapsedDeclarations = styles.match(
+    /\.bullet-plugin-mobile-right-fold-controls\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-header\s+\.cm-fold-indicator\.is-collapsed\s+\.collapse-indicator\s+svg\.svg-icon\s*\{([^}]*)\}/,
+  )?.[1];
+
+  expect(parentDeclarations).toContain("position: static;");
+  expect(controlDeclarations).toContain("display: flex;");
+  expect(controlDeclarations).toContain("box-sizing: border-box;");
+  expect(controlDeclarations).toContain("align-items: center;");
+  expect(controlDeclarations).toContain("justify-content: flex-start;");
+  expect(controlDeclarations).toContain("top: 0;");
+  expect(controlDeclarations).toContain("inset-inline-end: -15px;");
+  expect(controlDeclarations).toContain("width: 15px;");
+  expect(controlDeclarations).toContain("height: 1lh;");
+  expect(controlDeclarations).not.toContain("height: 100%;");
+  expect(controlDeclarations).toContain("padding-inline-start: 5px;");
+  expect(controlDeclarations).toContain("padding-inline-end: 0;");
+  expect(controlDeclarations).toContain("opacity: 1;");
+  expect(controlDeclarations).toContain("visibility: visible;");
+  expect(controlDeclarations).toContain("pointer-events: auto;");
+  expect(controlDeclarations).toContain("z-index: 2;");
+  expect(collapsedDeclarations).toContain("transform: rotate(90deg);");
+});
