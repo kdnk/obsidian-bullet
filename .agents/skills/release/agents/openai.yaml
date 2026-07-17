@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release"
+  short_description: "Safely publish this plugin version"
+  default_prompt: "Use $release to publish the next project version."
