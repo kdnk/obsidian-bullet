@@ -1,7 +1,10 @@
 import { ChangeSpec, Transaction } from "@codemirror/state";
 
 import { Logger } from "./Logger";
-import { MarkdownLineClassifier } from "./MarkdownLineClassifier";
+import {
+  MarkdownLineClassifier,
+  MarkdownLineInspection,
+} from "./MarkdownLineClassifier";
 
 export type BulletTypingDecision =
   | { kind: "pass" }
@@ -20,6 +23,22 @@ const structuralTriggers = new Set(["#", ">", "`", "-"]);
 interface TypedTrigger {
   fromBefore: number;
   fromAfter: number;
+}
+
+interface DeletedRange {
+  fromBefore: number;
+  toBefore: number;
+}
+
+interface AffectedPrefix {
+  before: MarkdownLineInspection;
+  ranges: DeletedRange[];
+}
+
+interface ConcreteChange {
+  from: number;
+  to: number;
+  insert?: string;
 }
 
 export class BulletTypingPolicy {
@@ -46,8 +65,8 @@ export class BulletTypingPolicy {
       return { kind: "pass" };
     }
 
-    if (!transaction.isUserEvent("input.type")) {
-      return { kind: "pass" };
+    if (isDeletionUserEvent(transaction)) {
+      return this.getDeletionDecision(transaction);
     }
 
     const promotion = this.getStructuralPromotion(transaction);
@@ -57,6 +76,114 @@ export class BulletTypingPolicy {
 
     const changes = this.getBodyCorrections(transaction);
     return changes.length > 0 ? { kind: "correct", changes } : { kind: "pass" };
+  }
+
+  private getDeletionDecision(transaction: Transaction): BulletTypingDecision {
+    const affectedPrefixes = this.getAffectedPrefixes(transaction);
+    const corrections: ConcreteChange[] = [];
+    const correctedLineNumbers = new Set<number>();
+
+    for (const affected of affectedPrefixes) {
+      if (affected.ranges.length !== 1) {
+        return { kind: "reject" };
+      }
+
+      if (isEntireLineDeleted(affected)) {
+        continue;
+      }
+
+      const mappedLine = getMappedLine(transaction, affected.before);
+      if (!mappedLine) {
+        return { kind: "reject" };
+      }
+
+      if (correctedLineNumbers.has(mappedLine.number)) {
+        return { kind: "reject" };
+      }
+      correctedLineNumbers.add(mappedLine.number);
+
+      const listItem = affected.before.listItem!;
+      if (
+        transaction.isUserEvent("delete.backward") &&
+        listItem.isPlainEmpty &&
+        !listItem.hasOwnedFollowingLine
+      ) {
+        const removal = getEmptyLeafRemoval(transaction, mappedLine);
+        if (!removal) {
+          return { kind: "reject" };
+        }
+        corrections.push(removal);
+        continue;
+      }
+
+      const existingPrefix = transaction.newDoc.sliceString(
+        mappedLine.from,
+        mappedLine.contentStart,
+      );
+      if (existingPrefix !== listItem.prefix) {
+        corrections.push({
+          from: mappedLine.from,
+          to: mappedLine.contentStart,
+          insert: listItem.prefix,
+        });
+      }
+    }
+
+    corrections.sort(
+      (left, right) => left.from - right.from || left.to - right.to,
+    );
+    for (let index = 1; index < corrections.length; index++) {
+      if (corrections[index].from < corrections[index - 1].to) {
+        return { kind: "reject" };
+      }
+    }
+
+    return corrections.length > 0
+      ? { kind: "correct", changes: corrections }
+      : { kind: "pass" };
+  }
+
+  private getAffectedPrefixes(transaction: Transaction): AffectedPrefix[] {
+    const deletedRanges = getDeletedRanges(transaction);
+    const affectedByLine = new Map<number, AffectedPrefix>();
+
+    for (const range of deletedRanges) {
+      const firstLine = transaction.startState.doc.lineAt(
+        range.fromBefore,
+      ).number;
+      const lastLine = transaction.startState.doc.lineAt(
+        range.toBefore - 1,
+      ).number;
+
+      for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++) {
+        let affected = affectedByLine.get(lineNumber);
+        if (!affected) {
+          const before = this.classifier.inspect(
+            transaction.startState.doc,
+            lineNumber,
+          );
+          const listItem = before.listItem;
+          if (!listItem) {
+            continue;
+          }
+          affected = { before, ranges: [] };
+          affectedByLine.set(lineNumber, affected);
+        }
+
+        const prefixTo =
+          affected.before.from + affected.before.listItem!.contentStart;
+        if (
+          range.fromBefore < prefixTo &&
+          range.toBefore > affected.before.from
+        ) {
+          affected.ranges.push(range);
+        }
+      }
+    }
+
+    return [...affectedByLine.values()]
+      .filter(({ ranges }) => ranges.length > 0)
+      .sort((left, right) => left.before.from - right.before.from);
   }
 
   private getStructuralPromotion(transaction: Transaction): ChangeSpec | null {
@@ -111,6 +238,90 @@ function isSupportedUserEvent(transaction: Transaction): boolean {
     transaction.isUserEvent("input.type") ||
     deletionUserEvents.some((event) => transaction.isUserEvent(event))
   );
+}
+
+function isDeletionUserEvent(transaction: Transaction): boolean {
+  return deletionUserEvents.some((event) => transaction.isUserEvent(event));
+}
+
+function getDeletedRanges(transaction: Transaction): DeletedRange[] {
+  const ranges: DeletedRange[] = [];
+  transaction.changes.iterChanges((fromBefore, toBefore) => {
+    if (toBefore > fromBefore) {
+      ranges.push({ fromBefore, toBefore });
+    }
+  }, true);
+  return ranges;
+}
+
+function isEntireLineDeleted(affected: AffectedPrefix): boolean {
+  const [range] = affected.ranges;
+  return (
+    range.fromBefore <= affected.before.from &&
+    range.toBefore >= affected.before.to
+  );
+}
+
+interface MappedLine {
+  number: number;
+  from: number;
+  to: number;
+  contentStart: number;
+}
+
+function getMappedLine(
+  transaction: Transaction,
+  before: MarkdownLineInspection,
+): MappedLine | null {
+  const listItem = before.listItem!;
+  const mappedLineStart = transaction.changes.mapPos(before.from, -1);
+  const mappedContentStart = transaction.changes.mapPos(
+    before.from + listItem.contentStart,
+    1,
+  );
+  const startLine = transaction.newDoc.lineAt(mappedLineStart);
+  const contentLine = transaction.newDoc.lineAt(mappedContentStart);
+
+  if (
+    startLine.number !== contentLine.number ||
+    startLine.from !== mappedLineStart ||
+    mappedContentStart < startLine.from ||
+    mappedContentStart > startLine.to
+  ) {
+    return null;
+  }
+
+  return {
+    number: startLine.number,
+    from: startLine.from,
+    to: startLine.to,
+    contentStart: mappedContentStart,
+  };
+}
+
+function getEmptyLeafRemoval(
+  transaction: Transaction,
+  line: MappedLine,
+): ConcreteChange | null {
+  if (line.contentStart !== line.to) {
+    return null;
+  }
+
+  if (transaction.newDoc.lines === 1) {
+    return { from: line.from, to: line.to };
+  }
+
+  if (line.number < transaction.newDoc.lines) {
+    return {
+      from: line.from,
+      to: transaction.newDoc.line(line.number + 1).from,
+    };
+  }
+
+  return {
+    from: transaction.newDoc.line(line.number - 1).to,
+    to: line.to,
+  };
 }
 
 function getSingleTypedTrigger(transaction: Transaction): TypedTrigger | null {

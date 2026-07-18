@@ -16,14 +16,30 @@ function makeTransaction(
   doc: string,
   changes: ChangeSpec,
   userEvent?: string,
-  cursor?: number,
+  selection?: number | EditorSelection,
 ) {
   const state = EditorState.create({
     doc,
     selection:
-      cursor === undefined ? undefined : EditorSelection.cursor(cursor),
+      typeof selection === "number"
+        ? EditorSelection.cursor(selection)
+        : selection,
   });
   return state.update({ changes, userEvent });
+}
+
+function makeMultiRangeDeletion(
+  doc: string,
+  ranges: readonly { from: number; to: number }[],
+) {
+  const state = EditorState.create({
+    doc,
+    selection: EditorSelection.create(
+      ranges.map(({ from, to }) => EditorSelection.range(from, to)),
+    ),
+    extensions: EditorState.allowMultipleSelections.of(true),
+  });
+  return state.update({ changes: ranges, userEvent: "delete.selection" });
 }
 
 function applyCorrection(
@@ -98,6 +114,190 @@ describe("BulletTypingPolicy", () => {
     const transaction = makeTransaction("plain", { from: 0, to: 1 }, userEvent);
 
     expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+  });
+
+  test.each([
+    {
+      description: "marker",
+      doc: "- item",
+      from: 0,
+      to: 1,
+      selection: 1,
+      userEvent: "delete.backward",
+      expected: "- item",
+    },
+    {
+      description: "spacing",
+      doc: "* item",
+      from: 1,
+      to: 2,
+      selection: 2,
+      userEvent: "delete.backward",
+      expected: "* item",
+    },
+    {
+      description: "complete prefix",
+      doc: "+ item",
+      from: 0,
+      to: 2,
+      selection: EditorSelection.single(0, 2),
+      userEvent: "delete.selection",
+      expected: "+ item",
+    },
+    {
+      description: "prefix through body text",
+      doc: "- item",
+      from: 0,
+      to: 4,
+      selection: EditorSelection.single(0, 4),
+      userEvent: "delete.selection",
+      expected: "- em",
+    },
+    {
+      description: "ordered prefix through body text",
+      doc: "10. item",
+      from: 0,
+      to: 6,
+      selection: EditorSelection.single(0, 6),
+      userEvent: "delete.cut",
+      expected: "10. em",
+    },
+  ])(
+    "preserves the original list prefix after deleting its $description",
+    ({ doc, from, to, selection, userEvent, expected }) => {
+      const transaction = makeTransaction(
+        doc,
+        { from, to },
+        userEvent,
+        selection,
+      );
+
+      expect(applyCorrection(transaction, policy.decide(transaction))).toBe(
+        expected,
+      );
+    },
+  );
+
+  test("uses mapped new-document coordinates for a shifted prefix correction", () => {
+    const transaction = makeMultiRangeDeletion("keep\n- item", [
+      { from: 0, to: 1 },
+      { from: 5, to: 6 },
+    ]);
+
+    expect(policy.decide(transaction)).toEqual({
+      kind: "correct",
+      changes: [{ from: 4, to: 5, insert: "- " }],
+    });
+    expect(applyCorrection(transaction, policy.decide(transaction))).toBe(
+      "eep\n- item",
+    );
+  });
+
+  test("allows deleting an entire list line", () => {
+    const transaction = makeTransaction(
+      "- one\n- two",
+      { from: 0, to: 6 },
+      "delete.selection",
+      EditorSelection.single(0, 6),
+    );
+
+    expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+  });
+
+  test.each([
+    {
+      description: "isolated root",
+      doc: "- ",
+      from: 1,
+      to: 2,
+      expected: "",
+    },
+    {
+      description: "root at the document start",
+      doc: "- \n- next",
+      from: 1,
+      to: 2,
+      expected: "- next",
+    },
+    {
+      description: "root between siblings",
+      doc: "- prev\n- \n- next",
+      from: 8,
+      to: 9,
+      expected: "- prev\n- next",
+    },
+    {
+      description: "root at the document end",
+      doc: "- prev\n- ",
+      from: 8,
+      to: 9,
+      expected: "- prev",
+    },
+    {
+      description: "nested leaf",
+      doc: "- parent\n  - \n- sibling",
+      from: 12,
+      to: 13,
+      expected: "- parent\n- sibling",
+    },
+  ])(
+    "removes an empty $description row on Backspace",
+    ({ doc, from, to, expected }) => {
+      const transaction = makeTransaction(
+        doc,
+        { from, to },
+        "delete.backward",
+        to,
+      );
+
+      expect(applyCorrection(transaction, policy.decide(transaction))).toBe(
+        expected,
+      );
+    },
+  );
+
+  test("restores an empty item that still owns a child", () => {
+    const transaction = makeTransaction(
+      "- \n  - child",
+      { from: 1, to: 2 },
+      "delete.backward",
+      2,
+    );
+
+    expect(applyCorrection(transaction, policy.decide(transaction))).toBe(
+      "- \n  - child",
+    );
+  });
+
+  test("passes a forward Delete that joins two items into a valid list item", () => {
+    const transaction = makeTransaction(
+      "- one\n- two",
+      { from: 5, to: 6 },
+      "delete.forward",
+      5,
+    );
+
+    expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+  });
+
+  test("rejects prefix recovery after its physical line boundary is deleted", () => {
+    const transaction = makeTransaction(
+      "plain\n- item",
+      { from: 5, to: 7 },
+      "delete.selection",
+      EditorSelection.single(5, 7),
+    );
+
+    expect(policy.decide(transaction)).toEqual({ kind: "reject" });
+  });
+
+  test("rejects multiple deletion ranges competing for one prefix", () => {
+    const transaction = makeMultiRangeDeletion("10. item", [
+      { from: 0, to: 1 },
+      { from: 2, to: 3 },
+    ]);
+
+    expect(policy.decide(transaction)).toEqual({ kind: "reject" });
   });
 
   test("handles composition subtypes as typed input", () => {
