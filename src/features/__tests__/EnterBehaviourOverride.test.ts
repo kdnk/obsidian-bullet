@@ -178,6 +178,48 @@ describe("EnterBehaviourOverride", () => {
     expect(operation).toBeInstanceOf(OutdentListIfItsEmpty);
   });
 
+  test("selects the root sibling operation for an empty ordered root item when smart lists are disabled", () => {
+    const operation = selectOperation({
+      text: "1. \n  1. child\n2. after",
+      cursor: { line: 0, ch: 3 },
+      settings: {
+        overrideEnterBehaviour: false,
+        keepBodyTextInBullets: true,
+      },
+      smartIndentListEnabled: false,
+    });
+
+    expect(operation).toBeInstanceOf(CreateNewRootItemAfterEmpty);
+  });
+
+  test("selects the outdent operation for an empty ordered nested item when smart lists are disabled", () => {
+    const operation = selectOperation({
+      text: "1. parent\n  1. \n    1. child",
+      cursor: { line: 1, ch: 5 },
+      settings: {
+        overrideEnterBehaviour: false,
+        keepBodyTextInBullets: true,
+      },
+      smartIndentListEnabled: false,
+    });
+
+    expect(operation).toBeInstanceOf(OutdentListIfItsEmpty);
+  });
+
+  test("keeps legacy delegation for an empty ordered item when body ownership is disabled", () => {
+    const operation = selectOperation({
+      text: "1. ",
+      cursor: { line: 0, ch: 3 },
+      settings: {
+        overrideEnterBehaviour: true,
+        keepBodyTextInBullets: false,
+      },
+      smartIndentListEnabled: false,
+    });
+
+    expect(operation).toBeNull();
+  });
+
   test("selects the existing new-item operation for a non-empty item", () => {
     const operation = selectOperation({
       text: "- item",

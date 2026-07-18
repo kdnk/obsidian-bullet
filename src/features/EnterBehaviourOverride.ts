@@ -71,32 +71,36 @@ export class EnterBehaviourOverride implements Feature {
     return this.operationPerformer.perform((root) => {
       const currentList = root.getListUnderCursor();
       const orderedList = /^\d+\.$/.test(currentList.getBullet());
-      if (orderedList && !this.obsidianSettings.isSmartIndentListEnabled()) {
-        return null;
-      }
-
+      const smartIndentListEnabled =
+        this.obsidianSettings.isSmartIndentListEnabled();
       const lines = currentList.getLines();
       const shouldHandleEmptyList =
         root.hasSingleCursor() &&
         lines.length === 1 &&
         isEmptyLineOrEmptyCheckbox(lines[0]);
 
-      if (shouldHandleEmptyList && currentList.getLevel() !== 1) {
-        return new OutdentListIfItsEmpty(
-          root,
-          this.obsidianSettings.isSmartIndentListEnabled(),
-        );
+      if (
+        shouldHandleEmptyList &&
+        this.settings.keepBodyTextInBullets &&
+        currentList.getLevel() === 1
+      ) {
+        return new CreateNewRootItemAfterEmpty(root, smartIndentListEnabled);
       }
 
       if (
         shouldHandleEmptyList &&
-        currentList.getLevel() === 1 &&
-        this.settings.keepBodyTextInBullets
+        this.settings.keepBodyTextInBullets &&
+        currentList.getLevel() !== 1
       ) {
-        return new CreateNewRootItemAfterEmpty(
-          root,
-          this.obsidianSettings.isSmartIndentListEnabled(),
-        );
+        return new OutdentListIfItsEmpty(root, smartIndentListEnabled);
+      }
+
+      if (orderedList && !smartIndentListEnabled) {
+        return null;
+      }
+
+      if (shouldHandleEmptyList && currentList.getLevel() !== 1) {
+        return new OutdentListIfItsEmpty(root, smartIndentListEnabled);
       }
 
       const defaultIndentChars = this.obsidianSettings.getDefaultIndentChars();
@@ -108,7 +112,7 @@ export class EnterBehaviourOverride implements Feature {
       return new CreateNewItem(
         root,
         defaultIndentChars,
-        this.obsidianSettings.isSmartIndentListEnabled(),
+        smartIndentListEnabled,
         true,
         documentPrefixBeforeRoot,
       );
