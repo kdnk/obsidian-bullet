@@ -93,6 +93,12 @@ describe("MarkdownLineClassifier", () => {
     });
   });
 
+  test("treats four spaces and space-tab indentation as the same root column", () => {
+    expect(inspect("    - sibling\n \t- ", 2).listItem).toMatchObject({
+      isRoot: true,
+    });
+  });
+
   test("distinguishes an empty task from a plain empty bullet", () => {
     expect(inspect("- [ ] ", 1).listItem).toMatchObject({
       prefix: "- ",
@@ -121,6 +127,12 @@ describe("MarkdownLineClassifier", () => {
       });
     },
   );
+
+  test("does not own a same-column space-tab sibling", () => {
+    expect(inspect("    - \n \t- sibling", 1).listItem).toMatchObject({
+      hasOwnedFollowingLine: false,
+    });
+  });
 
   test("only exposes list metadata for list item lines", () => {
     expect(inspect("- item\n  continuation", 2).listItem).toBeNull();
