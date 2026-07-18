@@ -78,6 +78,60 @@
 - one|
 ```
 
+# backspace should remove the only empty root item when body ownership is enabled
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- |
+```
+
+- keydown: `Backspace`
+- assertState:
+
+```md
+|
+```
+
+# backspace should remove a nested empty item when body ownership is enabled
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- parent
+  - |
+  - sibling
+```
+
+- keydown: `Backspace`
+- assertState:
+
+```md
+- parent|
+  - sibling
+```
+
+# backspace should remove a middle root item when body ownership is enabled
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- previous
+- |
+- next
+```
+
+- keydown: `Backspace`
+- assertState:
+
+```md
+- previous|
+- next
+```
+
 # backspace should remove note line if it's empty
 
 - applyState:

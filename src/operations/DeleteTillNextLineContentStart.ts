@@ -11,7 +11,7 @@ export class DeleteTillNextLineContentStart implements Operation {
     private numericBulletsEnabled: boolean,
   ) {
     this.deleteTillPreviousLineContentEnd =
-      new DeleteTillPreviousLineContentEnd(root, numericBulletsEnabled);
+      new DeleteTillPreviousLineContentEnd(root, numericBulletsEnabled, false);
   }
 
   perform() {

@@ -39,7 +39,8 @@ export class BackspaceBehaviourOverride implements Feature {
 
   private check = () => {
     return (
-      this.settings.keepCursorWithinContent !== "never" &&
+      (this.settings.keepCursorWithinContent !== "never" ||
+        this.settings.keepBodyTextInBullets) &&
       !this.imeDetector.isOpened()
     );
   };
@@ -50,6 +51,7 @@ export class BackspaceBehaviourOverride implements Feature {
         new DeleteTillPreviousLineContentEnd(
           root,
           this.obsidianSettings.isSmartIndentListEnabled(),
+          this.settings.keepBodyTextInBullets,
         ),
       editor,
     );

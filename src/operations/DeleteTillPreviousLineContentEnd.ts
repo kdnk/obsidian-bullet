@@ -12,11 +12,13 @@ import {
   Root,
   recalculateNumericBullets,
 } from "../root";
+import { isEmptyLineOrEmptyCheckbox } from "../utils/isEmptyLineOrEmptyCheckbox";
 
 export class DeleteTillPreviousLineContentEnd implements Operation {
   constructor(
     private root: Root,
     private numericBulletsEnabled: boolean,
+    private removeEmptyLeafItem: boolean,
   ) {}
 
   perform() {
@@ -31,8 +33,23 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
     const lines = list.getLinesInfo();
 
     const lineNo = lines.findIndex(
-      (l) => cursor.ch === l.from.ch && cursor.line === l.from.line,
+      (line) =>
+        cursor.line === line.from.line &&
+        (cursor.ch === line.from.ch ||
+          (this.removeEmptyLeafItem &&
+            isEmptyLineOrEmptyCheckbox(line.text) &&
+            cursor.ch === line.to.ch)),
     );
+
+    if (
+      lineNo === 0 &&
+      this.removeEmptyLeafItem &&
+      lines.length === 1 &&
+      isEmptyLineOrEmptyCheckbox(lines[0].text) &&
+      list.isEmpty()
+    ) {
+      return this.removeEmptyList(root, cursor, list);
+    }
 
     if (lineNo === 0) {
       return this.mergeWithPreviousItem(root, cursor, list);
@@ -41,6 +58,34 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
     }
 
     return NO_OP_OUTCOME;
+  }
+
+  private removeEmptyList(root: Root, cursor: Position, list: List) {
+    const previousList = this.getVisibleListUnderLine(root, cursor.line - 1);
+    const nextList = this.getVisibleListUnderLine(root, cursor.line + 1);
+    const parent = list.getParent();
+
+    if (!parent) {
+      return STOP_ONLY_OUTCOME;
+    }
+
+    parent.removeChild(list);
+    recalculateNumericBullets(root, this.numericBulletsEnabled);
+
+    if (previousList) {
+      root.replaceCursor(previousList.getLastLineContentEnd());
+    } else if (nextList) {
+      root.replaceCursor(nextList.getFirstLineContentStart());
+    } else {
+      root.replaceCursor(root.getContentStart());
+    }
+
+    return UPDATED_OUTCOME;
+  }
+
+  private getVisibleListUnderLine(root: Root, line: number) {
+    const list = root.getListUnderLine(line);
+    return list?.getTopFoldRoot() ?? list;
   }
 
   private mergeNotes(
