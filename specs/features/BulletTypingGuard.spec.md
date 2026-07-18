@@ -146,7 +146,7 @@ programmatic|
 - assertState:
 
 ```md
-- | item
+- |item
 ```
 
 # deleting a whole list line selection should not restore the item
