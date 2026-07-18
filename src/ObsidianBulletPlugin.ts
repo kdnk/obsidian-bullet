@@ -3,6 +3,7 @@ import { Plugin } from "obsidian";
 import { ArrowLeftAndCtrlArrowLeftBehaviourOverride } from "./features/ArrowLeftAndCtrlArrowLeftBehaviourOverride";
 import { BackspaceBehaviourOverride } from "./features/BackspaceBehaviourOverride";
 import { BetterListsStyles } from "./features/BetterListsStyles";
+import { BulletTypingGuard } from "./features/BulletTypingGuard";
 import { CtrlAAndCmdABehaviourOverride } from "./features/CtrlAAndCmdABehaviourOverride";
 import { DeleteBehaviourOverride } from "./features/DeleteBehaviourOverride";
 import { DragAndDrop } from "./features/DragAndDrop";
@@ -64,6 +65,9 @@ export default class ObsidianBulletPlugin extends Plugin {
         this.operationPerformer,
       ),
       new ListsFoldingCommands(this, this.obsidianSettings),
+
+      // features based on settings.keepBodyTextInBullets
+      new BulletTypingGuard(this, this.settings, this.logger),
 
       // features based on settings.keepCursorWithinContent
       new EditorSelectionsBehaviourOverride(

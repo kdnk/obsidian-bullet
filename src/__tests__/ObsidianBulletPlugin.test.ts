@@ -21,4 +21,20 @@ describe("ObsidianBulletPlugin wiring", () => {
       "new MobileRightFoldControls(this, this.settings)",
     );
   });
+
+  test("loads the bullet typing guard before selection behavior", () => {
+    const source = readFileSync(
+      join(__dirname, "../ObsidianBulletPlugin.ts"),
+      "utf-8",
+    );
+    const guard = source.indexOf(
+      "new BulletTypingGuard(this, this.settings, this.logger)",
+    );
+    const selectionBehavior = source.indexOf(
+      "new EditorSelectionsBehaviourOverride(",
+    );
+
+    expect(guard).toBeGreaterThanOrEqual(0);
+    expect(selectionBehavior).toBeGreaterThan(guard);
+  });
 });
