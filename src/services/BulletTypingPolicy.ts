@@ -65,7 +65,10 @@ export class BulletTypingPolicy {
       return { kind: "pass" };
     }
 
-    if (isDeletionUserEvent(transaction)) {
+    if (
+      isDeletionUserEvent(transaction) ||
+      isPureDeletionTransaction(transaction)
+    ) {
       return this.getDeletionDecision(transaction);
     }
 
@@ -265,6 +268,21 @@ function isSupportedUserEvent(transaction: Transaction): boolean {
 
 function isDeletionUserEvent(transaction: Transaction): boolean {
   return deletionUserEvents.some((event) => transaction.isUserEvent(event));
+}
+
+function isPureDeletionTransaction(transaction: Transaction): boolean {
+  let hasDeletion = false;
+  let hasInsertion = false;
+
+  transaction.changes.iterChanges(
+    (fromBefore, toBefore, _fromAfter, _toAfter, inserted) => {
+      hasDeletion ||= toBefore > fromBefore;
+      hasInsertion ||= inserted.length > 0;
+    },
+    true,
+  );
+
+  return hasDeletion && !hasInsertion;
 }
 
 function getDeletedRanges(transaction: Transaction): DeletedRange[] {

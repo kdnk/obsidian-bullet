@@ -127,6 +127,15 @@ describe("BulletTypingPolicy", () => {
       expected: "- item",
     },
     {
+      description: "marker through a Vim input transaction",
+      doc: "- item",
+      from: 0,
+      to: 1,
+      selection: EditorSelection.single(0, 1),
+      userEvent: "input.type",
+      expected: "- item",
+    },
+    {
       description: "spacing",
       doc: "* item",
       from: 1,
