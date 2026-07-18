@@ -193,6 +193,7 @@ const keysMap: { [key: string]: number } = {
   ArrowDown: 40,
   Delete: 46,
   KeyA: 65,
+  KeyZ: 90,
 };
 
 const RENDERER_TEST_CONNECT_DELAY_MS = 1_000;

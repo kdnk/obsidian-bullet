@@ -24,7 +24,7 @@
 ```
 
 - typeText: `a`
-- execute: `editor:undo`
+- keydown: `Cmd-KeyZ`
 - assertState:
 
 ```md
@@ -152,6 +152,7 @@ programmatic|
 # deleting a whole list line selection should not restore the item
 
 - setting: `keepBodyTextInBullets=true`
+- setting: `stickCursor="never"`
 - applyState:
 
 ```md
@@ -287,6 +288,7 @@ programmatic|
 # typing inside frontmatter should not create a bullet
 
 - setting: `keepBodyTextInBullets=true`
+- execute: `editor:toggle-source`
 - applyState:
 
 ```md
@@ -303,6 +305,8 @@ title: Exampl|
 title: Example|
 ---
 ```
+
+- execute: `editor:toggle-source`
 
 # typing inside fenced code should not create a bullet
 
