@@ -7,6 +7,7 @@ import { Feature } from "./Feature";
 
 import { MyEditor } from "../editor";
 import { CreateNewItem } from "../operations/CreateNewItem";
+import { CreateNewRootItemAfterEmpty } from "../operations/CreateNewRootItemAfterEmpty";
 import { InsertNewLineWithoutBullet } from "../operations/InsertNewLineWithoutBullet";
 import { OutdentListIfItsEmpty } from "../operations/OutdentListIfItsEmpty";
 import { IMEDetector } from "../services/IMEDetector";
@@ -59,7 +60,11 @@ export class EnterBehaviourOverride implements Feature {
   async unload() {}
 
   private check = () => {
-    return this.settings.overrideEnterBehaviour && !this.imeDetector.isOpened();
+    return (
+      (this.settings.overrideEnterBehaviour ||
+        this.settings.keepBodyTextInBullets) &&
+      !this.imeDetector.isOpened()
+    );
   };
 
   private run = (editor: MyEditor) => {
@@ -71,14 +76,24 @@ export class EnterBehaviourOverride implements Feature {
       }
 
       const lines = currentList.getLines();
-      const shouldOutdentEmptyList =
+      const shouldHandleEmptyList =
         root.hasSingleCursor() &&
         lines.length === 1 &&
-        isEmptyLineOrEmptyCheckbox(lines[0]) &&
-        currentList.getLevel() !== 1;
+        isEmptyLineOrEmptyCheckbox(lines[0]);
 
-      if (shouldOutdentEmptyList) {
+      if (shouldHandleEmptyList && currentList.getLevel() !== 1) {
         return new OutdentListIfItsEmpty(
+          root,
+          this.obsidianSettings.isSmartIndentListEnabled(),
+        );
+      }
+
+      if (
+        shouldHandleEmptyList &&
+        currentList.getLevel() === 1 &&
+        this.settings.keepBodyTextInBullets
+      ) {
+        return new CreateNewRootItemAfterEmpty(
           root,
           this.obsidianSettings.isSmartIndentListEnabled(),
         );

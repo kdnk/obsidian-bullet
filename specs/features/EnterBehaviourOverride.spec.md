@@ -179,6 +179,49 @@
   - |
 ```
 
+# enter should preserve an empty root item and create a sibling below its subtree when body ownership is enabled
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- |
+  - child
+- after
+```
+
+- keydown: `Enter`
+- assertState:
+
+```md
+- 
+  - child
+- |
+- after
+```
+
+# enter should outdent an empty nested item and its subtree once when body ownership is enabled
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- parent
+  - |
+    - child
+- after
+```
+
+- keydown: `Enter`
+- assertState:
+
+```md
+- parent
+- |
+  - child
+- after
+```
+
 # enter should delete list item if it's last item and it's on the top level
 
 - applyState:
