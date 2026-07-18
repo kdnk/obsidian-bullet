@@ -127,6 +127,8 @@ function getSingleTypedTrigger(transaction: Transaction): TypedTrigger | null {
       const value = inserted.toString();
       if (
         fromBefore === toBefore &&
+        selection.main.anchor === fromBefore &&
+        selection.main.head === fromBefore &&
         structuralTriggers.has(value) &&
         value.length === 1
       ) {
