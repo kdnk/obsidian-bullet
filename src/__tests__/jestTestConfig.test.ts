@@ -110,6 +110,47 @@ describe("test config helpers", () => {
 
     expect(code).toContain('await assertNativeListBullet({"line":2});');
   });
+
+  test("transforms annotated text actions from the real typing spec", () => {
+    const fs = jest.requireActual<typeof import("node:fs")>("node:fs");
+    const path = jest.requireActual<typeof import("node:path")>("node:path");
+    const sourcePath = path.resolve(
+      __dirname,
+      "../../specs/features/BulletTypingGuard.spec.md",
+    );
+    const source = fs.readFileSync(sourcePath, "utf8");
+
+    const { code } = mdSpecTransformer.process(source, sourcePath, {
+      config: { cwd: path.resolve(__dirname, "../..") },
+    });
+
+    expect(code).toContain('await typeText("a");');
+    expect(code).toContain('await pasteText("pasted");');
+    expect(code).toContain('await typeText("`");');
+    expect(code).toContain('await typeText("");');
+  });
+
+  test("preserves shorter Markdown fences inside a longer state fence", () => {
+    const source = [
+      "# types inside a fenced block",
+      "",
+      "- applyState:",
+      "",
+      "````md",
+      "```",
+      "cod|",
+      "```",
+      "````",
+    ].join("\n");
+
+    const { code } = mdSpecTransformer.process(
+      source,
+      "/repo/specs/fenced-state.spec.md",
+      { config: { cwd: "/repo" } },
+    );
+
+    expect(code).toContain('await applyState(["```","cod|","```"]);');
+  });
 });
 
 function readRendererCommandNames(sourceText?: string): string[] {

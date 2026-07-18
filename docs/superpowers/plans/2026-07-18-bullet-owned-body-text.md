@@ -948,8 +948,13 @@ What:
 
 **Files:**
 
+- Modify: `jest/semantic-command-contract.ts`
+- Modify: `jest/obsidian-driver.js`
+- Modify: `jest/test-globals.d.ts`
+- Modify: `jest/md-spec-transformer.js`
 - Modify: `src/ObsidianBulletPluginWithTests.ts`
 - Modify: `src/__tests__/ObsidianBulletPluginWithTests.test.ts`
+- Modify: `src/__tests__/jestTestConfig.test.ts`
 - Create: `specs/features/BulletTypingGuard.spec.md`
 - Modify: `specs/features/EnterBehaviourOverride.spec.md`
 - Modify: `specs/features/BackspaceBehaviourOverride.spec.md`

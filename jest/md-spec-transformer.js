@@ -6,12 +6,23 @@ function isAction(line) {
   return line.startsWith("- ");
 }
 
+function getCodeFenceLength(line) {
+  const match = /^(`{3,})(?:[^`]*)$/.exec(line);
+  return match ? match[1].length : null;
+}
+
 function isCodeBlock(line) {
-  return line.startsWith("```");
+  return getCodeFenceLength(line) !== null;
+}
+
+function isClosingCodeBlock(line, openingFenceLength) {
+  const match = /^(`{3,})\s*$/.exec(line);
+  return Boolean(match && match[1].length >= openingFenceLength);
 }
 
 function parseState(l) {
-  if (!isCodeBlock(l.line)) {
+  const openingFenceLength = getCodeFenceLength(l.line);
+  if (openingFenceLength === null) {
     throw new Error(
       `parseState: Unexpected line "${l.line}", expected "\`\`\`"`
     );
@@ -24,7 +35,7 @@ function parseState(l) {
 
     if (l.isEnded()) {
       throw new Error(`parseState: Unexpected EOF, expected "\`\`\`"`);
-    } else if (isCodeBlock(l.line)) {
+    } else if (isClosingCodeBlock(l.line, openingFenceLength)) {
       l.nextNotEmpty();
       return {
         lines,
@@ -171,6 +182,25 @@ function parseInsertText(l) {
   };
 }
 
+function parseTextAction(l, type) {
+  const source = l.line.replace(new RegExp(`^- ${type}:\\s*`), "");
+  const backtickMatch = /^`([^`]*)`$/.exec(source);
+  let text;
+
+  if (backtickMatch) {
+    text = backtickMatch[1];
+  } else {
+    text = JSON.parse(source);
+    if (typeof text !== "string") {
+      throw new Error(`${type}: Expected a string`);
+    }
+  }
+
+  l.nextNotEmpty();
+
+  return { type, text };
+}
+
 function parseExecuteCommandById(l) {
   const command = l.line.replace(/- execute: `([^`]+)`/, "$1");
 
@@ -207,6 +237,10 @@ function parseAction(l) {
     return parseSimulateKeydown(l);
   } else if (l.line.startsWith("- insertText:")) {
     return parseInsertText(l);
+  } else if (l.line.startsWith("- typeText:")) {
+    return parseTextAction(l, "typeText");
+  } else if (l.line.startsWith("- pasteText:")) {
+    return parseTextAction(l, "pasteText");
   } else if (l.line.startsWith("- execute:")) {
     return parseExecuteCommandById(l);
   } else if (l.line.startsWith("- setting:")) {
@@ -322,6 +356,12 @@ module.exports.process = function process(sourceText, sourcePath, options) {
           break;
         case "insertText":
           code += `    await insertText(${s(action.text)});\n`;
+          break;
+        case "typeText":
+          code += `    await typeText(${s(action.text)});\n`;
+          break;
+        case "pasteText":
+          code += `    await pasteText(${s(action.text)});\n`;
           break;
         case "executeCommandById":
           code += `    await executeCommandById(${s(action.command)});\n`;

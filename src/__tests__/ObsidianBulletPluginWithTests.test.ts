@@ -568,6 +568,53 @@ describe("ObsidianBulletPluginWithTests", () => {
     expect(applyState).toHaveBeenCalledWith(state);
   });
 
+  test.each([
+    ["typeText", "input.type"],
+    ["pasteText", "input.paste"],
+  ] as const)(
+    "dispatches %s as one annotated main-selection replacement",
+    async (command, userEvent) => {
+      const plugin = Object.create(
+        ObsidianBulletPluginWithTests.prototype,
+      ) as ObsidianBulletPluginWithTests;
+      const dispatchView = jest.fn();
+      const view = {
+        state: {
+          selection: {
+            main: { from: 2, to: 5 },
+          },
+        },
+        dispatch: dispatchView,
+      };
+      (
+        plugin as unknown as {
+          editor: {
+            getCodeMirrorView(): typeof view;
+          };
+        }
+      ).editor = {
+        getCodeMirrorView: () => view,
+      };
+      const dispatch = (
+        plugin as unknown as {
+          handleTestCommand(
+            type: string,
+            data: unknown,
+          ): Promise<State | undefined>;
+        }
+      ).handleTestCommand.bind(plugin);
+
+      await expect(dispatch(command, "xy")).resolves.toBeUndefined();
+
+      expect(dispatchView).toHaveBeenCalledTimes(1);
+      expect(dispatchView).toHaveBeenCalledWith({
+        changes: { from: 2, to: 5, insert: "xy" },
+        selection: { anchor: 4 },
+        userEvent,
+      });
+    },
+  );
+
   test("rejects unknown test commands", async () => {
     const plugin = Object.create(
       ObsidianBulletPluginWithTests.prototype,
@@ -588,6 +635,8 @@ describe("ObsidianBulletPluginWithTests", () => {
 
   test.each([
     ["applyState", { value: "- one", folds: [], selections: "invalid" }],
+    ["typeText", { text: "typed" }],
+    ["pasteText", 1],
     ["drag", { from: { line: 0, ch: "0" } }],
     ["move", { to: { line: 0, ch: 0 }, offsetX: "0", offsetY: 0 }],
     ["setSetting", { k: "listLines", v: "true" }],
