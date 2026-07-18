@@ -301,7 +301,7 @@ function matchListItem(text: string): ListItemMatch | null {
 function getIndentWidth(indent: string): number {
   let width = 0;
   for (const character of indent) {
-    width += character === "\t" ? 4 : 1;
+    width += character === "\t" ? 4 - (width % 4) : 1;
   }
   return width;
 }
