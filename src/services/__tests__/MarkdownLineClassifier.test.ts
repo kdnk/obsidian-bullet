@@ -1,4 +1,4 @@
-import { Text } from "@codemirror/state";
+import { EditorState } from "@codemirror/state";
 
 import {
   MarkdownLineClassifier,
@@ -7,7 +7,11 @@ import {
 
 function inspect(source: string, lineNumber: number) {
   const classifier = new MarkdownLineClassifier();
-  return classifier.inspect(Text.of(source.split("\n")), lineNumber);
+  const state = EditorState.create({
+    doc: source,
+    extensions: classifier.extension,
+  });
+  return classifier.inspect(state, lineNumber);
 }
 
 describe("MarkdownLineClassifier", () => {
@@ -137,5 +141,69 @@ describe("MarkdownLineClassifier", () => {
   test("only exposes list metadata for list item lines", () => {
     expect(inspect("- item\n  continuation", 2).listItem).toBeNull();
     expect(inspect("plain", 1).listItem).toBeNull();
+  });
+
+  test("does not rescan prior root items during inspection", () => {
+    const classifier = new MarkdownLineClassifier();
+    const state = EditorState.create({
+      doc: Array.from({ length: 1_000 }, () => "- item").join("\n"),
+      extensions: classifier.extension,
+    });
+    const line = jest.spyOn(state.doc, "line");
+
+    expect(classifier.inspect(state, state.doc.lines).listItem).toMatchObject({
+      isRoot: true,
+    });
+    expect(line).toHaveBeenCalledTimes(2);
+  });
+
+  test("classifies a nested item without scanning same-level siblings", () => {
+    const classifier = new MarkdownLineClassifier();
+    const state = EditorState.create({
+      doc: ["- root", ...Array.from({ length: 999 }, () => "  - item")].join(
+        "\n",
+      ),
+      extensions: classifier.extension,
+    });
+    const line = jest.spyOn(state.doc, "line");
+
+    expect(classifier.classify(state, state.doc.lines)).toBe("list-item");
+    expect(line).toHaveBeenCalledTimes(1);
+  });
+
+  test("reuses structural blocks for an ordinary same-line edit", () => {
+    const classifier = new MarkdownLineClassifier();
+    let state = EditorState.create({
+      doc: Array.from({ length: 1_000 }, () => "- item").join("\n"),
+      extensions: classifier.extension,
+    });
+    const line = jest.spyOn(
+      Object.getPrototypeOf(state.doc) as EditorState["doc"],
+      "line",
+    );
+
+    state = state.update({
+      changes: { from: state.doc.length, insert: "x" },
+    }).state;
+
+    expect(line).not.toHaveBeenCalled();
+    line.mockRestore();
+    expect(classifier.classify(state, state.doc.lines)).toBe("list-item");
+  });
+
+  test("rebuilds structural blocks when a fence delimiter changes", () => {
+    const classifier = new MarkdownLineClassifier();
+    let state = EditorState.create({
+      doc: "``\ninside\n```",
+      extensions: classifier.extension,
+    });
+
+    expect(classifier.inspect(state, 2).kind).toBe("body");
+
+    state = state.update({ changes: { from: 2, insert: "`" } }).state;
+    expect(classifier.inspect(state, 2).kind).toBe("structure");
+
+    state = state.update({ changes: { from: 2, to: 3 } }).state;
+    expect(classifier.inspect(state, 2).kind).toBe("body");
   });
 });

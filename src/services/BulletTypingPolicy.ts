@@ -37,7 +37,7 @@ interface AffectedPrefix {
 
 interface ConcreteChange {
   from: number;
-  to: number;
+  to?: number;
   insert?: string;
 }
 
@@ -135,11 +135,22 @@ export class BulletTypingPolicy {
       }
     }
 
+    corrections.push(
+      ...this.getBodyCorrections(
+        transaction,
+        getSameLineDeletionNumbers(transaction),
+        correctedLineNumbers,
+      ),
+    );
+
     corrections.sort(
-      (left, right) => left.from - right.from || left.to - right.to,
+      (left, right) =>
+        left.from - right.from ||
+        (left.to ?? left.from) - (right.to ?? right.from),
     );
     for (let index = 1; index < corrections.length; index++) {
-      if (corrections[index].from < corrections[index - 1].to) {
+      const previous = corrections[index - 1];
+      if (corrections[index].from < (previous.to ?? previous.from)) {
         return { kind: "reject" };
       }
     }
@@ -165,7 +176,7 @@ export class BulletTypingPolicy {
     const joinedPosition = transaction.changes.mapPos(affected.before.from, -1);
     const joinedLine = transaction.newDoc.lineAt(joinedPosition);
     return (
-      this.classifier.inspect(transaction.newDoc, joinedLine.number).kind ===
+      this.classifier.classify(transaction.state, joinedLine.number) ===
       "list-item"
     );
   }
@@ -184,7 +195,7 @@ export class BulletTypingPolicy {
         let affected = affectedByLine.get(lineNumber);
         if (!affected) {
           const before = this.classifier.inspect(
-            transaction.startState.doc,
+            transaction.startState,
             lineNumber,
           );
           const listItem = before.listItem;
@@ -220,7 +231,7 @@ export class BulletTypingPolicy {
 
     const beforeLine = transaction.startState.doc.lineAt(trigger.fromBefore);
     const before = this.classifier.inspect(
-      transaction.startState.doc,
+      transaction.startState,
       beforeLine.number,
     );
     const listItem = before.listItem;
@@ -244,15 +255,21 @@ export class BulletTypingPolicy {
     };
   }
 
-  private getBodyCorrections(transaction: Transaction): ChangeSpec[] {
-    const changes: ChangeSpec[] = [];
-    for (const lineNumber of getChangedLineNumbers(transaction)) {
-      const inspection = this.classifier.inspect(
-        transaction.newDoc,
-        lineNumber,
-      );
-      if (inspection.kind === "body") {
-        changes.push({ from: inspection.from, insert: "- " });
+  private getBodyCorrections(
+    transaction: Transaction,
+    lineNumbers = getChangedLineNumbers(transaction),
+    excludedLineNumbers: ReadonlySet<number> = new Set(),
+  ): ConcreteChange[] {
+    const changes: ConcreteChange[] = [];
+    for (const lineNumber of lineNumbers) {
+      if (excludedLineNumbers.has(lineNumber)) {
+        continue;
+      }
+      if (this.classifier.classify(transaction.state, lineNumber) === "body") {
+        changes.push({
+          from: transaction.newDoc.line(lineNumber).from,
+          insert: "- ",
+        });
       }
     }
     return changes;
@@ -293,6 +310,29 @@ function getDeletedRanges(transaction: Transaction): DeletedRange[] {
     }
   }, true);
   return ranges;
+}
+
+function getSameLineDeletionNumbers(transaction: Transaction): number[] {
+  const lineNumbers = new Set<number>();
+
+  for (const range of getDeletedRanges(transaction)) {
+    const beforeStartLine = transaction.startState.doc.lineAt(range.fromBefore);
+    const beforeEndLine = transaction.startState.doc.lineAt(range.toBefore);
+    if (beforeStartLine.number !== beforeEndLine.number) {
+      continue;
+    }
+
+    const mappedLineStart = transaction.changes.mapPos(
+      beforeStartLine.from,
+      -1,
+    );
+    const mappedLine = transaction.newDoc.lineAt(mappedLineStart);
+    if (mappedLine.from === mappedLineStart) {
+      lineNumbers.add(mappedLine.number);
+    }
+  }
+
+  return [...lineNumbers].sort((left, right) => left - right);
 }
 
 function isEntireLineDeleted(affected: AffectedPrefix): boolean {

@@ -1,6 +1,6 @@
 import { Plugin } from "obsidian";
 
-import { EditorState, Transaction } from "@codemirror/state";
+import { EditorState, Extension, Transaction } from "@codemirror/state";
 
 import { Feature } from "./Feature";
 
@@ -10,23 +10,60 @@ import { MarkdownLineClassifier } from "../services/MarkdownLineClassifier";
 import { Settings } from "../services/Settings";
 
 export class BulletTypingGuard implements Feature {
+  private classifier: MarkdownLineClassifier;
   private policy: BulletTypingPolicy;
+  private filterExtension: Extension;
+  private editorExtensions: Extension[] = [];
 
   constructor(
     private plugin: Plugin,
     private settings: Settings,
     logger: Logger,
   ) {
-    this.policy = new BulletTypingPolicy(new MarkdownLineClassifier(), logger);
-  }
-
-  async load() {
-    this.plugin.registerEditorExtension(
-      EditorState.transactionFilter.of(this.filterTransaction),
+    this.classifier = new MarkdownLineClassifier();
+    this.policy = new BulletTypingPolicy(this.classifier, logger);
+    this.filterExtension = EditorState.transactionFilter.of(
+      this.filterTransaction,
     );
   }
 
-  async unload() {}
+  async load() {
+    this.synchronizeEditorExtensions(false);
+    this.plugin.registerEditorExtension(this.editorExtensions);
+    this.settings.onChange(
+      ["keepBodyTextInBullets"],
+      this.handleSettingsChange,
+    );
+  }
+
+  async unload() {
+    this.settings.removeCallback(this.handleSettingsChange);
+  }
+
+  private handleSettingsChange = () => {
+    this.synchronizeEditorExtensions(true);
+  };
+
+  private synchronizeEditorExtensions(updateViews: boolean) {
+    const shouldEnable = this.settings.keepBodyTextInBullets;
+    const enabled = this.editorExtensions.length > 0;
+    if (enabled === shouldEnable) {
+      return;
+    }
+
+    if (shouldEnable) {
+      this.editorExtensions.push(
+        this.classifier.extension,
+        this.filterExtension,
+      );
+    } else {
+      this.editorExtensions.splice(0);
+    }
+
+    if (updateViews) {
+      this.plugin.app.workspace.updateOptions();
+    }
+  }
 
   private filterTransaction = (transaction: Transaction) => {
     if (!this.settings.keepBodyTextInBullets) {

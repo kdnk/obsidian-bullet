@@ -65,6 +65,22 @@ untouched
 pasted|
 ```
 
+# deleting from pasted body text should adopt the edited line
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+|p|lain
+```
+
+- typeText: ""
+- assertState:
+
+```md
+- |lain
+```
+
 # programmatic text insertion should remain unowned
 
 - setting: `keepBodyTextInBullets=true`

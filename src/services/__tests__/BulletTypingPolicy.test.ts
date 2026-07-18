@@ -110,11 +110,18 @@ describe("BulletTypingPolicy", () => {
     "delete.forward",
     "delete.selection",
     "delete.cut",
-  ])("passes reserved deletion event %s", (userEvent) => {
-    const transaction = makeTransaction("plain", { from: 0, to: 1 }, userEvent);
+  ])(
+    "passes reserved deletion event %s when ownership remains valid",
+    (userEvent) => {
+      const transaction = makeTransaction(
+        "- plain",
+        { from: 2, to: 3 },
+        userEvent,
+      );
 
-    expect(policy.decide(transaction)).toEqual({ kind: "pass" });
-  });
+      expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+    },
+  );
 
   test.each([
     {
@@ -195,12 +202,56 @@ describe("BulletTypingPolicy", () => {
 
     expect(policy.decide(transaction)).toEqual({
       kind: "correct",
-      changes: [{ from: 4, to: 5, insert: "- " }],
+      changes: [
+        { from: 0, insert: "- " },
+        { from: 4, to: 5, insert: "- " },
+      ],
     });
     expect(applyCorrection(transaction, policy.decide(transaction))).toBe(
-      "eep\n- item",
+      "- eep\n- item",
     );
   });
+
+  test.each([
+    {
+      description: "a pasted body line",
+      doc: "plain",
+      from: 0,
+      to: 1,
+      userEvent: "input.type",
+      expected: "- lain",
+    },
+    {
+      description: "a heading marker",
+      doc: "# heading",
+      from: 0,
+      to: 1,
+      userEvent: "delete.backward",
+      expected: "-  heading",
+    },
+    {
+      description: "list-continuation indentation",
+      doc: "- parent\n  continuation",
+      from: 9,
+      to: 11,
+      userEvent: "delete.selection",
+      expected: "- parent\n- continuation",
+    },
+  ])(
+    "adopts body text created by deleting $description",
+    ({ doc, from, to, userEvent, expected }) => {
+      const transaction = makeTransaction(
+        doc,
+        { from, to },
+        userEvent,
+        EditorSelection.single(from, to),
+      );
+
+      expect(applyCorrection(transaction, policy.decide(transaction))).toBe(
+        expected,
+      );
+    },
+  );
 
   test("allows deleting an entire list line", () => {
     const transaction = makeTransaction(
@@ -568,9 +619,9 @@ describe("BulletTypingPolicy", () => {
   });
 
   test("logs an unexpected analysis error and passes the transaction", () => {
-    const error = new Error("inspection failed");
+    const error = new Error("classification failed");
     class ThrowingClassifier extends MarkdownLineClassifier {
-      inspect(): never {
+      classify(): never {
         throw error;
       }
     }

@@ -21,12 +21,17 @@ interface GuardOptions {
 
 async function loadGuard(options: GuardOptions = {}) {
   const registerEditorExtension = jest.fn<void, [Extension]>();
-  const plugin = { registerEditorExtension } as unknown as Plugin;
+  const plugin = {
+    app: { workspace: { updateOptions: jest.fn() } },
+    registerEditorExtension,
+  } as unknown as Plugin;
   const settings = {
     keepBodyTextInBullets: true,
     keepCursorWithinContent: "bullet-and-checkbox",
+    onChange: jest.fn(),
+    removeCallback: jest.fn(),
     ...options,
-  } as Settings;
+  } as unknown as Settings;
   const feature = new BulletTypingGuard(plugin, settings, makeLogger());
 
   await feature.load();
@@ -222,5 +227,73 @@ describe("BulletTypingGuard", () => {
     );
 
     expect(documents).toEqual(["- a", "- a"]);
+  });
+
+  test("installs analysis only while body ownership is enabled", async () => {
+    const registerEditorExtension = jest.fn<void, [Extension]>();
+    const updateOptions = jest.fn();
+    let settingsCallback: (() => void) | undefined;
+    const onChange = jest.fn((_keys, callback: () => void) => {
+      settingsCallback = callback;
+    });
+    const removeCallback = jest.fn();
+    const plugin = {
+      app: { workspace: { updateOptions } },
+      registerEditorExtension,
+    } as unknown as Plugin;
+    const settings = {
+      keepBodyTextInBullets: false,
+      onChange,
+      removeCallback,
+    } as unknown as Settings;
+    const feature = new BulletTypingGuard(plugin, settings, makeLogger());
+
+    await feature.load();
+
+    const extensions = registerEditorExtension.mock.calls[0]?.[0];
+    if (!extensions) {
+      throw new Error("BulletTypingGuard did not register extensions");
+    }
+    expect(onChange).toHaveBeenCalledWith(
+      ["keepBodyTextInBullets"],
+      expect.any(Function),
+    );
+    expect(
+      EditorState.create({ extensions })
+        .update({
+          changes: { from: 0, insert: "a" },
+          userEvent: "input.type",
+        })
+        .newDoc.toString(),
+    ).toBe("a");
+
+    settings.keepBodyTextInBullets = true;
+    settingsCallback?.();
+
+    expect(updateOptions).toHaveBeenCalledTimes(1);
+    expect(
+      EditorState.create({ extensions })
+        .update({
+          changes: { from: 0, insert: "a" },
+          userEvent: "input.type",
+        })
+        .newDoc.toString(),
+    ).toBe("- a");
+
+    settings.keepBodyTextInBullets = false;
+    settingsCallback?.();
+
+    expect(updateOptions).toHaveBeenCalledTimes(2);
+    expect(
+      EditorState.create({ extensions })
+        .update({
+          changes: { from: 0, insert: "a" },
+          userEvent: "input.type",
+        })
+        .newDoc.toString(),
+    ).toBe("a");
+
+    await feature.unload();
+    expect(removeCallback).toHaveBeenCalledWith(settingsCallback);
   });
 });
