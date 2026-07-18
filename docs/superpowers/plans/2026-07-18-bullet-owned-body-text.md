@@ -631,7 +631,7 @@ private filterTransaction = (transaction: Transaction) => {
     return transaction;
   }
   if (decision.kind === "reject") {
-    return { selection: transaction.startState.selection };
+    return {};
   }
   return [
     transaction,
@@ -642,6 +642,8 @@ private filterTransaction = (transaction: Transaction) => {
   ];
 };
 ```
+
+`reject`では空のtransaction specを返す。開始selectionは暗黙に維持され、明示的なselection eventを導入しない。
 
 `load()`では`EditorState.transactionFilter.of(this.filterTransaction)`を一度だけ登録する。
 
