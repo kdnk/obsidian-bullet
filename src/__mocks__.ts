@@ -35,6 +35,7 @@ export function makeSettings(): Settings {
     debug: true,
     stickCursor: "bullet-and-checkbox",
     keepCursorWithinContent: "bullet-and-checkbox",
+    keepBodyTextInBullets: false,
   } as unknown as Settings;
   return settings;
 }

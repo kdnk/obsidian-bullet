@@ -103,6 +103,10 @@ const settingCommandDecoders = {
     k: "stickCursor",
     v: decodeStickCursorSetting(value),
   }),
+  keepBodyTextInBullets: (value) => ({
+    k: "keepBodyTextInBullets",
+    v: decodeBooleanSetting("keepBodyTextInBullets", value),
+  }),
   betterEnter: (value) => ({
     k: "betterEnter",
     v: decodeBooleanSetting("betterEnter", value),

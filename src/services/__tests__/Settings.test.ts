@@ -1,5 +1,16 @@
 import { Settings, SettingsChange, SettingsObject } from "../Settings";
 
+test("keeps body text enforcement disabled for saved data predating the setting", async () => {
+  const settings = new Settings({
+    loadData: jest.fn(async () => ({}) as SettingsObject),
+    saveData: jest.fn(async () => undefined),
+  });
+
+  await settings.load();
+
+  expect(settings.keepBodyTextInBullets).toBe(false);
+});
+
 test("enables outer vertical lines when saved data predates the setting", async () => {
   const saved = {
     styleLists: true,
@@ -12,7 +23,10 @@ test("enables outer vertical lines when saved data predates the setting", async 
     listLines: true,
     listLineAction: "toggle-folding",
     dnd: true,
-  } as Omit<SettingsObject, "outerListLines" | "mobileRightFoldControls">;
+  } as Omit<
+    SettingsObject,
+    "keepBodyTextInBullets" | "outerListLines" | "mobileRightFoldControls"
+  >;
   const storage = {
     loadData: jest.fn(async () => saved as SettingsObject),
     saveData: jest.fn(async () => undefined),
@@ -90,6 +104,21 @@ describe("change notifications", () => {
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback.mock.calls[0]?.[0].keys).toEqual(
       new Set(["mobileRightFoldControls"]),
+    );
+  });
+
+  test("notifies subscribers when body text enforcement changes", async () => {
+    const settings = new Settings({
+      loadData: jest.fn(async () => ({}) as SettingsObject),
+      saveData: jest.fn(async () => undefined),
+    });
+    const callback = jest.fn<void, [SettingsChange]>();
+    settings.onChange(["keepBodyTextInBullets"], callback);
+
+    settings.keepBodyTextInBullets = true;
+
+    expect(callback.mock.calls[0]?.[0].keys).toEqual(
+      new Set(["keepBodyTextInBullets"]),
     );
   });
 

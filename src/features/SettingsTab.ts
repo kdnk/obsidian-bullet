@@ -14,6 +14,7 @@ import { KeepCursorWithinContent, Settings } from "../services/Settings";
 
 type SettingsControlKey =
   | "keepCursorWithinContent"
+  | "keepBodyTextInBullets"
   | "overrideTabBehaviour"
   | "overrideEnterBehaviour"
   | "overrideVimOBehaviour"
@@ -53,6 +54,14 @@ const SETTING_GROUPS = [
           type: "dropdown",
           key: "keepCursorWithinContent",
           options: KEEP_CURSOR_OPTIONS,
+        },
+      },
+      {
+        name: "Keep body text in bullets",
+        desc: "Automatically keep directly typed body text in list items while allowing headings, quotes, horizontal rules, code fences, and frontmatter. Pasted and external changes are left unchanged.",
+        control: {
+          type: "toggle",
+          key: "keepBodyTextInBullets",
         },
       },
       {
@@ -202,6 +211,8 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
     switch (key) {
       case "keepCursorWithinContent":
         return this.settings.keepCursorWithinContent;
+      case "keepBodyTextInBullets":
+        return this.settings.keepBodyTextInBullets;
       case "overrideTabBehaviour":
         return this.settings.overrideTabBehaviour;
       case "overrideEnterBehaviour":
@@ -234,6 +245,9 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
       case "keepCursorWithinContent":
         this.settings.keepCursorWithinContent =
           decodeKeepCursorWithinContent(value);
+        break;
+      case "keepBodyTextInBullets":
+        this.settings.keepBodyTextInBullets = decodeBooleanControl(key, value);
         break;
       case "overrideTabBehaviour":
         this.settings.overrideTabBehaviour = decodeBooleanControl(key, value);

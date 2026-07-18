@@ -8,6 +8,7 @@ export interface SettingsObject {
   styleLists: boolean;
   debug: boolean;
   stickCursor: KeepCursorWithinContent | boolean;
+  keepBodyTextInBullets: boolean;
   betterEnter: boolean;
   betterVimO: boolean;
   betterTab: boolean;
@@ -29,6 +30,7 @@ const DEFAULT_SETTINGS: SettingsObject = {
   styleLists: true,
   debug: false,
   stickCursor: "bullet-and-checkbox",
+  keepBodyTextInBullets: false,
   betterEnter: true,
   betterVimO: true,
   betterTab: true,
@@ -75,6 +77,14 @@ export class Settings {
 
   set keepCursorWithinContent(value: KeepCursorWithinContent) {
     this.update({ stickCursor: value });
+  }
+
+  get keepBodyTextInBullets() {
+    return this.values.keepBodyTextInBullets;
+  }
+
+  set keepBodyTextInBullets(value: boolean) {
+    this.update({ keepBodyTextInBullets: value });
   }
 
   get overrideTabBehaviour() {

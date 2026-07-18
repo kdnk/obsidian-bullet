@@ -150,6 +150,7 @@ interface TestableSettingsTab {
 function makeSettings() {
   return {
     keepCursorWithinContent: "bullet-and-checkbox",
+    keepBodyTextInBullets: false,
     overrideTabBehaviour: true,
     overrideEnterBehaviour: true,
     overrideVimOBehaviour: true,
@@ -202,6 +203,7 @@ describe("SettingsTab", () => {
     ).toEqual([
       [
         "Stick the cursor to the content",
+        "Keep body text in bullets",
         "Enhance the Tab key",
         "Enhance the Enter key",
         "Vim-mode o/O inserts bullets",
@@ -228,6 +230,10 @@ describe("SettingsTab", () => {
         "bullet-and-checkbox": "Stick cursor out of bullets and checkboxes",
       },
     });
+    expect(groups[0]?.items[1]).toMatchObject({
+      name: "Keep body text in bullets",
+      control: { type: "toggle", key: "keepBodyTextInBullets" },
+    });
     expect(groups[2]?.items[0]?.control).toEqual({
       type: "toggle",
       key: "verticalLinesActionEnabled",
@@ -242,13 +248,16 @@ describe("SettingsTab", () => {
     expect(tab.getControlValue("keepCursorWithinContent")).toBe(
       "bullet-and-checkbox",
     );
+    expect(tab.getControlValue("keepBodyTextInBullets")).toBe(false);
 
     await tab.setControlValue("verticalLinesActionEnabled", false);
     await tab.setControlValue("keepCursorWithinContent", "bullet-only");
+    await tab.setControlValue("keepBodyTextInBullets", true);
 
     expect(settings.verticalLinesAction).toBe("none");
     expect(settings.keepCursorWithinContent).toBe("bullet-only");
-    expect(settings.save).toHaveBeenCalledTimes(2);
+    expect(settings.keepBodyTextInBullets).toBe(true);
+    expect(settings.save).toHaveBeenCalledTimes(3);
   });
 
   test("rejects invalid declarative control values", async () => {
@@ -274,6 +283,7 @@ describe("SettingsTab", () => {
     ).toEqual([
       "heading:Editing",
       "setting:Stick the cursor to the content",
+      "setting:Keep body text in bullets",
       "setting:Enhance the Tab key",
       "setting:Enhance the Enter key",
       "setting:Vim-mode o/O inserts bullets",
@@ -294,9 +304,9 @@ describe("SettingsTab", () => {
       (setting) => !setting.heading,
     );
     const cursorSetting = settingRecords[0];
-    const outerSetting = settingRecords[8];
-    const actionSetting = settingRecords[9];
-    const mobileSetting = settingRecords[10];
+    const outerSetting = settingRecords[9];
+    const actionSetting = settingRecords[10];
+    const mobileSetting = settingRecords[11];
 
     expect(cursorSetting?.dropdown?.value).toBe("bullet-and-checkbox");
     expect(outerSetting?.toggle?.value).toBe(true);
