@@ -277,7 +277,20 @@ describe("BulletTypingPolicy", () => {
       5,
     );
 
+    expect(transaction.newDoc.toString()).toBe("- one- two");
     expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+  });
+
+  test("rejects a forward Delete that embeds the next item prefix in body text", () => {
+    const transaction = makeTransaction(
+      "plain\n- item",
+      { from: 5, to: 6 },
+      "delete.forward",
+      5,
+    );
+
+    expect(transaction.newDoc.toString()).toBe("plain- item");
+    expect(policy.decide(transaction)).toEqual({ kind: "reject" });
   });
 
   test("rejects prefix recovery after its physical line boundary is deleted", () => {

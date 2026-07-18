@@ -94,6 +94,9 @@ export class BulletTypingPolicy {
 
       const mappedLine = getMappedLine(transaction, affected.before);
       if (!mappedLine) {
+        if (this.isValidForwardListJoin(transaction, affected)) {
+          continue;
+        }
         return { kind: "reject" };
       }
 
@@ -143,6 +146,27 @@ export class BulletTypingPolicy {
       : { kind: "pass" };
   }
 
+  private isValidForwardListJoin(
+    transaction: Transaction,
+    affected: AffectedPrefix,
+  ): boolean {
+    const [range] = affected.ranges;
+    if (
+      !transaction.isUserEvent("delete.forward") ||
+      range.fromBefore !== affected.before.from - 1 ||
+      range.toBefore !== affected.before.from
+    ) {
+      return false;
+    }
+
+    const joinedPosition = transaction.changes.mapPos(affected.before.from, -1);
+    const joinedLine = transaction.newDoc.lineAt(joinedPosition);
+    return (
+      this.classifier.inspect(transaction.newDoc, joinedLine.number).kind ===
+      "list-item"
+    );
+  }
+
   private getAffectedPrefixes(transaction: Transaction): AffectedPrefix[] {
     const deletedRanges = getDeletedRanges(transaction);
     const affectedByLine = new Map<number, AffectedPrefix>();
@@ -151,9 +175,7 @@ export class BulletTypingPolicy {
       const firstLine = transaction.startState.doc.lineAt(
         range.fromBefore,
       ).number;
-      const lastLine = transaction.startState.doc.lineAt(
-        range.toBefore - 1,
-      ).number;
+      const lastLine = transaction.startState.doc.lineAt(range.toBefore).number;
 
       for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++) {
         let affected = affectedByLine.get(lineNumber);
@@ -173,8 +195,9 @@ export class BulletTypingPolicy {
         const prefixTo =
           affected.before.from + affected.before.listItem!.contentStart;
         if (
-          range.fromBefore < prefixTo &&
-          range.toBefore > affected.before.from
+          (range.fromBefore < prefixTo &&
+            range.toBefore > affected.before.from) ||
+          range.toBefore === affected.before.from
         ) {
           affected.ranges.push(range);
         }
