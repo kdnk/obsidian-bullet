@@ -12,8 +12,17 @@ import {
 } from "../BulletTypingPolicy";
 import { MarkdownLineClassifier } from "../MarkdownLineClassifier";
 
-function makeTransaction(doc: string, changes: ChangeSpec, userEvent?: string) {
-  const state = EditorState.create({ doc });
+function makeTransaction(
+  doc: string,
+  changes: ChangeSpec,
+  userEvent?: string,
+  cursor?: number,
+) {
+  const state = EditorState.create({
+    doc,
+    selection:
+      cursor === undefined ? undefined : EditorSelection.cursor(cursor),
+  });
   return state.update({ changes, userEvent });
 }
 
@@ -211,6 +220,7 @@ describe("BulletTypingPolicy", () => {
         "- ",
         { from: 2, insert },
         "input.type",
+        2,
       );
 
       expect(applyCorrection(transaction, policy.decide(transaction))).toBe(
@@ -224,9 +234,21 @@ describe("BulletTypingPolicy", () => {
       "  - ",
       { from: 4, insert: "#" },
       "input.type",
+      4,
     );
 
     expect(applyCorrection(transaction, policy.decide(transaction))).toBe("#");
+  });
+
+  test("does not promote when the sole cursor differs from the insertion", () => {
+    const transaction = makeTransaction(
+      "- ",
+      { from: 2, insert: "#" },
+      "input.type",
+      0,
+    );
+
+    expect(policy.decide(transaction)).toEqual({ kind: "pass" });
   });
 
   test("does not promote a nested empty item", () => {
