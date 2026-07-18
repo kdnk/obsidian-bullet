@@ -10,9 +10,11 @@ export const semanticDriverCommandNames = [
   "insertText",
   "move",
   "parseState",
+  "pasteText",
   "resetSettings",
   "setSetting",
   "simulateKeydown",
+  "typeText",
   "waitForIdle",
 ] as const;
 

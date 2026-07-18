@@ -51,6 +51,8 @@ interface TestCommandMap {
   applyState: State | string | string[];
   simulateKeydown: string;
   insertText: string;
+  typeText: string;
+  pasteText: string;
   executeCommandById: string;
   drag: { from: MyEditorPosition };
   move: { to: MyEditorPosition; offsetX: number; offsetY: number };
@@ -149,6 +151,8 @@ const testCommandDecoders: TestCommandDecoders = {
   applyState: (data) => decodeStateSource("applyState", data),
   simulateKeydown: (data) => decodeString("simulateKeydown", data),
   insertText: (data) => decodeString("insertText", data),
+  typeText: (data) => decodeString("typeText", data),
+  pasteText: (data) => decodeString("pasteText", data),
   executeCommandById: (data) => decodeString("executeCommandById", data),
   drag: (data) => {
     const record = decodeRecord("drag", data);
@@ -319,6 +323,24 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
         head: nextCursor,
       },
     ]);
+  }
+
+  private dispatchText(text: string, userEvent: "input.type" | "input.paste") {
+    const view = this.editor.getCodeMirrorView();
+    const selection = view.state.selection.main;
+    view.dispatch({
+      changes: { from: selection.from, to: selection.to, insert: text },
+      selection: { anchor: selection.from + text.length },
+      userEvent,
+    });
+  }
+
+  private typeText(text: string) {
+    this.dispatchText(text, "input.type");
+  }
+
+  private pasteText(text: string) {
+    this.dispatchText(text, "input.paste");
   }
 
   async onload() {
@@ -568,6 +590,8 @@ export default class ObsidianBulletPluginWithTests extends ObsidianBulletPlugin 
       applyState: async (state) => await this.applyState(state),
       simulateKeydown: (keys) => this.simulateKeydown(keys),
       insertText: (text) => this.insertText(text),
+      typeText: (text) => this.typeText(text),
+      pasteText: (text) => this.pasteText(text),
       executeCommandById: (id) => this.executeCommandById(id),
       drag: (options) => this.drag(options),
       move: (options) => this.move(options),

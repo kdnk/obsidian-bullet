@@ -3,6 +3,8 @@ const COMMANDS = [
   "assertNativeListBullet",
   "simulateKeydown",
   "insertText",
+  "typeText",
+  "pasteText",
   "executeCommandById",
   "setSetting",
   "resetSettings",

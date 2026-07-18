@@ -16,9 +16,11 @@ export type DeclaredSemanticDriverCommandName =
   | "insertText"
   | "move"
   | "parseState"
+  | "pasteText"
   | "resetSettings"
   | "setSetting"
   | "simulateKeydown"
+  | "typeText"
   | "waitForIdle";
 
 declare global {
@@ -51,6 +53,8 @@ declare global {
   function parseState(state: string[]): Promise<State>;
   function simulateKeydown(keys: string): Promise<void>;
   function insertText(text: string): Promise<void>;
+  function typeText(text: string): Promise<void>;
+  function pasteText(text: string): Promise<void>;
   function executeCommandById(keys: string): Promise<void>;
   function setSetting(opts: SettingCommand): Promise<void>;
   function resetSettings(): Promise<void>;
