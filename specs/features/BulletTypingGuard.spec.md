@@ -224,7 +224,8 @@ programmatic|
 ```
 
 - typeText: `-`
-- typeText: `--`
+- typeText: `-`
+- typeText: `-`
 - assertState:
 
 ```md
@@ -241,7 +242,8 @@ programmatic|
 ```
 
 - typeText: "\u0060"
-- typeText: "\u0060\u0060"
+- typeText: "\u0060"
+- typeText: "\u0060"
 - assertState:
 
 ````md

@@ -128,6 +128,20 @@ describe("test config helpers", () => {
     expect(code).toContain('await pasteText("pasted");');
     expect(code).toContain('await typeText("`");');
     expect(code).toContain('await typeText("");');
+    expect(code).toContain(
+      [
+        '    await typeText("-");',
+        '    await typeText("-");',
+        '    await typeText("-");',
+      ].join("\n"),
+    );
+    expect(code).toContain(
+      [
+        '    await typeText("`");',
+        '    await typeText("`");',
+        '    await typeText("`");',
+      ].join("\n"),
+    );
   });
 
   test("preserves shorter Markdown fences inside a longer state fence", () => {
