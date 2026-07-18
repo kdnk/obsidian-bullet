@@ -33,22 +33,30 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
     const lines = list.getLinesInfo();
 
     const lineNo = lines.findIndex(
-      (line) =>
-        cursor.line === line.from.line &&
-        (cursor.ch === line.from.ch ||
-          (this.removeEmptyLeafItem &&
-            isEmptyLineOrEmptyCheckbox(line.text) &&
-            cursor.ch === line.to.ch)),
+      (line) => cursor.line === line.from.line && cursor.ch === line.from.ch,
     );
+    const firstLine = lines[0];
+    const syntheticContentStartMatch =
+      this.removeEmptyLeafItem &&
+      firstLine !== undefined &&
+      cursor.line === firstLine.from.line &&
+      cursor.ch !== firstLine.from.ch &&
+      cursor.ch === firstLine.to.ch &&
+      isEmptyLineOrEmptyCheckbox(firstLine.text);
 
     if (
-      lineNo === 0 &&
+      (lineNo === 0 || syntheticContentStartMatch) &&
       this.removeEmptyLeafItem &&
       lines.length === 1 &&
-      isEmptyLineOrEmptyCheckbox(lines[0].text) &&
+      firstLine !== undefined &&
+      isEmptyLineOrEmptyCheckbox(firstLine.text) &&
       list.isEmpty()
     ) {
       return this.removeEmptyList(root, cursor, list);
+    }
+
+    if (syntheticContentStartMatch) {
+      return NO_OP_OUTCOME;
     }
 
     if (lineNo === 0) {
