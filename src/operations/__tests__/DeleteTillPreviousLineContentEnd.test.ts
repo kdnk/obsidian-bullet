@@ -321,6 +321,44 @@ describe("empty leaf item removal", () => {
     expect(root.getCursor()).toEqual({ line: 0, ch: 2 });
   });
 
+  test("does not merge an empty checkbox with a continuation from its checkbox end", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- previous\n- [ ] \n  continuation",
+        cursor: { line: 1, ch: 6 },
+      }),
+    });
+
+    const outcome = new DeleteTillPreviousLineContentEnd(
+      root,
+      true,
+      true,
+    ).perform();
+
+    expect(outcome).toEqual(NO_OP_OUTCOME);
+    expect(root.print()).toBe("- previous\n- [ ] \n  continuation");
+    expect(root.getCursor()).toEqual({ line: 1, ch: 6 });
+  });
+
+  test("does not merge an empty checkbox with a child from its checkbox end", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- previous\n- [ ] \n  - child",
+        cursor: { line: 1, ch: 6 },
+      }),
+    });
+
+    const outcome = new DeleteTillPreviousLineContentEnd(
+      root,
+      true,
+      true,
+    ).perform();
+
+    expect(outcome).toEqual(NO_OP_OUTCOME);
+    expect(root.print()).toBe("- previous\n- [ ] \n  - child");
+    expect(root.getCursor()).toEqual({ line: 1, ch: 6 });
+  });
+
   test("preserves legacy behavior when enforcement is disabled", () => {
     const root = makeRoot({
       editor: makeEditor({
