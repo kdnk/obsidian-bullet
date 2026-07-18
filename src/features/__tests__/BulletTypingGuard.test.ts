@@ -202,6 +202,7 @@ describe("BulletTypingGuard", () => {
 
     expect(transaction.docChanged).toBe(false);
     expect(transaction.newDoc.toString()).toBe("plain\n- item");
+    expect(transaction.selection).toBeUndefined();
     expect(transaction.newSelection.eq(selection)).toBe(true);
   });
 

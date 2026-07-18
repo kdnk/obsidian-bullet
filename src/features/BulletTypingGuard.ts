@@ -38,7 +38,7 @@ export class BulletTypingGuard implements Feature {
       return transaction;
     }
     if (decision.kind === "reject") {
-      return { selection: transaction.startState.selection };
+      return {};
     }
     return [
       transaction,
