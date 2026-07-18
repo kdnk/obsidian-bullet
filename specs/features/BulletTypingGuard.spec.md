@@ -14,7 +14,9 @@
 - a|
 ```
 
-# undo should revert typed text and its bullet correction together
+# command-z should revert typed text and its bullet correction together
+
+- platform: `darwin`
 
 - setting: `keepBodyTextInBullets=true`
 - applyState:
@@ -25,6 +27,25 @@
 
 - typeText: `a`
 - keydown: `Cmd-KeyZ`
+- assertState:
+
+```md
+|
+```
+
+# control-z should revert typed text and its bullet correction together
+
+- platform: `linux`
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+|
+```
+
+- typeText: `a`
+- keydown: `Ctrl-KeyZ`
 - assertState:
 
 ```md
