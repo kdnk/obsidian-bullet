@@ -130,7 +130,6 @@ All settings are under **Settings → Bullet**.
 | Setting                             | Default | Effect                                                                                    |
 | ----------------------------------- | :-----: | ----------------------------------------------------------------------------------------- |
 | **Improve the style of your lists** |   On    | Apply Bullet's additional list spacing and bullet styling with Obsidian's default themes. |
-| **Draw vertical indentation lines** |   On    | Connect nested items with indentation guides.                                             |
 | **Draw outer list lines**           |   On    | Draw a guide beside each contiguous root list chunk.                                      |
 
 ### Folding
@@ -149,7 +148,7 @@ All settings are under **Settings → Bullet**.
 ## Compatibility
 
 - Bullet requires Obsidian 1.12.7 or later and is available on desktop and mobile.
-- The editing enhancements work in Obsidian's Markdown editor. Indentation guides and right-side mobile fold controls are designed for Live Preview.
+- The editing enhancements work in Obsidian's Markdown editor. Vertical-line folding, outer guides, and right-side mobile fold controls are designed for Live Preview.
 - **Improve the style of your lists** is applied only with Obsidian's default themes. Other themes may already define their own list appearance.
 - The fold and unfold commands require Obsidian's **Fold indent** editor setting to be enabled.
 
