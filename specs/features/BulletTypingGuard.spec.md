@@ -30,6 +30,24 @@
 - |
 ```
 
+# command-z should revert Space and its empty bullet together
+
+- platform: `darwin`
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+|
+```
+
+- typeText: ` `
+- keydown: `Cmd-KeyZ`
+- assertState:
+
+```md
+|
+```
+
 # space on a completely empty line should start a bullet in Source mode
 
 - setting: `keepBodyTextInBullets=true`
