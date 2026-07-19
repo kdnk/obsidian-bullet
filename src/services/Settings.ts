@@ -13,7 +13,6 @@ export interface SettingsObject {
   betterVimO: boolean;
   betterTab: boolean;
   selectAll: boolean;
-  listLines: boolean;
   outerListLines: boolean;
   listLineAction: VerticalLinesAction;
   mobileRightFoldControls: boolean;
@@ -35,15 +34,18 @@ const DEFAULT_SETTINGS: SettingsObject = {
   betterVimO: true,
   betterTab: true,
   selectAll: true,
-  listLines: true,
   outerListLines: true,
   listLineAction: "toggle-folding",
   mobileRightFoldControls: true,
   dnd: true,
 };
 
+type StoredSettingsObject = Partial<SettingsObject> & {
+  listLines?: boolean;
+};
+
 export interface Storage {
-  loadData(): Promise<SettingsObject>;
+  loadData(): Promise<StoredSettingsObject | null>;
   saveData(settings: SettingsObject): Promise<void>;
 }
 
@@ -127,14 +129,6 @@ export class Settings {
     this.update({ styleLists: value });
   }
 
-  get verticalLines() {
-    return this.values.listLines;
-  }
-
-  set verticalLines(value: boolean) {
-    this.update({ listLines: value });
-  }
-
   get outerVerticalLines() {
     return this.values.outerListLines;
   }
@@ -191,11 +185,12 @@ export class Settings {
   }
 
   async load() {
-    this.values = Object.assign(
-      {},
-      DEFAULT_SETTINGS,
-      await this.storage.loadData(),
-    );
+    const { listLines, ...saved } = (await this.storage.loadData()) ?? {};
+    this.values = Object.assign({}, DEFAULT_SETTINGS, saved);
+    if (listLines === false) {
+      this.values.outerListLines = false;
+      this.values.listLineAction = "none";
+    }
   }
 
   async save() {

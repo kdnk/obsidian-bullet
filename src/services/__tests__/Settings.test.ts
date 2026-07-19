@@ -20,7 +20,6 @@ test("enables outer vertical lines when saved data predates the setting", async 
     betterVimO: true,
     betterTab: true,
     selectAll: true,
-    listLines: true,
     listLineAction: "toggle-folding",
     dnd: true,
   } as Omit<
@@ -36,6 +35,43 @@ test("enables outer vertical lines when saved data predates the setting", async 
   await settings.load();
 
   expect(settings.outerVerticalLines).toBe(true);
+});
+
+test("migrates a disabled legacy vertical-lines setting", async () => {
+  const saveData = jest.fn(async () => undefined);
+  const settings = new Settings({
+    loadData: jest.fn(async () => ({
+      listLines: false,
+      outerListLines: true,
+      listLineAction: "toggle-folding",
+    })) as never,
+    saveData,
+  });
+
+  await settings.load();
+  await settings.save();
+
+  expect(settings.outerVerticalLines).toBe(false);
+  expect(settings.verticalLinesAction).toBe("none");
+  expect(settings.getValues()).not.toHaveProperty("listLines");
+  expect(saveData).toHaveBeenCalledWith(settings.getValues());
+});
+
+test("preserves direct settings when legacy vertical lines were enabled", async () => {
+  const settings = new Settings({
+    loadData: jest.fn(async () => ({
+      listLines: true,
+      outerListLines: false,
+      listLineAction: "none",
+    })) as never,
+    saveData: jest.fn(async () => undefined),
+  });
+
+  await settings.load();
+
+  expect(settings.outerVerticalLines).toBe(false);
+  expect(settings.verticalLinesAction).toBe("none");
+  expect(settings.getValues()).not.toHaveProperty("listLines");
 });
 
 test("enables mobile right fold controls when saved data predates the setting", async () => {
@@ -71,26 +107,28 @@ describe("change notifications", () => {
   test("notifies only subscriptions containing the changed key", () => {
     const settings = createSettings();
     const callback = jest.fn<void, [SettingsChange]>();
-    settings.onChange(["listLines"], callback);
+    settings.onChange(["outerListLines"], callback);
 
     settings.debug = true;
     expect(callback).not.toHaveBeenCalled();
 
-    settings.verticalLines = false;
+    settings.outerVerticalLines = false;
     expect(callback).toHaveBeenCalledTimes(1);
-    expect(callback.mock.calls[0]?.[0].keys).toEqual(new Set(["listLines"]));
+    expect(callback.mock.calls[0]?.[0].keys).toEqual(
+      new Set(["outerListLines"]),
+    );
   });
 
   test("notifies a multi-key subscription when one dependency changes", () => {
     const settings = createSettings();
     const callback = jest.fn<void, [SettingsChange]>();
-    settings.onChange(["listLines", "outerListLines"], callback);
+    settings.onChange(["outerListLines", "listLineAction"], callback);
 
-    settings.outerVerticalLines = false;
+    settings.verticalLinesAction = "none";
 
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback.mock.calls[0]?.[0].keys).toEqual(
-      new Set(["outerListLines"]),
+      new Set(["listLineAction"]),
     );
   });
 
@@ -126,19 +164,19 @@ describe("change notifications", () => {
     const settings = createSettings();
     const callback = jest.fn<void, [SettingsChange]>();
     settings.onChange(
-      ["debug", "listLines", "outerListLines", "betterEnter"],
+      ["debug", "outerListLines", "listLineAction", "betterEnter"],
       callback,
     );
     settings.debug = true;
-    settings.verticalLines = false;
     settings.outerVerticalLines = false;
+    settings.verticalLinesAction = "none";
     callback.mockClear();
 
     settings.reset();
 
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback.mock.calls[0]?.[0].keys).toEqual(
-      new Set(["debug", "listLines", "outerListLines"]),
+      new Set(["debug", "outerListLines", "listLineAction"]),
     );
   });
 

@@ -20,7 +20,6 @@ type SettingsControlKey =
   | "overrideVimOBehaviour"
   | "overrideSelectAllBehaviour"
   | "betterListsStyles"
-  | "verticalLines"
   | "outerVerticalLines"
   | "verticalLinesActionEnabled"
   | "mobileRightFoldControls"
@@ -116,14 +115,6 @@ const SETTING_GROUPS = [
         control: {
           type: "toggle",
           key: "betterListsStyles",
-        },
-      },
-      {
-        name: "Draw vertical indentation lines",
-        desc: "Show guide lines that connect nested list items by indentation level.",
-        control: {
-          type: "toggle",
-          key: "verticalLines",
         },
       },
       {
@@ -223,8 +214,6 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
         return this.settings.overrideSelectAllBehaviour;
       case "betterListsStyles":
         return this.settings.betterListsStyles;
-      case "verticalLines":
-        return this.settings.verticalLines;
       case "outerVerticalLines":
         return this.settings.outerVerticalLines;
       case "verticalLinesActionEnabled":
@@ -266,9 +255,6 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
         break;
       case "betterListsStyles":
         this.settings.betterListsStyles = decodeBooleanControl(key, value);
-        break;
-      case "verticalLines":
-        this.settings.verticalLines = decodeBooleanControl(key, value);
         break;
       case "outerVerticalLines":
         this.settings.outerVerticalLines = decodeBooleanControl(key, value);

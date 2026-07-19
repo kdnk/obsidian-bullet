@@ -125,10 +125,6 @@ const settingCommandDecoders = {
     k: "selectAll",
     v: decodeBooleanSetting("selectAll", value),
   }),
-  listLines: (value) => ({
-    k: "listLines",
-    v: decodeBooleanSetting("listLines", value),
-  }),
   outerListLines: (value) => ({
     k: "outerListLines",
     v: decodeBooleanSetting("outerListLines", value),

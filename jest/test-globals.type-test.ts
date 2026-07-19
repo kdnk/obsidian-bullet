@@ -2,8 +2,8 @@ import type { SemanticDriverCommandName } from "./semantic-command-contract";
 import type { DeclaredSemanticDriverCommandName } from "./test-globals";
 
 // Compile-only regression for the semantic driver's public test globals.
-// @ts-expect-error listLines accepts only boolean values.
-void setSetting({ k: "listLines", v: "toggle-folding" });
+// @ts-expect-error listLines is no longer a supported setting key.
+void setSetting({ k: "listLines", v: true });
 
 type Assert<T extends true> = T;
 type IsExact<A, B> =

@@ -639,7 +639,7 @@ describe("ObsidianBulletPluginWithTests", () => {
     ["pasteText", 1],
     ["drag", { from: { line: 0, ch: "0" } }],
     ["move", { to: { line: 0, ch: 0 }, offsetX: "0", offsetY: 0 }],
-    ["setSetting", { k: "listLines", v: "true" }],
+    ["setSetting", { k: "outerListLines", v: "true" }],
     ["setSetting", { k: "listLineAction", v: true }],
     ["setSetting", { k: "mobileRightFoldControls", v: "true" }],
     ["setSetting", { k: "keepBodyTextInBullets", v: "true" }],
@@ -660,6 +660,24 @@ describe("ObsidianBulletPluginWithTests", () => {
     await expect(dispatch(type, data)).rejects.toThrow(
       `Invalid data for test command: ${type}`,
     );
+  });
+
+  test("rejects the removed listLines setting key", async () => {
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
+    const dispatch = (
+      plugin as unknown as {
+        handleTestCommand(
+          type: string,
+          data: unknown,
+        ): Promise<State | undefined>;
+      }
+    ).handleTestCommand.bind(plugin);
+
+    await expect(
+      dispatch("setSetting", { k: "listLines", v: true }),
+    ).rejects.toThrow("k must be a known setting key");
   });
 
   test("validates command data before invoking its handler", async () => {

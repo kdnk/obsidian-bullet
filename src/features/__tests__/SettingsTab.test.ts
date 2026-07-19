@@ -156,7 +156,6 @@ function makeSettings() {
     overrideVimOBehaviour: true,
     overrideSelectAllBehaviour: true,
     betterListsStyles: true,
-    verticalLines: true,
     outerVerticalLines: true,
     verticalLinesAction: "toggle-folding",
     mobileRightFoldControls: true,
@@ -210,11 +209,7 @@ describe("SettingsTab", () => {
         "Enhance the Ctrl+A or Cmd+A behavior",
         "Drag-and-Drop",
       ],
-      [
-        "Improve the style of your lists",
-        "Draw vertical indentation lines",
-        "Draw outer list lines",
-      ],
+      ["Improve the style of your lists", "Draw outer list lines"],
       [
         "Fold lists from vertical indentation lines",
         "Show fold controls on the right on mobile",
@@ -291,7 +286,6 @@ describe("SettingsTab", () => {
       "setting:Drag-and-Drop",
       "heading:Appearance",
       "setting:Improve the style of your lists",
-      "setting:Draw vertical indentation lines",
       "setting:Draw outer list lines",
       "heading:Folding",
       "setting:Fold lists from vertical indentation lines",
@@ -304,9 +298,9 @@ describe("SettingsTab", () => {
       (setting) => !setting.heading,
     );
     const cursorSetting = settingRecords[0];
-    const outerSetting = settingRecords[9];
-    const actionSetting = settingRecords[10];
-    const mobileSetting = settingRecords[11];
+    const outerSetting = settingRecords[8];
+    const actionSetting = settingRecords[9];
+    const mobileSetting = settingRecords[10];
 
     expect(cursorSetting?.dropdown?.value).toBe("bullet-and-checkbox");
     expect(outerSetting?.toggle?.value).toBe(true);
