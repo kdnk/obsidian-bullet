@@ -33,6 +33,7 @@
       production entry pointにはtest rendererのrelay接続が含まれないため、そのbundleを使うとObsidian自体は起動してもglobal setupが`Obsidian test relay renderer connection timed out`で失敗します。
       このerrorではsourceを変更する前に、test buildを生成したか確認してください。
     - フルテストは `vault/test.md` をfixtureとして上書きします。手動検証用の内容がある場合は、フルテスト前にvault外へbackupしてください。テストcommandの終了直後はtest rendererの遅延終了処理がfixtureを再保存する場合があるため、`vault=vault` のrendererが終了したことを確認してからrestoreしてください。restore後は少し待ってfile sizeまたはhashがbackupと一致することを再確認してから実Obsidianの検証を続けてください。Obsidianのfile historyだけをbackupとして使わないでください。
+    - フルテスト用の一時backup directoryを片づけるときは、fixture restore後のhash確認を終えてから、agent自身が作成した正確な`/tmp/obsidian-bullet-*` directoryであることを検証し、`rm -rf`ではなく`/usr/bin/trash <exact-path>`でTrashへ移してください。
     - `dist/main.js` は生成物としてgitignoreされています。検証用にbuildしても、`git add -f` で追跡対象へ追加しないでください。
     - 実 Obsidian で手動検証するときは、リポジトリ内の `vault` をテスト用 vault として使ってください。個人用の `/Users/kodai/base` vault へテスト bundle やテストノートを配置しないでください。
     - 手動検証用のplugin IDは `bullet` です。build artifactは `vault/.obsidian/plugins/bullet/` へ配置し、別のpluginディレクトリを作らないでください。
