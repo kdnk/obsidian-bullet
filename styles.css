@@ -14,9 +14,7 @@
 }
 
 /* lines */
-.bullet-plugin-vertical-lines
-  .markdown-source-view.mod-cm6
-  .bullet-plugin-outer-list-guide {
+.markdown-source-view.mod-cm6 .bullet-plugin-outer-list-guide {
   position: absolute;
   inset-block: 0;
   inset-inline-start: calc(-1 * var(--list-indent));
@@ -24,9 +22,7 @@
   pointer-events: none;
 }
 
-.bullet-plugin-vertical-lines
-  .markdown-source-view.mod-cm6
-  .bullet-plugin-outer-list-guide::before {
+.markdown-source-view.mod-cm6 .bullet-plugin-outer-list-guide::before {
   content: "";
   position: absolute;
   inset-block: 0;
@@ -148,15 +144,13 @@
   transform: rotate(90deg);
 }
 
-.bullet-plugin-vertical-lines
-  .markdown-source-view.mod-cm6
+.markdown-source-view.mod-cm6
   .cm-indent-spacing.bullet-plugin-persistent-indent-guide {
   min-width: 0;
   display: inline;
 }
 
-.bullet-plugin-vertical-lines
-  .markdown-source-view.mod-cm6
+.markdown-source-view.mod-cm6
   .cm-indent-spacing.bullet-plugin-persistent-indent-guide::before {
   z-index: 2;
 }

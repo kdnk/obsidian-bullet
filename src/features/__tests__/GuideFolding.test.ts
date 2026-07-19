@@ -122,6 +122,7 @@ function makeGuideDOM(elements: Array<ReturnType<typeof makeGuideElement>>) {
 function makeFoldEditor() {
   return {
     lastLine: jest.fn().mockReturnValue(9),
+    getLine: jest.fn().mockReturnValue(""),
   };
 }
 
@@ -210,7 +211,6 @@ function makeHoverFixture(options: {
     }),
   };
   const settings = {
-    verticalLines: true,
     verticalLinesAction: "toggle-folding",
     onChange: jest.fn(),
     removeCallback: jest.fn(),
@@ -416,8 +416,7 @@ describe("GuideFoldingPluginValue decorations", () => {
 
   function makeFixture(
     text: string,
-    visibility: { verticalLines: boolean; outerVerticalLines: boolean } = {
-      verticalLines: true,
+    visibility: { outerVerticalLines: boolean } = {
       outerVerticalLines: true,
     },
   ) {
@@ -535,7 +534,7 @@ describe("GuideFoldingPluginValue decorations", () => {
       view as never,
     );
     expect(onChange).toHaveBeenCalledWith(
-      ["listLines", "outerListLines", "listLineAction"],
+      ["outerListLines", "listLineAction"],
       expect.any(Function),
     );
     view.requestMeasure.mockClear();
@@ -553,7 +552,7 @@ describe("GuideFoldingPluginValue decorations", () => {
     pluginValue.destroy();
   });
 
-  test("builds outer decorations on construction when both settings are visible", () => {
+  test("builds outer decorations while folding interaction is disabled", () => {
     const fixture = makeFixture("- parent\n    - child");
 
     expect(positions(fixture.pluginValue.decorations)).toEqual([0, 9]);
@@ -630,11 +629,10 @@ describe("GuideFoldingPluginValue decorations", () => {
     fixture.pluginValue.destroy();
   });
 
-  test.each([
-    { verticalLines: false, outerVerticalLines: true },
-    { verticalLines: true, outerVerticalLines: false },
-  ])("builds no outer decorations when visibility is %o", (visibility) => {
-    const fixture = makeFixture("- parent\n    - child", visibility);
+  test("builds no outer decorations when outer visibility is disabled", () => {
+    const fixture = makeFixture("- parent\n    - child", {
+      outerVerticalLines: false,
+    });
 
     expect(fixture.pluginValue.decorations).toBe(Decoration.none);
     fixture.pluginValue.destroy();
@@ -695,8 +693,7 @@ describe("GuideFoldingPluginValue persistent guides", () => {
     };
     const pluginValue = new GuideFoldingPluginValue(
       {
-        verticalLines: true,
-        verticalLinesAction: "none",
+        verticalLinesAction: "toggle-folding",
         onChange: jest.fn(),
         removeCallback: jest.fn(),
       } as never,
@@ -744,7 +741,6 @@ describe("GuideFoldingPluginValue persistent guides", () => {
     };
     const pluginValue = new GuideFoldingPluginValue(
       {
-        verticalLines: false,
         verticalLinesAction: "none",
         onChange: jest.fn(),
         removeCallback: jest.fn(),
@@ -774,7 +770,7 @@ describe("GuideFolding persistent guide styles", () => {
   test("preserves promoted spacing layout with marker-scoped styles", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(
-      /\.bullet-plugin-vertical-lines\s+\.markdown-source-view\.mod-cm6\s+\.cm-indent-spacing\.bullet-plugin-persistent-indent-guide\s*\{([^}]*)\}/,
+      /\.markdown-source-view\.mod-cm6\s+\.cm-indent-spacing\.bullet-plugin-persistent-indent-guide\s*\{([^}]*)\}/,
     )?.[1];
 
     expect(declarations).toContain("min-width: 0;");
@@ -784,7 +780,7 @@ describe("GuideFolding persistent guide styles", () => {
   test("stacks the promoted native guide above folded branch indicators", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(
-      /\.bullet-plugin-vertical-lines\s+\.markdown-source-view\.mod-cm6\s+\.cm-indent-spacing\.bullet-plugin-persistent-indent-guide::before\s*\{([^}]*)\}/,
+      /\.markdown-source-view\.mod-cm6\s+\.cm-indent-spacing\.bullet-plugin-persistent-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
 
     expect(declarations?.trim()).toBe("z-index: 2;");
@@ -798,7 +794,7 @@ describe("GuideFolding persistent guide styles", () => {
 
     expect(declarations?.trim()).toBe("cursor: pointer;");
     expect(styles).not.toMatch(
-      /\.bullet-plugin-vertical-lines\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\s*\{[^}]*cursor:\s*pointer/,
+      /(?:^|\n)\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\s*\{[^}]*cursor:\s*pointer/,
     );
   });
 
@@ -835,7 +831,7 @@ describe("GuideFolding outer guide styles", () => {
 
   test("positions a zero-content segment one list indent outside the native guide", () => {
     const declarations = styles.match(
-      /\.bullet-plugin-vertical-lines\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\s*\{([^}]*)\}/,
+      /\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\s*\{([^}]*)\}/,
     )?.[1];
 
     expect(declarations).toContain("position: absolute;");
@@ -849,7 +845,7 @@ describe("GuideFolding outer guide styles", () => {
 
   test("draws normal and hovered segments with native theme variables", () => {
     const normal = styles.match(
-      /\.bullet-plugin-vertical-lines\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
+      /\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const hovered = styles.match(
       /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide::before\s*\{([^}]*)\}/,
@@ -872,7 +868,7 @@ describe("GuideFolding outer guide styles", () => {
     expect(actionable).toContain("cursor: pointer;");
     expect(actionable).toContain("z-index: 2;");
     expect(styles).not.toMatch(
-      /\.bullet-plugin-vertical-lines\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\s*\{[^}]*cursor:/,
+      /(?:^|\n)\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\s*\{[^}]*cursor:/,
     );
   });
 
@@ -1022,7 +1018,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       view: ListenerCapturingView,
     ) => {
       const ownedSettings = {
-        verticalLines: false,
         outerVerticalLines: false,
         verticalLinesAction: "none",
         onChange: jest.fn(),
@@ -1137,7 +1132,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     };
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         outerVerticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
@@ -1367,7 +1361,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       { parse: jest.fn().mockReturnValue(root) },
@@ -1406,7 +1399,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       { parse: jest.fn().mockReturnValue(root) },
@@ -1435,7 +1427,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       { parse: jest.fn().mockReturnValue(root) },
@@ -1462,7 +1453,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       { parse: jest.fn().mockReturnValue(root) },
@@ -1495,7 +1485,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       { parse: jest.fn().mockReturnValue(root) },
@@ -1528,7 +1517,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       { parse: jest.fn().mockReturnValue(root) },
@@ -1559,7 +1547,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       { parse: jest.fn().mockReturnValue(root) },
@@ -1584,7 +1571,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       { parse: jest.fn().mockReturnValue(root) },
@@ -1611,7 +1597,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     >();
     const settingsCallbacks: Array<() => void> = [];
     const settings = {
-      verticalLines: true,
       verticalLinesAction: "toggle-folding",
       onChange: jest.fn((keys: unknown, callback?: () => void) => {
         settingsCallbacks.push(callback ?? (keys as () => void));
@@ -1662,7 +1647,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       true,
     );
     expect(settings.onChange).toHaveBeenCalledWith(
-      ["listLines", "outerListLines", "listLineAction"],
+      ["outerListLines", "listLineAction"],
       expect.any(Function),
     );
     expect(requestMeasure).toHaveBeenCalledTimes(1);
@@ -1722,7 +1707,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     >();
     const settingsCallbacks: Array<() => void> = [];
     const settings = {
-      verticalLines: true,
       verticalLinesAction: "toggle-folding",
       onChange: jest.fn((keys: unknown, callback?: () => void) => {
         settingsCallbacks.push(callback ?? (keys as () => void));
@@ -1962,7 +1946,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     >();
     const settingsCallbacks: Array<() => void> = [];
     const settings = {
-      verticalLines: true,
       outerVerticalLines: true,
       verticalLinesAction: "toggle-folding",
       onChange: jest.fn((keys: unknown, callback?: () => void) => {
@@ -2218,7 +2201,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       }),
     };
     const settings = {
-      verticalLines: true,
       verticalLinesAction: "toggle-folding",
       onChange: jest.fn(),
       removeCallback: jest.fn(),
@@ -2255,7 +2237,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { contentDOM } = makeGuideDOM([guide]);
     const settingsCallbacks: Array<() => void> = [];
     const settings = {
-      verticalLines: false,
       verticalLinesAction: "toggle-folding",
       onChange: jest.fn((keys: unknown, callback?: () => void) => {
         settingsCallbacks.push(callback ?? (keys as () => void));
@@ -2290,7 +2271,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
 
     expect(requests).toHaveLength(1);
-    settings.verticalLines = true;
     requests[0]?.write?.(undefined, view);
     expect(guide.classList.contains("cm-indent")).toBe(true);
 
@@ -2313,7 +2293,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { contentDOM } = makeGuideDOM(elements);
     const settingsCallbacks: Array<() => void> = [];
     const settings = {
-      verticalLines: true,
       verticalLinesAction: "toggle-folding",
       onChange: jest.fn((keys: unknown, callback?: () => void) => {
         settingsCallbacks.push(callback ?? (keys as () => void));
@@ -2375,7 +2354,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     };
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         outerVerticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
@@ -2406,7 +2384,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         outerVerticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
@@ -2448,7 +2425,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     };
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         outerVerticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
@@ -2475,7 +2451,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const parser = { parse: jest.fn().mockReturnValue(root) };
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       parser,
@@ -2493,7 +2468,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
   test.each([
     [
       "non-actionable widget",
-      { verticalLines: true, outerVerticalLines: true },
+      { outerVerticalLines: true },
       {
         "data-actionable": "false",
         "data-chunk-start": "0",
@@ -2502,7 +2477,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     ],
     [
       "malformed range",
-      { verticalLines: true, outerVerticalLines: true },
+      { outerVerticalLines: true },
       {
         "data-actionable": "true",
         "data-chunk-start": "not-a-line",
@@ -2511,12 +2486,12 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     ],
     [
       "missing range",
-      { verticalLines: true, outerVerticalLines: true },
+      { outerVerticalLines: true },
       { "data-actionable": "true" },
     ],
     [
       "blank range",
-      { verticalLines: true, outerVerticalLines: true },
+      { outerVerticalLines: true },
       {
         "data-actionable": "true",
         "data-chunk-start": " ",
@@ -2525,7 +2500,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     ],
     [
       "out-of-bounds range",
-      { verticalLines: true, outerVerticalLines: true },
+      { outerVerticalLines: true },
       {
         "data-actionable": "true",
         "data-chunk-start": "0",
@@ -2535,22 +2510,12 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     [
       "disabled action",
       {
-        verticalLines: true,
         outerVerticalLines: true,
         verticalLinesAction: "none",
       },
       undefined,
     ],
-    [
-      "master visibility off",
-      { verticalLines: false, outerVerticalLines: true },
-      undefined,
-    ],
-    [
-      "outer visibility off",
-      { verticalLines: true, outerVerticalLines: false },
-      undefined,
-    ],
+    ["outer visibility off", { outerVerticalLines: false }, undefined],
   ])("does not consume a %s outer widget", (_name, visibility, attributes) => {
     const parser = { parse: jest.fn(), parseRange: jest.fn() };
     mockGetEditorFromState.mockReturnValue(makeFoldEditor());
@@ -2584,7 +2549,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     };
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         outerVerticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
@@ -2615,7 +2579,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         outerVerticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
@@ -2651,9 +2614,8 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       cursor: { line: 0, ch: 0 },
     });
     const editor = makeFoldEditor();
-    mockGetEditorFromState.mockReturnValue(editor);
+    mockGetEditorFromState.mockReturnValue(null);
     const settings = {
-      verticalLines: false,
       outerVerticalLines: true,
       verticalLinesAction: "toggle-folding",
       onChange: jest.fn(),
@@ -2678,13 +2640,13 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       requestMeasure: jest.fn(),
     });
     new PluginValueWithView(settings, { parseRange }, view);
+    mockGetEditorFromState.mockReturnValue(editor);
     const mouseDownListener = addEventListener.mock.calls.find(
       ([eventName]) => eventName === "mousedown",
     )?.[1];
     const clickListener = addEventListener.mock.calls.find(
       ([eventName]) => eventName === "click",
     )?.[1];
-    settings.verticalLines = true;
     const mouseDownStopPropagation = jest.fn();
     const mouseDownPreventDefault = jest.fn();
     const clickStopPropagation = jest.fn();
@@ -2750,7 +2712,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const parser = { parseRange: jest.fn().mockReturnValue([root, root]) };
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         outerVerticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
@@ -2789,7 +2750,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const parser = { parse: jest.fn().mockReturnValue(root) };
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       parser,
@@ -2828,7 +2788,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const parser = { parse: jest.fn().mockReturnValue(root) };
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       parser,
@@ -2846,10 +2805,8 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
-  test.each([
-    [{ verticalLines: false, verticalLinesAction: "toggle-folding" }],
-    [{ verticalLines: true, verticalLinesAction: "none" }],
-  ])("ignores guides when settings disable interaction", (settings) => {
+  test("ignores guides when the folding action is disabled", () => {
+    const settings = { verticalLinesAction: "none" };
     const pluginValue = makeInteractionHarness(settings, { parse: jest.fn() });
     const { guides } = makeGuideLine();
     const { event, preventDefault } = makeEvent(guides[0]);
@@ -2866,7 +2823,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { event, preventDefault } = makeEvent(target);
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       { parse: jest.fn() },
@@ -2880,7 +2836,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
   test("ignores a guide while editor state is unavailable", () => {
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       { parse: jest.fn() },
@@ -2897,7 +2852,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       { parse: jest.fn().mockReturnValue(null) },
@@ -2920,7 +2874,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     mockGetEditorFromState.mockReturnValue(editor);
     const pluginValue = makeInteractionHarness(
       {
-        verticalLines: true,
         verticalLinesAction: "toggle-folding",
       },
       { parse: jest.fn().mockReturnValue(root) },

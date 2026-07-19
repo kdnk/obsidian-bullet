@@ -394,7 +394,7 @@ export class GuideFoldingPluginValue implements PluginValue {
   decorations: DecorationSet;
 
   private destroyed = false;
-  private lastOuterVisibility: [boolean, boolean];
+  private lastOuterVisibility: boolean;
   private lastPointerGuide: Element | null = null;
   private measureKey = {};
 
@@ -418,7 +418,7 @@ export class GuideFoldingPluginValue implements PluginValue {
       true,
     );
     this.settings.onChange(
-      ["listLines", "outerListLines", "listLineAction"],
+      ["outerListLines", "listLineAction"],
       this.onSettingsChange,
     );
     this.scheduleGuideSynchronization();
@@ -440,10 +440,7 @@ export class GuideFoldingPluginValue implements PluginValue {
   }
 
   private handleGuideInteraction(event: MouseEvent, shouldToggle: boolean) {
-    if (
-      !this.settings.verticalLines ||
-      this.settings.verticalLinesAction !== "toggle-folding"
-    ) {
+    if (!this.interactionEnabled()) {
       return false;
     }
 
@@ -580,10 +577,7 @@ export class GuideFoldingPluginValue implements PluginValue {
   };
 
   private interactionEnabled() {
-    return (
-      this.settings.verticalLines &&
-      this.settings.verticalLinesAction === "toggle-folding"
-    );
+    return this.settings.verticalLinesAction === "toggle-folding";
   }
 
   private outerInteractionEnabled() {
@@ -672,10 +666,7 @@ export class GuideFoldingPluginValue implements PluginValue {
 
   private onSettingsChange = () => {
     const outerVisibility = this.outerVisibility();
-    if (
-      outerVisibility[0] !== this.lastOuterVisibility[0] ||
-      outerVisibility[1] !== this.lastOuterVisibility[1]
-    ) {
+    if (outerVisibility !== this.lastOuterVisibility) {
       this.lastOuterVisibility = outerVisibility;
       this.decorations = this.buildOuterDecorations();
       this.view.dispatch({});
@@ -690,12 +681,12 @@ export class GuideFoldingPluginValue implements PluginValue {
     this.scheduleGuideSynchronization();
   };
 
-  private outerVisibility(): [boolean, boolean] {
-    return [this.settings.verticalLines, this.settings.outerVerticalLines];
+  private outerVisibility() {
+    return this.settings.outerVerticalLines;
   }
 
   private buildOuterDecorations() {
-    if (!this.settings.verticalLines || !this.settings.outerVerticalLines) {
+    if (!this.settings.outerVerticalLines) {
       return Decoration.none;
     }
     const editor = getEditorFromState(this.view.state);
@@ -723,7 +714,7 @@ export class GuideFoldingPluginValue implements PluginValue {
 
         synchronizePersistentIndentGuides(
           this.view.contentDOM,
-          this.settings.verticalLines,
+          this.interactionEnabled(),
         );
         synchronizeHoveredIndentGuides(
           this.view.contentDOM,

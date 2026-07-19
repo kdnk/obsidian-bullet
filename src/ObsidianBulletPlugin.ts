@@ -150,7 +150,7 @@ export default class ObsidianBulletPlugin extends Plugin {
       // features based on settings.mobileRightFoldControls
       new MobileRightFoldControls(this, this.settings),
 
-      // features based on settings.verticalLines
+      // vertical-line folding and outer list guides
       new VerticalLines(this, this.settings, this.parser),
 
       // features based on settings.dragAndDrop

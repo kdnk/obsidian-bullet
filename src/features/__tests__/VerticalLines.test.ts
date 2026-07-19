@@ -73,7 +73,7 @@ describe("VerticalLines", () => {
     jest.clearAllMocks();
   });
 
-  test("manages display and folding-action classes across documents", async () => {
+  test("manages the folding-action class across documents", async () => {
     const mainDocument = makeDocument();
     const popoutDocument = makeDocument();
     Object.defineProperty(global, "activeDocument", {
@@ -84,7 +84,6 @@ describe("VerticalLines", () => {
     const { eventHandlers, plugin, workspace } = makePlugin();
     const settingsCallbacks: Array<() => void> = [];
     const settings = {
-      verticalLines: true,
       verticalLinesAction: "toggle-folding",
       onChange: jest.fn((keys: unknown, callback?: () => void) => {
         settingsCallbacks.push(callback ?? (keys as () => void));
@@ -101,7 +100,7 @@ describe("VerticalLines", () => {
     await feature.load();
 
     expect(settings.onChange).toHaveBeenCalledWith(
-      ["listLines", "outerListLines", "listLineAction"],
+      ["listLineAction"],
       expect.any(Function),
     );
     expect(plugin.registerEditorExtension).toHaveBeenCalled();
@@ -114,9 +113,6 @@ describe("VerticalLines", () => {
       expect.any(Function),
     );
     expect(
-      mainDocument.body.classList.contains("bullet-plugin-vertical-lines"),
-    ).toBe(true);
-    expect(
       mainDocument.body.classList.contains(
         "bullet-plugin-vertical-lines-action-toggle-folding",
       ),
@@ -125,9 +121,6 @@ describe("VerticalLines", () => {
     for (const handler of eventHandlers.get("window-open") ?? []) {
       handler({} as never, { document: popoutDocument } as never);
     }
-    expect(
-      popoutDocument.body.classList.contains("bullet-plugin-vertical-lines"),
-    ).toBe(true);
     expect(
       popoutDocument.body.classList.contains(
         "bullet-plugin-vertical-lines-action-toggle-folding",
@@ -143,16 +136,10 @@ describe("VerticalLines", () => {
     settingsCallback();
 
     expect(
-      mainDocument.body.classList.contains("bullet-plugin-vertical-lines"),
-    ).toBe(true);
-    expect(
       mainDocument.body.classList.contains(
         "bullet-plugin-vertical-lines-action-toggle-folding",
       ),
     ).toBe(false);
-    expect(
-      popoutDocument.body.classList.contains("bullet-plugin-vertical-lines"),
-    ).toBe(true);
     expect(
       popoutDocument.body.classList.contains(
         "bullet-plugin-vertical-lines-action-toggle-folding",
@@ -160,32 +147,20 @@ describe("VerticalLines", () => {
     ).toBe(false);
 
     settings.verticalLinesAction = "toggle-folding";
-    settings.verticalLines = false;
     settingsCallback();
 
-    expect(
-      mainDocument.body.classList.contains("bullet-plugin-vertical-lines"),
-    ).toBe(false);
     expect(
       mainDocument.body.classList.contains(
         "bullet-plugin-vertical-lines-action-toggle-folding",
       ),
-    ).toBe(false);
+    ).toBe(true);
 
-    settings.verticalLines = true;
-    settingsCallback();
     await feature.unload();
 
     expect(
-      mainDocument.body.classList.contains("bullet-plugin-vertical-lines"),
-    ).toBe(false);
-    expect(
       mainDocument.body.classList.contains(
         "bullet-plugin-vertical-lines-action-toggle-folding",
       ),
-    ).toBe(false);
-    expect(
-      popoutDocument.body.classList.contains("bullet-plugin-vertical-lines"),
     ).toBe(false);
     expect(
       popoutDocument.body.classList.contains(
@@ -203,7 +178,6 @@ describe("VerticalLines", () => {
     const { plugin, workspace } = makePlugin();
     const settingsCallbacks: Array<() => void> = [];
     const settings = {
-      verticalLines: true,
       verticalLinesAction: "toggle-folding",
       onChange: jest.fn((keys: unknown, callback?: () => void) => {
         settingsCallbacks.push(callback ?? (keys as () => void));
@@ -245,20 +219,11 @@ describe("VerticalLines", () => {
       GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION,
     );
     expect(workspace.updateOptions).toHaveBeenCalledTimes(2);
-
-    settings.verticalLines = false;
-    settingsCallback();
-
-    expect(registeredExtensions).not.toContain(
-      GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION,
-    );
-    expect(workspace.updateOptions).toHaveBeenCalledTimes(3);
   });
 
   test("exposes plugin value decorations through the view plugin", async () => {
     const { plugin } = makePlugin();
     const settings = {
-      verticalLines: true,
       outerVerticalLines: true,
       verticalLinesAction: "none",
       onChange: jest.fn(),
@@ -292,7 +257,6 @@ describe("VerticalLines", () => {
   test("constructs the guide folding plugin value from the registered view plugin", async () => {
     const { plugin } = makePlugin();
     const settings = {
-      verticalLines: true,
       outerVerticalLines: true,
       verticalLinesAction: "none",
       onChange: jest.fn(),

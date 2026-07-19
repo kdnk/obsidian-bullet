@@ -13,12 +13,10 @@ import {
 import { Parser } from "../services/Parser";
 import { Settings } from "../services/Settings";
 
-const VERTICAL_LINES_BODY_CLASS = "bullet-plugin-vertical-lines";
 const VERTICAL_LINES_ACTION_BODY_CLASS =
   "bullet-plugin-vertical-lines-action-toggle-folding";
 
 export class VerticalLines implements Feature {
-  private bodyClass: DocumentBodyClass;
   private actionBodyClass: DocumentBodyClass;
   private editorExtensions: Extension[] = [];
 
@@ -27,11 +25,6 @@ export class VerticalLines implements Feature {
     private settings: Settings,
     private parser: Parser,
   ) {
-    this.bodyClass = new DocumentBodyClass(
-      this.plugin,
-      VERTICAL_LINES_BODY_CLASS,
-      this.shouldApplyBodyClass,
-    );
     this.actionBodyClass = new DocumentBodyClass(
       this.plugin,
       VERTICAL_LINES_ACTION_BODY_CLASS,
@@ -49,22 +42,16 @@ export class VerticalLines implements Feature {
     this.synchronizeScrollPastEndExtension(false);
     this.plugin.registerEditorExtension(this.editorExtensions);
 
-    this.settings.onChange(
-      ["listLines", "outerListLines", "listLineAction"],
-      this.updateBodyClasses,
-    );
-    this.bodyClass.load();
+    this.settings.onChange(["listLineAction"], this.updateActionState);
     this.actionBodyClass.load();
   }
 
   async unload() {
-    this.settings.removeCallback(this.updateBodyClasses);
+    this.settings.removeCallback(this.updateActionState);
     this.actionBodyClass.unload();
-    this.bodyClass.unload();
   }
 
-  private updateBodyClasses = () => {
-    this.bodyClass.update();
+  private updateActionState = () => {
     this.actionBodyClass.update();
     this.synchronizeScrollPastEndExtension(true);
   };
@@ -90,14 +77,7 @@ export class VerticalLines implements Feature {
     }
   }
 
-  private shouldApplyBodyClass = () => {
-    return this.settings.verticalLines;
-  };
-
   private shouldApplyActionBodyClass = () => {
-    return (
-      this.settings.verticalLines &&
-      this.settings.verticalLinesAction === "toggle-folding"
-    );
+    return this.settings.verticalLinesAction === "toggle-folding";
   };
 }
