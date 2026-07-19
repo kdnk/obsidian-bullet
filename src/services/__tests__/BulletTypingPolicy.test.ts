@@ -385,6 +385,95 @@ describe("BulletTypingPolicy", () => {
     );
   });
 
+  test("starts a bullet when Space is typed on a completely empty line", () => {
+    const transaction = makeTransaction(
+      "",
+      { from: 0, insert: " " },
+      "input.type",
+    );
+
+    const decision = policy.decide(transaction);
+
+    expect(decision).toEqual({
+      kind: "correct",
+      changes: [{ from: 0, insert: "-" }],
+    });
+    expect(applyCorrection(transaction, decision)).toBe("- ");
+  });
+
+  test.each([
+    { description: "whitespace-only line", doc: "  ", from: 2 },
+    {
+      description: "empty list continuation",
+      doc: "- parent\n  ",
+      from: 11,
+    },
+  ])("does not start a bullet on a $description", ({ doc, from }) => {
+    const transaction = makeTransaction(
+      doc,
+      { from, insert: " " },
+      "input.type",
+      from,
+    );
+
+    expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+  });
+
+  test("does not start a bullet from composition Space input", () => {
+    const transaction = makeTransaction(
+      "",
+      { from: 0, insert: " " },
+      "input.type.compose",
+    );
+
+    expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+  });
+
+  test("does not start a bullet when Space replaces a selection", () => {
+    const transaction = makeTransaction(
+      "x",
+      { from: 0, to: 1, insert: " " },
+      "input.type",
+      EditorSelection.range(0, 1),
+    );
+
+    expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+  });
+
+  test("does not start bullets from multiple Space insertions", () => {
+    const state = EditorState.create({
+      doc: "\n",
+      selection: EditorSelection.create([
+        EditorSelection.cursor(0),
+        EditorSelection.cursor(1),
+      ]),
+      extensions: EditorState.allowMultipleSelections.of(true),
+    });
+    const transaction = state.update({
+      changes: [
+        { from: 0, insert: " " },
+        { from: 1, insert: " " },
+      ],
+      userEvent: "input.type",
+    });
+
+    expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+  });
+
+  test("keeps the existing body correction for Space before pasted text", () => {
+    const transaction = makeTransaction(
+      "plain",
+      { from: 0, insert: " " },
+      "input.type",
+      0,
+    );
+
+    expect(policy.decide(transaction)).toEqual({
+      kind: "correct",
+      changes: [{ from: 0, insert: "- " }],
+    });
+  });
+
   test("prefixes directly typed body text on a blank line", () => {
     const transaction = makeTransaction(
       "",

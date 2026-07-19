@@ -23,6 +23,7 @@ const structuralTriggers = new Set(["#", ">", "`", "-"]);
 interface TypedTrigger {
   fromBefore: number;
   fromAfter: number;
+  value: string;
 }
 
 interface DeletedRange {
@@ -70,6 +71,11 @@ export class BulletTypingPolicy {
       isPureDeletionTransaction(transaction)
     ) {
       return this.getDeletionDecision(transaction);
+    }
+
+    const bulletStart = this.getEmptyLineBulletStart(transaction);
+    if (bulletStart) {
+      return { kind: "correct", changes: [bulletStart] };
     }
 
     const promotion = this.getStructuralPromotion(transaction);
@@ -223,9 +229,27 @@ export class BulletTypingPolicy {
       .sort((left, right) => left.before.from - right.before.from);
   }
 
+  private getEmptyLineBulletStart(transaction: Transaction): ChangeSpec | null {
+    if (transaction.annotation(Transaction.userEvent) !== "input.type") {
+      return null;
+    }
+
+    const trigger = getSingleTypedTrigger(transaction);
+    if (!trigger || trigger.value !== " ") {
+      return null;
+    }
+
+    const beforeLine = transaction.startState.doc.lineAt(trigger.fromBefore);
+    if (beforeLine.text !== "" || trigger.fromBefore !== beforeLine.from) {
+      return null;
+    }
+
+    return { from: trigger.fromAfter, insert: "-" };
+  }
+
   private getStructuralPromotion(transaction: Transaction): ChangeSpec | null {
     const trigger = getSingleTypedTrigger(transaction);
-    if (!trigger) {
+    if (!trigger || !structuralTriggers.has(trigger.value)) {
       return null;
     }
 
@@ -421,10 +445,9 @@ function getSingleTypedTrigger(transaction: Transaction): TypedTrigger | null {
         fromBefore === toBefore &&
         selection.main.anchor === fromBefore &&
         selection.main.head === fromBefore &&
-        structuralTriggers.has(value) &&
         value.length === 1
       ) {
-        trigger = { fromBefore, fromAfter };
+        trigger = { fromBefore, fromAfter, value };
       }
     },
     true,
