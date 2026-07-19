@@ -31,7 +31,7 @@ export interface MarkdownLineInspection {
   listItem: ListLineInspection | null;
 }
 
-const listItemRe = /^([ \t]*)([-*+]|\d+\.)([ \t]+)(.*)$/;
+const listItemRe = /^([ \t]*)([-*+]|\d+\.)(?:([ \t]+)(.*))?$/;
 const atxHeadingRe = /^ {0,3}#{1,6}(?:[ \t]+|$)/;
 const quoteRe = /^ {0,3}>/;
 const horizontalRuleRe = /^ {0,3}(?:-[ \t]*){3,}$/;
@@ -403,7 +403,7 @@ function matchListItem(text: string): ListItemMatch | null {
     return null;
   }
 
-  const [, indent, marker, spacing, content] = match;
+  const [, indent, marker, spacing = "", content = ""] = match;
   return {
     indent,
     prefix: `${indent}${marker}${spacing}`,

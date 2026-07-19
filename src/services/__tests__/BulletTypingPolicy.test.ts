@@ -300,6 +300,20 @@ describe("BulletTypingPolicy", () => {
       to: 13,
       expected: "- parent\n- sibling",
     },
+    {
+      description: "nested leaf without trailing marker space",
+      doc: "- parent\n  -",
+      from: 11,
+      to: 12,
+      expected: "- parent",
+    },
+    {
+      description: "nested plus leaf without trailing marker space",
+      doc: "- parent\n  +",
+      from: 11,
+      to: 12,
+      expected: "- parent",
+    },
   ])(
     "removes an empty $description row on Backspace",
     ({ doc, from, to, expected }) => {
@@ -308,6 +322,48 @@ describe("BulletTypingPolicy", () => {
         { from, to },
         "delete.backward",
         to,
+      );
+
+      expect(applyCorrection(transaction, policy.decide(transaction))).toBe(
+        expected,
+      );
+    },
+  );
+
+  test("removes a bare empty leaf row through a Vim input deletion", () => {
+    const transaction = makeTransaction(
+      "- parent\n  -",
+      { from: 11, to: 12 },
+      "input.type",
+      EditorSelection.single(11, 12),
+    );
+
+    expect(applyCorrection(transaction, policy.decide(transaction))).toBe(
+      "- parent",
+    );
+  });
+
+  test.each([
+    {
+      description: "insertion",
+      changes: { from: 12, insert: "x" },
+      selection: 12,
+      expected: "- parent\n  -x",
+    },
+    {
+      description: "replacement",
+      changes: { from: 11, to: 12, insert: "x" },
+      selection: EditorSelection.single(11, 12),
+      expected: "- parent\n  x",
+    },
+  ])(
+    "does not remove a bare empty leaf row for an input.type $description",
+    ({ changes, selection, expected }) => {
+      const transaction = makeTransaction(
+        "- parent\n  -",
+        changes,
+        "input.type",
+        selection,
       );
 
       expect(applyCorrection(transaction, policy.decide(transaction))).toBe(
@@ -607,6 +663,17 @@ describe("BulletTypingPolicy", () => {
       );
     },
   );
+
+  test("keeps extending a promoted bare marker into a horizontal rule", () => {
+    const transaction = makeTransaction(
+      "-",
+      { from: 1, insert: "-" },
+      "input.type",
+      1,
+    );
+
+    expect(applyCorrection(transaction, policy.decide(transaction))).toBe("--");
+  });
 
   test("removes the full prefix when promoting an indented root item", () => {
     const transaction = makeTransaction(

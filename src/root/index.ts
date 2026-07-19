@@ -208,7 +208,9 @@ export class List {
   }
 
   private getContentStartCh() {
-    return this.indent.length + this.bullet.length + 1;
+    return (
+      this.indent.length + this.bullet.length + this.spaceAfterBullet.length
+    );
   }
 
   isFolded(): boolean {

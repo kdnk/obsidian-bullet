@@ -225,6 +225,25 @@ describe("empty leaf item removal", () => {
     expect(root.getCursor()).toEqual({ line: 0, ch: 8 });
   });
 
+  test("removes a nested empty item whose marker ends the line", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- parent\n  -",
+        cursor: { line: 1, ch: 3 },
+      }),
+    });
+
+    const outcome = new DeleteTillPreviousLineContentEnd(
+      root,
+      true,
+      true,
+    ).perform();
+
+    expect(outcome).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe("- parent");
+    expect(root.getCursor()).toEqual({ line: 0, ch: 8 });
+  });
+
   test("removes an empty checkbox item", () => {
     const root = makeRoot({
       editor: makeEditor({

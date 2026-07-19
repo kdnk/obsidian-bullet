@@ -8,10 +8,10 @@ const bulletSignRe = `(?:[-*+]|\\d+\\.)`;
 const optionalCheckboxRe = `(?:${checkboxRe})?`;
 const defaultTabSize = 4;
 
-const listItemRe = new RegExp(`^[ \t]*${bulletSignRe}( |\t)`);
+const listItemRe = new RegExp(`^[ \t]*${bulletSignRe}(?:[ \t]|$)`);
 const stringWithSpacesRe = new RegExp(`^[ \t]+`);
 const parseListItemRe = new RegExp(
-  `^([ \t]*)(${bulletSignRe})( |\t)(${optionalCheckboxRe})(.*)$`,
+  `^([ \t]*)(${bulletSignRe})(?:( |\t)(${optionalCheckboxRe})(.*))?$`,
 );
 
 export interface ReaderPosition {
@@ -188,8 +188,8 @@ export class Parser {
       const matches = parseListItemRe.exec(line);
 
       if (matches) {
-        const [, indent, bullet, spaceAfterBullet] = matches;
-        let [, , , , optionalCheckbox, content] = matches;
+        const [, indent, bullet, spaceAfterBullet = ""] = matches;
+        let [, , , , optionalCheckbox = "", content = ""] = matches;
         const hadCheckbox = optionalCheckbox.length > 0;
 
         content = optionalCheckbox + content;

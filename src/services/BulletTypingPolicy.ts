@@ -116,7 +116,7 @@ export class BulletTypingPolicy {
 
       const listItem = affected.before.listItem!;
       if (
-        transaction.isUserEvent("delete.backward") &&
+        isBackwardLikeDeletion(transaction) &&
         listItem.isPlainEmpty &&
         !listItem.hasOwnedFollowingLine
       ) {
@@ -268,6 +268,7 @@ export class BulletTypingPolicy {
       !listItem?.isRoot ||
       !listItem.isPlainEmpty ||
       listItem.hasOwnedFollowingLine ||
+      !/[ \t]$/.test(listItem.prefix) ||
       trigger.fromBefore !== before.from + listItem.contentStart
     ) {
       return null;
@@ -329,6 +330,14 @@ function isPureDeletionTransaction(transaction: Transaction): boolean {
   );
 
   return hasDeletion && !hasInsertion;
+}
+
+function isBackwardLikeDeletion(transaction: Transaction): boolean {
+  return (
+    transaction.isUserEvent("delete.backward") ||
+    (transaction.annotation(Transaction.userEvent) === "input.type" &&
+      isPureDeletionTransaction(transaction))
+  );
 }
 
 function getDeletedRanges(transaction: Transaction): DeletedRange[] {

@@ -96,6 +96,34 @@ describe("parseList", () => {
     expect(list!.print()).toBe(" - one\n - two\n     - three");
   });
 
+  test.each([
+    { marker: "-", contentStart: 3 },
+    { marker: "*", contentStart: 3 },
+    { marker: "+", contentStart: 3 },
+    { marker: "12.", contentStart: 5 },
+  ])(
+    "should parse an empty $marker child whose marker ends the line",
+    ({ marker, contentStart }) => {
+      const parser = makeParser();
+      const editor = makeEditor({
+        text: `- parent\n  ${marker}`,
+        cursor: { line: 1, ch: contentStart },
+      });
+
+      const root = parser.parse(editor);
+
+      expect(root).toBeTruthy();
+      const [child] = root!.getChildren()[0].getChildren();
+      expect(child.getBullet()).toBe(marker);
+      expect(child.getFirstLineContentStart()).toEqual({
+        line: 1,
+        ch: contentStart,
+      });
+      expect(root!.getCursor()).toEqual({ line: 1, ch: contentStart });
+      expect(root!.print()).toBe(`- parent\n  ${marker}`);
+    },
+  );
+
   test("should parse mixed spaces and tabs without failing", () => {
     const log = makeLogSink();
     const logger = makeLogger(log);

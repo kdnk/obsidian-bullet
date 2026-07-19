@@ -115,6 +115,23 @@
   - sibling
 ```
 
+# backspace should remove a nested empty item without trailing marker space
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- parent
+  -|
+```
+
+- keydown: `Backspace`
+- assertState:
+
+```md
+- parent|
+```
+
 # backspace should remove a middle root item when body ownership is enabled
 
 - setting: `keepBodyTextInBullets=true`

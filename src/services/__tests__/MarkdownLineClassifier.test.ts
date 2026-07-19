@@ -90,6 +90,24 @@ describe("MarkdownLineClassifier", () => {
     });
   });
 
+  test.each([
+    { marker: "-", contentStart: 3 },
+    { marker: "*", contentStart: 3 },
+    { marker: "+", contentStart: 3 },
+    { marker: "12.", contentStart: 5 },
+  ])(
+    "reports a nested empty $marker bullet whose marker ends the line",
+    ({ marker, contentStart }) => {
+      expect(inspect(`- parent\n  ${marker}`, 2).listItem).toMatchObject({
+        prefix: `  ${marker}`,
+        contentStart,
+        isRoot: false,
+        isPlainEmpty: true,
+        hasOwnedFollowingLine: false,
+      });
+    },
+  );
+
   test("treats an indented list item without a lexical parent as root", () => {
     expect(inspect("  - ", 1).listItem).toMatchObject({
       isRoot: true,
