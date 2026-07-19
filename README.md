@@ -81,15 +81,11 @@ Hold <kbd>Alt</kbd> or <kbd>Option</kbd> while navigating or clicking to place t
 
 Bullet can draw native-looking guides between nested items and beside each root-level list chunk. With guide actions enabled, click a guide to fold or unfold the child branches it connects.
 
-![Fold nested lists from their indentation guides](demos/demo3.gif)
-
 The separate **Fold the list** and **Unfold the list** commands operate on the item at the caret. These commands do not have default shortcuts, so you can assign your own under **Settings → Hotkeys**.
 
 ### Drag branches on desktop
 
 Drag a bullet, fold indicator, or checkbox to move its complete branch. Drag-and-drop is a desktop feature; the keyboard and Command Palette movement actions remain available on mobile.
-
-![Move a list branch by dragging it](demos/demo4.gif)
 
 ### Use Vim and mobile controls
 
