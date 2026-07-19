@@ -419,6 +419,23 @@ describe("BulletTypingPolicy", () => {
     expect(policy.decide(transaction)).toEqual({ kind: "pass" });
   });
 
+  test.each([
+    { description: "frontmatter", doc: "---\n\n---" },
+    { description: "fenced code", doc: "```\n\n```" },
+  ])(
+    "does not start a bullet on an empty line inside $description",
+    ({ doc }) => {
+      const transaction = makeTransaction(
+        doc,
+        { from: 4, insert: " " },
+        "input.type",
+        4,
+      );
+
+      expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+    },
+  );
+
   test("does not start a bullet from composition Space input", () => {
     const transaction = makeTransaction(
       "",

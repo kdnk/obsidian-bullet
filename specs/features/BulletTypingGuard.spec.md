@@ -393,6 +393,49 @@ programmatic|
 - [ ] >|
 ```
 
+# space on an empty frontmatter line should remain structural
+
+- setting: `keepBodyTextInBullets=true`
+- execute: `editor:toggle-source`
+- applyState:
+
+```md
+---
+|
+---
+```
+
+- typeText: ` `
+- assertState:
+
+```md
+---
+ |
+---
+```
+
+- execute: `editor:toggle-source`
+
+# space on an empty fenced-code line should remain structural
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+````md
+```
+|
+```
+````
+
+- typeText: ` `
+- assertState:
+
+````md
+```
+ |
+```
+````
+
 # typing inside frontmatter should not create a bullet
 
 - setting: `keepBodyTextInBullets=true`

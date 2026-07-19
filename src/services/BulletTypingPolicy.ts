@@ -240,7 +240,12 @@ export class BulletTypingPolicy {
     }
 
     const beforeLine = transaction.startState.doc.lineAt(trigger.fromBefore);
-    if (beforeLine.text !== "" || trigger.fromBefore !== beforeLine.from) {
+    if (
+      beforeLine.text !== "" ||
+      trigger.fromBefore !== beforeLine.from ||
+      this.classifier.classify(transaction.startState, beforeLine.number) !==
+        "blank"
+    ) {
       return null;
     }
 
