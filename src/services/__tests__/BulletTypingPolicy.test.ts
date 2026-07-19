@@ -434,7 +434,7 @@ describe("BulletTypingPolicy", () => {
       "x",
       { from: 0, to: 1, insert: " " },
       "input.type",
-      EditorSelection.range(0, 1),
+      EditorSelection.single(0, 1),
     );
 
     expect(policy.decide(transaction)).toEqual({ kind: "pass" });

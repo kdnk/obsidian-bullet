@@ -57,6 +57,8 @@ The movement shortcuts are registered by Bullet. The other controls replace Obsi
 
 With **Keep body text in bullets** enabled, directly typed body text stays in a list item or one of its continuation lines. Headings, block quotes, horizontal rules, fenced code blocks, and frontmatter remain available as document-level Markdown structures.
 
+On a completely empty line, press <kbd>Space</kbd> to create an empty list item immediately. Indented continuation lines remain plain note lines.
+
 The rule applies to direct typing and deletion. Pasted text, dropped text, and changes made by other plugins are left unchanged.
 
 Enhanced `Enter` creates a new item at the appropriate level and outdents an empty nested item. `Shift`+`Enter` adds a continuation line to the current item without creating another bullet.

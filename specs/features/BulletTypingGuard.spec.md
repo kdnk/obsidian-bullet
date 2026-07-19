@@ -14,6 +14,59 @@
 - a|
 ```
 
+# space on a completely empty line should start a bullet
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+|
+```
+
+- typeText: ` `
+- assertState:
+
+```md
+- |
+```
+
+# space on a completely empty line should start a bullet in Source mode
+
+- setting: `keepBodyTextInBullets=true`
+- execute: `editor:toggle-source`
+- applyState:
+
+```md
+|
+```
+
+- typeText: ` `
+- assertState:
+
+```md
+- |
+```
+
+- execute: `editor:toggle-source`
+
+# space on an empty continuation should remain plain indentation
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- parent
+  |
+```
+
+- typeText: ` `
+- assertState:
+
+```md
+- parent
+   |
+```
+
 # command-z should revert typed text and its bullet correction together
 
 - platform: `darwin`

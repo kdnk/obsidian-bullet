@@ -77,6 +77,18 @@ describe("BulletTypingGuard", () => {
     expect(transaction.newDoc.toString()).toBe("a");
   });
 
+  test("leaves Space unchanged while body ownership is disabled", async () => {
+    const guard = await loadGuard({ keepBodyTextInBullets: false });
+    const state = EditorState.create({ extensions: guard });
+
+    const transaction = state.update({
+      changes: { from: 0, insert: " " },
+      userEvent: "input.type",
+    });
+
+    expect(transaction.newDoc.toString()).toBe(" ");
+  });
+
   test("returns the original transaction when the policy passes", async () => {
     const guard = await loadGuard();
     const capture = captureInputTransaction();
@@ -116,6 +128,20 @@ describe("BulletTypingGuard", () => {
     });
 
     expect(transaction.newSelection.main).toEqual(EditorSelection.cursor(3));
+  });
+
+  test("maps Space past the empty bullet correction", async () => {
+    const guard = await loadGuard();
+    const state = EditorState.create({ extensions: guard });
+
+    const transaction = state.update({
+      changes: { from: 0, insert: " " },
+      selection: { anchor: 1 },
+      userEvent: "input.type",
+    });
+
+    expect(transaction.newDoc.toString()).toBe("- ");
+    expect(transaction.newSelection.main).toEqual(EditorSelection.cursor(2));
   });
 
   test("preserves reverse ranges and the main selection", async () => {
@@ -188,6 +214,30 @@ describe("BulletTypingGuard", () => {
     expect(transaction).toBeInstanceOf(Transaction);
     expect(transaction.newDoc.toString()).toBe("- a");
     expect(transaction.annotation(Transaction.addToHistory)).toBe(true);
+    expect(transaction.state.field(historyEventCount)).toBe(1);
+  });
+
+  test("keeps Space and its empty bullet in one history event", async () => {
+    const guard = await loadGuard();
+    const historyEventCount = StateField.define<number>({
+      create: () => 0,
+      update: (count, transaction) =>
+        transaction.docChanged &&
+        transaction.annotation(Transaction.addToHistory) !== false
+          ? count + 1
+          : count,
+    });
+    const state = EditorState.create({
+      extensions: [historyEventCount, guard],
+    });
+
+    const transaction = state.update({
+      annotations: Transaction.addToHistory.of(true),
+      changes: { from: 0, insert: " " },
+      userEvent: "input.type",
+    });
+
+    expect(transaction.newDoc.toString()).toBe("- ");
     expect(transaction.state.field(historyEventCount)).toBe(1);
   });
 
