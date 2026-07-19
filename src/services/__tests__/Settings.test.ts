@@ -1,6 +1,6 @@
 import { Settings, SettingsChange, SettingsObject } from "../Settings";
 
-test("keeps body text enforcement disabled for saved data predating the setting", async () => {
+test("enables body text enforcement for saved data predating the setting", async () => {
   const settings = new Settings({
     loadData: jest.fn(async () => ({}) as SettingsObject),
     saveData: jest.fn(async () => undefined),
@@ -8,7 +8,7 @@ test("keeps body text enforcement disabled for saved data predating the setting"
 
   await settings.load();
 
-  expect(settings.keepBodyTextInBullets).toBe(false);
+  expect(settings.keepBodyTextInBullets).toBe(true);
 });
 
 test("enables outer vertical lines when saved data predates the setting", async () => {
@@ -115,7 +115,7 @@ describe("change notifications", () => {
     const callback = jest.fn<void, [SettingsChange]>();
     settings.onChange(["keepBodyTextInBullets"], callback);
 
-    settings.keepBodyTextInBullets = true;
+    settings.keepBodyTextInBullets = false;
 
     expect(callback.mock.calls[0]?.[0].keys).toEqual(
       new Set(["keepBodyTextInBullets"]),

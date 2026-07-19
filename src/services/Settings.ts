@@ -30,7 +30,7 @@ const DEFAULT_SETTINGS: SettingsObject = {
   styleLists: true,
   debug: false,
   stickCursor: "bullet-and-checkbox",
-  keepBodyTextInBullets: false,
+  keepBodyTextInBullets: true,
   betterEnter: true,
   betterVimO: true,
   betterTab: true,

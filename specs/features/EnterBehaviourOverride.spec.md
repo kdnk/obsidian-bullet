@@ -222,8 +222,9 @@
 - after
 ```
 
-# enter should delete list item if it's last item and it's on the top level
+# enter should delete list item if it's last item and body ownership is disabled
 
+- setting: `keepBodyTextInBullets=false`
 - applyState:
 
 ```md
@@ -239,8 +240,9 @@
 |
 ```
 
-# enter should delete list item if it's last item and it's on the top level and it's checkbox
+# enter should delete checkbox item if it's last item and body ownership is disabled
 
+- setting: `keepBodyTextInBullets=false`
 - applyState:
 
 ```md

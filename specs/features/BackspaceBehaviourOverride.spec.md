@@ -1,5 +1,6 @@
-# backspace should work as regular if it's last empty line
+# backspace should work as regular if it's last empty line and body ownership is disabled
 
+- setting: `keepBodyTextInBullets=false`
 - applyState:
 
 ```md
@@ -13,8 +14,9 @@
 -|
 ```
 
-# backspace should work as regular if it's first line without children
+# backspace should work as regular if it's first line without children and body ownership is disabled
 
+- setting: `keepBodyTextInBullets=false`
 - applyState:
 
 ```md
