@@ -123,12 +123,15 @@ Expected: `BetterListsStyles.test.ts` passes with no warnings.
 Run:
 
 ```bash
-n exec 22.23.1 npx prettier --check styles.css src/features/__tests__/BetterListsStyles.test.ts docs/superpowers/specs/2026-07-22-collapsed-list-bullet-halo-design.md docs/superpowers/plans/2026-07-22-collapsed-list-bullet-halo.md
+n exec 22.23.1 npx prettier --check src/features/__tests__/BetterListsStyles.test.ts docs/superpowers/specs/2026-07-22-collapsed-list-bullet-halo-design.md docs/superpowers/plans/2026-07-22-collapsed-list-bullet-halo.md
 n exec 22.23.1 npm run test:unit -- --runInBand
 n exec 22.23.1 npm run build
 ```
 
 Expected: every command exits 0, and the build does not add tracked output.
+
+The full-file `styles.css` check remains excluded because the applied `codex/darker-vertical-guides` branch keeps its selector at line 63 on two lines while the current Prettier version collapses it to one.
+The halo block was formatted with Prettier, and that unrelated selector change was restored before the feature commit.
 
 - [x] **Step 6: Verify the state transition in the repository test vault**
 
