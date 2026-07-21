@@ -37,7 +37,7 @@
 - Consumes: `resolveVerticalGuideTarget()`、`collectVerticalGuideGroup()`、outer chunk ID、`ViewUpdate.docChanged`
 - Produces: view-local `SelectedGuide`、selected marker group、document click cleanup
 
-- [ ] **Step 1: 選択のsemantic scopeとlifecycleを要求する失敗テストを書く**
+- [x] **Step 1: 選択のsemantic scopeとlifecycleを要求する失敗テストを書く**
 
 既存のViewPlugin test harnessへ`contentDOM.ownerDocument`のlistener記録と`contentDOM.contains()`を追加する。
 public methodは増やさず、capture listenerとqueued measurementを通して次を検証する。
@@ -67,7 +67,7 @@ test caseは次を含める。
 - `docChanged: true`のupdateで解除する。
 - destroyでdocument listenerとselected markerを除去する。
 
-- [ ] **Step 2: 選択未実装でtestが失敗することを確認する**
+- [x] **Step 2: 選択未実装でtestが失敗することを確認する**
 
 Run:
 
@@ -77,7 +77,7 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/features/__tests__/GuideFolding.test
 
 Expected: selected marker、action非依存click、document listenerの期待値でFAILし、既存fold testはPASSする。
 
-- [ ] **Step 3: view-local semantic keyを追加する**
+- [x] **Step 3: view-local semantic keyを追加する**
 
 `GuideFolding.ts`へ次のprivate stateを追加する。
 
@@ -102,7 +102,7 @@ class GuideFoldingPluginValue implements PluginValue {
 inner clickでは`resolveVerticalGuideTarget()`が返したListの`getFirstLineContentStart()`を保存する。
 outer clickでは検証済みの`data-chunk-start`と`data-chunk-end`から既存形式のchunk IDを保存する。
 
-- [ ] **Step 4: selected groupを既存measurementへ統合する**
+- [x] **Step 4: selected groupを既存measurementへ統合する**
 
 `HoverMeasurement`をguide marker全体のmeasurementへ改名し、hoverとselectedのinner groupおよびouter groupを一回のreadで返す。
 inner selectionは保存したList開始位置と`hasSameListStart()`が一致するcandidateだけを集める。
@@ -111,7 +111,7 @@ outer selectionは保存したchunk IDと同じ`data-chunk-id`を持つ表示中
 selected用にinnerとouterそれぞれmarker、start marker、end markerを追加し、既存`synchronizeHoverMarkers()`を用途非依存の`synchronizeGuideMarkers()`へ改名して再利用する。
 表示segmentが0個の場合はstateを残し、次のview updateで再解決する。
 
-- [ ] **Step 5: 選択とfoldの条件を分離する**
+- [x] **Step 5: 選択とfoldの条件を分離する**
 
 `handleGuideInteraction()`先頭の`interactionEnabled()` gateを外す。
 semantic targetを解決できたguideは`mousedown`でselection移動だけをpreventし、`click`で選択状態を設定する。
@@ -133,7 +133,7 @@ return true;
 targetが現在の`contentDOM`内にあるguideでなければ選択を解除し、measurementを予約する。
 guide clickではdocument listenerが先に走っても解除せず、その後のcontent listenerが選択を設定する。
 
-- [ ] **Step 6: focused testを通す**
+- [x] **Step 6: focused testを通す**
 
 Run:
 
@@ -143,7 +143,7 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/features/__tests__/GuideFolding.test
 
 Expected: GuideFolding testがすべてPASSする。
 
-- [ ] **Step 7: selection lifecycleをcommitする**
+- [x] **Step 7: selection lifecycleをcommitする**
 
 Run `but diff`し、sourceとtestのfile IDだけを次のmessageで既存branchへcommitする。
 
@@ -174,7 +174,7 @@ What:
 - Consumes: Task 1のselected marker群と既存hover paint
 - Produces: action設定に依存しないselected表示、ガイド選択のドメイン語と実装制約
 
-- [ ] **Step 1: selected paintの失敗するCSS contract testを書く**
+- [x] **Step 1: selected paintの失敗するCSS contract testを書く**
 
 innerとouterのselected selectorがhoverと同じactive変数を使うことを確認する。
 
@@ -191,7 +191,7 @@ expect(enhancedSelectedDeclarations).toContain(
 selected startとendだけが対応する上下の角を2pxへ丸めること、selectorがfold action body classへ依存しないことも確認する。
 outer widgetは`data-actionable`に関係なく既存width内でpointerを受け、追加width、padding、overlayを持たないことを確認する。
 
-- [ ] **Step 2: 新しいCSS contractが失敗することを確認する**
+- [x] **Step 2: 新しいCSS contractが失敗することを確認する**
 
 Run:
 
@@ -201,7 +201,7 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/features/__tests__/GuideFolding.test
 
 Expected: selected selectorまたはaction非依存pointer targetの期待値でFAILする。
 
-- [ ] **Step 3: hoverとselectedへ同じpaintを適用する**
+- [x] **Step 3: hoverとselectedへ同じpaintを適用する**
 
 既存hover ruleへselected selectorをcommaで追加するか、同じ宣言を共有するselector groupへ整理する。
 selected selectorはaction body classの外へ置く。
@@ -219,7 +219,7 @@ selected selectorはaction body classの外へ置く。
 enhanced表示、Live PreviewとSource modeの中心補正、innerとouterのendpoint ruleにもselected markerを加える。
 outer widgetの`width: var(--list-indent)`をそのままhit areaにし、独自geometryは追加しない。
 
-- [ ] **Step 4: ドメイン語とagent指針を追加する**
+- [x] **Step 4: ドメイン語とagent指針を追加する**
 
 `CONTEXT.md`へ次を追加する。
 
@@ -233,7 +233,7 @@ outer widgetの`width: var(--list-indent)`をそのままhit areaにし、独自
 - ガイド選択はfold可能性と`verticalLinesAction`から独立したview固有状態として扱ってください。DOM elementを状態として保持せず、documentが同じ間だけsemantic keyから表示中のnative segmentへ`requestMeasure()`でselected markerを同期してください。fold、scroll、DOM再生成では維持し、別の場所のclick、`docChanged`、ViewPlugin destroyでは解除してください。独立overlay、追加Decoration、StateField、editor transactionを選択状態のために導入しないでください。
 ```
 
-- [ ] **Step 5: focused test、lint、type checkを通す**
+- [x] **Step 5: focused test、lint、type checkを通す**
 
 Run:
 
@@ -245,7 +245,7 @@ n exec 22.23.1 npx tsc --noEmit
 
 Expected: 3commandがexit 0になる。
 
-- [ ] **Step 6: paintとguidanceをcommitする**
+- [x] **Step 6: paintとguidanceをcommitする**
 
 Run `but diff`し、Task 2の4ファイルのfile IDだけを次のmessageで既存branchへcommitする。
 
@@ -277,7 +277,7 @@ What:
 - Consumes: Tasks 1と2のselection lifecycleとpaint
 - Produces: CI相当の自動検証結果とtest vaultでのdesktopおよびmobile確認
 
-- [ ] **Step 1: runtimeとObsidian lockを確認する**
+- [x] **Step 1: runtimeとObsidian lockを確認する**
 
 Run:
 
@@ -288,7 +288,7 @@ lsof "$HOME/Library/Application Support/obsidian/Local Storage/leveldb/LOCK"
 
 Expected: Node.jsは`v22.23.1`を表示する。lock ownerが小文字の`obsidian` CLI processなら、その正確なPIDだけを終了して解放を再確認する。
 
-- [ ] **Step 2: fixtureをbackupしてtest buildを生成する**
+- [x] **Step 2: fixtureをbackupしてtest buildを生成する**
 
 Run:
 
@@ -301,7 +301,7 @@ n exec 22.23.1 npm run build-with-tests
 
 Expected: backup hashが表示され、buildがexit 0になる。
 
-- [ ] **Step 3: automated verificationを実行する**
+- [x] **Step 3: automated verificationを実行する**
 
 Run:
 
@@ -315,12 +315,14 @@ n exec 22.23.1 npm run build
 
 Expected: 全commandがexit 0になる。
 
-- [ ] **Step 4: renderer終了後にfixtureをrestoreする**
+- [x] **Step 4: renderer終了後にfixtureをrestoreする**
 
 `vault=vault`のrenderer終了を確認してからbackupを戻し、少し待ってSHA-256が一致することを再確認する。
 backup directoryの絶対pathが`/tmp/obsidian-bullet-guide-selection.`で始まることを検証し、`/usr/bin/trash <exact-path>`でTrashへ移す。
 
 - [ ] **Step 5: test vaultで実動作を確認する**
+
+Computer Useが正規のObsidian application pathを指定した状態でもUI state取得前にtimeoutしたため、UI actionを実行せず未完了とした。
 
 production buildを`vault/.obsidian/plugins/bullet/`へ配置する。
 各UI action直前にtest vaultのfocus、title、`useTab === true`、`tabSize === 4`を確認する。
@@ -334,7 +336,7 @@ desktopとmobile touch emulationで次を確認する。
 - 別guide clickで移動し、本文またはeditor外のclickで解除する。
 - 文書編集で解除する。
 
-- [ ] **Step 6: workspaceを確認する**
+- [x] **Step 6: workspaceを確認する**
 
 Run:
 
