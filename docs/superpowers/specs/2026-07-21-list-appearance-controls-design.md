@@ -54,8 +54,10 @@ mobileではsticky hoverを避けるためhaloを表示しない。
 
 haloは`.list-bullet`のlayout寸法を変えず、dotと同じ中心へabsolute配置する。
 直径は18px、角丸は50%とする。
+RTLでも同じ中心へ置くため、logical insetだけで中心を算出し、横方向のphysical transformは使わない。
 色はWorkflowyの`#4B5155`と`#BBBEC0`を固定せず、`var(--text-muted)`を38%混ぜた透明色としてテーマへ追従させる。
 dotをhaloより手前に描き、hover前後でdotの直径と中心座標を変えない。
+折りたたみ済みの親でもnativeのring、色、transitionを残さず、同じ7pxのdotとして表示する。
 transitionとanimationは追加しない。
 
 `BetterListsStyles`の既存条件は維持する。

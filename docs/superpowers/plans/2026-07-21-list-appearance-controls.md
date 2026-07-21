@@ -475,13 +475,30 @@ Replace the existing dot dimensions with 7px and add stacking support:
 }
 
 .bullet-plugin-better-lists .list-bullet::after {
-  position: relative;
+  position: absolute;
   z-index: 1;
   width: 7px;
   height: 7px;
   background-color: var(--text-muted);
+  transition: none;
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-list-line
+  .is-collapsed
+  ~ .cm-formatting-list
+  .list-bullet::after {
+  background-color: var(--text-muted);
+  box-shadow: none;
+  transition: none;
 }
 ```
+
+Keep the native absolute positioning explicit here. Overriding it with
+`position: relative` adds the 7px dot to the inline-flex marker width in
+Obsidian 1.13 and shifts the text spacing, violating the stable-layout
+requirement.
 
 Add the desktop actionable halo:
 
@@ -492,8 +509,8 @@ body:not(.is-mobile).bullet-plugin-better-lists
   .list-bullet:hover::before {
   content: "";
   position: absolute;
-  inset-block-start: 50%;
-  inset-inline-start: 50%;
+  inset-block-start: calc(50% - 9px);
+  inset-inline-start: calc(50% - 9px);
   width: 18px;
   height: 18px;
   border-radius: 50%;
@@ -502,10 +519,13 @@ body:not(.is-mobile).bullet-plugin-better-lists
     var(--text-muted) 38%,
     transparent
   );
-  transform: translate(-50%, -50%);
   pointer-events: none;
 }
 ```
+
+Use logical inset calculations without a physical X translation so the halo
+keeps the same center in both LTR and RTL layouts. The collapsed-marker rule
+must outrank Obsidian 1.13's native collapsed ring and transition.
 
 Do not add a global hover rule, a mobile rule, a Reading-view rule, a transition, or new DOM.
 

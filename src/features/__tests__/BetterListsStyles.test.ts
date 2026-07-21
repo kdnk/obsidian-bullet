@@ -133,10 +133,16 @@ describe("BetterListsStyles", () => {
     const declarations = styles.match(
       /\.bullet-plugin-better-lists\s+\.list-bullet::after\s*\{([^}]*)\}/,
     )?.[1];
+    const collapsedDeclarations = styles.match(
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s+\.is-collapsed\s*~\s*\.cm-formatting-list\s+\.list-bullet::after\s*\{([^}]*)\}/,
+    )?.[1];
     const normalized = declarations?.replace(/\s+/g, " ").trim();
 
     expect(normalized).toBe(
-      "position: relative; z-index: 1; width: 7px; height: 7px; border-radius: 50%; background-color: var(--text-muted);",
+      "position: absolute; z-index: 1; width: 7px; height: 7px; border-radius: 50%; background-color: var(--text-muted); transition: none;",
+    );
+    expect(collapsedDeclarations?.replace(/\s+/g, " ").trim()).toBe(
+      "background-color: var(--text-muted); box-shadow: none; transition: none;",
     );
   });
 
@@ -152,7 +158,7 @@ describe("BetterListsStyles", () => {
 
     expect(bullet?.replace(/\s+/g, " ").trim()).toBe("position: relative;");
     expect(normalizedHalo).toBe(
-      'content: ""; position: absolute; inset-block-start: 50%; inset-inline-start: 50%; width: 18px; height: 18px; transform: translate(-50%, -50%); border-radius: 50%; background-color: color-mix(in srgb, var(--text-muted) 38%, transparent); pointer-events: none;',
+      'content: ""; position: absolute; inset-block-start: calc(50% - 9px); inset-inline-start: calc(50% - 9px); width: 18px; height: 18px; border-radius: 50%; background-color: color-mix(in srgb, var(--text-muted) 38%, transparent); pointer-events: none;',
     );
     expect(normalizedHalo).not.toMatch(
       /\b(?:transition|animation|opacity)\s*:/,
