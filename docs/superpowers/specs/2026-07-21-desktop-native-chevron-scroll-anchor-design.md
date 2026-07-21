@@ -118,3 +118,31 @@ desktop mode で list と heading を viewport 上端から 160px に置き、cu
 
 検証後は診断 listener と一時 fixture を削除する。
 
+## 検証結果
+
+2026-07-21にNode.js 22.23.1とObsidian 1.13.2で検証した。
+
+source verificationではunit test 55 suites、651 testsがPASSし、lint、`tsc --noEmit`、test buildがすべてexit 0だった。
+
+実Obsidianでは、test buildをリポジトリ内の`vault/.obsidian/plugins/bullet/`へ配置し、972行のfixtureをdesktop modeで開いた。
+
+全操作でtrusted eventが`pointerdown`、`pointerup`、`click`の順に一度ずつ到達し、click captureから12 animation framesまで記録した。
+
+| 対象 | 操作 | 操作行のviewport相対Y | 上側表示行 | 操作行span | 上側表示行span | `scrollTop` | `scrollTop` span | state反転 |
+| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| list | fold | 159.6875px | `- before 294` | 0px | 0px | 7432px | 0px | 1回 |
+| list | unfold | 159.6875px | `- before 294` | 0px | 0px | 7432px | 0px | 1回 |
+| heading | fold | 160.1875px | `- middle 295` | 0px | 0px | 15454px | 0px | 1回 |
+| heading | unfold | 160.1875px | `- middle 295` | 0px | 0px | 15454px | 0px | 1回 |
+
+listとheadingのどちらもfold時は`false`から`true`、unfold時は`true`から`false`へ一度だけ変わった。
+
+診断listenerとruntime globalを削除し、fixtureを`apply_patch`で削除した後、`test - vault - Obsidian 1.13.2`、`test.md`、desktop mode、fixture不在を確認した。
+
+full testの初回実行は、並行releaseがproduction buildで`dist/main.js`を上書きした後だったため、test relay renderer connection timeoutで失敗した。
+
+rendererとLOCKの解放、`vault/test.md`の復元、test buildの再生成と再配置を行った最終実行では、75 suites、798 testsがPASSし、15 testsがskippedだった。
+
+test後はrendererとLOCK ownerがないことを確認してから`vault/test.md`を4,588 bytes、SHA-256 `3b41a8cfcfc20a345fa3b2d33a909f1fb00bdd00d2302223bedefc0ed9c96f0b`へ復元し、二秒後も一致することを確認した。
+
+検証用backup directoryは対象pathと内容を確認してから`/usr/bin/trash`へ移し、production buildと`git diff --check`はexit 0だった。

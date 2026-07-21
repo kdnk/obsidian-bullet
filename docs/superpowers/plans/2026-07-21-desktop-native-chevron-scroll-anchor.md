@@ -36,13 +36,13 @@
 - Consumes: `ensureFoldScrollReserve(view)` と `stableFoldScrollSnapshot(view)` from `src/features/FoldScroll.ts`。
 - Produces: `NativeFoldScroll implements Feature`、`NativeFoldScrollState.extension`、`NativeFoldScrollPluginValue` と、その RED から GREEN までの regression test。
 
-- [ ] **Step 1: desktop document を表現できる test helper を追加する**
+- [x] **Step 1: desktop document を表現できる test helper を追加する**
 
 body class の fake は `is-mobile` と `bullet-plugin-mobile-right-fold-controls` を別々に表現する。
 
 mobile setting 無効 test は `is-mobile` だけを持つ document とし、desktop と混同しない。
 
-- [ ] **Step 2: list と heading の failing test を追加する**
+- [x] **Step 2: list と heading の failing test を追加する**
 
 次の二つの selector を table test にする。
 
@@ -53,9 +53,9 @@ mobile setting 無効 test は `is-mobile` だけを持つ document とし、des
 ]
 ```
 
-desktop body で `pointerdown` 後に padding と `scrollHeight` read、`click` 後に `prepare(view)` を期待する。
+desktop body で `pointerdown` と `click` の各event後にpaddingと`scrollHeight` readを期待し、`click`では加えて`prepare(view)`を期待する。
 
-- [ ] **Step 3: RED を確認する**
+- [x] **Step 3: RED を確認する**
 
 Run:
 
@@ -65,13 +65,13 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/features/__tests__/MobileRightFoldCo
 
 Expected: desktop case が `paddingBottom` と `prepare` の未実行で FAIL する。
 
-- [ ] **Step 4: transaction state を移す**
+- [x] **Step 4: transaction state を移す**
 
 `MobileNativeFoldScroll` の pending object、`WeakMap<EditorState, PendingFoldScrollSnapshot>`、transaction extender、`prepare()`、timeout expiry を `NativeFoldScrollState` へ名前を変えて移す。
 
 fold effect、unfold effect、folded range の実内容変更という消費条件は変えない。
 
-- [ ] **Step 5: desktop と mobile の activation rule を実装する**
+- [x] **Step 5: desktop と mobile の activation rule を実装する**
 
 `NativeFoldScrollPluginValue` は `contentDOM` の capture phase に `pointerdown` と `click` を登録する。
 
@@ -90,25 +90,25 @@ function isNativeFoldScrollEnabled(document: Document): boolean {
 
 対象 selector は list と heading の native `.collapse-indicator` だけに限定する。
 
-- [ ] **Step 6: mobile feature を body class 管理へ戻す**
+- [x] **Step 6: mobile feature を body class 管理へ戻す**
 
 `MobileRightFoldControls.ts` から CodeMirror extension、ViewPlugin、pointer listener、transaction state を削除する。
 
 `MobileRightFoldControls.load()` は setting callback と `DocumentBodyClass` だけを管理する。
 
-- [ ] **Step 7: generic test を専用 file へ移す**
+- [x] **Step 7: generic test を専用 file へ移す**
 
 desktop list、desktop heading、mobile setting 有効、mobile setting 無効、対象外 element、fold、unfold、中間 selection、implicit unfold、timeout expiry、古い timeout の全 case を `NativeFoldScroll.test.ts` に置く。
 
 test は mock の呼び出し自体ではなく、native fold transaction に snapshot effect が含まれる結果を確認する。
 
-- [ ] **Step 8: plugin へ feature を登録する**
+- [x] **Step 8: plugin へ feature を登録する**
 
 `ObsidianBulletPlugin.ts` で `new NativeFoldScroll(this)` を `MobileRightFoldControls` の直後に登録する。
 
 plugin lifecycle test は feature の load と unload が既存 feature と同じ順序で実行されることを確認する。
 
-- [ ] **Step 9: GREEN を確認する**
+- [x] **Step 9: GREEN を確認する**
 
 Run:
 
@@ -122,7 +122,7 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest \
 
 Expected: 対象 suite がすべて PASS する。
 
-- [ ] **Step 10: Task 1 を commit する**
+- [x] **Step 10: Task 1 を commit する**
 
 `but diff` が返した source と test の change ID だけを使い、`codex/roam-scroll-anchor` へ次の message で commit する。
 
@@ -154,13 +154,13 @@ What:
 - Consumes: desktop native chevron の one-snapshot transaction contract。
 - Produces: 自動 test と実 Obsidian の検証記録、再発防止指示。
 
-- [ ] **Step 1: AGENTS.md に desktop contract を追加する**
+- [x] **Step 1: AGENTS.md に desktop contract を追加する**
 
 native chevron の scroll 保持対象は desktop の list と heading、mobile right controls 有効時の list と heading であることを記録する。
 
 capture phase の pointer sequence、同じ transaction の snapshot、手動 `scrollTop` 補正禁止を明記する。
 
-- [ ] **Step 2: source verification を実行する**
+- [x] **Step 2: source verification を実行する**
 
 Run:
 
@@ -173,7 +173,7 @@ n exec 22.23.1 npm run build-with-tests
 
 Expected: 全 command が exit 0。
 
-- [ ] **Step 3: 実 Obsidian で desktop list と heading を測る**
+- [x] **Step 3: 実 Obsidian で desktop list と heading を測る**
 
 test build を `vault/.obsidian/plugins/bullet/` へ配置し、`vault=vault` を明示して plugin を reload する。
 
@@ -185,13 +185,13 @@ cursor を fold 内へ置き、native mouse の `pointerdown`、`pointerup`、`c
 
 Expected: list と heading の fold と unfold の全四操作で、各 span が 0px、fold 状態が一度だけ反転する。
 
-- [ ] **Step 4: fixture と診断 state を片づける**
+- [x] **Step 4: fixture と診断 state を片づける**
 
 診断 listener を外し、`vault/desktop-native-chevron-scroll-repro.md` を `apply_patch` で削除する。
 
 `test.md` を開き直し、test vault だけが操作対象だったことを確認する。
 
-- [ ] **Step 5: full verification を実行する**
+- [x] **Step 5: full verification を実行する**
 
 full test 前に test renderer lock と fixture backup の project rule を守る。
 
@@ -205,7 +205,14 @@ git diff --check
 
 Expected: 全 test suite が PASS し、production build と diff check が exit 0。
 
-- [ ] **Step 6: Task 2 を commit する**
+Verification evidence（2026-07-21）：
+
+- Node.js 22.23.1 の unit test は 55 suites、651 tests が PASS し、lint、`tsc --noEmit`、test build も exit 0 だった。
+- 実 Obsidian 1.13.2 の 972 行 fixture では、list と heading の fold と unfold の全四操作で native trusted `pointerdown` → `pointerup` → `click` を観測し、操作行、上側表示行、`scrollTop` の各 span が 0px、fold state の反転が一回だった。
+- full test は test build を再生成した最終実行で 75 suites、798 tests が PASS し、15 tests が skipped だった。
+- `vault/test.md` は renderer 終了後に 4,588 bytes、SHA-256 `3b41a8cfcfc20a345fa3b2d33a909f1fb00bdd00d2302223bedefc0ed9c96f0b`へ復元し、production build と `git diff --check` は exit 0 だった。
+
+- [x] **Step 6: Task 2 を commit する**
 
 `but diff` が返した `AGENTS.md` と verification evidence を追記した spec と plan の change ID だけを使い、`codex/roam-scroll-anchor` へ次の message で commit する。
 
