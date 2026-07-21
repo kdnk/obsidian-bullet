@@ -16,7 +16,7 @@ import {
   makeRoot,
   makeSettings,
 } from "../../__mocks__";
-import { Parser } from "../../services/Parser";
+import { Parser, Reader } from "../../services/Parser";
 import { Settings } from "../../services/Settings";
 import { GuideFoldingPluginValue } from "../GuideFolding";
 
@@ -2073,7 +2073,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       [outerChildB.line, 4],
       [outerLeafB.line, 5],
     ]);
-    let currentRoot = outerRoot;
+    let currentRoot: ReturnType<typeof makeRoot> | null = outerRoot;
     let currentEditor = outerEditor;
     const querySelector = jest.fn((selector: string) =>
       selector ===
@@ -2175,7 +2175,11 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     )?.[1];
     settings.verticalLinesAction = "none";
     clickListener?.(makeEvent(outerLeafA.guides[0]).event);
+    hoveredGuide = null;
+    parser.parse.mockClear();
     executeLatestMeasurement();
+    expect(parser.parse).toHaveBeenCalledTimes(1);
+    hoveredGuide = outerLeafA.guides[0];
     const selectedSegments = [outerChildA.guides[0], outerLeafA.guides[0]];
     const unrelatedSegments = [outerChildB.guides[0], outerLeafB.guides[0]];
     expect(
@@ -2220,7 +2224,8 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       cursor: { line: 3, ch: 12 },
     });
     currentEditor = innerEditor;
-    currentRoot = makeRoot({ editor: innerEditor });
+    const innerRoot = makeRoot({ editor: innerEditor });
+    currentRoot = innerRoot;
     const branchAlpha = makeGuideLine(["    ", "    "]);
     const leafAlpha = makeGuideLine(["    ", "    ", "    "]);
     const branchBeta = makeGuideLine(["    ", "    "]);
@@ -2311,6 +2316,56 @@ describe("GuideFoldingPluginValue guide interactions", () => {
         "bullet-plugin-selected-indent-guide-end",
       ),
     ).toBe(true);
+
+    const renderedReplacementCandidates = candidates;
+    candidates = [];
+    pluginValue.update({ docChanged: false });
+    executeLatestMeasurement();
+    candidates = renderedReplacementCandidates;
+    pluginValue.update({ docChanged: false });
+    executeLatestMeasurement();
+    expect(
+      replacementSegments.every((guide) =>
+        guide?.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(true);
+
+    currentRoot = null;
+    pluginValue.update({ docChanged: false });
+    const staleRequest = requests[requests.length - 1];
+    const staleMeasurement = staleRequest?.read?.();
+    currentRoot = innerRoot;
+    clickListener?.(makeEvent(replacedLeafAlpha.guides[0]).event);
+    staleRequest?.write?.(staleMeasurement, view);
+    executeLatestMeasurement();
+    const replacementParentSegments = [
+      replacedBranchAlpha.guides[0],
+      replacedLeafAlpha.guides[0],
+      replacedBranchBeta.guides[0],
+      replacedLeafBeta.guides[0],
+    ];
+    expect(
+      replacementParentSegments.every((guide) =>
+        guide?.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(true);
+
+    clickListener?.(makeEvent(replacedLeafAlpha.guides[1]).event);
+    executeLatestMeasurement();
+    currentRoot = null;
+    pluginValue.update({ docChanged: false });
+    executeLatestMeasurement();
+    currentRoot = innerRoot;
+    pluginValue.update({ docChanged: false });
+    executeLatestMeasurement();
+    expect(
+      replacementSegments.some((guide) =>
+        guide?.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(false);
+
+    clickListener?.(makeEvent(replacedLeafAlpha.guides[1]).event);
+    executeLatestMeasurement();
     const settingsCallback = settingsCallbacks[0];
     if (!settingsCallback) {
       throw new Error("Expected settings callback to be registered");
@@ -2550,11 +2605,14 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       destroy(): void;
       update(update: unknown): void;
     };
-    const pluginValue = new PluginValueWithView(
-      settings,
-      new Parser(makeLogger(), makeSettings()),
-      view,
-    );
+    const semanticParser = new Parser(makeLogger(), makeSettings());
+    const parser = {
+      parseRange: jest.fn(
+        (editor: Reader, startLine: number, endLine: number) =>
+          semanticParser.parseRange(editor, startLine, endLine),
+      ),
+    };
+    const pluginValue = new PluginValueWithView(settings, parser, view);
     const executeLatestMeasurement = () => {
       const request = requests[requests.length - 1];
       const measurement = request?.read?.();
@@ -2695,6 +2753,51 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     ).toBe(true);
     expect(outerGuides[0].getAttribute).toHaveBeenCalledWith("data-actionable");
     expect(view.dispatch).not.toHaveBeenCalled();
+
+    clickListener?.(makeEvent(makeOuterSegment("1:1")).event);
+    executeLatestMeasurement();
+    expect(
+      outerGuides
+        .slice(0, 2)
+        .every((guide) =>
+          guide.classList.contains("bullet-plugin-selected-outer-list-guide"),
+        ),
+    ).toBe(true);
+
+    settings.outerVerticalLines = false;
+    outerGuides = [];
+    settingsCallback();
+    executeLatestMeasurement();
+    settings.outerVerticalLines = true;
+    outerGuides = [makeOuterSegment("0:2"), makeOuterSegment("0:2")];
+    hoveredOuter = outerGuides[0]!;
+    settingsCallback();
+    executeLatestMeasurement();
+    expect(
+      outerGuides.every((guide) =>
+        guide.classList.contains("bullet-plugin-selected-outer-list-guide"),
+      ),
+    ).toBe(true);
+
+    pluginValue.update({ docChanged: true });
+    executeLatestMeasurement();
+    expect(
+      outerGuides.some((guide) =>
+        guide.classList.contains("bullet-plugin-selected-outer-list-guide"),
+      ),
+    ).toBe(false);
+
+    parser.parseRange.mockReturnValueOnce([]);
+    view.dispatch.mockClear();
+    clickListener?.(makeEvent(outerGuides[0]).event);
+    executeLatestMeasurement();
+    expect(
+      outerGuides.every((guide) =>
+        guide.classList.contains("bullet-plugin-selected-outer-list-guide"),
+      ),
+    ).toBe(true);
+    expect(view.dispatch).not.toHaveBeenCalled();
+
     pluginValue.destroy();
     expect(
       outerGuides.some((guide) =>
