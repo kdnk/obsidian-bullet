@@ -798,18 +798,48 @@ describe("GuideFolding persistent guide styles", () => {
     );
   });
 
-  test("hides list chevrons while vertical guides toggle folding", () => {
+  test("shows desktop list chevrons only on row hover between guides", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
-    const declarations = styles.match(
-      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-list-line\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
+    const hiddenDeclarations = styles.match(
+      /body:not\(\.is-mobile\)\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
+    )?.[1];
+    const hoveredDeclarations = styles.match(
+      /body:not\(\.is-mobile\)\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\):hover\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
+    )?.[1];
+    const competingParentDeclarations = styles.match(
+      /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\):hover\s+\.cm-fold-indicator\s*\{([^}]*)\}/,
+    )?.[1];
+    const competingControlDeclarations = styles.match(
+      /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\):hover\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
+    )?.[1];
+    const competingIconDeclarations = styles.match(
+      /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\):hover\s+\.cm-fold-indicator\s+\.collapse-indicator\s+svg\.svg-icon\s*\{([^}]*)\}/,
     )?.[1];
 
-    expect(declarations?.replace(/\s+/g, " ").trim()).toBe(
-      "visibility: hidden; pointer-events: none;",
+    expect(hiddenDeclarations).toContain("display: flex;");
+    expect(hiddenDeclarations).toContain("box-sizing: border-box;");
+    expect(hiddenDeclarations).toContain("align-items: center;");
+    expect(hiddenDeclarations).toContain("justify-content: center;");
+    expect(hiddenDeclarations).toContain(
+      "inset-inline-start: calc(-1 * var(--list-indent, 18px));",
     );
-    expect(declarations).not.toContain("display:");
+    expect(hiddenDeclarations).toContain("inset-inline-end: auto;");
+    expect(hiddenDeclarations).toContain("width: var(--list-indent, 18px);");
+    expect(hiddenDeclarations).toContain("padding-inline: 0;");
+    expect(hiddenDeclarations).toContain("opacity: 0;");
+    expect(hiddenDeclarations).toContain("visibility: hidden;");
+    expect(hiddenDeclarations).toContain("pointer-events: none;");
+    expect(hoveredDeclarations?.replace(/\s+/g, " ").trim()).toBe(
+      "opacity: 1; visibility: visible; pointer-events: auto;",
+    );
+    expect(competingParentDeclarations?.trim()).toBe("z-index: 3;");
+    expect(competingControlDeclarations?.trim()).toBe("pointer-events: none;");
+    expect(competingIconDeclarations?.trim()).toBe("pointer-events: auto;");
     expect(styles).not.toMatch(
-      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{/,
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-list-line\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{/,
+    );
+    expect(styles).not.toMatch(
+      /body:not\(\.is-mobile\)[^{]*\.HyperMD-header[^{]*\.collapse-indicator\s*\{/,
     );
   });
 

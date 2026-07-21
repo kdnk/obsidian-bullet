@@ -599,6 +599,28 @@ test("mirrors native mobile heading fold controls without widening the editor", 
   expect(editorOverflowRules).toEqual([]);
 });
 
+test("keeps desktop guide-hover hit targeting out of mobile controls", () => {
+  const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+  const guideHoverRules = parseCssRules(styles).filter(
+    ({ selector }) =>
+      selector.includes(
+        ".bullet-plugin-vertical-lines-action-toggle-folding",
+      ) &&
+      selector.includes(
+        ".cm-line.HyperMD-list-line:has(.cm-fold-indicator):hover",
+      ),
+  );
+
+  expect(guideHoverRules).toHaveLength(3);
+  expect(
+    guideHoverRules.every(({ selector }) =>
+      selector.startsWith(
+        "body:not(.is-mobile).bullet-plugin-vertical-lines-action-toggle-folding ",
+      ),
+    ),
+  ).toBe(true);
+});
+
 test("moves native mobile heading fold controls to the right edge", () => {
   const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
   const parentDeclarations = styles.match(
