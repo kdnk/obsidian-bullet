@@ -202,15 +202,15 @@ describe("SettingsTab", () => {
       groups.map((group) => group.items.map((definition) => definition.name)),
     ).toEqual([
       [
-        "Stick the cursor to the content",
-        "Keep body text in bullets",
+        "Keep typed text in lists",
+        "Keep cursor out of list markers",
         "Enhance the Tab key",
         "Enhance the Enter key",
         "Vim-mode o/O inserts bullets",
         "Enhance the Ctrl+A or Cmd+A behavior",
         "Drag-and-Drop",
       ],
-      ["Improve the style of your lists", "Enhance vertical lines"],
+      ["Style list bullets", "Enhance vertical lines"],
       [
         "Draw outer list lines",
         "Fold lists from vertical indentation lines",
@@ -218,18 +218,28 @@ describe("SettingsTab", () => {
       ],
       ["Debug mode"],
     ]);
-    expect(groups[0]?.items[0]?.control).toEqual({
-      type: "dropdown",
-      key: "keepCursorWithinContent",
-      options: {
-        never: "Never",
-        "bullet-only": "Stick cursor out of bullets",
-        "bullet-and-checkbox": "Stick cursor out of bullets and checkboxes",
+    expect(groups[0]?.items[0]).toEqual({
+      name: "Keep typed text in lists",
+      desc: "Add a list marker when directly typed body text would otherwise sit outside a list. Markdown structures stay available; pasted and external changes are unchanged.",
+      control: { type: "toggle", key: "keepBodyTextInBullets" },
+    });
+    expect(groups[0]?.items[1]).toEqual({
+      name: "Keep cursor out of list markers",
+      desc: "Move the caret out of bullet, number, and checkbox prefixes after navigation or a click. Hold Alt or Option to place it inside temporarily. This changes only the caret position.",
+      control: {
+        type: "dropdown",
+        key: "keepCursorWithinContent",
+        options: {
+          never: "Allow cursor in markers",
+          "bullet-only": "Keep out of bullets",
+          "bullet-and-checkbox": "Keep out of bullets and checkboxes",
+        },
       },
     });
-    expect(groups[0]?.items[1]).toMatchObject({
-      name: "Keep body text in bullets",
-      control: { type: "toggle", key: "keepBodyTextInBullets" },
+    expect(groups[1]?.items[0]).toEqual({
+      name: "Style list bullets",
+      desc: "Use Bullet's list-marker spacing, larger dots, and parent-item hover feedback. Colors follow the active Obsidian theme.",
+      control: { type: "toggle", key: "betterListsStyles" },
     });
     expect(groups[2]?.items[0]?.control).toEqual({
       type: "toggle",
@@ -294,15 +304,15 @@ describe("SettingsTab", () => {
       ),
     ).toEqual([
       "heading:Editing",
-      "setting:Stick the cursor to the content",
-      "setting:Keep body text in bullets",
+      "setting:Keep typed text in lists",
+      "setting:Keep cursor out of list markers",
       "setting:Enhance the Tab key",
       "setting:Enhance the Enter key",
       "setting:Vim-mode o/O inserts bullets",
       "setting:Enhance the Ctrl+A or Cmd+A behavior",
       "setting:Drag-and-Drop",
       "heading:Appearance",
-      "setting:Improve the style of your lists",
+      "setting:Style list bullets",
       "setting:Enhance vertical lines",
       "heading:Folding",
       "setting:Draw outer list lines",
@@ -315,7 +325,7 @@ describe("SettingsTab", () => {
     const settingRecords = mockSettingsRecords.filter(
       (setting) => !setting.heading,
     );
-    const cursorSetting = settingRecords[0];
+    const cursorSetting = settingRecords[1];
     const hoverSetting = settingRecords[8];
     const outerSetting = settingRecords[9];
     const actionSetting = settingRecords[10];

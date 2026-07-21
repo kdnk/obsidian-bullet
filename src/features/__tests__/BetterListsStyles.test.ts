@@ -37,7 +37,10 @@ function makePlugin() {
   return {
     eventHandlers,
     plugin: {
-      app: { workspace },
+      app: {
+        workspace,
+        vault: { config: { cssTheme: "" } },
+      },
       registerEvent: jest.fn(),
     },
     workspace,
@@ -66,15 +69,7 @@ describe("BetterListsStyles", () => {
       }),
       removeCallback: jest.fn(),
     };
-    const obsidianSettings = {
-      isDefaultThemeEnabled: jest.fn().mockReturnValue(true),
-    };
-
-    const feature = new BetterListsStyles(
-      plugin as never,
-      settings as never,
-      obsidianSettings as never,
-    );
+    const feature = new BetterListsStyles(plugin as never, settings as never);
 
     await feature.load();
 
@@ -88,6 +83,10 @@ describe("BetterListsStyles", () => {
     );
     expect(workspace.on).toHaveBeenCalledWith(
       "window-close",
+      expect.any(Function),
+    );
+    expect(workspace.on).not.toHaveBeenCalledWith(
+      "css-change",
       expect.any(Function),
     );
     expect(
@@ -128,7 +127,32 @@ describe("BetterListsStyles", () => {
     expect(settings.removeCallback).toHaveBeenCalledWith(expect.any(Function));
   });
 
-  test("renders the default-theme bullet as a seven-pixel circle", () => {
+  test("applies list styling with a custom theme", async () => {
+    const mainDocument = makeDocument();
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: mainDocument,
+    });
+
+    const { plugin } = makePlugin();
+    plugin.app.vault.config.cssTheme = "Minimal";
+    const settings = {
+      betterListsStyles: true,
+      onChange: jest.fn(),
+      removeCallback: jest.fn(),
+    };
+    const feature = new BetterListsStyles(plugin as never, settings as never);
+
+    await feature.load();
+
+    expect(
+      mainDocument.body.classList.contains("bullet-plugin-better-lists"),
+    ).toBe(true);
+
+    await feature.unload();
+  });
+
+  test("renders a theme-aware bullet as a seven-pixel circle", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(
       /\.bullet-plugin-better-lists\s+\.list-bullet::after\s*\{([^}]*)\}/,
