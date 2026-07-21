@@ -24,7 +24,10 @@ test("enables outer vertical lines when saved data predates the setting", async 
     dnd: true,
   } as Omit<
     SettingsObject,
-    "keepBodyTextInBullets" | "outerListLines" | "mobileRightFoldControls"
+    | "keepBodyTextInBullets"
+    | "outerListLines"
+    | "enhanceVerticalLineHover"
+    | "mobileRightFoldControls"
   >;
   const storage = {
     loadData: jest.fn(async () => saved as SettingsObject),
@@ -35,6 +38,17 @@ test("enables outer vertical lines when saved data predates the setting", async 
   await settings.load();
 
   expect(settings.outerVerticalLines).toBe(true);
+});
+
+test("enables enhanced vertical-line hover when saved data predates the setting", async () => {
+  const settings = new Settings({
+    loadData: jest.fn(async () => ({}) as SettingsObject),
+    saveData: jest.fn(async () => undefined),
+  });
+
+  await settings.load();
+
+  expect(settings.enhancedVerticalLineHover).toBe(true);
 });
 
 test("migrates a disabled legacy vertical-lines setting", async () => {
@@ -145,6 +159,19 @@ describe("change notifications", () => {
     );
   });
 
+  test("notifies subscribers when enhanced vertical-line hover changes", () => {
+    const settings = createSettings();
+    const callback = jest.fn<void, [SettingsChange]>();
+    settings.onChange(["enhanceVerticalLineHover"], callback);
+
+    settings.enhancedVerticalLineHover = false;
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(callback.mock.calls[0]?.[0].keys).toEqual(
+      new Set(["enhanceVerticalLineHover"]),
+    );
+  });
+
   test("notifies subscribers when body text enforcement changes", async () => {
     const settings = new Settings({
       loadData: jest.fn(async () => ({}) as SettingsObject),
@@ -164,19 +191,31 @@ describe("change notifications", () => {
     const settings = createSettings();
     const callback = jest.fn<void, [SettingsChange]>();
     settings.onChange(
-      ["debug", "outerListLines", "listLineAction", "betterEnter"],
+      [
+        "debug",
+        "outerListLines",
+        "listLineAction",
+        "enhanceVerticalLineHover",
+        "betterEnter",
+      ],
       callback,
     );
     settings.debug = true;
     settings.outerVerticalLines = false;
     settings.verticalLinesAction = "none";
+    settings.enhancedVerticalLineHover = false;
     callback.mockClear();
 
     settings.reset();
 
     expect(callback).toHaveBeenCalledTimes(1);
     expect(callback.mock.calls[0]?.[0].keys).toEqual(
-      new Set(["debug", "outerListLines", "listLineAction"]),
+      new Set([
+        "debug",
+        "outerListLines",
+        "listLineAction",
+        "enhanceVerticalLineHover",
+      ]),
     );
   });
 

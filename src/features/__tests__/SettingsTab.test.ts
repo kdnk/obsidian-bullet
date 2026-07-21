@@ -156,6 +156,7 @@ function makeSettings() {
     overrideVimOBehaviour: true,
     overrideSelectAllBehaviour: true,
     betterListsStyles: true,
+    enhancedVerticalLineHover: true,
     outerVerticalLines: true,
     verticalLinesAction: "toggle-folding",
     mobileRightFoldControls: true,
@@ -209,7 +210,11 @@ describe("SettingsTab", () => {
         "Enhance the Ctrl+A or Cmd+A behavior",
         "Drag-and-Drop",
       ],
-      ["Improve the style of your lists", "Draw outer list lines"],
+      [
+        "Improve the style of your lists",
+        "Enhance vertical line hover",
+        "Draw outer list lines",
+      ],
       [
         "Fold lists from vertical indentation lines",
         "Show fold controls on the right on mobile",
@@ -233,6 +238,10 @@ describe("SettingsTab", () => {
       type: "toggle",
       key: "verticalLinesActionEnabled",
     });
+    expect(groups[1]?.items[1]?.control).toEqual({
+      type: "toggle",
+      key: "enhancedVerticalLineHover",
+    });
   });
 
   test("reads and persists declarative control values through Settings", async () => {
@@ -244,15 +253,18 @@ describe("SettingsTab", () => {
       "bullet-and-checkbox",
     );
     expect(tab.getControlValue("keepBodyTextInBullets")).toBe(false);
+    expect(tab.getControlValue("enhancedVerticalLineHover")).toBe(true);
 
     await tab.setControlValue("verticalLinesActionEnabled", false);
     await tab.setControlValue("keepCursorWithinContent", "bullet-only");
     await tab.setControlValue("keepBodyTextInBullets", true);
+    await tab.setControlValue("enhancedVerticalLineHover", false);
 
     expect(settings.verticalLinesAction).toBe("none");
     expect(settings.keepCursorWithinContent).toBe("bullet-only");
     expect(settings.keepBodyTextInBullets).toBe(true);
-    expect(settings.save).toHaveBeenCalledTimes(3);
+    expect(settings.enhancedVerticalLineHover).toBe(false);
+    expect(settings.save).toHaveBeenCalledTimes(4);
   });
 
   test("rejects invalid declarative control values", async () => {
@@ -286,6 +298,7 @@ describe("SettingsTab", () => {
       "setting:Drag-and-Drop",
       "heading:Appearance",
       "setting:Improve the style of your lists",
+      "setting:Enhance vertical line hover",
       "setting:Draw outer list lines",
       "heading:Folding",
       "setting:Fold lists from vertical indentation lines",
@@ -298,29 +311,34 @@ describe("SettingsTab", () => {
       (setting) => !setting.heading,
     );
     const cursorSetting = settingRecords[0];
-    const outerSetting = settingRecords[8];
-    const actionSetting = settingRecords[9];
-    const mobileSetting = settingRecords[10];
+    const hoverSetting = settingRecords[8];
+    const outerSetting = settingRecords[9];
+    const actionSetting = settingRecords[10];
+    const mobileSetting = settingRecords[11];
 
     expect(cursorSetting?.dropdown?.value).toBe("bullet-and-checkbox");
+    expect(hoverSetting?.toggle?.value).toBe(true);
     expect(outerSetting?.toggle?.value).toBe(true);
     expect(actionSetting?.toggle?.value).toBe(true);
     expect(mobileSetting?.toggle?.value).toBe(true);
 
     if (
+      !hoverSetting.toggle ||
       !outerSetting.toggle ||
       !actionSetting.toggle ||
       !mobileSetting.toggle
     ) {
       throw new Error("Expected legacy toggle controls");
     }
+    await hoverSetting.toggle.callbacks[0](false);
     await outerSetting.toggle.callbacks[0](false);
     await actionSetting.toggle.callbacks[0](false);
     await mobileSetting.toggle.callbacks[0](false);
 
+    expect(settings.enhancedVerticalLineHover).toBe(false);
     expect(settings.outerVerticalLines).toBe(false);
     expect(settings.verticalLinesAction).toBe("none");
     expect(settings.mobileRightFoldControls).toBe(false);
-    expect(settings.save).toHaveBeenCalledTimes(3);
+    expect(settings.save).toHaveBeenCalledTimes(4);
   });
 });

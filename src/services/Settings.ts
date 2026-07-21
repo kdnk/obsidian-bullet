@@ -6,6 +6,7 @@ export type KeepCursorWithinContent =
 
 export interface SettingsObject {
   styleLists: boolean;
+  enhanceVerticalLineHover: boolean;
   debug: boolean;
   stickCursor: KeepCursorWithinContent | boolean;
   keepBodyTextInBullets: boolean;
@@ -27,6 +28,7 @@ export interface SettingsChange {
 
 const DEFAULT_SETTINGS: SettingsObject = {
   styleLists: true,
+  enhanceVerticalLineHover: true,
   debug: false,
   stickCursor: "bullet-and-checkbox",
   keepBodyTextInBullets: true,
@@ -127,6 +129,14 @@ export class Settings {
 
   set betterListsStyles(value: boolean) {
     this.update({ styleLists: value });
+  }
+
+  get enhancedVerticalLineHover() {
+    return this.values.enhanceVerticalLineHover;
+  }
+
+  set enhancedVerticalLineHover(value: boolean) {
+    this.update({ enhanceVerticalLineHover: value });
   }
 
   get outerVerticalLines() {

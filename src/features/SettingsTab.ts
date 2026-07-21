@@ -20,6 +20,7 @@ type SettingsControlKey =
   | "overrideVimOBehaviour"
   | "overrideSelectAllBehaviour"
   | "betterListsStyles"
+  | "enhancedVerticalLineHover"
   | "outerVerticalLines"
   | "verticalLinesActionEnabled"
   | "mobileRightFoldControls"
@@ -115,6 +116,14 @@ const SETTING_GROUPS = [
         control: {
           type: "toggle",
           key: "betterListsStyles",
+        },
+      },
+      {
+        name: "Enhance vertical line hover",
+        desc: "Make foldable vertical indentation lines thicker and rounded on hover.",
+        control: {
+          type: "toggle",
+          key: "enhancedVerticalLineHover",
         },
       },
       {
@@ -214,6 +223,8 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
         return this.settings.overrideSelectAllBehaviour;
       case "betterListsStyles":
         return this.settings.betterListsStyles;
+      case "enhancedVerticalLineHover":
+        return this.settings.enhancedVerticalLineHover;
       case "outerVerticalLines":
         return this.settings.outerVerticalLines;
       case "verticalLinesActionEnabled":
@@ -255,6 +266,12 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
         break;
       case "betterListsStyles":
         this.settings.betterListsStyles = decodeBooleanControl(key, value);
+        break;
+      case "enhancedVerticalLineHover":
+        this.settings.enhancedVerticalLineHover = decodeBooleanControl(
+          key,
+          value,
+        );
         break;
       case "outerVerticalLines":
         this.settings.outerVerticalLines = decodeBooleanControl(key, value);

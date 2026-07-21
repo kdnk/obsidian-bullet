@@ -97,6 +97,10 @@ const settingCommandDecoders = {
     k: "styleLists",
     v: decodeBooleanSetting("styleLists", value),
   }),
+  enhanceVerticalLineHover: (value) => ({
+    k: "enhanceVerticalLineHover",
+    v: decodeBooleanSetting("enhanceVerticalLineHover", value),
+  }),
   debug: (value) => ({
     k: "debug",
     v: decodeBooleanSetting("debug", value),

@@ -680,6 +680,33 @@ describe("ObsidianBulletPluginWithTests", () => {
     ).rejects.toThrow("k must be a known setting key");
   });
 
+  test("decodes the enhanced vertical-line hover setting", async () => {
+    const plugin = Object.create(
+      ObsidianBulletPluginWithTests.prototype,
+    ) as ObsidianBulletPluginWithTests;
+    const setSetting = jest.spyOn(plugin, "setSetting").mockImplementation();
+    const dispatch = (
+      plugin as unknown as {
+        handleTestCommand(
+          type: string,
+          data: unknown,
+        ): Promise<State | undefined>;
+      }
+    ).handleTestCommand.bind(plugin);
+
+    await expect(
+      dispatch("setSetting", {
+        k: "enhanceVerticalLineHover",
+        v: false,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(setSetting).toHaveBeenCalledWith({
+      k: "enhanceVerticalLineHover",
+      v: false,
+    });
+  });
+
   test("validates command data before invoking its handler", async () => {
     const plugin = Object.create(
       ObsidianBulletPluginWithTests.prototype,
