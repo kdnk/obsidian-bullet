@@ -78,8 +78,12 @@ export const GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION: Extension =
 type GuideMeasurement = {
   indentGuides: Element[];
   outerGuides: Element[];
-  selectedIndentGuides: Element[];
-  selectedOuterGuides: Element[];
+  selection: {
+    key: SelectedGuide | null;
+    valid: boolean;
+    indentGuides: Element[];
+    outerGuides: Element[];
+  };
 };
 
 type SelectedGuide =
@@ -494,6 +498,7 @@ export class GuideFoldingPluginValue implements PluginValue {
   private lastOuterVisibility: boolean;
   private lastPointerGuide: Element | null = null;
   private selectedGuide: SelectedGuide | null = null;
+  private outerListChunks: readonly OuterListChunk[] | null = null;
   private activeDocument: Document | null;
   private measureKey = {};
 
@@ -528,6 +533,7 @@ export class GuideFoldingPluginValue implements PluginValue {
   update(update: ViewUpdate) {
     if (update.docChanged) {
       this.selectedGuide = null;
+      this.outerListChunks = null;
       this.decorations = this.buildOuterDecorations();
     }
     this.scheduleGuideSynchronization();
@@ -576,10 +582,17 @@ export class GuideFoldingPluginValue implements PluginValue {
       ) {
         return false;
       }
+      const chunkId = `${startLine}:${endLine}`;
+      if (
+        this.outerListChunks !== null &&
+        !this.outerListChunks.some((chunk) => chunk.id === chunkId)
+      ) {
+        return false;
+      }
       if (shouldToggle) {
         this.selectedGuide = {
           kind: "outer",
-          chunkId: `${startLine}:${endLine}`,
+          chunkId,
         };
         this.scheduleGuideSynchronization();
       }
@@ -777,32 +790,52 @@ export class GuideFoldingPluginValue implements PluginValue {
     );
   }
 
-  private readSelectedIndentGuideGroup(): Element[] {
-    if (this.selectedGuide?.kind !== "indent") return [];
-    const { targetStart } = this.selectedGuide;
-    const editor = getEditorFromState(this.view.state);
-    if (!editor) return [];
+  private readSelectedGuideMeasurement(): GuideMeasurement["selection"] {
+    const key = this.selectedGuide;
+    if (!key) {
+      return { key, valid: true, indentGuides: [], outerGuides: [] };
+    }
+    if (key.kind === "outer") {
+      const valid =
+        this.outerListChunks === null ||
+        this.outerListChunks.some((chunk) => chunk.id === key.chunkId);
+      return {
+        key,
+        valid,
+        indentGuides: [],
+        outerGuides: valid
+          ? Array.from(
+              this.view.contentDOM.querySelectorAll<HTMLElement>(
+                OUTER_LIST_GUIDE_SELECTOR,
+              ),
+            ).filter((guide) => guide.dataset.chunkId === key.chunkId)
+          : [],
+      };
+    }
 
-    return Array.from(
+    const { targetStart } = key;
+    const editor = getEditorFromState(this.view.state);
+    if (!editor) {
+      return { key, valid: true, indentGuides: [], outerGuides: [] };
+    }
+    const root = this.parser.parse(editor, targetStart);
+    const selectedList = root?.getListUnderLine(targetStart.line);
+    if (
+      !root ||
+      !selectedList ||
+      !hasSameListStart(selectedList, targetStart)
+    ) {
+      return { key, valid: false, indentGuides: [], outerGuides: [] };
+    }
+
+    const indentGuides = Array.from(
       this.view.contentDOM.querySelectorAll(RENDERED_GUIDE_CANDIDATE_SELECTOR),
     ).filter((guide) => {
-      const line = this.getLineForGuide(guide);
-      if (line === null) return false;
-      const root = this.parser.parse(editor, { line, ch: 0 });
-      const list = root?.getListUnderLine(line);
+      const list = this.getListForGuide(root, guide);
       const target = list ? resolveVerticalGuideTarget(list, guide) : null;
       return target ? hasSameListStart(target, targetStart) : false;
     });
-  }
-
-  private readSelectedOuterListGuideGroup(): Element[] {
-    if (this.selectedGuide?.kind !== "outer") return [];
-    const { chunkId } = this.selectedGuide;
-    return Array.from(
-      this.view.contentDOM.querySelectorAll<HTMLElement>(
-        OUTER_LIST_GUIDE_SELECTOR,
-      ),
-    ).filter((guide) => guide.dataset.chunkId === chunkId);
+    return { key, valid: true, indentGuides, outerGuides: [] };
   }
 
   private readGuideMeasurement(): GuideMeasurement {
@@ -811,8 +844,7 @@ export class GuideFoldingPluginValue implements PluginValue {
       outerGuides: this.outerInteractionEnabled()
         ? collectHoveredOuterListGuides(this.view.contentDOM)
         : [],
-      selectedIndentGuides: this.readSelectedIndentGuideGroup(),
-      selectedOuterGuides: this.readSelectedOuterListGuideGroup(),
+      selection: this.readSelectedGuideMeasurement(),
     };
   }
 
@@ -870,10 +902,9 @@ export class GuideFoldingPluginValue implements PluginValue {
     if (!editor) {
       return Decoration.none;
     }
-    return buildOuterListGuideDecorations(
-      this.view.state.doc,
-      collectOuterListChunks(this.parser, editor),
-    );
+    const chunks = collectOuterListChunks(this.parser, editor);
+    this.outerListChunks = chunks;
+    return buildOuterListGuideDecorations(this.view.state.doc, chunks);
   }
 
   private scheduleGuideSynchronization() {
@@ -903,14 +934,23 @@ export class GuideFoldingPluginValue implements PluginValue {
             ? (measurement?.outerGuides ?? [])
             : [],
         );
-        synchronizeSelectedIndentGuides(
-          this.view.contentDOM,
-          measurement?.selectedIndentGuides ?? [],
-        );
-        synchronizeSelectedOuterListGuides(
-          this.view.contentDOM,
-          measurement?.selectedOuterGuides ?? [],
-        );
+        const measuredSelection = measurement?.selection;
+        if (measuredSelection?.key === this.selectedGuide) {
+          if (!measuredSelection.valid) {
+            this.selectedGuide = null;
+            synchronizeSelectedIndentGuides(this.view.contentDOM, []);
+            synchronizeSelectedOuterListGuides(this.view.contentDOM, []);
+          } else {
+            synchronizeSelectedIndentGuides(
+              this.view.contentDOM,
+              measuredSelection.indentGuides,
+            );
+            synchronizeSelectedOuterListGuides(
+              this.view.contentDOM,
+              measuredSelection.outerGuides,
+            );
+          }
+        }
       },
     });
   }
