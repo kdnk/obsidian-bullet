@@ -54,6 +54,15 @@ body:not(.is-mobile).bullet-plugin-better-lists
 }
 
 /* lines */
+.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6 {
+  --indentation-guide-color: color-mix(
+    in oklch,
+    var(--text-normal) 20%,
+    transparent
+  );
+}
+
 .markdown-source-view.mod-cm6 .bullet-plugin-outer-list-guide {
   position: absolute;
   inset-block: 0;
@@ -98,7 +107,20 @@ body:not(.is-mobile)
   .bullet-plugin-outer-list-guide[data-actionable="true"].bullet-plugin-hovered-outer-list-guide::before {
   inset-inline-end: -1px;
   border-inline-end: 3px solid var(--indentation-guide-color-active);
-  border-radius: 2px;
+}
+
+.bullet-plugin-vertical-lines-action-toggle-folding.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6
+  .bullet-plugin-outer-list-guide[data-actionable="true"].bullet-plugin-hovered-outer-list-guide.bullet-plugin-hovered-outer-list-guide-start::before {
+  border-start-start-radius: 2px;
+  border-start-end-radius: 2px;
+}
+
+.bullet-plugin-vertical-lines-action-toggle-folding.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6
+  .bullet-plugin-outer-list-guide[data-actionable="true"].bullet-plugin-hovered-outer-list-guide.bullet-plugin-hovered-outer-list-guide-end::before {
+  border-end-start-radius: 2px;
+  border-end-end-radius: 2px;
 }
 
 body:not(
@@ -130,7 +152,22 @@ body:not(
   .cm-hmd-list-indent
   .cm-indent.bullet-plugin-hovered-indent-guide::before {
   border-inline-end: 3px solid var(--indentation-guide-color-active);
-  border-radius: 2px;
+}
+
+.bullet-plugin-vertical-lines-action-toggle-folding.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6
+  .cm-hmd-list-indent
+  .cm-indent.bullet-plugin-hovered-indent-guide.bullet-plugin-hovered-indent-guide-start::before {
+  border-start-start-radius: 2px;
+  border-start-end-radius: 2px;
+}
+
+.bullet-plugin-vertical-lines-action-toggle-folding.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6
+  .cm-hmd-list-indent
+  .cm-indent.bullet-plugin-hovered-indent-guide.bullet-plugin-hovered-indent-guide-end::before {
+  border-end-start-radius: 2px;
+  border-end-end-radius: 2px;
 }
 
 .bullet-plugin-vertical-lines-action-toggle-folding.bullet-plugin-enhanced-vertical-line-hover

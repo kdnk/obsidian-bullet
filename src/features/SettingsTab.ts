@@ -119,8 +119,8 @@ const SETTING_GROUPS = [
         },
       },
       {
-        name: "Enhance vertical line hover",
-        desc: "Make foldable vertical indentation lines thicker and rounded on hover.",
+        name: "Enhance vertical lines",
+        desc: "Strengthen indentation lines and use a continuous rounded hover.",
         control: {
           type: "toggle",
           key: "enhancedVerticalLineHover",
