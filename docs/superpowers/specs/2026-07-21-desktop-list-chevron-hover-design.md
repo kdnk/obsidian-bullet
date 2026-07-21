@@ -44,7 +44,11 @@ CSS 変数が未定義のテーマでも成立するよう、`--list-indent` に
 
 背景色でガイドを覆ったり、縦線の位置、太さ、色、z-indexを変更したりしない。
 
-縦線操作が有効な場合は既存のガイドがシェブロンより上の z-index を保つため、ガイド上のクリック対象も変わらない。
+最外層では18px幅の outer guide が通常の fold indicator より前面にあるため、そのままでは表示したシェブロンをクリックできない。
+
+デスクトップで縦線操作が有効かつ行がホバーされている間だけ `.cm-fold-indicator` を outer guide より前面へ出し、18px幅の `.collapse-indicator` 自体は `pointer-events: none`、中央の10px SVGだけは `pointer-events: auto` にする。
+
+これにより、シェブロン中央ではネイティブfoldingを使え、左右4pxでは既存のouter guideまたはnative indent guideを操作できる。
 
 ## 既存機能との関係
 
@@ -56,6 +60,8 @@ CSS 変数が未定義のテーマでも成立するよう、`--list-indent` に
 
 シェブロンを非表示にしている間は hit target も無効にし、行ホバーと縦線ホバーの判定を妨げない。
 
+縦線操作が無効な場合は18pxのネイティブ操作領域全体をクリック可能にし、本文から操作領域までホバーを連続させる。
+
 ## テスト
 
 CSS contract testでは、次の条件を検証する。
@@ -64,6 +70,7 @@ CSS contract testでは、次の条件を検証する。
 - 通常時は `visibility`、`opacity`、`pointer-events` によって非表示にする。
 - 行の `:hover` だけで表示と hit targetを復元する。
 - ガイド間の操作領域を `--list-indent` から計算し、SVG を中央揃えにする。
+- 縦線操作中はfold indicatorの重なり順をホバー中だけ上げ、SVGだけをネイティブのhit targetにする。
 - 見出しとモバイルへ作用する無限定な selectorを追加しない。
 - 縦線操作の body classに依存した常時非表示ルールを残さない。
 
@@ -72,6 +79,7 @@ CSS contract testでは、次の条件を検証する。
 - 行外、editor selectionだけがある行、leaf 行ではシェブロンが表示されない。
 - rootと入れ子のfoldable行では、行の本文上へポインタを置いたときだけシェブロンが表示される。
 - 表示された SVG と両側の縦線の間に正の間隔があり、本文から操作領域までホバーが途切れない。
+- 縦線操作中の `elementFromPoint()` はSVG中央でネイティブアイコンを返し、左右の余白で対応するガイドを返す。
 - シェブロンと縦線のどちらからでもfoldとunfoldが動作する。
 - モバイルでは既存の右端コントロールが常時表示される。
 

@@ -56,6 +56,15 @@ test("shows desktop list chevrons only on row hover between guides", () => {
   const hoveredDeclarations = styles.match(
     /body:not\(\.is-mobile\)\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\):hover\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
   )?.[1];
+  const competingParentDeclarations = styles.match(
+    /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\):hover\s+\.cm-fold-indicator\s*\{([^}]*)\}/,
+  )?.[1];
+  const competingControlDeclarations = styles.match(
+    /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\):hover\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
+  )?.[1];
+  const competingIconDeclarations = styles.match(
+    /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\):hover\s+\.cm-fold-indicator\s+\.collapse-indicator\s+svg\.svg-icon\s*\{([^}]*)\}/,
+  )?.[1];
 
   expect(hiddenDeclarations).toContain("display: flex;");
   expect(hiddenDeclarations).toContain("box-sizing: border-box;");
@@ -73,6 +82,9 @@ test("shows desktop list chevrons only on row hover between guides", () => {
   expect(hoveredDeclarations?.replace(/\s+/g, " ").trim()).toBe(
     "opacity: 1; visibility: visible; pointer-events: auto;",
   );
+  expect(competingParentDeclarations?.trim()).toBe("z-index: 3;");
+  expect(competingControlDeclarations?.trim()).toBe("pointer-events: none;");
+  expect(competingIconDeclarations?.trim()).toBe("pointer-events: auto;");
   expect(styles).not.toMatch(
     /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-list-line\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{/,
   );
@@ -81,6 +93,8 @@ test("shows desktop list chevrons only on row hover between guides", () => {
   );
 });
 ```
+
+Also add a mobile cross-feature contract in `MobileRightFoldControls.test.ts` that collects the three guide-hover rules and requires every selector to start with `body:not(.is-mobile).bullet-plugin-vertical-lines-action-toggle-folding`. This prevents the desktop hit-target override from shrinking the mobile control when both feature body classes are present.
 
 - [ ] **Step 2: Run the focused test and verify RED**
 
@@ -122,6 +136,30 @@ body:not(.is-mobile)
   .collapse-indicator {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
+}
+
+body:not(.is-mobile).bullet-plugin-vertical-lines-action-toggle-folding
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-list-line:has(.cm-fold-indicator):hover
+  .cm-fold-indicator {
+  z-index: 3;
+}
+
+body:not(.is-mobile).bullet-plugin-vertical-lines-action-toggle-folding
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-list-line:has(.cm-fold-indicator):hover
+  .cm-fold-indicator
+  .collapse-indicator {
+  pointer-events: none;
+}
+
+body:not(.is-mobile).bullet-plugin-vertical-lines-action-toggle-folding
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-list-line:has(.cm-fold-indicator):hover
+  .cm-fold-indicator
+  .collapse-indicator
+  svg.svg-icon {
   pointer-events: auto;
 }
 ```
@@ -175,6 +213,7 @@ After the existing Computer Use focus rule in `AGENTS.md`, add:
 
 ```markdown
     - `obsidian-cli vault=vault eval ...`が`Command "eval" not found`を返す一方でDeveloper commandが利用できる場合は、`obsidian-cli vault=vault dev:cdp method=Runtime.evaluate params='{"expression":"window.focus(); document.title","returnByValue":true}'`をfocusとtitle確認のfallbackとして使ってください。返値に`vault`が含まれ、`base`が含まれないことを各UI action直前に確認し、この確認ができない場合はactionを実行しないでください。
+    - `app.emulateMobile(true)`と`app.emulateMobile(false)`はworkspaceを再構成し、対象noteを`New tab`へ戻したりDeveloper commandを一時的に切断したりします。mode切替後はDeveloper commandの再接続を待ち、`obsidian-cli vault=vault open path=<test-note>`で対象noteを開き直して`obsidian-cli vault=vault plugin:reload id=bullet`を実行してからDOM検査や入力を再開してください。切替前のelementや座標は再利用しないでください。
 ```
 
 - [ ] **Step 2: Back up the full-test fixture and inspect the LevelDB lock owner**
@@ -238,9 +277,10 @@ Use a fresh DOM query to locate one root foldable row and one nested foldable ro
 For each row, verify:
 
 - With the pointer outside the row, computed `opacity` is `0`, `visibility` is `hidden`, and `pointer-events` is `none` even when the editor selection is on that row.
-- Moving the pointer over the row text changes the control to `opacity: 1`, `visibility: visible`, and `pointer-events: auto`.
+- Moving the pointer over the row text changes the control to `opacity: 1` and `visibility: visible`.
 - The control spans one `--list-indent` lane and touches the row edge, so the hover state remains active while moving from the text to the control.
 - The 10px SVG has positive horizontal clearance from both adjacent guides.
+- While guide folding is enabled, the SVG has `pointer-events: auto`, its 18px parent control has `pointer-events: none`, and `elementFromPoint()` resolves the 4px side clearances to the corresponding guide.
 - A leaf row contains no native `.collapse-indicator` and gains no plugin-owned replacement.
 
 - [ ] **Step 7: Verify both folding paths and mobile isolation**
