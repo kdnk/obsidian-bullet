@@ -90,6 +90,7 @@ describe("NativeFoldScroll", () => {
         target,
         type: "click",
       } as unknown as Event);
+      expect(view.readScrollHeight).toHaveBeenCalledTimes(2);
       const transaction = state.update({
         effects: foldEffect.of({ from: 0, to: 1 }),
       });
