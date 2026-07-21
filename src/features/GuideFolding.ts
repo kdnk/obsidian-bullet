@@ -170,28 +170,21 @@ function synchronizeGuideMarkers(
   startSelector: string,
   endMarker: string,
   endSelector: string,
-  previousMarked: Iterable<Element> = [],
-): Element[] {
+): void {
   const ordered = Array.from(guides);
   const next = new Set(ordered);
-  const previous = Array.from(previousMarked);
 
-  for (const element of new Set<Element>([
-    ...Array.from(contentDOM.querySelectorAll<Element>(startSelector)),
-    ...previous,
-  ])) {
+  for (const element of Array.from(
+    contentDOM.querySelectorAll(startSelector),
+  )) {
     element.classList.remove(startMarker);
   }
-  for (const element of new Set<Element>([
-    ...Array.from(contentDOM.querySelectorAll<Element>(endSelector)),
-    ...previous,
-  ])) {
+  for (const element of Array.from(contentDOM.querySelectorAll(endSelector))) {
     element.classList.remove(endMarker);
   }
-  for (const element of new Set<Element>([
-    ...Array.from(contentDOM.querySelectorAll<Element>(markerSelector)),
-    ...previous,
-  ])) {
+  for (const element of Array.from(
+    contentDOM.querySelectorAll(markerSelector),
+  )) {
     if (!next.has(element)) {
       element.classList.remove(marker);
     }
@@ -201,7 +194,6 @@ function synchronizeGuideMarkers(
   }
   ordered[0]?.classList.add(startMarker);
   ordered[ordered.length - 1]?.classList.add(endMarker);
-  return ordered;
 }
 
 function buildOuterListGuideDecorations(
@@ -445,9 +437,8 @@ function synchronizeHoveredIndentGuides(
 function synchronizeSelectedIndentGuides(
   contentDOM: ParentNode,
   highlightedGuides: Iterable<Element>,
-  previousMarked: Iterable<Element> = [],
-): Element[] {
-  return synchronizeGuideMarkers(
+): void {
+  synchronizeGuideMarkers(
     contentDOM,
     highlightedGuides,
     SELECTED_GUIDE_MARKER,
@@ -456,16 +447,14 @@ function synchronizeSelectedIndentGuides(
     SELECTED_GUIDE_START_SELECTOR,
     SELECTED_GUIDE_END_MARKER,
     SELECTED_GUIDE_END_SELECTOR,
-    previousMarked,
   );
 }
 
 function synchronizeSelectedOuterListGuides(
   contentDOM: ParentNode,
   guides: Iterable<Element>,
-  previousMarked: Iterable<Element> = [],
-): Element[] {
-  return synchronizeGuideMarkers(
+): void {
+  synchronizeGuideMarkers(
     contentDOM,
     guides,
     SELECTED_OUTER_LIST_GUIDE_CLASS,
@@ -474,7 +463,6 @@ function synchronizeSelectedOuterListGuides(
     SELECTED_OUTER_LIST_GUIDE_START_SELECTOR,
     SELECTED_OUTER_LIST_GUIDE_END_CLASS,
     SELECTED_OUTER_LIST_GUIDE_END_SELECTOR,
-    previousMarked,
   );
 }
 
@@ -506,8 +494,6 @@ export class GuideFoldingPluginValue implements PluginValue {
   private lastOuterVisibility: boolean;
   private lastPointerGuide: Element | null = null;
   private selectedGuide: SelectedGuide | null = null;
-  private selectedIndentMarkerElements: Element[] = [];
-  private selectedOuterMarkerElements: Element[] = [];
   private activeDocument: Document | null;
   private measureKey = {};
 
@@ -703,16 +689,8 @@ export class GuideFoldingPluginValue implements PluginValue {
     this.settings.removeCallback(this.onSettingsChange);
     synchronizeHoveredIndentGuides(this.view.contentDOM, []);
     synchronizeHoveredOuterListGuides(this.view.contentDOM, []);
-    this.selectedIndentMarkerElements = synchronizeSelectedIndentGuides(
-      this.view.contentDOM,
-      [],
-      this.selectedIndentMarkerElements,
-    );
-    this.selectedOuterMarkerElements = synchronizeSelectedOuterListGuides(
-      this.view.contentDOM,
-      [],
-      this.selectedOuterMarkerElements,
-    );
+    synchronizeSelectedIndentGuides(this.view.contentDOM, []);
+    synchronizeSelectedOuterListGuides(this.view.contentDOM, []);
     synchronizePersistentIndentGuides(this.view.contentDOM, false);
   }
 
@@ -925,15 +903,13 @@ export class GuideFoldingPluginValue implements PluginValue {
             ? (measurement?.outerGuides ?? [])
             : [],
         );
-        this.selectedIndentMarkerElements = synchronizeSelectedIndentGuides(
+        synchronizeSelectedIndentGuides(
           this.view.contentDOM,
           measurement?.selectedIndentGuides ?? [],
-          this.selectedIndentMarkerElements,
         );
-        this.selectedOuterMarkerElements = synchronizeSelectedOuterListGuides(
+        synchronizeSelectedOuterListGuides(
           this.view.contentDOM,
           measurement?.selectedOuterGuides ?? [],
-          this.selectedOuterMarkerElements,
         );
       },
     });
