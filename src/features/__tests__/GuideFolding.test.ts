@@ -1455,7 +1455,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       const { interaction, pluginValue, view } = makeTransactionFixture(5);
       setPaddingBottom(view, "100px");
 
-      expect(pluginValue.click(interaction.event, view)).toBe(false);
+      expect(pluginValue.click(interaction.event, view)).toBe(true);
 
       expect(view.scrollSnapshot).not.toHaveBeenCalled();
       expect(view.dispatch).not.toHaveBeenCalled();
@@ -1767,12 +1767,12 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { guides } = makeGuideLine(["  "]);
 
     expect(pluginValue.click(makeEvent(guides[0]).event, makeView(1))).toBe(
-      false,
+      true,
     );
     expect(foldable).not.toHaveBeenCalled();
   });
 
-  test("returns false when no fold range can be updated", () => {
+  test("retains selection when no fold range can be updated", () => {
     const root = makeRoot({
       editor: makeEditor({
         text: "- parent\n  - branch\n    - leaf",
@@ -1792,10 +1792,10 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { event, preventDefault } = makeEvent(guides[0]);
 
     const view = makeView(2);
-    expect(pluginValue.click(event, view)).toBe(false);
+    expect(pluginValue.click(event, view)).toBe(true);
     expect(foldable).toHaveBeenCalledTimes(1);
     expect(view.dispatch).not.toHaveBeenCalled();
-    expect(preventDefault).not.toHaveBeenCalled();
+    expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
   test("observes mousedown and click during capture and removes both listeners", () => {
@@ -1918,6 +1918,15 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       void,
       [string, CapturedListener | undefined, boolean]
     >();
+    const documentListeners = new Map<string, CapturedListener>();
+    const ownerDocument = {
+      addEventListener: jest.fn(
+        (eventName: string, listener: CapturedListener) => {
+          documentListeners.set(eventName, listener);
+        },
+      ),
+      removeEventListener: jest.fn(),
+    };
     const settingsCallbacks: Array<() => void> = [];
     const settings = {
       verticalLinesAction: "toggle-folding",
@@ -1977,11 +1986,30 @@ describe("GuideFoldingPluginValue guide interactions", () => {
           guide.classList.contains("bullet-plugin-hovered-indent-guide"),
         );
       }
+      if (selector === ".bullet-plugin-selected-indent-guide") {
+        return candidates.filter((guide) =>
+          guide.classList.contains("bullet-plugin-selected-indent-guide"),
+        );
+      }
+      if (selector === ".bullet-plugin-selected-indent-guide-start") {
+        return candidates.filter((guide) =>
+          guide.classList.contains("bullet-plugin-selected-indent-guide-start"),
+        );
+      }
+      if (selector === ".bullet-plugin-selected-indent-guide-end") {
+        return candidates.filter((guide) =>
+          guide.classList.contains("bullet-plugin-selected-indent-guide-end"),
+        );
+      }
       return [];
     });
     const contentDOM = {
       addEventListener,
       removeEventListener,
+      ownerDocument,
+      contains: jest.fn((target: unknown) =>
+        candidates.includes(target as never),
+      ),
       querySelector,
       querySelectorAll,
     };
@@ -2035,6 +2063,26 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       ),
     ).toBe(false);
 
+    const clickListener = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === "click",
+    )?.[1];
+    settings.verticalLinesAction = "none";
+    clickListener?.(makeEvent(outerLeafA.guides[0]).event);
+    executeLatestMeasurement();
+    const selectedSegments = [outerChildA.guides[0], outerLeafA.guides[0]];
+    const unrelatedSegments = [outerChildB.guides[0], outerLeafB.guides[0]];
+    expect(
+      selectedSegments.every((guide) =>
+        guide.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(true);
+    expect(
+      unrelatedSegments.some((guide) =>
+        guide.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(false);
+    settings.verticalLinesAction = "toggle-folding";
+
     const innerEditor = makeEditor({
       text: [
         "- parent",
@@ -2085,6 +2133,13 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       ).toBe(true);
     }
 
+    // The semantic selection survives DOM replacement and viewport updates.
+    expect(
+      innerSegments.every((guide) =>
+        guide?.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(false);
+
     const settingsCallback = settingsCallbacks[0];
     if (!settingsCallback) {
       throw new Error("Expected settings callback to be registered");
@@ -2122,6 +2177,38 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       ).toBe(false);
     }
 
+    // Leaving the view only clears hover feedback; a selection is retained.
+    settings.verticalLinesAction = "none";
+    clickListener?.(makeEvent(leafAlpha.guides[1]).event);
+    executeLatestMeasurement();
+    pointerLeave?.({} as Event);
+    expect(
+      innerSegments.every((guide) =>
+        guide?.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(true);
+
+    documentListeners.get("click")?.(makeEvent({}).event);
+    executeLatestMeasurement();
+    expect(
+      innerSegments.some((guide) =>
+        guide?.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(false);
+
+    clickListener?.(makeEvent(leafAlpha.guides[1]).event);
+    executeLatestMeasurement();
+    pluginValue.update({ docChanged: true });
+    executeLatestMeasurement();
+    expect(
+      innerSegments.some((guide) =>
+        guide?.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(false);
+
+    clickListener?.(makeEvent(leafAlpha.guides[1]).event);
+    executeLatestMeasurement();
+
     hoveredGuide = leafAlpha.guides[1];
     pluginValue.update({});
     executeLatestMeasurement();
@@ -2129,6 +2216,9 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     for (const guide of innerSegments) {
       expect(
         guide?.classList.contains("bullet-plugin-hovered-indent-guide"),
+      ).toBe(false);
+      expect(
+        guide?.classList.contains("bullet-plugin-selected-indent-guide"),
       ).toBe(false);
     }
     expect(removeEventListener).toHaveBeenCalledWith(
@@ -2139,6 +2229,16 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(removeEventListener).toHaveBeenCalledWith(
       "pointerleave",
       pointerLeave,
+      true,
+    );
+    expect(ownerDocument.addEventListener).toHaveBeenCalledWith(
+      "click",
+      expect.any(Function),
+      true,
+    );
+    expect(ownerDocument.removeEventListener).toHaveBeenCalledWith(
+      "click",
+      expect.any(Function),
       true,
     );
   });
@@ -2167,9 +2267,19 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       removeCallback: jest.fn(),
     };
     const makeOuterSegment = (chunkId: string, actionable = true) => {
-      const attributes = { "data-actionable": String(actionable) };
+      const [startLine, endLine] = chunkId.split(":");
+      const attributes = {
+        "data-actionable": String(actionable),
+        "data-chunk-start": startLine ?? "",
+        "data-chunk-end": endLine ?? "",
+      };
       return {
-        dataset: { chunkId, actionable: String(actionable) },
+        dataset: {
+          chunkId,
+          actionable: String(actionable),
+          chunkStart: startLine ?? "",
+          chunkEnd: endLine ?? "",
+        },
         classList: makeClassList(),
         matches: jest.fn(
           (selector: string) => selector === ".bullet-plugin-outer-list-guide",
@@ -2213,6 +2323,25 @@ describe("GuideFoldingPluginValue guide interactions", () => {
         return outerGuides.filter((guide) =>
           guide.classList.contains(
             "bullet-plugin-hovered-outer-list-guide-end",
+          ),
+        );
+      }
+      if (selector === ".bullet-plugin-selected-outer-list-guide") {
+        return outerGuides.filter((guide) =>
+          guide.classList.contains("bullet-plugin-selected-outer-list-guide"),
+        );
+      }
+      if (selector === ".bullet-plugin-selected-outer-list-guide-start") {
+        return outerGuides.filter((guide) =>
+          guide.classList.contains(
+            "bullet-plugin-selected-outer-list-guide-start",
+          ),
+        );
+      }
+      if (selector === ".bullet-plugin-selected-outer-list-guide-end") {
+        return outerGuides.filter((guide) =>
+          guide.classList.contains(
+            "bullet-plugin-selected-outer-list-guide-end",
           ),
         );
       }
@@ -2260,7 +2389,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     };
 
     const firstMeasurement = requests[0]?.read?.();
-    expect(firstMeasurement).toEqual({
+    expect(firstMeasurement).toMatchObject({
       indentGuides: [],
       outerGuides: outerGuides.slice(0, 2),
     });
@@ -2372,10 +2501,30 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     settings.outerVerticalLines = true;
     settingsCallback();
     executeLatestMeasurement();
+
+    settings.verticalLinesAction = "none";
+    outerGuides[0].dataset.actionable = "false";
+    const clickListener = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === "click",
+    )?.[1];
+    clickListener?.(makeEvent(outerGuides[0]).event);
+    executeLatestMeasurement();
+    expect(
+      outerGuides
+        .slice(0, 2)
+        .every((guide) =>
+          guide.classList.contains("bullet-plugin-selected-outer-list-guide"),
+        ),
+    ).toBe(true);
     pluginValue.destroy();
     expect(
       outerGuides.some((guide) =>
         guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
+      ),
+    ).toBe(false);
+    expect(
+      outerGuides.some((guide) =>
+        guide.classList.contains("bullet-plugin-selected-outer-list-guide"),
       ),
     ).toBe(false);
     // Detached replacements are outside contentDOM, so scoped cleanup cannot reach them.
@@ -2623,7 +2772,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
 
     expect(pluginValue.click(event, view)).toBe(true);
     expect(parser.parseRange).toHaveBeenCalledTimes(1);
-    expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 2);
     expect(parser.parse).not.toHaveBeenCalled();
     expect(view.posAtDOM).not.toHaveBeenCalled();
     expect(foldable).toHaveBeenCalledWith(expect.anything(), 0, 9);
@@ -2692,7 +2840,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
 
     const view = makeView(1);
     expect(pluginValue.mouseDown(event, view)).toBe(true);
-    expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 2);
+    expect(parser.parseRange).not.toHaveBeenCalled();
     expect(view.dispatch).not.toHaveBeenCalled();
     expect(preventDefault).toHaveBeenCalledTimes(1);
   });
@@ -2774,7 +2922,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       undefined,
     ],
     ["outer visibility off", { outerVerticalLines: false }, undefined],
-  ])("does not consume a %s outer widget", (_name, visibility, attributes) => {
+  ])("handles a %s outer widget", (_name, visibility, attributes) => {
     const parser = { parse: jest.fn(), parseRange: jest.fn() };
     mockGetEditorFromState.mockReturnValue(makeFoldEditor());
     const pluginValue = makeInteractionHarness(
@@ -2788,12 +2936,14 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       makeOuterGuideTarget(attributes),
     );
 
-    expect(pluginValue.click(event, makeView(1))).toBe(false);
+    const selectable =
+      _name === "non-actionable widget" || _name === "disabled action";
+    expect(pluginValue.click(event, makeView(1))).toBe(selectable);
     expect(parser.parseRange).not.toHaveBeenCalled();
-    expect(preventDefault).not.toHaveBeenCalled();
+    expect(preventDefault).toHaveBeenCalledTimes(selectable ? 1 : 0);
   });
 
-  test("does not consume an actionable outer widget when the chunk has no fold targets", () => {
+  test("retains an actionable outer selection when the chunk has no fold targets", () => {
     const sourceEditor = makeEditor({
       text: "- leaf A\n- leaf B",
       cursor: { line: 0, ch: 0 },
@@ -2821,13 +2971,13 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
 
     const view = makeView(1);
-    expect(pluginValue.click(event, view)).toBe(false);
+    expect(pluginValue.click(event, view)).toBe(true);
     expect(parser.parseRange).toHaveBeenCalledWith(editor, 0, 1);
     expect(view.dispatch).not.toHaveBeenCalled();
-    expect(preventDefault).not.toHaveBeenCalled();
+    expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
-  test("does not consume an outer widget when no planned fold range can be updated", () => {
+  test("retains an outer selection when no planned fold range can be updated", () => {
     const sourceEditor = makeEditor({
       text: "- parent\n    - child",
       cursor: { line: 0, ch: 0 },
@@ -2855,10 +3005,10 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
 
     const view = makeView(1);
-    expect(pluginValue.click(event, view)).toBe(false);
+    expect(pluginValue.click(event, view)).toBe(true);
     expect(foldable).toHaveBeenCalledTimes(1);
     expect(view.dispatch).not.toHaveBeenCalled();
-    expect(preventDefault).not.toHaveBeenCalled();
+    expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
   test("capture listeners suppress mousedown selection and toggle on click", () => {
@@ -2948,10 +3098,9 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       stopPropagation: clickStopPropagation,
     } as unknown as Event);
 
-    expect(parseRange).toHaveBeenCalledTimes(3);
+    expect(parseRange).toHaveBeenCalledTimes(2);
     expect(parseRange).toHaveBeenNthCalledWith(1, editor, 0, 1);
-    expect(parseRange).toHaveBeenNthCalledWith(2, editor, 0, 1);
-    expect(parseRange).toHaveBeenNthCalledWith(3, editor, 1, 1);
+    expect(parseRange).toHaveBeenNthCalledWith(2, editor, 1, 1);
     expect(view.dispatch).toHaveBeenCalledTimes(1);
     expect(mouseDownPreventDefault).toHaveBeenCalledTimes(1);
     expect(mouseDownStopPropagation).toHaveBeenCalledTimes(1);
