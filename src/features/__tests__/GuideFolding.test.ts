@@ -848,14 +848,32 @@ describe("GuideFolding persistent guide styles", () => {
     );
   });
 
-  test("uses the native active style on the complete marked logical guide", () => {
+  test("centers a three-pixel active style without replacing the native mode indent", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(
       /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
+    const livePreviewOffset = styles.match(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const sourceModeOffset = styles.match(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6:not\(\.is-live-preview\)\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const normalized = declarations?.replace(/\s+/g, " ").trim();
 
-    expect(declarations?.replace(/\s+/g, " ").trim()).toBe(
-      "border-inline-end: var(--indentation-guide-width-active) solid var(--indentation-guide-color-active);",
+    expect(normalized).toBe(
+      "border-inline-end: 3px solid var(--indentation-guide-color-active); border-radius: 2px;",
+    );
+    expect(livePreviewOffset?.replace(/\s+/g, " ").trim()).toBe(
+      "margin-inline-start: calc(var(--indentation-guide-editing-indent) - 1px);",
+    );
+    expect(sourceModeOffset?.replace(/\s+/g, " ").trim()).toBe(
+      "margin-inline-start: calc(var(--indentation-guide-source-indent) - 1px);",
+    );
+    expect(normalized).not.toMatch(/\binset-inline-(?:start|end)\s*:/);
+    expect(normalized).not.toMatch(/(?:^|;)\s*(?:left|right)\s*:/);
+    expect(normalized).not.toMatch(
+      /\b(?:transition|box-shadow|background|opacity)\s*:/,
     );
     expect(styles).not.toMatch(/\.cm-indent:hover::before/);
   });
@@ -899,12 +917,23 @@ describe("GuideFolding outer guide styles", () => {
     const hovered = styles.match(
       /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
+    const desktopHovered = styles.match(
+      /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const normalizedHovered = hovered?.replace(/\s+/g, " ").trim();
 
     expect(normal?.replace(/\s+/g, " ")).toContain(
       "border-inline-end: var(--indentation-guide-width) solid var(--indentation-guide-color);",
     );
-    expect(hovered?.replace(/\s+/g, " ")).toContain(
-      "border-inline-end: var(--indentation-guide-width-active) solid var(--indentation-guide-color-active);",
+    expect(normalizedHovered).toBe(
+      "inset-inline-end: -1px; border-inline-end: 3px solid var(--indentation-guide-color-active); border-radius: 2px;",
+    );
+    expect(desktopHovered?.replace(/\s+/g, " ").trim()).toBe(
+      "inset-inline-start: -1px; inset-inline-end: auto;",
+    );
+    expect(normalizedHovered).not.toMatch(/(?:^|;)\s*(?:left|right)\s*:/);
+    expect(normalizedHovered).not.toMatch(
+      /\b(?:transition|box-shadow|background|opacity)\s*:/,
     );
   });
 
