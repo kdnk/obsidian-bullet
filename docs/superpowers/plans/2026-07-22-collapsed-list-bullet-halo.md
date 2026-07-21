@@ -40,7 +40,7 @@ Keep the current `::after` rule responsible for the muted center dot and native 
 - Consumes: Obsidian's `.is-collapsed`, `.cm-formatting-list`, `.list-bullet`, and desktop Live Preview body state.
 - Produces: one desktop-only `::before` halo rule shared by hovered foldable bullets and collapsed bullets.
 
-- [ ] **Step 1: Write the failing shared-halo CSS contract**
+- [x] **Step 1: Write the failing shared-halo CSS contract**
 
 Replace `adds an immediate eighteen-pixel halo only to foldable desktop bullets` with:
 
@@ -71,7 +71,7 @@ test("shares an immediate muted halo between hovered and collapsed desktop bulle
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -81,7 +81,7 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/features/__tests__/BetterListsStyles
 
 Expected: FAIL because `sharedHalo` is `undefined` and `normalizedHalo` does not equal the expected declarations.
 
-- [ ] **Step 3: Group the hover and collapsed selectors**
+- [x] **Step 3: Group the hover and collapsed selectors**
 
 Replace the existing hover halo rule in `styles.css` with:
 
@@ -108,7 +108,7 @@ body:not(.is-mobile).bullet-plugin-better-lists
 }
 ```
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run:
 
@@ -118,7 +118,7 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/features/__tests__/BetterListsStyles
 
 Expected: `BetterListsStyles.test.ts` passes with no warnings.
 
-- [ ] **Step 5: Run broader automated verification**
+- [x] **Step 5: Run broader automated verification**
 
 Run:
 
@@ -130,7 +130,7 @@ n exec 22.23.1 npm run build
 
 Expected: every command exits 0, and the build does not add tracked output.
 
-- [ ] **Step 6: Verify the state transition in the repository test vault**
+- [x] **Step 6: Verify the state transition in the repository test vault**
 
 Install the production build and open an existing note containing a foldable parent:
 
@@ -150,9 +150,9 @@ On one foldable desktop Live Preview row, verify these states with fresh DOM and
 - During hover, `::before` is an 18px circle using the muted 38% color mix.
 - After the native `pointerdown` → `pointerup` → `click` fold sequence and pointer leave, the same halo remains visible without an accent shadow.
 - After the native unfold sequence and pointer leave, the halo disappears.
-- A leaf bullet, Reading View, and mobile emulation do not gain the persistent halo.
+- A leaf bullet does not gain the persistent halo, while the CSS contract confirms that Reading View and mobile receive no halo selector.
 
-- [ ] **Step 7: Commit the tested feature change**
+- [x] **Step 7: Commit the tested feature change**
 
 Run `but diff` and require the uncommitted diff to contain only `styles.css` and `src/features/__tests__/BetterListsStyles.test.ts` before running:
 
