@@ -106,6 +106,18 @@ function makeGuideDOM(elements: Array<ReturnType<typeof makeGuideElement>>) {
       );
     }
 
+    if (selector === ".bullet-plugin-hovered-indent-guide-start") {
+      return elements.filter((element) =>
+        element.classList.contains("bullet-plugin-hovered-indent-guide-start"),
+      );
+    }
+
+    if (selector === ".bullet-plugin-hovered-indent-guide-end") {
+      return elements.filter((element) =>
+        element.classList.contains("bullet-plugin-hovered-indent-guide-end"),
+      );
+    }
+
     return [];
   });
 
@@ -181,6 +193,16 @@ function makeHoverFixture(options: {
     if (selector === ".bullet-plugin-hovered-indent-guide") {
       return options.candidates.filter((guide) =>
         guide.classList.contains("bullet-plugin-hovered-indent-guide"),
+      );
+    }
+    if (selector === ".bullet-plugin-hovered-indent-guide-start") {
+      return options.candidates.filter((guide) =>
+        guide.classList.contains("bullet-plugin-hovered-indent-guide-start"),
+      );
+    }
+    if (selector === ".bullet-plugin-hovered-indent-guide-end") {
+      return options.candidates.filter((guide) =>
+        guide.classList.contains("bullet-plugin-hovered-indent-guide-end"),
       );
     }
     return [];
@@ -335,6 +357,40 @@ describe("GuideFoldingPluginValue hover measurement", () => {
       branchBeta.guides[1],
       leafBeta.guides[1],
     ]);
+    if (!measurement) {
+      throw new Error("Expected a hover measurement");
+    }
+    fixture.requests[0]?.write?.(measurement);
+
+    const highlighted = measurement.indentGuides;
+    expect(
+      highlighted[0]?.classList.contains(
+        "bullet-plugin-hovered-indent-guide-start",
+      ),
+    ).toBe(true);
+    expect(
+      highlighted[0]?.classList.contains(
+        "bullet-plugin-hovered-indent-guide-end",
+      ),
+    ).toBe(false);
+    for (const guide of highlighted.slice(1, -1)) {
+      expect(
+        guide.classList.contains("bullet-plugin-hovered-indent-guide-start"),
+      ).toBe(false);
+      expect(
+        guide.classList.contains("bullet-plugin-hovered-indent-guide-end"),
+      ).toBe(false);
+    }
+    expect(
+      highlighted[highlighted.length - 1]?.classList.contains(
+        "bullet-plugin-hovered-indent-guide-start",
+      ),
+    ).toBe(false);
+    expect(
+      highlighted[highlighted.length - 1]?.classList.contains(
+        "bullet-plugin-hovered-indent-guide-end",
+      ),
+    ).toBe(true);
     fixture.pluginValue.destroy();
   });
 
@@ -369,7 +425,11 @@ describe("GuideFoldingPluginValue hover measurement", () => {
     const staleLine = makeGuideLine(["    "]);
     const selected = selectedLine.guides[0];
     const stale = staleLine.guides[0];
-    stale.classList.add("bullet-plugin-hovered-indent-guide");
+    stale.classList.add(
+      "bullet-plugin-hovered-indent-guide",
+      "bullet-plugin-hovered-indent-guide-start",
+      "bullet-plugin-hovered-indent-guide-end",
+    );
     const fixture = makeHoverFixture({
       editor,
       root,
@@ -393,6 +453,18 @@ describe("GuideFoldingPluginValue hover measurement", () => {
     expect(
       selected.classList.contains("bullet-plugin-hovered-indent-guide"),
     ).toBe(true);
+    expect(
+      selected.classList.contains("bullet-plugin-hovered-indent-guide-start"),
+    ).toBe(true);
+    expect(
+      selected.classList.contains("bullet-plugin-hovered-indent-guide-end"),
+    ).toBe(true);
+    expect(
+      stale.classList.contains("bullet-plugin-hovered-indent-guide-start"),
+    ).toBe(false);
+    expect(
+      stale.classList.contains("bullet-plugin-hovered-indent-guide-end"),
+    ).toBe(false);
 
     const pointerLeave = fixture.addEventListener.mock.calls.find(
       ([eventName]) => eventName === "pointerleave",
@@ -400,6 +472,12 @@ describe("GuideFoldingPluginValue hover measurement", () => {
     pointerLeave?.({} as Event);
     expect(
       selected.classList.contains("bullet-plugin-hovered-indent-guide"),
+    ).toBe(false);
+    expect(
+      selected.classList.contains("bullet-plugin-hovered-indent-guide-start"),
+    ).toBe(false);
+    expect(
+      selected.classList.contains("bullet-plugin-hovered-indent-guide-end"),
     ).toBe(false);
     fixture.pluginValue.destroy();
   });
@@ -864,8 +942,17 @@ describe("GuideFolding persistent guide styles", () => {
 
   test("centers the optional three-pixel style without replacing the native mode indent", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const normalColor = styles.match(
+      /\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s*\{([^}]*)\}/,
+    )?.[1];
     const declarations = styles.match(
       /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const startDeclarations = styles.match(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide\.bullet-plugin-hovered-indent-guide-start::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const endDeclarations = styles.match(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide\.bullet-plugin-hovered-indent-guide-end::before\s*\{([^}]*)\}/,
     )?.[1];
     const livePreviewOffset = styles.match(
       /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
@@ -875,8 +962,17 @@ describe("GuideFolding persistent guide styles", () => {
     )?.[1];
     const normalized = declarations?.replace(/\s+/g, " ").trim();
 
+    expect(normalColor?.replace(/\s+/g, " ").trim()).toBe(
+      "--indentation-guide-color: color-mix( in oklch, var(--text-normal) 20%, transparent );",
+    );
     expect(normalized).toBe(
-      "border-inline-end: 3px solid var(--indentation-guide-color-active); border-radius: 2px;",
+      "border-inline-end: 3px solid var(--indentation-guide-color-active);",
+    );
+    expect(startDeclarations?.replace(/\s+/g, " ").trim()).toBe(
+      "border-start-start-radius: 2px; border-start-end-radius: 2px;",
+    );
+    expect(endDeclarations?.replace(/\s+/g, " ").trim()).toBe(
+      "border-end-start-radius: 2px; border-end-end-radius: 2px;",
     );
     expect(livePreviewOffset?.replace(/\s+/g, " ").trim()).toBe(
       "margin-inline-start: calc(var(--indentation-guide-editing-indent) - 1px);",
@@ -889,6 +985,7 @@ describe("GuideFolding persistent guide styles", () => {
     expect(normalized).not.toMatch(
       /\b(?:transition|box-shadow|background|opacity)\s*:/,
     );
+    expect(normalized).not.toMatch(/\bborder-radius\s*:/);
     expect(styles).not.toMatch(/\.cm-indent:hover::before/);
   });
 });
@@ -934,6 +1031,12 @@ describe("GuideFolding outer guide styles", () => {
     const enhancedHovered = styles.match(
       /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
+    const enhancedStart = styles.match(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide\.bullet-plugin-hovered-outer-list-guide-start::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const enhancedEnd = styles.match(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide\.bullet-plugin-hovered-outer-list-guide-end::before\s*\{([^}]*)\}/,
+    )?.[1];
     const desktopEnhancedHovered = styles.match(
       /body:not\(\s*\.is-mobile\s*\)\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
@@ -949,7 +1052,13 @@ describe("GuideFolding outer guide styles", () => {
       "border-inline-end: var(--indentation-guide-width-active) solid var(--indentation-guide-color-active);",
     );
     expect(normalizedEnhancedHovered).toBe(
-      "inset-inline-end: -1px; border-inline-end: 3px solid var(--indentation-guide-color-active); border-radius: 2px;",
+      "inset-inline-end: -1px; border-inline-end: 3px solid var(--indentation-guide-color-active);",
+    );
+    expect(enhancedStart?.replace(/\s+/g, " ").trim()).toBe(
+      "border-start-start-radius: 2px; border-start-end-radius: 2px;",
+    );
+    expect(enhancedEnd?.replace(/\s+/g, " ").trim()).toBe(
+      "border-end-start-radius: 2px; border-end-end-radius: 2px;",
     );
     expect(desktopEnhancedHovered?.replace(/\s+/g, " ").trim()).toBe(
       "inset-inline-start: -1px; inset-inline-end: auto;",
@@ -2092,6 +2201,20 @@ describe("GuideFoldingPluginValue guide interactions", () => {
           guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
         );
       }
+      if (selector === ".bullet-plugin-hovered-outer-list-guide-start") {
+        return outerGuides.filter((guide) =>
+          guide.classList.contains(
+            "bullet-plugin-hovered-outer-list-guide-start",
+          ),
+        );
+      }
+      if (selector === ".bullet-plugin-hovered-outer-list-guide-end") {
+        return outerGuides.filter((guide) =>
+          guide.classList.contains(
+            "bullet-plugin-hovered-outer-list-guide-end",
+          ),
+        );
+      }
       return [];
     });
     const contentDOM = {
@@ -2153,6 +2276,26 @@ describe("GuideFoldingPluginValue guide interactions", () => {
           guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
         ),
     ).toBe(true);
+    expect(
+      outerGuides[0]?.classList.contains(
+        "bullet-plugin-hovered-outer-list-guide-start",
+      ),
+    ).toBe(true);
+    expect(
+      outerGuides[0]?.classList.contains(
+        "bullet-plugin-hovered-outer-list-guide-end",
+      ),
+    ).toBe(false);
+    expect(
+      outerGuides[1]?.classList.contains(
+        "bullet-plugin-hovered-outer-list-guide-start",
+      ),
+    ).toBe(false);
+    expect(
+      outerGuides[1]?.classList.contains(
+        "bullet-plugin-hovered-outer-list-guide-end",
+      ),
+    ).toBe(true);
 
     const oldGuides = outerGuides;
     const decorationSet = pluginValue.decorations;
@@ -2182,6 +2325,17 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(
       outerGuides.some((guide) =>
         guide.classList.contains("bullet-plugin-hovered-outer-list-guide"),
+      ),
+    ).toBe(false);
+    expect(
+      outerGuides.some(
+        (guide) =>
+          guide.classList.contains(
+            "bullet-plugin-hovered-outer-list-guide-start",
+          ) ||
+          guide.classList.contains(
+            "bullet-plugin-hovered-outer-list-guide-end",
+          ),
       ),
     ).toBe(false);
     pointerLeave?.({} as Event);

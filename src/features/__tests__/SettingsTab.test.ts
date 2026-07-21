@@ -210,7 +210,7 @@ describe("SettingsTab", () => {
         "Enhance the Ctrl+A or Cmd+A behavior",
         "Drag-and-Drop",
       ],
-      ["Improve the style of your lists", "Enhance vertical line hover"],
+      ["Improve the style of your lists", "Enhance vertical lines"],
       [
         "Draw outer list lines",
         "Fold lists from vertical indentation lines",
@@ -239,9 +239,13 @@ describe("SettingsTab", () => {
       type: "toggle",
       key: "verticalLinesActionEnabled",
     });
-    expect(groups[1]?.items[1]?.control).toEqual({
-      type: "toggle",
-      key: "enhancedVerticalLineHover",
+    expect(groups[1]?.items[1]).toMatchObject({
+      name: "Enhance vertical lines",
+      desc: "Strengthen indentation lines and use a continuous rounded hover.",
+      control: {
+        type: "toggle",
+        key: "enhancedVerticalLineHover",
+      },
     });
   });
 
@@ -299,7 +303,7 @@ describe("SettingsTab", () => {
       "setting:Drag-and-Drop",
       "heading:Appearance",
       "setting:Improve the style of your lists",
-      "setting:Enhance vertical line hover",
+      "setting:Enhance vertical lines",
       "heading:Folding",
       "setting:Draw outer list lines",
       "setting:Fold lists from vertical indentation lines",

@@ -35,6 +35,10 @@ const PERSISTENT_GUIDE_CANDIDATE_SELECTOR =
   ".cm-hmd-list-indent > .cm-indent-spacing:not(.cm-indent)";
 const HOVERED_GUIDE_MARKER = "bullet-plugin-hovered-indent-guide";
 const HOVERED_GUIDE_SELECTOR = `.${HOVERED_GUIDE_MARKER}`;
+const HOVERED_GUIDE_START_MARKER = "bullet-plugin-hovered-indent-guide-start";
+const HOVERED_GUIDE_START_SELECTOR = `.${HOVERED_GUIDE_START_MARKER}`;
+const HOVERED_GUIDE_END_MARKER = "bullet-plugin-hovered-indent-guide-end";
+const HOVERED_GUIDE_END_SELECTOR = `.${HOVERED_GUIDE_END_MARKER}`;
 const HOVERED_GUIDE_CANDIDATE_SELECTOR =
   `${INDENT_GUIDE_SELECTOR}:hover, ` +
   ".cm-hmd-list-indent > .cm-indent-spacing:hover";
@@ -45,6 +49,12 @@ const OUTER_LIST_GUIDE_CLASS = "bullet-plugin-outer-list-guide";
 const OUTER_LIST_GUIDE_SELECTOR = `.${OUTER_LIST_GUIDE_CLASS}`;
 const HOVERED_OUTER_LIST_GUIDE_CLASS = "bullet-plugin-hovered-outer-list-guide";
 const HOVERED_OUTER_LIST_GUIDE_SELECTOR = `.${HOVERED_OUTER_LIST_GUIDE_CLASS}`;
+const HOVERED_OUTER_LIST_GUIDE_START_CLASS =
+  "bullet-plugin-hovered-outer-list-guide-start";
+const HOVERED_OUTER_LIST_GUIDE_START_SELECTOR = `.${HOVERED_OUTER_LIST_GUIDE_START_CLASS}`;
+const HOVERED_OUTER_LIST_GUIDE_END_CLASS =
+  "bullet-plugin-hovered-outer-list-guide-end";
+const HOVERED_OUTER_LIST_GUIDE_END_SELECTOR = `.${HOVERED_OUTER_LIST_GUIDE_END_CLASS}`;
 const CHUNK_LINE_ATTRIBUTE_RE = /^(0|[1-9]\d*)$/;
 
 export const GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION: Extension =
@@ -118,17 +128,51 @@ function synchronizeHoveredOuterListGuides(
   contentDOM: ParentNode,
   guides: Iterable<Element>,
 ) {
-  const next = new Set(guides);
+  synchronizeHoverMarkers(
+    contentDOM,
+    guides,
+    HOVERED_OUTER_LIST_GUIDE_CLASS,
+    HOVERED_OUTER_LIST_GUIDE_SELECTOR,
+    HOVERED_OUTER_LIST_GUIDE_START_CLASS,
+    HOVERED_OUTER_LIST_GUIDE_START_SELECTOR,
+    HOVERED_OUTER_LIST_GUIDE_END_CLASS,
+    HOVERED_OUTER_LIST_GUIDE_END_SELECTOR,
+  );
+}
+
+function synchronizeHoverMarkers(
+  contentDOM: ParentNode,
+  guides: Iterable<Element>,
+  marker: string,
+  markerSelector: string,
+  startMarker: string,
+  startSelector: string,
+  endMarker: string,
+  endSelector: string,
+) {
+  const ordered = Array.from(guides);
+  const next = new Set(ordered);
+
   for (const element of Array.from(
-    contentDOM.querySelectorAll(HOVERED_OUTER_LIST_GUIDE_SELECTOR),
+    contentDOM.querySelectorAll(startSelector),
+  )) {
+    element.classList.remove(startMarker);
+  }
+  for (const element of Array.from(contentDOM.querySelectorAll(endSelector))) {
+    element.classList.remove(endMarker);
+  }
+  for (const element of Array.from(
+    contentDOM.querySelectorAll(markerSelector),
   )) {
     if (!next.has(element)) {
-      element.classList.remove(HOVERED_OUTER_LIST_GUIDE_CLASS);
+      element.classList.remove(marker);
     }
   }
-  next.forEach((element) =>
-    element.classList.add(HOVERED_OUTER_LIST_GUIDE_CLASS),
-  );
+  for (const element of ordered) {
+    element.classList.add(marker);
+  }
+  ordered[0]?.classList.add(startMarker);
+  ordered[ordered.length - 1]?.classList.add(endMarker);
 }
 
 function buildOuterListGuideDecorations(
@@ -356,17 +400,16 @@ function synchronizeHoveredIndentGuides(
   contentDOM: ParentNode,
   highlightedGuides: Iterable<Element>,
 ) {
-  const highlighted = new Set(highlightedGuides);
-  for (const element of Array.from(
-    contentDOM.querySelectorAll(HOVERED_GUIDE_SELECTOR),
-  )) {
-    if (!highlighted.has(element)) {
-      element.classList.remove(HOVERED_GUIDE_MARKER);
-    }
-  }
-  highlighted.forEach((element) => {
-    element.classList.add(HOVERED_GUIDE_MARKER);
-  });
+  synchronizeHoverMarkers(
+    contentDOM,
+    highlightedGuides,
+    HOVERED_GUIDE_MARKER,
+    HOVERED_GUIDE_SELECTOR,
+    HOVERED_GUIDE_START_MARKER,
+    HOVERED_GUIDE_START_SELECTOR,
+    HOVERED_GUIDE_END_MARKER,
+    HOVERED_GUIDE_END_SELECTOR,
+  );
 }
 
 function toggleVerticalGuideTarget(view: EditorView, list: List) {
