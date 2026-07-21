@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { BetterListsStyles } from "../BetterListsStyles";
 
 function makeClassList() {
@@ -123,5 +126,42 @@ describe("BetterListsStyles", () => {
       mainDocument.body.classList.contains("bullet-plugin-better-lists"),
     ).toBe(false);
     expect(settings.removeCallback).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  test("renders the default-theme bullet as a seven-pixel circle", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const declarations = styles.match(
+      /\.bullet-plugin-better-lists\s+\.list-bullet::after\s*\{([^}]*)\}/,
+    )?.[1];
+    const normalized = declarations?.replace(/\s+/g, " ").trim();
+
+    expect(normalized).toBe(
+      "width: 7px; height: 7px; border-radius: 50%; background-color: var(--text-muted);",
+    );
+  });
+
+  test("adds an immediate eighteen-pixel halo only to foldable desktop bullets", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const bullet = styles.match(
+      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.list-bullet\s*\{([^}]*)\}/,
+    )?.[1];
+    const halo = styles.match(
+      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.list-bullet:hover::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const normalizedHalo = halo?.replace(/\s+/g, " ").trim();
+
+    expect(bullet?.replace(/\s+/g, " ").trim()).toBe("position: relative;");
+    expect(normalizedHalo).toBe(
+      'content: ""; position: absolute; inset-block-start: 50%; inset-inline-start: 50%; width: 18px; height: 18px; transform: translate(-50%, -50%); border-radius: 50%; background-color: color-mix(in srgb, var(--text-muted) 38%, transparent); pointer-events: none;',
+    );
+    expect(normalizedHalo).not.toMatch(
+      /\b(?:transition|animation|opacity)\s*:/,
+    );
+    expect(styles).not.toMatch(
+      /\.bullet-plugin-better-lists\s+\.markdown-preview-view[^{}]*\.list-bullet:hover::before/,
+    );
+    expect(styles).not.toMatch(
+      /body\.is-mobile\.bullet-plugin-better-lists[^{}]*\.list-bullet:hover::before/,
+    );
   });
 });

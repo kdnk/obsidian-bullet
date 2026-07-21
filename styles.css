@@ -8,9 +8,33 @@
 }
 
 .bullet-plugin-better-lists .list-bullet::after {
-  width: 0.4em;
-  height: 0.4em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
   background-color: var(--text-muted);
+}
+
+body:not(.is-mobile).bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-list-line:has(.cm-fold-indicator)
+  .list-bullet {
+  position: relative;
+}
+
+body:not(.is-mobile).bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-list-line:has(.cm-fold-indicator)
+  .list-bullet:hover::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background-color: color-mix(in srgb, var(--text-muted) 38%, transparent);
+  pointer-events: none;
 }
 
 /* lines */
