@@ -70,9 +70,9 @@ body:not(.is-mobile)
   box-sizing: border-box;
   align-items: center;
   justify-content: center;
-  inset-inline-start: calc(-1 * var(--list-indent, 18px));
+  inset-inline-start: -5px;
   inset-inline-end: auto;
-  width: var(--list-indent, 18px);
+  width: 14px;
   padding-inline: 0;
   opacity: 0;
   visibility: hidden;

@@ -798,7 +798,7 @@ describe("GuideFolding persistent guide styles", () => {
     );
   });
 
-  test("shows desktop list chevrons only on row hover between guides", () => {
+  test("shows desktop list chevrons only on row hover at the Logseq spacing", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const hiddenDeclarations = styles.match(
       /body:not\(\.is-mobile\)\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
@@ -820,12 +820,17 @@ describe("GuideFolding persistent guide styles", () => {
     expect(hiddenDeclarations).toContain("box-sizing: border-box;");
     expect(hiddenDeclarations).toContain("align-items: center;");
     expect(hiddenDeclarations).toContain("justify-content: center;");
-    expect(hiddenDeclarations).toContain(
+    expect(hiddenDeclarations).toContain("inset-inline-start: -5px;");
+    expect(hiddenDeclarations).toContain("inset-inline-end: auto;");
+    expect(hiddenDeclarations).toContain("width: 14px;");
+    expect(hiddenDeclarations).toContain("padding-inline: 0;");
+    expect(hiddenDeclarations).not.toContain("transform:");
+    expect(hiddenDeclarations).not.toContain(
       "inset-inline-start: calc(-1 * var(--list-indent, 18px));",
     );
-    expect(hiddenDeclarations).toContain("inset-inline-end: auto;");
-    expect(hiddenDeclarations).toContain("width: var(--list-indent, 18px);");
-    expect(hiddenDeclarations).toContain("padding-inline: 0;");
+    expect(hiddenDeclarations).not.toContain(
+      "width: var(--list-indent, 18px);",
+    );
     expect(hiddenDeclarations).toContain("opacity: 0;");
     expect(hiddenDeclarations).toContain("visibility: hidden;");
     expect(hiddenDeclarations).toContain("pointer-events: none;");
