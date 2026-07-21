@@ -39,6 +39,12 @@ const HOVERED_GUIDE_START_MARKER = "bullet-plugin-hovered-indent-guide-start";
 const HOVERED_GUIDE_START_SELECTOR = `.${HOVERED_GUIDE_START_MARKER}`;
 const HOVERED_GUIDE_END_MARKER = "bullet-plugin-hovered-indent-guide-end";
 const HOVERED_GUIDE_END_SELECTOR = `.${HOVERED_GUIDE_END_MARKER}`;
+const SELECTED_GUIDE_MARKER = "bullet-plugin-selected-indent-guide";
+const SELECTED_GUIDE_SELECTOR = `.${SELECTED_GUIDE_MARKER}`;
+const SELECTED_GUIDE_START_MARKER = "bullet-plugin-selected-indent-guide-start";
+const SELECTED_GUIDE_START_SELECTOR = `.${SELECTED_GUIDE_START_MARKER}`;
+const SELECTED_GUIDE_END_MARKER = "bullet-plugin-selected-indent-guide-end";
+const SELECTED_GUIDE_END_SELECTOR = `.${SELECTED_GUIDE_END_MARKER}`;
 const HOVERED_GUIDE_CANDIDATE_SELECTOR =
   `${INDENT_GUIDE_SELECTOR}:hover, ` +
   ".cm-hmd-list-indent > .cm-indent-spacing:hover";
@@ -55,15 +61,30 @@ const HOVERED_OUTER_LIST_GUIDE_START_SELECTOR = `.${HOVERED_OUTER_LIST_GUIDE_STA
 const HOVERED_OUTER_LIST_GUIDE_END_CLASS =
   "bullet-plugin-hovered-outer-list-guide-end";
 const HOVERED_OUTER_LIST_GUIDE_END_SELECTOR = `.${HOVERED_OUTER_LIST_GUIDE_END_CLASS}`;
+const SELECTED_OUTER_LIST_GUIDE_CLASS =
+  "bullet-plugin-selected-outer-list-guide";
+const SELECTED_OUTER_LIST_GUIDE_SELECTOR = `.${SELECTED_OUTER_LIST_GUIDE_CLASS}`;
+const SELECTED_OUTER_LIST_GUIDE_START_CLASS =
+  "bullet-plugin-selected-outer-list-guide-start";
+const SELECTED_OUTER_LIST_GUIDE_START_SELECTOR = `.${SELECTED_OUTER_LIST_GUIDE_START_CLASS}`;
+const SELECTED_OUTER_LIST_GUIDE_END_CLASS =
+  "bullet-plugin-selected-outer-list-guide-end";
+const SELECTED_OUTER_LIST_GUIDE_END_SELECTOR = `.${SELECTED_OUTER_LIST_GUIDE_END_CLASS}`;
 const CHUNK_LINE_ATTRIBUTE_RE = /^(0|[1-9]\d*)$/;
 
 export const GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION: Extension =
   scrollPastEnd();
 
-type HoverMeasurement = {
+type GuideMeasurement = {
   indentGuides: Element[];
   outerGuides: Element[];
+  selectedIndentGuides: Element[];
+  selectedOuterGuides: Element[];
 };
+
+type SelectedGuide =
+  | { kind: "indent"; targetStart: MyEditorPosition }
+  | { kind: "outer"; chunkId: string };
 
 interface OuterListChunk {
   root: Root;
@@ -128,7 +149,7 @@ function synchronizeHoveredOuterListGuides(
   contentDOM: ParentNode,
   guides: Iterable<Element>,
 ) {
-  synchronizeHoverMarkers(
+  synchronizeGuideMarkers(
     contentDOM,
     guides,
     HOVERED_OUTER_LIST_GUIDE_CLASS,
@@ -140,7 +161,7 @@ function synchronizeHoveredOuterListGuides(
   );
 }
 
-function synchronizeHoverMarkers(
+function synchronizeGuideMarkers(
   contentDOM: ParentNode,
   guides: Iterable<Element>,
   marker: string,
@@ -370,9 +391,10 @@ function resolveVerticalGuideTarget(
   return null;
 }
 
-function hasSameListStart(left: List, right: List) {
+function hasSameListStart(left: List, right: List | MyEditorPosition) {
   const leftStart = left.getFirstLineContentStart();
-  const rightStart = right.getFirstLineContentStart();
+  const rightStart =
+    right instanceof List ? right.getFirstLineContentStart() : right;
   return leftStart.line === rightStart.line && leftStart.ch === rightStart.ch;
 }
 
@@ -400,7 +422,7 @@ function synchronizeHoveredIndentGuides(
   contentDOM: ParentNode,
   highlightedGuides: Iterable<Element>,
 ) {
-  synchronizeHoverMarkers(
+  synchronizeGuideMarkers(
     contentDOM,
     highlightedGuides,
     HOVERED_GUIDE_MARKER,
@@ -409,6 +431,38 @@ function synchronizeHoveredIndentGuides(
     HOVERED_GUIDE_START_SELECTOR,
     HOVERED_GUIDE_END_MARKER,
     HOVERED_GUIDE_END_SELECTOR,
+  );
+}
+
+function synchronizeSelectedIndentGuides(
+  contentDOM: ParentNode,
+  highlightedGuides: Iterable<Element>,
+) {
+  synchronizeGuideMarkers(
+    contentDOM,
+    highlightedGuides,
+    SELECTED_GUIDE_MARKER,
+    SELECTED_GUIDE_SELECTOR,
+    SELECTED_GUIDE_START_MARKER,
+    SELECTED_GUIDE_START_SELECTOR,
+    SELECTED_GUIDE_END_MARKER,
+    SELECTED_GUIDE_END_SELECTOR,
+  );
+}
+
+function synchronizeSelectedOuterListGuides(
+  contentDOM: ParentNode,
+  guides: Iterable<Element>,
+) {
+  synchronizeGuideMarkers(
+    contentDOM,
+    guides,
+    SELECTED_OUTER_LIST_GUIDE_CLASS,
+    SELECTED_OUTER_LIST_GUIDE_SELECTOR,
+    SELECTED_OUTER_LIST_GUIDE_START_CLASS,
+    SELECTED_OUTER_LIST_GUIDE_START_SELECTOR,
+    SELECTED_OUTER_LIST_GUIDE_END_CLASS,
+    SELECTED_OUTER_LIST_GUIDE_END_SELECTOR,
   );
 }
 
@@ -439,6 +493,8 @@ export class GuideFoldingPluginValue implements PluginValue {
   private destroyed = false;
   private lastOuterVisibility: boolean;
   private lastPointerGuide: Element | null = null;
+  private selectedGuide: SelectedGuide | null = null;
+  private activeDocument: Document | null;
   private measureKey = {};
 
   constructor(
@@ -447,9 +503,11 @@ export class GuideFoldingPluginValue implements PluginValue {
     private view: EditorView,
   ) {
     this.lastOuterVisibility = this.outerVisibility();
+    this.activeDocument = this.view.contentDOM.ownerDocument ?? null;
     this.decorations = this.buildOuterDecorations();
     this.view.contentDOM.addEventListener("mousedown", this.onMouseDown, true);
     this.view.contentDOM.addEventListener("click", this.onClick, true);
+    this.activeDocument?.addEventListener("click", this.onDocumentClick, true);
     this.view.contentDOM.addEventListener(
       "pointermove",
       this.onPointerMove,
@@ -469,6 +527,7 @@ export class GuideFoldingPluginValue implements PluginValue {
 
   update(update: ViewUpdate) {
     if (update.docChanged) {
+      this.selectedGuide = null;
       this.decorations = this.buildOuterDecorations();
     }
     this.scheduleGuideSynchronization();
@@ -483,20 +542,13 @@ export class GuideFoldingPluginValue implements PluginValue {
   }
 
   private handleGuideInteraction(event: MouseEvent, shouldToggle: boolean) {
-    if (!this.interactionEnabled()) {
-      return false;
-    }
-
     const pressedGuide = event.target;
     if (!isElementLike(pressedGuide)) {
       return false;
     }
 
     if (pressedGuide.matches(OUTER_LIST_GUIDE_SELECTOR)) {
-      if (
-        !this.settings.outerVerticalLines ||
-        pressedGuide.getAttribute("data-actionable") !== "true"
-      ) {
+      if (!this.settings.outerVerticalLines) {
         return false;
       }
       const startAttribute = pressedGuide.getAttribute("data-chunk-start");
@@ -524,7 +576,22 @@ export class GuideFoldingPluginValue implements PluginValue {
       ) {
         return false;
       }
-      const roots = this.parser.parseRange(editor, startLine, endLine);
+      if (shouldToggle) {
+        this.selectedGuide = {
+          kind: "outer",
+          chunkId: `${startLine}:${endLine}`,
+        };
+        this.scheduleGuideSynchronization();
+      }
+      if (
+        !shouldToggle ||
+        !this.interactionEnabled() ||
+        pressedGuide.getAttribute("data-actionable") !== "true"
+      ) {
+        event.preventDefault();
+        return true;
+      }
+      const roots = this.parser.parseRange(editor, startLine, endLine) ?? [];
       if (roots.length !== 1) {
         return false;
       }
@@ -532,11 +599,12 @@ export class GuideFoldingPluginValue implements PluginValue {
       if (
         !root ||
         root.getContentStart().line !== startLine ||
-        root.getContentEnd().line !== endLine ||
-        !isOuterListChunkActionable(root) ||
-        (shouldToggle && !toggleOuterListChunk(this.view, root))
+        root.getContentEnd().line !== endLine
       ) {
         return false;
+      }
+      if (isOuterListChunkActionable(root)) {
+        toggleOuterListChunk(this.view, root);
       }
       event.preventDefault();
       return true;
@@ -571,12 +639,22 @@ export class GuideFoldingPluginValue implements PluginValue {
     }
 
     const target = resolveVerticalGuideTarget(list, pressedGuide);
-    if (
-      !target ||
-      !isVerticalGuideTargetActionable(target) ||
-      (shouldToggle && !toggleVerticalGuideTarget(this.view, target))
-    ) {
+    if (!target) {
       return false;
+    }
+
+    if (shouldToggle) {
+      this.selectedGuide = {
+        kind: "indent",
+        targetStart: target.getFirstLineContentStart(),
+      };
+      this.scheduleGuideSynchronization();
+      if (
+        this.interactionEnabled() &&
+        isVerticalGuideTargetActionable(target)
+      ) {
+        toggleVerticalGuideTarget(this.view, target);
+      }
     }
 
     event.preventDefault();
@@ -591,6 +669,11 @@ export class GuideFoldingPluginValue implements PluginValue {
       true,
     );
     this.view.contentDOM.removeEventListener("click", this.onClick, true);
+    this.activeDocument?.removeEventListener(
+      "click",
+      this.onDocumentClick,
+      true,
+    );
     this.view.contentDOM.removeEventListener(
       "pointermove",
       this.onPointerMove,
@@ -604,6 +687,8 @@ export class GuideFoldingPluginValue implements PluginValue {
     this.settings.removeCallback(this.onSettingsChange);
     synchronizeHoveredIndentGuides(this.view.contentDOM, []);
     synchronizeHoveredOuterListGuides(this.view.contentDOM, []);
+    synchronizeSelectedIndentGuides(this.view.contentDOM, []);
+    synchronizeSelectedOuterListGuides(this.view.contentDOM, []);
     synchronizePersistentIndentGuides(this.view.contentDOM, false);
   }
 
@@ -617,6 +702,23 @@ export class GuideFoldingPluginValue implements PluginValue {
     if (this.handleClick(event)) {
       event.stopPropagation();
     }
+  };
+
+  private onDocumentClick = (event: MouseEvent) => {
+    const target = event.target;
+    if (
+      isElementLike(target) &&
+      this.view.contentDOM.contains(target) &&
+      (target.matches(INDENT_GUIDE_SELECTOR) ||
+        target.matches(OUTER_LIST_GUIDE_SELECTOR))
+    ) {
+      return;
+    }
+    if (!this.selectedGuide) {
+      return;
+    }
+    this.selectedGuide = null;
+    this.scheduleGuideSynchronization();
   };
 
   private interactionEnabled() {
@@ -673,12 +775,42 @@ export class GuideFoldingPluginValue implements PluginValue {
     );
   }
 
-  private readHoverMeasurement(): HoverMeasurement {
+  private readSelectedIndentGuideGroup(): Element[] {
+    if (this.selectedGuide?.kind !== "indent") return [];
+    const { targetStart } = this.selectedGuide;
+    const editor = getEditorFromState(this.view.state);
+    if (!editor) return [];
+
+    return Array.from(
+      this.view.contentDOM.querySelectorAll(RENDERED_GUIDE_CANDIDATE_SELECTOR),
+    ).filter((guide) => {
+      const line = this.getLineForGuide(guide);
+      if (line === null) return false;
+      const root = this.parser.parse(editor, { line, ch: 0 });
+      const list = root?.getListUnderLine(line);
+      const target = list ? resolveVerticalGuideTarget(list, guide) : null;
+      return target ? hasSameListStart(target, targetStart) : false;
+    });
+  }
+
+  private readSelectedOuterListGuideGroup(): Element[] {
+    if (this.selectedGuide?.kind !== "outer") return [];
+    const { chunkId } = this.selectedGuide;
+    return Array.from(
+      this.view.contentDOM.querySelectorAll<HTMLElement>(
+        OUTER_LIST_GUIDE_SELECTOR,
+      ),
+    ).filter((guide) => guide.dataset.chunkId === chunkId);
+  }
+
+  private readGuideMeasurement(): GuideMeasurement {
     return {
       indentGuides: this.readHoveredIndentGuideGroup(),
       outerGuides: this.outerInteractionEnabled()
         ? collectHoveredOuterListGuides(this.view.contentDOM)
         : [],
+      selectedIndentGuides: this.readSelectedIndentGuideGroup(),
+      selectedOuterGuides: this.readSelectedOuterListGuideGroup(),
     };
   }
 
@@ -749,8 +881,8 @@ export class GuideFoldingPluginValue implements PluginValue {
 
     this.view.requestMeasure({
       key: this.measureKey,
-      read: () => this.readHoverMeasurement(),
-      write: (measurement: HoverMeasurement) => {
+      read: () => this.readGuideMeasurement(),
+      write: (measurement: GuideMeasurement) => {
         if (this.destroyed) {
           return;
         }
@@ -768,6 +900,14 @@ export class GuideFoldingPluginValue implements PluginValue {
           this.outerInteractionEnabled()
             ? (measurement?.outerGuides ?? [])
             : [],
+        );
+        synchronizeSelectedIndentGuides(
+          this.view.contentDOM,
+          measurement?.selectedIndentGuides ?? [],
+        );
+        synchronizeSelectedOuterListGuides(
+          this.view.contentDOM,
+          measurement?.selectedOuterGuides ?? [],
         );
       },
     });
