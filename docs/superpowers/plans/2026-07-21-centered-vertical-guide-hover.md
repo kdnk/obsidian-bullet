@@ -4,7 +4,7 @@
 
 **Goal:** Render every actionable hovered vertical guide as a rounded three-pixel line whose center remains identical to the normal one-pixel guide.
 
-**Architecture:** Keep Obsidian's native pseudo-elements and the existing semantic hover markers. Increase only the marked border to three pixels and apply Logseq's two-pixel corner radius. Shift native guides one pixel with a logical negative margin so their static position remains intact; shift explicitly anchored outer guides one pixel with their logical inset.
+**Architecture:** Keep Obsidian's native pseudo-elements and the existing semantic hover markers. Increase only the marked border to three pixels and apply Logseq's two-pixel corner radius. Subtract one pixel from each native editor mode's existing logical margin so both its static position and theme offset remain intact; shift explicitly anchored outer guides one pixel with their logical inset.
 
 **Tech Stack:** CSS logical properties, Jest stylesheet contract tests, Node.js 22.23.1, GitButler CLI
 
@@ -33,10 +33,17 @@
 
 - [ ] **Step 1: Write the failing native and outer guide CSS contract assertions**
 
-Change the native hover assertion to require the following normalized declarations:
+Change the shared native hover assertion to require the following normalized declarations:
 
 ```text
-margin-inline-start: -1px; border-inline-end: 3px solid var(--indentation-guide-color-active); border-radius: 2px;
+border-inline-end: 3px solid var(--indentation-guide-color-active); border-radius: 2px;
+```
+
+Require the Live Preview and Source mode offset rules respectively:
+
+```text
+margin-inline-start: calc(var(--indentation-guide-editing-indent) - 1px);
+margin-inline-start: calc(var(--indentation-guide-source-indent) - 1px);
 ```
 
 Change the general outer hover assertion to require both declarations:
@@ -71,12 +78,29 @@ Expected: the native and outer hover style assertions fail because the current r
 
 - [ ] **Step 3: Implement the centered hover geometry**
 
-Update the native hover rule:
+Update the shared native hover rule:
 
 ```css
-margin-inline-start: -1px;
 border-inline-end: 3px solid var(--indentation-guide-color-active);
 border-radius: 2px;
+```
+
+Add mode-specific native offset rules:
+
+```css
+.bullet-plugin-vertical-lines-action-toggle-folding
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-hmd-list-indent
+  .cm-indent.bullet-plugin-hovered-indent-guide::before {
+  margin-inline-start: calc(var(--indentation-guide-editing-indent) - 1px);
+}
+
+.bullet-plugin-vertical-lines-action-toggle-folding
+  .markdown-source-view.mod-cm6:not(.is-live-preview)
+  .cm-hmd-list-indent
+  .cm-indent.bullet-plugin-hovered-indent-guide::before {
+  margin-inline-start: calc(var(--indentation-guide-source-indent) - 1px);
+}
 ```
 
 Update the general outer hover rule:
@@ -140,7 +164,7 @@ obsidian-cli vault=vault dev:cdp method=Runtime.evaluate params='{"expression":"
 ```
 
 Before each Computer Use action, focus the test-vault renderer and confirm the window title contains `vault` and does not contain `base`.
-For one native inner guide, confirm the normal geometry computes to `static inline start + 0px margin + 1px content width + 0.5px border = center`, while hover computes to `the same static inline start - 1px margin + 1px content width + 1.5px border = the same center`.
+For one native inner guide in Live Preview, confirm the normal geometry computes to `static inline start + native editing margin + 1px content width + 0.5px border = center`, while hover computes to `the same static inline start + native editing margin - 1px + 1px content width + 1.5px border = the same center`.
 For one outer guide, compare the normal and hovered painted bounds and confirm the center X difference is `0px`, while the widths are `1px` and `3px`.
 Confirm the hovered pseudo-elements compute to `border-radius: 2px`, the normal pseudo-elements retain their native radius, and the rendered three-pixel endpoints appear rounded.
 Confirm the whole represented logical guide becomes three pixels wide and a separate list at the same X coordinate remains unchanged.

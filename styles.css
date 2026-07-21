@@ -49,8 +49,16 @@ body:not(.is-mobile)
 .bullet-plugin-vertical-lines-action-toggle-folding
   .markdown-source-view.mod-cm6
   .bullet-plugin-outer-list-guide[data-actionable="true"].bullet-plugin-hovered-outer-list-guide::before {
-  border-inline-end: var(--indentation-guide-width-active) solid
-    var(--indentation-guide-color-active);
+  inset-inline-end: -1px;
+  border-inline-end: 3px solid var(--indentation-guide-color-active);
+  border-radius: 2px;
+}
+
+body:not(.is-mobile).bullet-plugin-vertical-lines-action-toggle-folding
+  .markdown-source-view.mod-cm6
+  .bullet-plugin-outer-list-guide[data-actionable="true"].bullet-plugin-hovered-outer-list-guide::before {
+  inset-inline-start: -1px;
+  inset-inline-end: auto;
 }
 
 .bullet-plugin-vertical-lines-action-toggle-folding
@@ -64,8 +72,22 @@ body:not(.is-mobile)
   .markdown-source-view.mod-cm6
   .cm-hmd-list-indent
   .cm-indent.bullet-plugin-hovered-indent-guide::before {
-  border-inline-end: var(--indentation-guide-width-active) solid
-    var(--indentation-guide-color-active);
+  border-inline-end: 3px solid var(--indentation-guide-color-active);
+  border-radius: 2px;
+}
+
+.bullet-plugin-vertical-lines-action-toggle-folding
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-hmd-list-indent
+  .cm-indent.bullet-plugin-hovered-indent-guide::before {
+  margin-inline-start: calc(var(--indentation-guide-editing-indent) - 1px);
+}
+
+.bullet-plugin-vertical-lines-action-toggle-folding
+  .markdown-source-view.mod-cm6:not(.is-live-preview)
+  .cm-hmd-list-indent
+  .cm-indent.bullet-plugin-hovered-indent-guide::before {
+  margin-inline-start: calc(var(--indentation-guide-source-indent) - 1px);
 }
 
 body:not(.is-mobile)
