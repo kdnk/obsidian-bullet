@@ -68,7 +68,7 @@ body:not(.is-mobile).bullet-plugin-better-lists
   inset-block: 0;
   inset-inline-start: calc(-1 * var(--list-indent));
   width: var(--list-indent);
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .markdown-source-view.mod-cm6 .bullet-plugin-outer-list-guide::before {
@@ -90,9 +90,44 @@ body:not(.is-mobile)
 .bullet-plugin-vertical-lines-action-toggle-folding
   .markdown-source-view.mod-cm6
   .bullet-plugin-outer-list-guide[data-actionable="true"] {
-  pointer-events: auto;
   cursor: pointer;
   z-index: 2;
+}
+
+.markdown-source-view.mod-cm6
+  .bullet-plugin-outer-list-guide.bullet-plugin-selected-outer-list-guide::before {
+  border-inline-end: var(--indentation-guide-width-active) solid
+    var(--indentation-guide-color-active);
+}
+
+.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6
+  .bullet-plugin-outer-list-guide.bullet-plugin-selected-outer-list-guide::before {
+  inset-inline-end: -1px;
+  inline-size: 3px;
+  border-inline-end: 0;
+  background-color: var(--indentation-guide-color-active);
+}
+
+.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6
+  .bullet-plugin-outer-list-guide.bullet-plugin-selected-outer-list-guide.bullet-plugin-selected-outer-list-guide-start::before {
+  border-start-start-radius: 2px;
+  border-start-end-radius: 2px;
+}
+
+.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6
+  .bullet-plugin-outer-list-guide.bullet-plugin-selected-outer-list-guide.bullet-plugin-selected-outer-list-guide-end::before {
+  border-end-start-radius: 2px;
+  border-end-end-radius: 2px;
+}
+
+body:not(.is-mobile).bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6
+  .bullet-plugin-outer-list-guide.bullet-plugin-selected-outer-list-guide::before {
+  inset-inline-start: -1px;
+  inset-inline-end: auto;
 }
 
 .bullet-plugin-vertical-lines-action-toggle-folding
@@ -139,6 +174,52 @@ body:not(
   .cm-hmd-list-indent
   .cm-indent {
   cursor: pointer;
+}
+
+.markdown-source-view.mod-cm6
+  .cm-hmd-list-indent
+  .cm-indent.bullet-plugin-selected-indent-guide::before {
+  border-inline-end: var(--indentation-guide-width-active) solid
+    var(--indentation-guide-color-active);
+}
+
+.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6
+  .cm-hmd-list-indent
+  .cm-indent.bullet-plugin-selected-indent-guide::before {
+  inline-size: 3px;
+  border-inline-end: 0;
+  background-color: var(--indentation-guide-color-active);
+}
+
+.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6
+  .cm-hmd-list-indent
+  .cm-indent.bullet-plugin-selected-indent-guide.bullet-plugin-selected-indent-guide-start::before {
+  border-start-start-radius: 2px;
+  border-start-end-radius: 2px;
+}
+
+.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6
+  .cm-hmd-list-indent
+  .cm-indent.bullet-plugin-selected-indent-guide.bullet-plugin-selected-indent-guide-end::before {
+  border-end-start-radius: 2px;
+  border-end-end-radius: 2px;
+}
+
+.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-hmd-list-indent
+  .cm-indent.bullet-plugin-selected-indent-guide::before {
+  margin-inline-start: var(--indentation-guide-editing-indent);
+}
+
+.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6:not(.is-live-preview)
+  .cm-hmd-list-indent
+  .cm-indent.bullet-plugin-selected-indent-guide::before {
+  margin-inline-start: var(--indentation-guide-source-indent);
 }
 
 .bullet-plugin-vertical-lines-action-toggle-folding
