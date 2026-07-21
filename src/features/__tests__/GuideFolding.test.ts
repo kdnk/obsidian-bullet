@@ -970,7 +970,7 @@ describe("GuideFolding persistent guide styles", () => {
     const normalized = declarations?.replace(/\s+/g, " ").trim();
 
     expect(normalColor?.replace(/\s+/g, " ").trim()).toBe(
-      "--indentation-guide-color: color-mix( in oklch, var(--text-normal) 20%, transparent );",
+      "--indentation-guide-color: color-mix( in oklch, var(--text-normal) 26%, transparent );",
     );
     expect(normalized).toBe(
       "inline-size: 3px; border-inline-end: 0; background-color: var(--indentation-guide-color-active);",
