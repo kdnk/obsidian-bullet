@@ -848,16 +848,30 @@ describe("GuideFolding persistent guide styles", () => {
     );
   });
 
-  test("centers a three-pixel active style without replacing the native mode indent", () => {
+  test("uses native active guide styling when enhanced hover is disabled", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(
       /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
+    const normalized = declarations?.replace(/\s+/g, " ").trim();
+
+    expect(normalized).toBe(
+      "border-inline-end: var(--indentation-guide-width-active) solid var(--indentation-guide-color-active);",
+    );
+    expect(normalized).not.toMatch(/\bborder-radius\s*:/);
+    expect(normalized).not.toMatch(/\bmargin-inline-start\s*:/);
+  });
+
+  test("centers the optional three-pixel style without replacing the native mode indent", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const declarations = styles.match(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
     const livePreviewOffset = styles.match(
-      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const sourceModeOffset = styles.match(
-      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6:not\(\.is-live-preview\)\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6:not\(\.is-live-preview\)\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const normalized = declarations?.replace(/\s+/g, " ").trim();
 
@@ -910,29 +924,40 @@ describe("GuideFolding outer guide styles", () => {
     );
   });
 
-  test("draws normal and hovered segments with native theme variables", () => {
+  test("draws normal, native-active, and enhanced segments with theme variables", () => {
     const normal = styles.match(
       /\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
-    const hovered = styles.match(
+    const nativeHovered = styles.match(
       /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
-    const desktopHovered = styles.match(
-      /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide::before\s*\{([^}]*)\}/,
+    const enhancedHovered = styles.match(
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
-    const normalizedHovered = hovered?.replace(/\s+/g, " ").trim();
+    const desktopEnhancedHovered = styles.match(
+      /body:not\(\s*\.is-mobile\s*\)\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const normalizedNativeHovered = nativeHovered?.replace(/\s+/g, " ").trim();
+    const normalizedEnhancedHovered = enhancedHovered
+      ?.replace(/\s+/g, " ")
+      .trim();
 
     expect(normal?.replace(/\s+/g, " ")).toContain(
       "border-inline-end: var(--indentation-guide-width) solid var(--indentation-guide-color);",
     );
-    expect(normalizedHovered).toBe(
+    expect(normalizedNativeHovered).toBe(
+      "border-inline-end: var(--indentation-guide-width-active) solid var(--indentation-guide-color-active);",
+    );
+    expect(normalizedEnhancedHovered).toBe(
       "inset-inline-end: -1px; border-inline-end: 3px solid var(--indentation-guide-color-active); border-radius: 2px;",
     );
-    expect(desktopHovered?.replace(/\s+/g, " ").trim()).toBe(
+    expect(desktopEnhancedHovered?.replace(/\s+/g, " ").trim()).toBe(
       "inset-inline-start: -1px; inset-inline-end: auto;",
     );
-    expect(normalizedHovered).not.toMatch(/(?:^|;)\s*(?:left|right)\s*:/);
-    expect(normalizedHovered).not.toMatch(
+    expect(normalizedEnhancedHovered).not.toMatch(
+      /(?:^|;)\s*(?:left|right)\s*:/,
+    );
+    expect(normalizedEnhancedHovered).not.toMatch(
       /\b(?:transition|box-shadow|background|opacity)\s*:/,
     );
   });

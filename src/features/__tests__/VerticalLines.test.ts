@@ -73,7 +73,7 @@ describe("VerticalLines", () => {
     jest.clearAllMocks();
   });
 
-  test("manages the folding-action class across documents", async () => {
+  test("manages folding and enhanced-hover classes independently across documents", async () => {
     const mainDocument = makeDocument();
     const popoutDocument = makeDocument();
     Object.defineProperty(global, "activeDocument", {
@@ -82,11 +82,15 @@ describe("VerticalLines", () => {
     });
 
     const { eventHandlers, plugin, workspace } = makePlugin();
-    const settingsCallbacks: Array<() => void> = [];
+    const settingsCallbacks = new Map<string, () => void>();
     const settings = {
       verticalLinesAction: "toggle-folding",
+      enhancedVerticalLineHover: true,
       onChange: jest.fn((keys: unknown, callback?: () => void) => {
-        settingsCallbacks.push(callback ?? (keys as () => void));
+        settingsCallbacks.set(
+          (keys as string[]).join(","),
+          callback ?? (keys as () => void),
+        );
       }),
       removeCallback: jest.fn(),
     };
@@ -103,6 +107,10 @@ describe("VerticalLines", () => {
       ["listLineAction"],
       expect.any(Function),
     );
+    expect(settings.onChange).toHaveBeenCalledWith(
+      ["enhanceVerticalLineHover"],
+      expect.any(Function),
+    );
     expect(plugin.registerEditorExtension).toHaveBeenCalled();
     expect(workspace.on).toHaveBeenCalledWith(
       "window-open",
@@ -117,6 +125,11 @@ describe("VerticalLines", () => {
         "bullet-plugin-vertical-lines-action-toggle-folding",
       ),
     ).toBe(true);
+    expect(
+      mainDocument.body.classList.contains(
+        "bullet-plugin-enhanced-vertical-line-hover",
+      ),
+    ).toBe(true);
 
     for (const handler of eventHandlers.get("window-open") ?? []) {
       handler({} as never, { document: popoutDocument } as never);
@@ -126,14 +139,36 @@ describe("VerticalLines", () => {
         "bullet-plugin-vertical-lines-action-toggle-folding",
       ),
     ).toBe(true);
+    expect(
+      popoutDocument.body.classList.contains(
+        "bullet-plugin-enhanced-vertical-line-hover",
+      ),
+    ).toBe(true);
 
-    const settingsCallback = settingsCallbacks[0];
-    if (!settingsCallback) {
-      throw new Error("Expected settings callback to be registered");
+    const actionSettingsCallback = settingsCallbacks.get("listLineAction");
+    const hoverSettingsCallback = settingsCallbacks.get(
+      "enhanceVerticalLineHover",
+    );
+    if (!actionSettingsCallback || !hoverSettingsCallback) {
+      throw new Error("Expected settings callbacks to be registered");
     }
 
+    settings.enhancedVerticalLineHover = false;
+    hoverSettingsCallback();
+
+    expect(
+      mainDocument.body.classList.contains(
+        "bullet-plugin-vertical-lines-action-toggle-folding",
+      ),
+    ).toBe(true);
+    expect(
+      mainDocument.body.classList.contains(
+        "bullet-plugin-enhanced-vertical-line-hover",
+      ),
+    ).toBe(false);
+
     settings.verticalLinesAction = "none";
-    settingsCallback();
+    actionSettingsCallback();
 
     expect(
       mainDocument.body.classList.contains(
@@ -146,8 +181,17 @@ describe("VerticalLines", () => {
       ),
     ).toBe(false);
 
+    settings.enhancedVerticalLineHover = true;
+    hoverSettingsCallback();
+
+    expect(
+      mainDocument.body.classList.contains(
+        "bullet-plugin-enhanced-vertical-line-hover",
+      ),
+    ).toBe(true);
+
     settings.verticalLinesAction = "toggle-folding";
-    settingsCallback();
+    actionSettingsCallback();
 
     expect(
       mainDocument.body.classList.contains(
@@ -167,7 +211,15 @@ describe("VerticalLines", () => {
         "bullet-plugin-vertical-lines-action-toggle-folding",
       ),
     ).toBe(false);
-    expect(settings.removeCallback).toHaveBeenCalledWith(expect.any(Function));
+    expect(
+      popoutDocument.body.classList.contains(
+        "bullet-plugin-enhanced-vertical-line-hover",
+      ),
+    ).toBe(false);
+    expect(settings.removeCallback).toHaveBeenCalledWith(
+      actionSettingsCallback,
+    );
+    expect(settings.removeCallback).toHaveBeenCalledWith(hoverSettingsCallback);
   });
 
   test("reserves scroll-past-end space only while guide folding is enabled", async () => {
@@ -179,6 +231,7 @@ describe("VerticalLines", () => {
     const settingsCallbacks: Array<() => void> = [];
     const settings = {
       verticalLinesAction: "toggle-folding",
+      enhancedVerticalLineHover: true,
       onChange: jest.fn((keys: unknown, callback?: () => void) => {
         settingsCallbacks.push(callback ?? (keys as () => void));
       }),
@@ -226,6 +279,7 @@ describe("VerticalLines", () => {
     const settings = {
       outerVerticalLines: true,
       verticalLinesAction: "none",
+      enhancedVerticalLineHover: true,
       onChange: jest.fn(),
       removeCallback: jest.fn(),
     };
@@ -259,6 +313,7 @@ describe("VerticalLines", () => {
     const settings = {
       outerVerticalLines: true,
       verticalLinesAction: "none",
+      enhancedVerticalLineHover: true,
       onChange: jest.fn(),
       removeCallback: jest.fn(),
     };

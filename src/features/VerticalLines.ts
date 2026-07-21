@@ -15,9 +15,12 @@ import { Settings } from "../services/Settings";
 
 const VERTICAL_LINES_ACTION_BODY_CLASS =
   "bullet-plugin-vertical-lines-action-toggle-folding";
+const ENHANCED_VERTICAL_LINE_HOVER_BODY_CLASS =
+  "bullet-plugin-enhanced-vertical-line-hover";
 
 export class VerticalLines implements Feature {
   private actionBodyClass: DocumentBodyClass;
+  private hoverBodyClass: DocumentBodyClass;
   private editorExtensions: Extension[] = [];
 
   constructor(
@@ -29,6 +32,11 @@ export class VerticalLines implements Feature {
       this.plugin,
       VERTICAL_LINES_ACTION_BODY_CLASS,
       this.shouldApplyActionBodyClass,
+    );
+    this.hoverBodyClass = new DocumentBodyClass(
+      this.plugin,
+      ENHANCED_VERTICAL_LINE_HOVER_BODY_CLASS,
+      this.shouldApplyHoverBodyClass,
     );
   }
 
@@ -43,17 +51,28 @@ export class VerticalLines implements Feature {
     this.plugin.registerEditorExtension(this.editorExtensions);
 
     this.settings.onChange(["listLineAction"], this.updateActionState);
+    this.settings.onChange(
+      ["enhanceVerticalLineHover"],
+      this.updateHoverBodyClass,
+    );
     this.actionBodyClass.load();
+    this.hoverBodyClass.load();
   }
 
   async unload() {
     this.settings.removeCallback(this.updateActionState);
+    this.settings.removeCallback(this.updateHoverBodyClass);
     this.actionBodyClass.unload();
+    this.hoverBodyClass.unload();
   }
 
   private updateActionState = () => {
     this.actionBodyClass.update();
     this.synchronizeScrollPastEndExtension(true);
+  };
+
+  private updateHoverBodyClass = () => {
+    this.hoverBodyClass.update();
   };
 
   private synchronizeScrollPastEndExtension(updateViews: boolean) {
@@ -79,5 +98,9 @@ export class VerticalLines implements Feature {
 
   private shouldApplyActionBodyClass = () => {
     return this.settings.verticalLinesAction === "toggle-folding";
+  };
+
+  private shouldApplyHoverBodyClass = () => {
+    return this.settings.enhancedVerticalLineHover;
   };
 }
