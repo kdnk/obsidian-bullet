@@ -3,7 +3,6 @@ import { Plugin } from "obsidian";
 import { DocumentBodyClass } from "./DocumentBodyClass";
 import { Feature } from "./Feature";
 
-import { ObsidianSettings } from "../services/ObsidianSettings";
 import { Settings } from "../services/Settings";
 
 const BETTER_LISTS_BODY_CLASS = "bullet-plugin-better-lists";
@@ -14,21 +13,16 @@ export class BetterListsStyles implements Feature {
   constructor(
     private plugin: Plugin,
     private settings: Settings,
-    private obsidianSettings: ObsidianSettings,
   ) {
     this.bodyClass = new DocumentBodyClass(
       this.plugin,
       BETTER_LISTS_BODY_CLASS,
-      this.shouldApplyBodyClass,
+      () => this.settings.betterListsStyles,
     );
   }
 
   async load() {
     this.settings.onChange(["styleLists"], this.updateBodyClass);
-    this.plugin.registerEvent(
-      this.plugin.app.workspace.on("css-change", this.updateBodyClass),
-    );
-    this.updateBodyClass();
     this.bodyClass.load();
   }
 
@@ -39,12 +33,5 @@ export class BetterListsStyles implements Feature {
 
   private updateBodyClass = () => {
     this.bodyClass.update();
-  };
-
-  private shouldApplyBodyClass = () => {
-    return (
-      this.obsidianSettings.isDefaultThemeEnabled() &&
-      this.settings.betterListsStyles
-    );
   };
 }

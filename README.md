@@ -55,7 +55,7 @@ The movement shortcuts are registered by Bullet. The other controls replace Obsi
 
 ### Keep editing inside the outline
 
-With **Keep body text in bullets** enabled, directly typed body text stays in a list item or one of its continuation lines. Headings, block quotes, horizontal rules, fenced code blocks, and frontmatter remain available as document-level Markdown structures.
+With **Keep typed text in lists** enabled, directly typed body text stays in a list item or one of its continuation lines. Headings, block quotes, horizontal rules, fenced code blocks, and frontmatter remain available as document-level Markdown structures.
 
 On a completely empty line, press <kbd>Space</kbd> to create an empty list item immediately. Indented continuation lines remain plain note lines.
 
@@ -71,11 +71,11 @@ Repeated `Command`+`A` or `Ctrl`+`A` expands selection from the current item's c
 
 ### Keep the caret in editable content
 
-Bullet can keep the caret outside the Markdown prefix for bullets, numbered items, and checkboxes. Choose one of three modes under **Stick the cursor to the content**:
+Bullet can keep the caret outside the Markdown prefix for bullets, numbered items, and checkboxes. Choose one of three modes under **Keep cursor out of list markers**:
 
-- **Never:** allow the caret inside all Markdown prefixes.
-- **Stick cursor out of bullets:** protect bullet and number prefixes, but allow checkbox editing.
-- **Stick cursor out of bullets and checkboxes:** keep the caret in item content.
+- **Allow cursor in markers:** allow the caret inside all Markdown prefixes.
+- **Keep out of bullets:** protect bullet and number prefixes, but allow checkbox editing.
+- **Keep out of bullets and checkboxes:** keep the caret in item content.
 
 Hold <kbd>Alt</kbd> or <kbd>Option</kbd> while navigating or clicking to place the caret inside protected markup temporarily.
 
@@ -117,27 +117,28 @@ All settings are under **Settings → Bullet**.
 
 ### Editing
 
-| Setting                                  |                  Default                   | Effect                                                 |
-| ---------------------------------------- | :----------------------------------------: | ------------------------------------------------------ |
-| **Stick the cursor to the content**      | Stick cursor out of bullets and checkboxes | Keep the caret outside bullet and checkbox prefixes.   |
-| **Keep body text in bullets**            |                     On                     | Keep directly typed body text inside list items.       |
-| **Enhance the Tab key**                  |                     On                     | Indent and outdent complete branches.                  |
-| **Enhance the Enter key**                |                     On                     | Create and outdent items with outliner-style behavior. |
-| **Vim-mode o/O inserts bullets**         |                     On                     | Create list items from Vim's `o` and `O` actions.      |
-| **Enhance the Ctrl+A or Cmd+A behavior** |                     On                     | Expand selection through list scopes.                  |
-| **Drag-and-Drop**                        |                     On                     | Move branches by dragging on desktop.                  |
+| Setting                                  |                 Default                 | Effect                                                               |
+| ---------------------------------------- | :-------------------------------------: | -------------------------------------------------------------------- |
+| **Keep typed text in lists**             |                   On                    | Add list markers when directly typed body text would sit outside one. |
+| **Keep cursor out of list markers**      | Keep out of bullets and checkboxes      | Move the caret outside bullet, number, and checkbox prefixes.         |
+| **Enhance the Tab key**                  |                   On                    | Indent and outdent complete branches.                                 |
+| **Enhance the Enter key**                |                   On                    | Create and outdent items with outliner-style behavior.                |
+| **Vim-mode o/O inserts bullets**         |                   On                    | Create list items from Vim's `o` and `O` actions.                     |
+| **Enhance the Ctrl+A or Cmd+A behavior** |                   On                    | Expand selection through list scopes.                                 |
+| **Drag-and-Drop**                        |                   On                    | Move branches by dragging on desktop.                                 |
 
 ### Appearance
 
-| Setting                             | Default | Effect                                                                                    |
-| ----------------------------------- | :-----: | ----------------------------------------------------------------------------------------- |
-| **Improve the style of your lists** |   On    | Apply Bullet's additional list spacing and bullet styling with Obsidian's default themes. |
-| **Draw outer list lines**           |   On    | Draw a guide beside each contiguous root list chunk.                                      |
+| Setting                    | Default | Effect                                                                                             |
+| -------------------------- | :-----: | -------------------------------------------------------------------------------------------------- |
+| **Style list bullets**     |   On    | Use Bullet's marker spacing, larger dots, and parent hover feedback with active theme colors.      |
+| **Enhance vertical lines** |   On    | Strengthen indentation guides and use a continuous rounded hover.                                  |
 
 ### Folding
 
 | Setting                                        | Default | Effect                                                                     |
 | ---------------------------------------------- | :-----: | -------------------------------------------------------------------------- |
+| **Draw outer list lines**                      |   On    | Draw a guide beside each contiguous root list chunk.                       |
 | **Fold lists from vertical indentation lines** |   On    | Make visible guides clickable for folding.                                 |
 | **Show fold controls on the right on mobile**  |   On    | Move native list and heading controls to the right in mobile Live Preview. |
 
@@ -151,7 +152,6 @@ All settings are under **Settings → Bullet**.
 
 - Bullet requires Obsidian 1.12.7 or later and is available on desktop and mobile.
 - The editing enhancements work in Obsidian's Markdown editor. Vertical-line folding, outer guides, and right-side mobile fold controls are designed for Live Preview.
-- **Improve the style of your lists** is applied only with Obsidian's default themes. Other themes may already define their own list appearance.
 - The fold and unfold commands require Obsidian's **Fold indent** editor setting to be enabled.
 
 ## Support and credits

@@ -37,9 +37,9 @@ type BulletSettingGroup = SettingDefinitionGroup<SettingsControlKey> & {
 };
 
 const KEEP_CURSOR_OPTIONS = {
-  never: "Never",
-  "bullet-only": "Stick cursor out of bullets",
-  "bullet-and-checkbox": "Stick cursor out of bullets and checkboxes",
+  never: "Allow cursor in markers",
+  "bullet-only": "Keep out of bullets",
+  "bullet-and-checkbox": "Keep out of bullets and checkboxes",
 } satisfies Record<KeepCursorWithinContent, string>;
 
 const SETTING_GROUPS = [
@@ -48,20 +48,20 @@ const SETTING_GROUPS = [
     heading: "Editing",
     items: [
       {
-        name: "Stick the cursor to the content",
-        desc: "Keep the caret in the editable text instead of the markdown prefix. Use Never to edit bullets and checkboxes directly, Bullets to stay out of `- ` or `1. `, or Bullets and checkboxes to also stay out of `[ ]` / `[x]` markup.",
+        name: "Keep typed text in lists",
+        desc: "Add a list marker when directly typed body text would otherwise sit outside a list. Markdown structures stay available; pasted and external changes are unchanged.",
+        control: {
+          type: "toggle",
+          key: "keepBodyTextInBullets",
+        },
+      },
+      {
+        name: "Keep cursor out of list markers",
+        desc: "Move the caret out of bullet, number, and checkbox prefixes after navigation or a click. Hold Alt or Option to place it inside temporarily. This changes only the caret position.",
         control: {
           type: "dropdown",
           key: "keepCursorWithinContent",
           options: KEEP_CURSOR_OPTIONS,
-        },
-      },
-      {
-        name: "Keep body text in bullets",
-        desc: "Automatically keep directly typed body text in list items while allowing headings, quotes, horizontal rules, code fences, and frontmatter. Pasted and external changes are left unchanged.",
-        control: {
-          type: "toggle",
-          key: "keepBodyTextInBullets",
         },
       },
       {
@@ -111,8 +111,8 @@ const SETTING_GROUPS = [
     heading: "Appearance",
     items: [
       {
-        name: "Improve the style of your lists",
-        desc: "Styles are only compatible with built-in Obsidian themes and may not be compatible with other themes.",
+        name: "Style list bullets",
+        desc: "Use Bullet's list-marker spacing, larger dots, and parent-item hover feedback. Colors follow the active Obsidian theme.",
         control: {
           type: "toggle",
           key: "betterListsStyles",

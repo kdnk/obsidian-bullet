@@ -33,15 +33,6 @@ export class ObsidianSettings {
     return config.legacyEditor;
   }
 
-  isDefaultThemeEnabled() {
-    const config: { cssTheme: string } = {
-      cssTheme: "",
-      ...getHiddenObsidianConfig(this.app),
-    };
-
-    return config.cssTheme === "";
-  }
-
   getTabsSettings(): ObsidianTabsSettings {
     return {
       useTab: true,
