@@ -28,7 +28,7 @@
 - Consumes: `ObsidianBulletPluginSettingTab.getSettingDefinitions(): SettingDefinitionItem<SettingsControlKey>[]` and `display(): void`.
 - Produces: the unchanged `outerVerticalLines` toggle under the first position in the `Folding` group for declarative and fallback rendering.
 
-- [ ] **Step 1: Write the failing group-order assertions**
+- [x] **Step 1: Write the failing group-order assertions**
 
 Change the declarative group expectation to:
 
@@ -80,7 +80,7 @@ Change the fallback display expectation around the group boundary to:
 "setting:Show fold controls on the right on mobile",
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -90,7 +90,7 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/features/__tests__/SettingsTab.test.
 
 Expected: FAIL because `Draw outer list lines` is still returned under `Appearance` and is rendered before the `Folding` heading.
 
-- [ ] **Step 3: Move the shared setting definition**
+- [x] **Step 3: Move the shared setting definition**
 
 Remove this object from `Appearance`:
 
@@ -108,7 +108,7 @@ Remove this object from `Appearance`:
 Insert the same object as the first item in `Folding`, before `Fold lists from vertical indentation lines`.
 Do not change the object contents or any getter, setter, storage, or feature code.
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run:
 
@@ -118,7 +118,7 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/features/__tests__/SettingsTab.test.
 
 Expected: PASS with all four SettingsTab tests passing.
 
-- [ ] **Step 5: Run the settings regression suite**
+- [x] **Step 5: Run the settings regression suite**
 
 Run:
 
@@ -128,7 +128,7 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/features/__tests__/SettingsTab.test.
 
 Expected: PASS with no failures, warnings, or setting persistence changes.
 
-- [ ] **Step 6: Commit the implementation**
+- [x] **Step 6: Commit the implementation**
 
 Inspect only uncommitted changes with `but diff`, then commit the two source files and this completed plan to `codex/move-outer-lines-setting` with:
 

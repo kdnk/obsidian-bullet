@@ -126,6 +126,12 @@ const SETTING_GROUPS = [
           key: "enhancedVerticalLineHover",
         },
       },
+    ],
+  },
+  {
+    type: "group",
+    heading: "Folding",
+    items: [
       {
         name: "Draw outer list lines",
         desc: "Show a root-level guide beside each contiguous list chunk.",
@@ -134,12 +140,6 @@ const SETTING_GROUPS = [
           key: "outerVerticalLines",
         },
       },
-    ],
-  },
-  {
-    type: "group",
-    heading: "Folding",
-    items: [
       {
         name: "Fold lists from vertical indentation lines",
         desc: "Click a vertical indentation line to fold or unfold that list.",
