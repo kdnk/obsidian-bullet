@@ -170,21 +170,28 @@ function synchronizeGuideMarkers(
   startSelector: string,
   endMarker: string,
   endSelector: string,
-) {
+  previousMarked: Iterable<Element> = [],
+): Element[] {
   const ordered = Array.from(guides);
   const next = new Set(ordered);
+  const previous = Array.from(previousMarked);
 
-  for (const element of Array.from(
-    contentDOM.querySelectorAll(startSelector),
-  )) {
+  for (const element of new Set<Element>([
+    ...Array.from(contentDOM.querySelectorAll<Element>(startSelector)),
+    ...previous,
+  ])) {
     element.classList.remove(startMarker);
   }
-  for (const element of Array.from(contentDOM.querySelectorAll(endSelector))) {
+  for (const element of new Set<Element>([
+    ...Array.from(contentDOM.querySelectorAll<Element>(endSelector)),
+    ...previous,
+  ])) {
     element.classList.remove(endMarker);
   }
-  for (const element of Array.from(
-    contentDOM.querySelectorAll(markerSelector),
-  )) {
+  for (const element of new Set<Element>([
+    ...Array.from(contentDOM.querySelectorAll<Element>(markerSelector)),
+    ...previous,
+  ])) {
     if (!next.has(element)) {
       element.classList.remove(marker);
     }
@@ -194,6 +201,7 @@ function synchronizeGuideMarkers(
   }
   ordered[0]?.classList.add(startMarker);
   ordered[ordered.length - 1]?.classList.add(endMarker);
+  return ordered;
 }
 
 function buildOuterListGuideDecorations(
@@ -437,8 +445,9 @@ function synchronizeHoveredIndentGuides(
 function synchronizeSelectedIndentGuides(
   contentDOM: ParentNode,
   highlightedGuides: Iterable<Element>,
-) {
-  synchronizeGuideMarkers(
+  previousMarked: Iterable<Element> = [],
+): Element[] {
+  return synchronizeGuideMarkers(
     contentDOM,
     highlightedGuides,
     SELECTED_GUIDE_MARKER,
@@ -447,14 +456,16 @@ function synchronizeSelectedIndentGuides(
     SELECTED_GUIDE_START_SELECTOR,
     SELECTED_GUIDE_END_MARKER,
     SELECTED_GUIDE_END_SELECTOR,
+    previousMarked,
   );
 }
 
 function synchronizeSelectedOuterListGuides(
   contentDOM: ParentNode,
   guides: Iterable<Element>,
-) {
-  synchronizeGuideMarkers(
+  previousMarked: Iterable<Element> = [],
+): Element[] {
+  return synchronizeGuideMarkers(
     contentDOM,
     guides,
     SELECTED_OUTER_LIST_GUIDE_CLASS,
@@ -463,6 +474,7 @@ function synchronizeSelectedOuterListGuides(
     SELECTED_OUTER_LIST_GUIDE_START_SELECTOR,
     SELECTED_OUTER_LIST_GUIDE_END_CLASS,
     SELECTED_OUTER_LIST_GUIDE_END_SELECTOR,
+    previousMarked,
   );
 }
 
@@ -494,6 +506,8 @@ export class GuideFoldingPluginValue implements PluginValue {
   private lastOuterVisibility: boolean;
   private lastPointerGuide: Element | null = null;
   private selectedGuide: SelectedGuide | null = null;
+  private selectedIndentMarkerElements: Element[] = [];
+  private selectedOuterMarkerElements: Element[] = [];
   private activeDocument: Document | null;
   private measureKey = {};
 
@@ -593,7 +607,8 @@ export class GuideFoldingPluginValue implements PluginValue {
       }
       const roots = this.parser.parseRange(editor, startLine, endLine) ?? [];
       if (roots.length !== 1) {
-        return false;
+        event.preventDefault();
+        return true;
       }
       const root = roots[0];
       if (
@@ -601,7 +616,8 @@ export class GuideFoldingPluginValue implements PluginValue {
         root.getContentStart().line !== startLine ||
         root.getContentEnd().line !== endLine
       ) {
-        return false;
+        event.preventDefault();
+        return true;
       }
       if (isOuterListChunkActionable(root)) {
         toggleOuterListChunk(this.view, root);
@@ -687,8 +703,16 @@ export class GuideFoldingPluginValue implements PluginValue {
     this.settings.removeCallback(this.onSettingsChange);
     synchronizeHoveredIndentGuides(this.view.contentDOM, []);
     synchronizeHoveredOuterListGuides(this.view.contentDOM, []);
-    synchronizeSelectedIndentGuides(this.view.contentDOM, []);
-    synchronizeSelectedOuterListGuides(this.view.contentDOM, []);
+    this.selectedIndentMarkerElements = synchronizeSelectedIndentGuides(
+      this.view.contentDOM,
+      [],
+      this.selectedIndentMarkerElements,
+    );
+    this.selectedOuterMarkerElements = synchronizeSelectedOuterListGuides(
+      this.view.contentDOM,
+      [],
+      this.selectedOuterMarkerElements,
+    );
     synchronizePersistentIndentGuides(this.view.contentDOM, false);
   }
 
@@ -901,13 +925,15 @@ export class GuideFoldingPluginValue implements PluginValue {
             ? (measurement?.outerGuides ?? [])
             : [],
         );
-        synchronizeSelectedIndentGuides(
+        this.selectedIndentMarkerElements = synchronizeSelectedIndentGuides(
           this.view.contentDOM,
           measurement?.selectedIndentGuides ?? [],
+          this.selectedIndentMarkerElements,
         );
-        synchronizeSelectedOuterListGuides(
+        this.selectedOuterMarkerElements = synchronizeSelectedOuterListGuides(
           this.view.contentDOM,
           measurement?.selectedOuterGuides ?? [],
+          this.selectedOuterMarkerElements,
         );
       },
     });

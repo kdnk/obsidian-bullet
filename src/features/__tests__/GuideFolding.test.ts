@@ -2081,6 +2081,22 @@ describe("GuideFoldingPluginValue guide interactions", () => {
         guide.classList.contains("bullet-plugin-selected-indent-guide"),
       ),
     ).toBe(false);
+
+    clickListener?.(makeEvent(outerLeafB.guides[0]).event);
+    executeLatestMeasurement();
+    expect(
+      selectedSegments.some((guide) =>
+        guide.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(false);
+    expect(
+      unrelatedSegments.every((guide) =>
+        guide.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(true);
+
+    clickListener?.(makeEvent(outerLeafA.guides[0]).event);
+    executeLatestMeasurement();
     settings.verticalLinesAction = "toggle-folding";
 
     const innerEditor = makeEditor({
@@ -2133,10 +2149,69 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       ).toBe(true);
     }
 
-    // The semantic selection survives DOM replacement and viewport updates.
+    // This is a different semantic guide, so the outer selection does not leak.
     expect(
       innerSegments.every((guide) =>
         guide?.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(false);
+
+    settings.verticalLinesAction = "none";
+    clickListener?.(makeEvent(leafAlpha.guides[1]).event);
+    executeLatestMeasurement();
+    expect(
+      innerSegments.every((guide) =>
+        guide?.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(true);
+
+    const replacedBranchAlpha = makeGuideLine(["    ", "    "]);
+    const replacedLeafAlpha = makeGuideLine(["    ", "    ", "    "]);
+    const replacedBranchBeta = makeGuideLine(["    ", "    "]);
+    const replacedLeafBeta = makeGuideLine(["    ", "    ", "    "]);
+    const replacementSegments = [
+      replacedBranchAlpha.guides[1],
+      replacedLeafAlpha.guides[1],
+      replacedBranchBeta.guides[1],
+      replacedLeafBeta.guides[1],
+    ];
+    candidates = [
+      ...replacedBranchAlpha.guides,
+      ...replacedLeafAlpha.guides,
+      ...replacedBranchBeta.guides,
+      ...replacedLeafBeta.guides,
+    ];
+    lineByElement = new Map<unknown, number>([
+      [replacedBranchAlpha.line, 2],
+      [replacedLeafAlpha.line, 3],
+      [replacedBranchBeta.line, 4],
+      [replacedLeafBeta.line, 5],
+    ]);
+    pluginValue.update({ docChanged: false });
+    executeLatestMeasurement();
+    expect(
+      replacementSegments.every((guide) =>
+        guide?.classList.contains("bullet-plugin-selected-indent-guide"),
+      ),
+    ).toBe(true);
+    expect(
+      replacementSegments[0]?.classList.contains(
+        "bullet-plugin-selected-indent-guide-start",
+      ),
+    ).toBe(true);
+    expect(
+      replacementSegments[replacementSegments.length - 1]?.classList.contains(
+        "bullet-plugin-selected-indent-guide-end",
+      ),
+    ).toBe(true);
+    expect(
+      innerSegments.some(
+        (guide) =>
+          guide?.classList.contains("bullet-plugin-selected-indent-guide") ||
+          guide?.classList.contains(
+            "bullet-plugin-selected-indent-guide-start",
+          ) ||
+          guide?.classList.contains("bullet-plugin-selected-indent-guide-end"),
       ),
     ).toBe(false);
 
@@ -2154,10 +2229,11 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     }
 
     settings.verticalLinesAction = "toggle-folding";
+    hoveredGuide = replacedLeafAlpha.guides[1];
     settingsCallback();
     executeLatestMeasurement();
     expect(
-      leafAlpha.guides[1]?.classList.contains(
+      replacedLeafAlpha.guides[1]?.classList.contains(
         "bullet-plugin-hovered-indent-guide",
       ),
     ).toBe(true);
@@ -2167,7 +2243,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const pointerLeave = addEventListener.mock.calls.find(
       ([eventName]) => eventName === "pointerleave",
     )?.[1];
-    pointerMove?.({ target: leafAlpha.guides[1] } as unknown as Event);
+    pointerMove?.({ target: replacedLeafAlpha.guides[1] } as unknown as Event);
     hoveredGuide = null;
     pointerLeave?.({} as Event);
     executeLatestMeasurement();
@@ -2179,41 +2255,46 @@ describe("GuideFoldingPluginValue guide interactions", () => {
 
     // Leaving the view only clears hover feedback; a selection is retained.
     settings.verticalLinesAction = "none";
-    clickListener?.(makeEvent(leafAlpha.guides[1]).event);
+    clickListener?.(makeEvent(replacedLeafAlpha.guides[1]).event);
     executeLatestMeasurement();
     pointerLeave?.({} as Event);
     expect(
-      innerSegments.every((guide) =>
+      replacementSegments.every((guide) =>
         guide?.classList.contains("bullet-plugin-selected-indent-guide"),
       ),
     ).toBe(true);
 
-    documentListeners.get("click")?.(makeEvent({}).event);
+    const otherViewGuide = makeGuideLine(["    "]).guides[0];
+    const otherContentDOM = {
+      contains: jest.fn((target: unknown) => target === otherViewGuide),
+    };
+    expect(otherContentDOM.contains(otherViewGuide)).toBe(true);
+    documentListeners.get("click")?.(makeEvent(otherViewGuide).event);
     executeLatestMeasurement();
     expect(
-      innerSegments.some((guide) =>
+      replacementSegments.some((guide) =>
         guide?.classList.contains("bullet-plugin-selected-indent-guide"),
       ),
     ).toBe(false);
 
-    clickListener?.(makeEvent(leafAlpha.guides[1]).event);
+    clickListener?.(makeEvent(replacedLeafAlpha.guides[1]).event);
     executeLatestMeasurement();
     pluginValue.update({ docChanged: true });
     executeLatestMeasurement();
     expect(
-      innerSegments.some((guide) =>
+      replacementSegments.some((guide) =>
         guide?.classList.contains("bullet-plugin-selected-indent-guide"),
       ),
     ).toBe(false);
 
-    clickListener?.(makeEvent(leafAlpha.guides[1]).event);
+    clickListener?.(makeEvent(replacedLeafAlpha.guides[1]).event);
     executeLatestMeasurement();
 
-    hoveredGuide = leafAlpha.guides[1];
+    hoveredGuide = replacedLeafAlpha.guides[1];
     pluginValue.update({});
     executeLatestMeasurement();
     pluginValue.destroy();
-    for (const guide of innerSegments) {
+    for (const guide of replacementSegments) {
       expect(
         guide?.classList.contains("bullet-plugin-hovered-indent-guide"),
       ).toBe(false);
@@ -2268,26 +2349,25 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     };
     const makeOuterSegment = (chunkId: string, actionable = true) => {
       const [startLine, endLine] = chunkId.split(":");
-      const attributes = {
-        "data-actionable": String(actionable),
-        "data-chunk-start": startLine ?? "",
-        "data-chunk-end": endLine ?? "",
+      const dataset = {
+        chunkId,
+        actionable: String(actionable),
+        chunkStart: startLine ?? "",
+        chunkEnd: endLine ?? "",
       };
       return {
-        dataset: {
-          chunkId,
-          actionable: String(actionable),
-          chunkStart: startLine ?? "",
-          chunkEnd: endLine ?? "",
-        },
+        dataset,
         classList: makeClassList(),
         matches: jest.fn(
           (selector: string) => selector === ".bullet-plugin-outer-list-guide",
         ),
         closest: jest.fn(),
-        getAttribute: jest.fn(
-          (name: string) => attributes[name as keyof typeof attributes] ?? null,
-        ),
+        getAttribute: jest.fn((name: string) => {
+          if (name === "data-actionable") return dataset.actionable;
+          if (name === "data-chunk-start") return dataset.chunkStart;
+          if (name === "data-chunk-end") return dataset.chunkEnd;
+          return null;
+        }),
       };
     };
     let outerGuides = [
@@ -2502,8 +2582,9 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     settingsCallback();
     executeLatestMeasurement();
 
-    settings.verticalLinesAction = "none";
+    settings.verticalLinesAction = "toggle-folding";
     outerGuides[0].dataset.actionable = "false";
+    view.dispatch.mockClear();
     const clickListener = addEventListener.mock.calls.find(
       ([eventName]) => eventName === "click",
     )?.[1];
@@ -2516,6 +2597,8 @@ describe("GuideFoldingPluginValue guide interactions", () => {
           guide.classList.contains("bullet-plugin-selected-outer-list-guide"),
         ),
     ).toBe(true);
+    expect(outerGuides[0].getAttribute).toHaveBeenCalledWith("data-actionable");
+    expect(view.dispatch).not.toHaveBeenCalled();
     pluginValue.destroy();
     expect(
       outerGuides.some((guide) =>
@@ -3104,11 +3187,11 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(view.dispatch).toHaveBeenCalledTimes(1);
     expect(mouseDownPreventDefault).toHaveBeenCalledTimes(1);
     expect(mouseDownStopPropagation).toHaveBeenCalledTimes(1);
-    expect(clickPreventDefault).toHaveBeenCalledTimes(1);
-    expect(clickStopPropagation).toHaveBeenCalledTimes(1);
+    expect(clickPreventDefault).toHaveBeenCalledTimes(2);
+    expect(clickStopPropagation).toHaveBeenCalledTimes(2);
   });
 
-  test("does not consume an outer widget when parsing returns multiple roots", () => {
+  test("consumes an outer selection when optional folding parses multiple roots", () => {
     const sourceEditor = makeEditor({
       text: "- parent\n    - child",
       cursor: { line: 0, ch: 0 },
@@ -3133,9 +3216,9 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
 
     const view = makeView(1);
-    expect(pluginValue.click(event, view)).toBe(false);
+    expect(pluginValue.click(event, view)).toBe(true);
     expect(view.dispatch).not.toHaveBeenCalled();
-    expect(preventDefault).not.toHaveBeenCalled();
+    expect(preventDefault).toHaveBeenCalledTimes(1);
   });
 
   test("folds the outermost ancestor represented by a native indentation guide", () => {
