@@ -12,12 +12,24 @@
 }
 
 .bullet-plugin-better-lists .list-bullet::after {
-  position: relative;
+  position: absolute;
   z-index: 1;
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background-color: var(--text-muted);
+  transition: none;
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-list-line
+  .is-collapsed
+  ~ .cm-formatting-list
+  .list-bullet::after {
+  background-color: var(--text-muted);
+  box-shadow: none;
+  transition: none;
 }
 
 body:not(.is-mobile).bullet-plugin-better-lists
@@ -26,11 +38,10 @@ body:not(.is-mobile).bullet-plugin-better-lists
   .list-bullet:hover::before {
   content: "";
   position: absolute;
-  inset-block-start: 50%;
-  inset-inline-start: 50%;
+  inset-block-start: calc(50% - 9px);
+  inset-inline-start: calc(50% - 9px);
   width: 18px;
   height: 18px;
-  transform: translate(-50%, -50%);
   border-radius: 50%;
   background-color: color-mix(in srgb, var(--text-muted) 38%, transparent);
   pointer-events: none;
