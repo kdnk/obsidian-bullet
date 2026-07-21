@@ -58,7 +58,7 @@ body:not(.is-mobile).bullet-plugin-better-lists
   .markdown-source-view.mod-cm6 {
   --indentation-guide-color: color-mix(
     in oklch,
-    var(--text-normal) 20%,
+    var(--text-normal) 26%,
     transparent
   );
 }
