@@ -8,7 +8,11 @@ const leveldown = require("leveldown");
 const { runObsidianBootstrap } = require("./obsidian-bootstrap-lifecycle");
 const { startObsidianGlobalLifecycle } = require("./obsidian-global-lifecycle");
 const { startObsidianRelay } = require("./obsidian-relay");
-const { getTestPluginId, getVaultPluginDir } = require("./test-config");
+const {
+  getTestPluginId,
+  getVaultPluginDir,
+  TEST_VAULT_APP_CONFIG,
+} = require("./test-config");
 
 const KILL_CMD =
   process.platform === "darwin"
@@ -111,11 +115,7 @@ async function prepareVault() {
   const vaultConfig = JSON.parse(fs.readFileSync(vaultConfigFilePath));
   const newVaultConfig = {
     ...vaultConfig,
-    foldHeading: true,
-    foldIndent: true,
-    useTab: false,
-    tabSize: 2,
-    legacyEditor: false,
+    ...TEST_VAULT_APP_CONFIG,
   };
   if (JSON.stringify(vaultConfig) !== JSON.stringify(newVaultConfig)) {
     debug(`  Saving ${vaultConfigFilePath}`);

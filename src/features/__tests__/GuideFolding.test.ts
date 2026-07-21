@@ -966,7 +966,7 @@ describe("GuideFolding persistent guide styles", () => {
       "--indentation-guide-color: color-mix( in oklch, var(--text-normal) 20%, transparent );",
     );
     expect(normalized).toBe(
-      "border-inline-end: 3px solid var(--indentation-guide-color-active);",
+      "inline-size: 3px; border-inline-end: 0; background-color: var(--indentation-guide-color-active);",
     );
     expect(startDeclarations?.replace(/\s+/g, " ").trim()).toBe(
       "border-start-start-radius: 2px; border-start-end-radius: 2px;",
@@ -975,15 +975,15 @@ describe("GuideFolding persistent guide styles", () => {
       "border-end-start-radius: 2px; border-end-end-radius: 2px;",
     );
     expect(livePreviewOffset?.replace(/\s+/g, " ").trim()).toBe(
-      "margin-inline-start: calc(var(--indentation-guide-editing-indent) - 1px);",
+      "margin-inline-start: var(--indentation-guide-editing-indent);",
     );
     expect(sourceModeOffset?.replace(/\s+/g, " ").trim()).toBe(
-      "margin-inline-start: calc(var(--indentation-guide-source-indent) - 1px);",
+      "margin-inline-start: var(--indentation-guide-source-indent);",
     );
     expect(normalized).not.toMatch(/\binset-inline-(?:start|end)\s*:/);
     expect(normalized).not.toMatch(/(?:^|;)\s*(?:left|right)\s*:/);
     expect(normalized).not.toMatch(
-      /\b(?:transition|box-shadow|background|opacity)\s*:/,
+      /\b(?:transition|box-shadow|outline|opacity)\s*:/,
     );
     expect(normalized).not.toMatch(/\bborder-radius\s*:/);
     expect(styles).not.toMatch(/\.cm-indent:hover::before/);
@@ -1052,7 +1052,7 @@ describe("GuideFolding outer guide styles", () => {
       "border-inline-end: var(--indentation-guide-width-active) solid var(--indentation-guide-color-active);",
     );
     expect(normalizedEnhancedHovered).toBe(
-      "inset-inline-end: -1px; border-inline-end: 3px solid var(--indentation-guide-color-active);",
+      "inset-inline-end: -1px; inline-size: 3px; border-inline-end: 0; background-color: var(--indentation-guide-color-active);",
     );
     expect(enhancedStart?.replace(/\s+/g, " ").trim()).toBe(
       "border-start-start-radius: 2px; border-start-end-radius: 2px;",
@@ -1067,7 +1067,7 @@ describe("GuideFolding outer guide styles", () => {
       /(?:^|;)\s*(?:left|right)\s*:/,
     );
     expect(normalizedEnhancedHovered).not.toMatch(
-      /\b(?:transition|box-shadow|background|opacity)\s*:/,
+      /\b(?:transition|box-shadow|outline|opacity)\s*:/,
     );
   });
 
@@ -1084,7 +1084,7 @@ describe("GuideFolding outer guide styles", () => {
     );
   });
 
-  test("introduces no custom paint, overlay, or scroll correction", () => {
+  test("introduces no fixed paint, overlay, or scroll correction", () => {
     const outerRules = Array.from(
       styles.matchAll(
         /[^{}]*\.bullet-plugin-outer-list-guide[^{}]*\{([^}]*)\}/g,
@@ -1092,7 +1092,8 @@ describe("GuideFolding outer guide styles", () => {
       (match) => match[1] ?? "",
     ).join("\n");
 
-    expect(outerRules).not.toMatch(/\bbackground(?:-color)?\s*:/);
+    expect(outerRules.match(/\bbackground-color\s*:/g) ?? []).toHaveLength(1);
+    expect(outerRules).not.toMatch(/\bbackground\s*:/);
     expect(outerRules).not.toMatch(/(?:#[0-9a-f]{3,8}|rgba?\(|hsla?\()/i);
     expect(outerRules).not.toMatch(/\btransform\s*:/);
     expect(styles).not.toContain("bullet-plugin-outer-list-guide-overlay");
