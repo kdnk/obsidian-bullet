@@ -133,13 +133,19 @@ describe("BetterListsStyles", () => {
     const declarations = styles.match(
       /\.bullet-plugin-better-lists\s+\.list-bullet::after\s*\{([^}]*)\}/,
     )?.[1];
+    const foldableDeclarations = styles.match(
+      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.list-bullet::after\s*\{([^}]*)\}/,
+    )?.[1];
     const collapsedDeclarations = styles.match(
-      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s+\.is-collapsed\s*~\s*\.cm-formatting-list\s+\.list-bullet::after\s*\{([^}]*)\}/,
+      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s+\.is-collapsed\s*~\s*\.cm-formatting-list\s+\.list-bullet::after\s*\{([^}]*)\}/,
     )?.[1];
     const normalized = declarations?.replace(/\s+/g, " ").trim();
 
     expect(normalized).toBe(
-      "position: absolute; z-index: 1; width: 7px; height: 7px; border-radius: 50%; background-color: var(--text-muted); transition: none;",
+      "position: absolute; z-index: 1; width: 7px; height: 7px; border-radius: 50%; background-color: var(--text-muted);",
+    );
+    expect(foldableDeclarations?.replace(/\s+/g, " ").trim()).toBe(
+      "transition: none;",
     );
     expect(collapsedDeclarations?.replace(/\s+/g, " ").trim()).toBe(
       "background-color: var(--text-muted); box-shadow: none; transition: none;",
