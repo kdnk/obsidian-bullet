@@ -128,8 +128,25 @@ describe("MobileRightFoldControls", () => {
         "bullet-plugin-mobile-right-fold-controls",
       ),
     ).toBe(false);
+    expect(
+      popoutDocument.body.classList.contains(
+        "bullet-plugin-mobile-right-fold-controls",
+      ),
+    ).toBe(false);
 
+    settings.mobileRightFoldControls = true;
+    callbacks[0]?.();
     await feature.unload();
+    expect(
+      mainDocument.body.classList.contains(
+        "bullet-plugin-mobile-right-fold-controls",
+      ),
+    ).toBe(false);
+    expect(
+      popoutDocument.body.classList.contains(
+        "bullet-plugin-mobile-right-fold-controls",
+      ),
+    ).toBe(false);
     expect(settings.removeCallback).toHaveBeenCalledWith(expect.any(Function));
   });
 
