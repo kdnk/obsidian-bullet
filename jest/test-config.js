@@ -1,5 +1,13 @@
 const manifest = require("../manifest.json");
 
+const TEST_VAULT_APP_CONFIG = Object.freeze({
+  foldHeading: true,
+  foldIndent: true,
+  useTab: true,
+  tabSize: 4,
+  legacyEditor: false,
+});
+
 function getTestPluginId() {
   return manifest.id;
 }
@@ -11,4 +19,5 @@ function getVaultPluginDir(vaultDir) {
 module.exports = {
   getTestPluginId,
   getVaultPluginDir,
+  TEST_VAULT_APP_CONFIG,
 };

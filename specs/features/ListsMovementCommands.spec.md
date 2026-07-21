@@ -84,7 +84,7 @@
 
 ```md
 - qwe
-  - qwe|
+	- qwe|
 ```
 
 # bullet:indent-list should indent children
@@ -102,8 +102,8 @@
 
 ```md
 - qwe
-  - qwe|
-    - qwe
+	- qwe|
+	  - qwe
 ```
 
 # bullet:indent-list should not indent line if it's no parent

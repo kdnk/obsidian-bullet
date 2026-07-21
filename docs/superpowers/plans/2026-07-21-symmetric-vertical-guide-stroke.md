@@ -27,6 +27,10 @@
 - Modify: `jest/test-config.js`
 - Modify: `jest/global-setup.js`
 - Modify: `src/__tests__/jestTestConfig.test.ts`
+- Modify: `specs/features/EnterBehaviourOverride.spec.md`
+- Modify: `specs/features/ListsMovementCommands.spec.md`
+- Modify: `specs/features/DragAndDrop.spec.md`
+- Modify: `specs/features/TabBehaviourOverride.spec.md`
 - Modify locally: `vault/.obsidian/app.json`
 
 **Interfaces:**
@@ -81,6 +85,7 @@ const newVaultConfig = {
 ```
 
 ignoredの`vault/.obsidian/app.json`も`useTab: true`と`tabSize: 4`へ揃える。
+indent操作後のintegration specは、test vaultが実際に生成するtab文字を期待し、spaceへ正規化しない。
 
 - [ ] **Step 4: focused testをGREENにする**
 
@@ -247,4 +252,3 @@ What:
 - Paint enhanced guides as centered three-pixel fills.
 - Persist tabs with a four-column width in the test vault setup.
 ```
-

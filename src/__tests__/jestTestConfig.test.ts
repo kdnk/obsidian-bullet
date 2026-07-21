@@ -1,6 +1,10 @@
 import { COMMANDS, installObsidianDriver } from "../../jest/obsidian-driver";
 import { semanticDriverCommandNames } from "../../jest/semantic-command-contract";
-import { getTestPluginId, getVaultPluginDir } from "../../jest/test-config";
+import {
+  TEST_VAULT_APP_CONFIG,
+  getTestPluginId,
+  getVaultPluginDir,
+} from "../../jest/test-config";
 
 const mdSpecTransformer = jest.requireActual<{
   process: (
@@ -18,6 +22,13 @@ describe("test config helpers", () => {
     expect(getVaultPluginDir("/tmp/vault")).toBe(
       "/tmp/vault/.obsidian/plugins/bullet",
     );
+  });
+
+  test("uses tabs with a four-column width in the test vault", () => {
+    expect(TEST_VAULT_APP_CONFIG).toMatchObject({
+      useTab: true,
+      tabSize: 4,
+    });
   });
 
   test("keeps the exact renderer request-command registry", () => {

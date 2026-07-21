@@ -8,6 +8,7 @@
 `vault/.obsidian/app.json`はgitignore対象なので、このfileを一度変更するだけではfull test後の値を保証できない。
 trackedな`jest/test-config.js`へtest vault用app configを定義し、`jest/global-setup.js`がfull testのたびに同じ値を再適用する。
 unit testはexportされたconfigを直接検証する。
+indent操作を含むintegration specは、test vaultが生成するtab文字を期待値に使い、spaceへ正規化しない。
 
 今後の手動検証ではUI操作前のvault title確認に加え、runtimeの`app.vault.config.useTab`が`true`、`tabSize`が`4`であることを確認する。
 
@@ -62,4 +63,3 @@ test configのunit testは`TEST_VAULT_APP_CONFIG.useTab === true`と`tabSize ===
 
 実Obsidianではtab文字で4階層にしたfixtureを使う。
 Live PreviewとSource modeの各深さで通常線の中心columnとhover3pxの中央columnが一致し、start capが中央1pxから始まり、次のrowが左右1pxずつの3pxになることをscreenshot pixelで確認する。
-
