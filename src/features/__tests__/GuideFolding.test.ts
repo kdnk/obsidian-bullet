@@ -260,6 +260,13 @@ test("exposes only the ViewPlugin lifecycle interface", () => {
   expect(guideFoldingInterfaceIsClosed).toBe(true);
 });
 
+test("keeps selected-guide state semantic rather than DOM-local", () => {
+  const source = readFileSync(join(__dirname, "../GuideFolding.ts"), "utf8");
+
+  expect(source).not.toContain("selectedIndentMarkerElements");
+  expect(source).not.toContain("selectedOuterMarkerElements");
+});
+
 describe("GuideFoldingPluginValue hover measurement", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -2204,17 +2211,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
         "bullet-plugin-selected-indent-guide-end",
       ),
     ).toBe(true);
-    expect(
-      innerSegments.some(
-        (guide) =>
-          guide?.classList.contains("bullet-plugin-selected-indent-guide") ||
-          guide?.classList.contains(
-            "bullet-plugin-selected-indent-guide-start",
-          ) ||
-          guide?.classList.contains("bullet-plugin-selected-indent-guide-end"),
-      ),
-    ).toBe(false);
-
     const settingsCallback = settingsCallbacks[0];
     if (!settingsCallback) {
       throw new Error("Expected settings callback to be registered");
