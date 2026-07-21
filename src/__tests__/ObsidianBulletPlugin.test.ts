@@ -22,6 +22,25 @@ describe("ObsidianBulletPlugin wiring", () => {
     );
   });
 
+  test("loads and unloads native fold scroll immediately after mobile fold controls", () => {
+    const source = readFileSync(
+      join(__dirname, "../ObsidianBulletPlugin.ts"),
+      "utf-8",
+    );
+    expect(source).toContain(
+      'import { NativeFoldScroll } from "./features/NativeFoldScroll";',
+    );
+    expect(source).toContain(
+      [
+        "new MobileRightFoldControls(this, this.settings),",
+        "new NativeFoldScroll(this),",
+      ].join("\n      "),
+    );
+    expect(source).toContain("for (const feature of this.features) {");
+    expect(source).toContain("await feature.load();");
+    expect(source).toContain("await feature.unload();");
+  });
+
   test("loads the bullet typing guard before selection behavior", () => {
     const source = readFileSync(
       join(__dirname, "../ObsidianBulletPlugin.ts"),

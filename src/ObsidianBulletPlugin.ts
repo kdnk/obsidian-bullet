@@ -14,6 +14,7 @@ import { ListsFoldingCommands } from "./features/ListsFoldingCommands";
 import { ListsMovementCommands } from "./features/ListsMovementCommands";
 import { MetaBackspaceBehaviourOverride } from "./features/MetaBackspaceBehaviourOverride";
 import { MobileRightFoldControls } from "./features/MobileRightFoldControls";
+import { NativeFoldScroll } from "./features/NativeFoldScroll";
 import { SettingsTab } from "./features/SettingsTab";
 import { ShiftTabBehaviourOverride } from "./features/ShiftTabBehaviourOverride";
 import { SystemInfo } from "./features/SystemInfo";
@@ -149,6 +150,7 @@ export default class ObsidianBulletPlugin extends Plugin {
 
       // features based on settings.mobileRightFoldControls
       new MobileRightFoldControls(this, this.settings),
+      new NativeFoldScroll(this),
 
       // vertical-line folding and outer list guides
       new VerticalLines(this, this.settings, this.parser),
