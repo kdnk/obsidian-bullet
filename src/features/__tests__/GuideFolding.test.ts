@@ -1161,8 +1161,8 @@ describe("GuideFolding outer guide styles", () => {
     )?.[1];
 
     for (const selectedDeclarations of [selectedOuter, selectedInner]) {
-      expect(selectedDeclarations).toContain(
-        "border-inline-end: var(--indentation-guide-width-active) solid\n    var(--indentation-guide-color-active);",
+      expect(selectedDeclarations?.replace(/\s+/g, " ").trim()).toContain(
+        "border-inline-end: var(--indentation-guide-width-active) solid var(--indentation-guide-color-active);",
       );
     }
     for (const enhancedSelectedDeclarations of [
