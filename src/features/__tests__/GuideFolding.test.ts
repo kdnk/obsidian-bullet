@@ -878,6 +878,20 @@ describe("GuideFolding outer guide styles", () => {
     expect(declarations).toContain("pointer-events: none;");
   });
 
+  test("moves only the desktop outer line to the widget inline start", () => {
+    const baseDeclarations = styles.match(
+      /\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const desktopDeclarations = styles.match(
+      /body:not\(\.is-mobile\)\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(baseDeclarations).toContain("inset-inline-end: 0;");
+    expect(desktopDeclarations?.replace(/\s+/g, " ").trim()).toBe(
+      "inset-inline-start: 0; inset-inline-end: auto;",
+    );
+  });
+
   test("draws normal and hovered segments with native theme variables", () => {
     const normal = styles.match(
       /\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,

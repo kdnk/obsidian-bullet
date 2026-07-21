@@ -31,6 +31,13 @@
     var(--indentation-guide-color);
 }
 
+body:not(.is-mobile)
+  .markdown-source-view.mod-cm6
+  .bullet-plugin-outer-list-guide::before {
+  inset-inline-start: 0;
+  inset-inline-end: auto;
+}
+
 .bullet-plugin-vertical-lines-action-toggle-folding
   .markdown-source-view.mod-cm6
   .bullet-plugin-outer-list-guide[data-actionable="true"] {
