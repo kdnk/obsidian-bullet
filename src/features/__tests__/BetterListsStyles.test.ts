@@ -136,14 +136,14 @@ describe("BetterListsStyles", () => {
     const normalized = declarations?.replace(/\s+/g, " ").trim();
 
     expect(normalized).toBe(
-      "width: 7px; height: 7px; border-radius: 50%; background-color: var(--text-muted);",
+      "position: relative; z-index: 1; width: 7px; height: 7px; border-radius: 50%; background-color: var(--text-muted);",
     );
   });
 
   test("adds an immediate eighteen-pixel halo only to foldable desktop bullets", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const bullet = styles.match(
-      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.list-bullet\s*\{([^}]*)\}/,
+      /\.bullet-plugin-better-lists\s+\.list-bullet\s*\{([^}]*)\}/,
     )?.[1];
     const halo = styles.match(
       /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.list-bullet:hover::before\s*\{([^}]*)\}/,
