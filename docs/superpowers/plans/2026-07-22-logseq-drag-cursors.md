@@ -15,7 +15,7 @@ Replace the current grab/grabbing CSS with desktop editor-scoped pointer/copy ru
 - Apply `pointer` to unordered markers, ordered markers, task checkboxes, and native list chevrons while desktop drag-and-drop is enabled and idle.
 - Apply `copy` throughout the desktop Markdown editor after the existing six-pixel drag threshold is crossed.
 - Keep `copy` as visual feedback only; the dropped branch must still move rather than copy.
-- Do not change mobile, Reading View, heading chevrons, vertical guides, editor content, drag calculations, or drop feedback.
+- Do not apply idle `pointer` styling to mobile, Reading View, heading chevrons, vertical guides, or normal editor content. During an active desktop drag, intentionally apply `copy` to the Markdown editor and all descendants; do not change drag calculations or drop feedback.
 - Do not add JavaScript state, listeners, DOM markers, inline styles, or cleanup paths.
 - Use Node.js 22.23.1 for every test, lint, typecheck, and build command.
 - Use `but` for every version-control write and keep all work on `codex/logseq-drag-cursors`.
@@ -49,9 +49,11 @@ Add this test after `uses neutral Logseq-style drag feedback` in `src/features/_
 ```ts
 test("uses Logseq-style cursors for drag handles and active drags", () => {
   const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
-  const idleDeclarations = styles.match(
-    /body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)\s+\.markdown-source-view\.mod-cm6\s+\.cm-formatting-list,\s*body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)\s+\.markdown-source-view\.mod-cm6\s+\.task-list-item-checkbox,\s*body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)\s+\.markdown-source-view\.mod-cm6\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
-  )?.[1];
+  const idleRule = styles.match(
+    /(body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)\s+\.markdown-source-view\.mod-cm6\s+\.cm-formatting-list,\s*body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)\s+\.markdown-source-view\.mod-cm6\s+\.task-list-item-checkbox,\s*body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-list-line\s+\.cm-fold-indicator\s+\.collapse-indicator)\s*\{([^}]*)\}/,
+  );
+  const idleSelector = idleRule?.[1];
+  const idleDeclarations = idleRule?.[2];
   const draggingDeclarations = styles.match(
     /html\s+body:not\(\.is-mobile\)\.bullet-plugin-dnd\.bullet-plugin-dragging\s+\.markdown-source-view\.mod-cm6,\s*html\s+body:not\(\.is-mobile\)\.bullet-plugin-dnd\.bullet-plugin-dragging\s+\.markdown-source-view\.mod-cm6\s+\*\s*\{([^}]*)\}/,
   )?.[1];
@@ -60,6 +62,7 @@ test("uses Logseq-style cursors for drag handles and active drags", () => {
 
   expect(normalize(idleDeclarations)).toBe("cursor: pointer;");
   expect(normalize(draggingDeclarations)).toBe("cursor: copy !important;");
+  expect(idleSelector).not.toMatch(/\.HyperMD-header|\.cm-indent/);
   expect(styles).not.toMatch(/cursor:\s*(?:grab|grabbing)\s*;/);
 });
 ```
@@ -87,6 +90,7 @@ body:not(.is-mobile).bullet-plugin-dnd:not(.bullet-plugin-dragging)
   .task-list-item-checkbox,
 body:not(.is-mobile).bullet-plugin-dnd:not(.bullet-plugin-dragging)
   .markdown-source-view.mod-cm6
+  .HyperMD-list-line
   .cm-fold-indicator
   .collapse-indicator {
   cursor: pointer;

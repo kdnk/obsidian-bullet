@@ -441,6 +441,7 @@ body:not(.is-mobile).bullet-plugin-dnd:not(.bullet-plugin-dragging)
   .task-list-item-checkbox,
 body:not(.is-mobile).bullet-plugin-dnd:not(.bullet-plugin-dragging)
   .markdown-source-view.mod-cm6
+  .HyperMD-list-line
   .cm-fold-indicator
   .collapse-indicator {
   cursor: pointer;

@@ -30,13 +30,15 @@ Bulletは独自のmouse eventでリスト移動を実装しているため、同
 - task listのcheckbox
 - list itemのnative fold chevron
 
-モバイル、Reading View、見出しのシェブロン、縦線ガイド、通常のeditor本文は変更しない。
+通常時の`pointer`は、モバイル、Reading View、見出しのシェブロン、縦線ガイド、通常のeditor本文へ適用しない。
+
+ドラッグ中は例外として、plus記号をeditor内で維持するため、`copy`をeditorのすべての子要素へ適用する。
 
 ドラッグ開始距離、drop候補の計算、移動元と挿入位置の表示、list移動処理も変更しない。
 
 ## カーソル状態
 
-`bullet-plugin-dnd`があり、`bullet-plugin-dragging`がない通常時は、バレット、番号、チェックボックス、シェブロンへ`cursor: pointer`を適用する。
+`bullet-plugin-dnd`があり、`bullet-plugin-dragging`がない通常時は、バレット、番号、チェックボックス、list itemのnative fold chevronへ`cursor: pointer`を適用する。
 
 pointerが6pxの開始距離へ達して`bullet-plugin-dragging`が付いた後は、ドラッグ対象とdrop候補を含むeditor領域へ`cursor: copy`を適用する。
 
