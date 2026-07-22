@@ -182,9 +182,17 @@ describe("BetterListsStyles", () => {
       /\.bullet-plugin-better-lists\s+\.list-bullet\s*\{([^}]*)\}/,
     )?.[1];
     const sharedHalo = styles.match(
-      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.list-bullet:hover::before,\s*body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s+\.is-collapsed\s*~\s*\.cm-formatting-list\s+\.list-bullet::before\s*\{([^}]*)\}/,
+      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.list-bullet:hover::before,\s*body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s+\.is-collapsed\s*~\s*\.cm-formatting-list\s+\.list-bullet::before,\s*body:not\(\s*\.is-mobile\s*\)\.bullet-plugin-better-lists\.bullet-plugin-dnd\.bullet-plugin-dragging\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-dragging-source-line\s+\.list-bullet::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const dragSourceSelector = styles.match(
+      /(body:not\(\s*\.is-mobile\s*\)\.bullet-plugin-better-lists\.bullet-plugin-dnd\.bullet-plugin-dragging\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-dragging-source-line\s+\.list-bullet::before)\s*\{/,
     )?.[1];
     const normalizedHalo = sharedHalo?.replace(/\s+/g, " ").trim();
+    const normalizedDragSourceSelector = dragSourceSelector
+      ?.replace(/\s+/g, " ")
+      .replace(/\(\s+/g, "(")
+      .replace(/\s+\)/g, ")")
+      .trim();
 
     expect(bullet?.replace(/\s+/g, " ").trim()).toBe("position: relative;");
     expect(normalizedHalo).toBe(
@@ -193,11 +201,20 @@ describe("BetterListsStyles", () => {
     expect(normalizedHalo).not.toMatch(
       /\b(?:transition|animation|opacity|outline|box-shadow)\s*:/,
     );
+    expect(normalizedDragSourceSelector).toBe(
+      "body:not(.is-mobile).bullet-plugin-better-lists.bullet-plugin-dnd.bullet-plugin-dragging .markdown-source-view.mod-cm6.is-live-preview .cm-line.bullet-plugin-dragging-source-line .list-bullet::before",
+    );
     expect(styles).not.toMatch(
       /\.bullet-plugin-better-lists\s+\.markdown-preview-view[^{}]*\.list-bullet(?::hover)?::before/,
     );
     expect(styles).not.toMatch(
       /body\.is-mobile\.bullet-plugin-better-lists[^{}]*\.list-bullet(?::hover)?::before/,
+    );
+    expect(styles).not.toMatch(
+      /\.markdown-preview-view[^{}]*\.bullet-plugin-dragging-source-line[^{}]*\.list-bullet::before/,
+    );
+    expect(styles).not.toMatch(
+      /body\.is-mobile[^{}]*\.bullet-plugin-dragging-source-line[^{}]*\.list-bullet::before/,
     );
   });
 
