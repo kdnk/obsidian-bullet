@@ -60,8 +60,7 @@ body:not(.is-mobile).bullet-plugin-better-lists
 }
 
 /* lines */
-.bullet-plugin-enhanced-vertical-line-hover
-  .markdown-source-view.mod-cm6 {
+.bullet-plugin-enhanced-vertical-line-hover .markdown-source-view.mod-cm6 {
   --indentation-guide-color: color-mix(
     in oklch,
     var(--text-normal) 26%,
@@ -434,16 +433,25 @@ body:not(.is-mobile).bullet-plugin-vertical-lines-action-toggle-folding
   pointer-events: none;
 }
 
-body.bullet-plugin-dnd:not(.bullet-plugin-dragging)
+body:not(.is-mobile).bullet-plugin-dnd:not(.bullet-plugin-dragging)
   .markdown-source-view.mod-cm6
   .cm-formatting-list,
-body.bullet-plugin-dnd:not(.bullet-plugin-dragging)
+body:not(.is-mobile).bullet-plugin-dnd:not(.bullet-plugin-dragging)
+  .markdown-source-view.mod-cm6
+  .task-list-item-checkbox,
+body:not(.is-mobile).bullet-plugin-dnd:not(.bullet-plugin-dragging)
   .markdown-source-view.mod-cm6
   .cm-fold-indicator
   .collapse-indicator {
-  cursor: grab;
+  cursor: pointer;
 }
 
-html body.bullet-plugin-dnd.bullet-plugin-dragging {
-  cursor: grabbing;
+html
+  body:not(.is-mobile).bullet-plugin-dnd.bullet-plugin-dragging
+  .markdown-source-view.mod-cm6,
+html
+  body:not(.is-mobile).bullet-plugin-dnd.bullet-plugin-dragging
+  .markdown-source-view.mod-cm6
+  * {
+  cursor: copy !important;
 }
