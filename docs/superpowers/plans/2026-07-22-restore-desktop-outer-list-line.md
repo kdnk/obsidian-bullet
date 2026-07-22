@@ -28,7 +28,7 @@
 - Consumes: `.bullet-plugin-outer-list-guide::before` as the existing normal paint source.
 - Produces: one base `inset-inline-end: 0` position shared by desktop and mobile, with no desktop-only normal-line override.
 
-- [ ] **Step 1: Write the failing CSS contract test**
+- [x] **Step 1: Write the failing CSS contract test**
 
 Replace the existing desktop normal-line test with:
 
@@ -46,7 +46,7 @@ test("keeps the normal outer line at the widget inline end on desktop", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -56,7 +56,7 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/features/__tests__/GuideFolding.test
 
 Expected: FAIL because the current desktop selector still returns `inset-inline-start: 0; inset-inline-end: auto;`.
 
-- [ ] **Step 3: Remove the desktop normal-line override**
+- [x] **Step 3: Remove the desktop normal-line override**
 
 Delete only this rule from `styles.css`:
 
@@ -71,7 +71,7 @@ body:not(.is-mobile)
 
 Do not change the later desktop rules that require `bullet-plugin-enhanced-vertical-line-hover` and apply only to selected or hovered guides.
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [x] **Step 4: Run the focused test and verify GREEN**
 
 Run:
 
@@ -81,7 +81,7 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/features/__tests__/GuideFolding.test
 
 Expected: PASS.
 
-- [ ] **Step 5: Run automated verification**
+- [x] **Step 5: Run automated verification**
 
 Run:
 
@@ -93,7 +93,7 @@ n exec 22.23.1 npm run build-with-tests
 
 Expected: all commands exit 0.
 
-- [ ] **Step 6: Verify the real Obsidian paint and interaction**
+- [x] **Step 6: Verify the real Obsidian paint and interaction**
 
 Before the integration test, inspect the LevelDB lock owner with:
 
@@ -122,7 +122,7 @@ For the first `.bullet-plugin-outer-list-guide`, verify that `getComputedStyle(g
 
 Expected: the integration spec passes, the computed normal line uses the inline end, and `vault/test.md` matches the backup hash after restoration.
 
-- [ ] **Step 7: Commit the scoped fix**
+- [x] **Step 7: Commit the scoped fix**
 
 Inspect the real uncommitted hunks:
 
@@ -147,3 +147,14 @@ What:
 ```
 
 Do not include changes owned by another branch.
+
+## Verification Results
+
+- RED：focused CSS contract failed because the desktop normal selector returned `inset-inline-start: 0; inset-inline-end: auto;`.
+- GREEN：the same focused CSS contract passed after removing the desktop normal override.
+- Unit：55 suites、665 tests passed with Node.js 22.23.1.
+- Lint：Prettier and ESLint passed.
+- Build：`build-with-tests` completed successfully.
+- Integration：the focused outer-guide interaction spec passed in Obsidian 1.13.3.
+- Paint：the test-vault outer guide produced 7 segments; the first normal pseudo-element used `insetInlineEnd: 0px`, `insetInlineStart: 35px`, and a visible 1px theme-colored border.
+- Fixture：`vault/test.md` was restored to SHA-256 `3b41a8cfcfc20a345fa3b2d33a909f1fb00bdd00d2302223bedefc0ed9c96f0b` and rechecked after renderer exit.
