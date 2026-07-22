@@ -30,7 +30,7 @@
 - Consumes: `--indentation-guide-editing-indent`, the base outer pseudo-element, and the existing 3px enhanced paint.
 - Produces: a desktop Live Preview outer line one native indent before the first inner guide, with shared normal, hover, and selected geometry.
 
-- [ ] **Step 1: Change the CSS contract to require native-grid offsets**
+- [x] **Step 1: Change the CSS contract to require native-grid offsets**
 
 Rename `keeps the normal outer line at the widget inline end on desktop` to `keeps the fallback at the widget end and aligns desktop Live Preview to native guides`.
 Keep the base and generic desktop lookups, and add:
@@ -59,7 +59,7 @@ expect(desktopEnhancedHovered?.replace(/\s+/g, " ").trim()).toBe(
 
 Apply the same Live Preview selector and expectation to `desktopEnhancedSelectedOuter` in the selected paint test.
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
 Run:
 
@@ -69,7 +69,7 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/features/__tests__/GuideFolding.test
 
 Expected: all three tests fail because no desktop Live Preview native-offset rules exist yet.
 
-- [ ] **Step 3: Add the normal desktop Live Preview offset**
+- [x] **Step 3: Add the normal desktop Live Preview offset**
 
 After the base outer pseudo-element rule, add:
 
@@ -82,7 +82,7 @@ body:not(.is-mobile)
 }
 ```
 
-- [ ] **Step 4: Center enhanced selected and hovered paint on that line**
+- [x] **Step 4: Center enhanced selected and hovered paint on that line**
 
 Add the selected state rule:
 
@@ -108,13 +108,13 @@ body:not(
 }
 ```
 
-- [ ] **Step 5: Run the focused tests and verify GREEN**
+- [x] **Step 5: Run the focused tests and verify GREEN**
 
 Run the Step 2 command again.
 
 Expected: all three tests pass.
 
-- [ ] **Step 6: Run automated verification**
+- [x] **Step 6: Run automated verification**
 
 Run:
 
@@ -126,7 +126,7 @@ n exec 22.23.1 npm run build-with-tests
 
 Expected: every command exits 0.
 
-- [ ] **Step 7: Verify integration and real Obsidian paint**
+- [x] **Step 7: Verify integration and real Obsidian paint**
 
 Inspect the LevelDB lock owner before the integration test.
 Back up `vault/test.md` into a new `/tmp/obsidian-bullet-outer-grid.*` directory and record both SHA-256 hashes.
@@ -150,7 +150,7 @@ For an actionable outer guide in Live Preview, verify:
 - `mousedown` to `mouseup` to `click` folds and unfolds once;
 - pointer leave and a click elsewhere clear hover and selection markers.
 
-- [ ] **Step 8: Commit the scoped fix**
+- [x] **Step 8: Commit the scoped fix**
 
 Use `but diff` to copy the exact change IDs for the revised documents, test, and CSS files.
 Commit only those IDs to `codex/fix-outer-line-hover` with:
@@ -168,3 +168,19 @@ What:
 - preserve chevron, halo, widget, mobile, Source mode, and folding geometry
 - lock the native-grid contract with focused regression assertions
 ```
+
+## Verification Results
+
+- RED: the three focused contracts failed because the desktop Live Preview normal, hovered, and selected offsets were undefined.
+- GREEN: the same three focused contracts passed after adding the native-grid offsets.
+- Unit: 55 suites and 665 tests passed with Node.js 22.23.1.
+- Full test: 75 suites passed with 812 passed and 15 skipped tests.
+- Lint: Prettier and ESLint passed after formatting the changed test.
+- Build: `build-with-tests` completed successfully.
+- Integration: the focused outer-guide interaction spec passed in Obsidian 1.13.3.
+- Normal paint: the outer line occupied `x=53.6..54.6`, the first inner guide began at `x=89.6`, and the guide distance was 36px.
+- Hover paint: the 3px line occupied `x=52.6..55.6`, kept a 0px center delta from the normal line, and left 15.4px before the chevron SVG at `x=71..81`.
+- Selected paint: the 3px line kept the same center after folding.
+- Interaction: the chunk changed from 31 visible segments to 1 and back to 31 through complete native pointer sequences.
+- Cleanup: hover markers, selection markers, temporary probe styles, and captured Obsidian errors were all zero after verification.
+- Fixture: `vault/test.md` was restored to SHA-256 `3b41a8cfcfc20a345fa3b2d33a909f1fb00bdd00d2302223bedefc0ed9c96f0b` and rechecked after renderer exit.
