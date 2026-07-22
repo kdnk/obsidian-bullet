@@ -681,18 +681,7 @@ describe("DragAndDrop", () => {
     );
     const doc = makeDocument();
     const dropZone = makeElement();
-
-    (
-      feature as unknown as {
-        documents: Map<unknown, unknown>;
-        state: unknown;
-      }
-    ).documents.set(doc, { doc, dropZone });
-    (
-      feature as unknown as {
-        state: unknown;
-      }
-    ).state = {
+    const dragState = {
       doc,
       view: { contentDOM: { offsetWidth: 400 } },
       dropVariant: {
@@ -705,16 +694,29 @@ describe("DragAndDrop", () => {
 
     (
       feature as unknown as {
+        documents: Map<unknown, unknown>;
+        state: unknown;
+      }
+    ).documents.set(doc, { doc, dropZone });
+    (
+      feature as unknown as {
+        state: unknown;
+      }
+    ).state = dragState;
+
+    (
+      feature as unknown as {
         drawDropZone: () => void;
       }
     ).drawDropZone();
 
     expect(dropZone.style).toEqual({
       display: "block",
-      top: "120px",
+      top: "122px",
       left: "80px",
       width: "340px",
     });
+    expect(dragState.dropVariant.top).toBe(120);
     expect(dropZone.children).toEqual([]);
     expect(dropZone.classList.contains("bullet-plugin-drop-zone-inside")).toBe(
       false,

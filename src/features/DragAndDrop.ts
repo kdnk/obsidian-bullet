@@ -17,6 +17,7 @@ import { Settings } from "../services/Settings";
 
 const BODY_CLASS = "bullet-plugin-dnd";
 const DRAG_START_DISTANCE_PX = 6;
+const DROP_ZONE_VERTICAL_OFFSET_PX = 2;
 
 interface DragAndDropDocumentContext {
   doc: Document;
@@ -339,7 +340,7 @@ export class DragAndDrop implements Feature {
 
     dropZone.setCssStyles({
       display: "block",
-      top: dropVariant.top + "px",
+      top: dropVariant.top + DROP_ZONE_VERTICAL_OFFSET_PX + "px",
       left: dropVariant.left + "px",
       width: width + "px",
     });
