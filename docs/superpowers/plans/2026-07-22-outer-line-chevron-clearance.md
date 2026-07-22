@@ -32,7 +32,7 @@
 - Consumes: native `--icon-xs`, the existing outer pseudo-element, and the existing 3px enhanced paint.
 - Produces: a normal outer line at half an icon width from the widget inline end and enhanced paint centered on the same line.
 
-- [ ] **Step 1: Change the CSS contracts to require icon-relative offsets**
+- [x] **Step 1: Change the CSS contracts to require icon-relative offsets**
 
 Rename the normal-position test to `keeps the fallback at the widget end and clears the desktop chevron`.
 Require the desktop Live Preview normal declaration to be:
@@ -51,7 +51,7 @@ expect(desktopEnhancedHovered?.replace(/\s+/g, " ").trim()).toBe(
 );
 ```
 
-- [ ] **Step 2: Run the focused tests and verify RED**
+- [x] **Step 2: Run the focused tests and verify RED**
 
 Run:
 
@@ -61,7 +61,7 @@ SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/features/__tests__/GuideFolding.test
 
 Expected: three tests fail because the current CSS still uses `--indentation-guide-editing-indent`.
 
-- [ ] **Step 3: Move normal, selected, and hovered paint**
+- [x] **Step 3: Move normal, selected, and hovered paint**
 
 Replace the three desktop Live Preview offsets with:
 
@@ -81,12 +81,12 @@ inset-inline-start: auto;
 inset-inline-end: calc(var(--icon-xs) / 2 - 1px);
 ```
 
-- [ ] **Step 4: Update the durable outer-guide instruction**
+- [x] **Step 4: Update the durable outer-guide instruction**
 
 Replace the desktop Live Preview exception in `AGENTS.md` with the icon-relative geometry.
 Record the real-Obsidian requirements: normal and enhanced centers match, the enhanced SVG gap is positive, and no first-inner-guide distance contract remains.
 
-- [ ] **Step 5: Run the focused tests and verify GREEN**
+- [x] **Step 5: Run the focused tests and verify GREEN**
 
 Run the Step 2 command again.
 
@@ -105,7 +105,7 @@ Expected: all three tests pass.
 - Consumes: the icon-relative CSS contract from Task 1.
 - Produces: automated and real-Obsidian evidence that the line is close, visible, centered, and non-intersecting.
 
-- [ ] **Step 1: Run automated verification**
+- [x] **Step 1: Run automated verification**
 
 Run:
 
@@ -117,7 +117,7 @@ n exec 22.23.1 npm run build-with-tests
 
 Expected: every command exits 0.
 
-- [ ] **Step 2: Run the focused integration spec**
+- [x] **Step 2: Run the focused integration spec**
 
 Inspect the LevelDB lock owner.
 Back up `vault/test.md` into a new `/tmp/obsidian-bullet-outer-clearance.*` directory and record both SHA-256 hashes.
@@ -130,7 +130,7 @@ n exec 22.23.1 npm test -- specs/features/VerticalGuideInteraction.spec.md --run
 
 After the renderer exits, restore `vault/test.md`, verify its hash immediately and after a delay, and move only the verified temporary directory to Trash.
 
-- [ ] **Step 3: Verify real Obsidian geometry and interaction**
+- [x] **Step 3: Verify real Obsidian geometry and interaction**
 
 Open `vault/scroll-fold-regression-test.md` in the repository test vault and reload plugin `bullet`.
 Before every UI action, focus the `vault` renderer and verify the title contains `vault` but not `base`, `useTab` is `true`, and `tabSize` is `4`.
@@ -144,8 +144,22 @@ Verify:
 - pointer leave and clicking elsewhere clear hover and selected markers;
 - no temporary probe style or Obsidian error remains.
 
-- [ ] **Step 4: Commit the scoped fix**
+- [x] **Step 4: Commit the scoped fix**
 
 Use `but diff` to copy the exact change IDs for the spec, plan, test, CSS, and `AGENTS.md` changes.
 Commit only those IDs to `codex/fix-outer-line-clearance` with an English Conventional Commit whose body explains Why and What.
 
+## Verification Results
+
+- RED: the three focused CSS contracts failed because the implementation still used `--indentation-guide-editing-indent`.
+- GREEN: the same three contracts passed after switching to icon-relative offsets.
+- Unit: 55 suites and 665 tests passed with Node.js 22.23.1.
+- Full test: 75 suites passed with 812 passed and 15 skipped tests.
+- Lint: Prettier and ESLint passed.
+- Build: `build-with-tests` completed successfully.
+- Integration: the focused outer-guide interaction spec passed in Obsidian 1.13.3.
+- Fixture: `vault/test.md` was restored to SHA-256 `3b41a8cfcfc20a345fa3b2d33a909f1fb00bdd00d2302223bedefc0ed9c96f0b` and rechecked after renderer exit.
+- Normal paint: the line occupied `x=68..69` with center `x=68.5`; the chevron SVG began at `x=71`.
+- Hover and selected paint: the 3px line occupied `x=67..70`, retained center `x=68.5`, and left a `1px` SVG gap.
+- Interaction: a complete native pointer sequence changed 31 visible segments to 1 and back to 31.
+- Cleanup: hover markers, selected markers, temporary probe styles, and captured Obsidian errors were all zero.
