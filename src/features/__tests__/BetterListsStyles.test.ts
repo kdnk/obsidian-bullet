@@ -200,4 +200,21 @@ describe("BetterListsStyles", () => {
       /body\.is-mobile\.bullet-plugin-better-lists[^{}]*\.list-bullet(?::hover)?::before/,
     );
   });
+
+  test("keeps styled desktop chevrons clear of the halo", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const spacingDeclarations = styles.match(
+      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(spacingDeclarations?.replace(/\s+/g, " ").trim()).toBe(
+      "inset-inline-start: -7px;",
+    );
+    expect(styles).not.toMatch(
+      /body\.is-mobile\.bullet-plugin-better-lists[^{}]*\.collapse-indicator\s*\{/,
+    );
+    expect(styles).not.toMatch(
+      /\.bullet-plugin-better-lists[^{}]*\.HyperMD-header[^{}]*\.collapse-indicator\s*\{/,
+    );
+  });
 });
