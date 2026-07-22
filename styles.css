@@ -47,6 +47,12 @@ body:not(.is-mobile).bullet-plugin-better-lists
   .cm-line.HyperMD-list-line
   .is-collapsed
   ~ .cm-formatting-list
+  .list-bullet::before,
+body:not(
+    .is-mobile
+  ).bullet-plugin-better-lists.bullet-plugin-dnd.bullet-plugin-dragging
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-dragging-source-line
   .list-bullet::before {
   content: "";
   position: absolute;
