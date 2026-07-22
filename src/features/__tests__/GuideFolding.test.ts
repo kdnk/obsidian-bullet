@@ -1014,16 +1014,22 @@ describe("GuideFolding outer guide styles", () => {
     expect(declarations).toContain("pointer-events: auto;");
   });
 
-  test("keeps the normal outer line at the widget inline end on desktop", () => {
+  test("keeps the fallback at the widget end and aligns desktop Live Preview to native guides", () => {
     const baseDeclarations = styles.match(
       /\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const desktopNormalDeclarations = styles.match(
       /body:not\(\.is-mobile\)\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
+    const desktopLivePreviewDeclarations = styles.match(
+      /body:not\(\.is-mobile\)\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
 
     expect(baseDeclarations).toContain("inset-inline-end: 0;");
     expect(desktopNormalDeclarations).toBeUndefined();
+    expect(desktopLivePreviewDeclarations?.replace(/\s+/g, " ").trim()).toBe(
+      "inset-inline-start: var(--indentation-guide-editing-indent); inset-inline-end: auto;",
+    );
   });
 
   test("draws normal, native-active, and enhanced segments with theme variables", () => {
@@ -1043,7 +1049,7 @@ describe("GuideFolding outer guide styles", () => {
       /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide\.bullet-plugin-hovered-outer-list-guide-end::before\s*\{([^}]*)\}/,
     )?.[1];
     const desktopEnhancedHovered = styles.match(
-      /body:not\(\s*\.is-mobile\s*\)\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide::before\s*\{([^}]*)\}/,
+      /body:not\(\s*\.is-mobile\s*\)\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.bullet-plugin-outer-list-guide\[data-actionable="true"\]\.bullet-plugin-hovered-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const normalizedNativeHovered = nativeHovered?.replace(/\s+/g, " ").trim();
     const normalizedEnhancedHovered = enhancedHovered
@@ -1066,7 +1072,7 @@ describe("GuideFolding outer guide styles", () => {
       "border-end-start-radius: 2px; border-end-end-radius: 2px;",
     );
     expect(desktopEnhancedHovered?.replace(/\s+/g, " ").trim()).toBe(
-      "inset-inline-start: -1px; inset-inline-end: auto;",
+      "inset-inline-start: calc(var(--indentation-guide-editing-indent) - 1px); inset-inline-end: auto;",
     );
     expect(normalizedEnhancedHovered).not.toMatch(
       /(?:^|;)\s*(?:left|right)\s*:/,
@@ -1122,7 +1128,7 @@ describe("GuideFolding outer guide styles", () => {
       /\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\.bullet-plugin-selected-outer-list-guide\.bullet-plugin-selected-outer-list-guide-end::before\s*\{([^}]*)\}/,
     )?.[1];
     const desktopEnhancedSelectedOuter = styles.match(
-      /body:not\(\.is-mobile\)\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide\.bullet-plugin-selected-outer-list-guide::before\s*\{([^}]*)\}/,
+      /body:not\(\.is-mobile\)\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.bullet-plugin-outer-list-guide\.bullet-plugin-selected-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const selectedInner = styles.match(
       /\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-selected-indent-guide::before\s*\{([^}]*)\}/,
@@ -1185,7 +1191,7 @@ describe("GuideFolding outer guide styles", () => {
       "border-end-start-radius: 2px; border-end-end-radius: 2px;",
     );
     expect(desktopEnhancedSelectedOuter?.replace(/\s+/g, " ").trim()).toBe(
-      "inset-inline-start: -1px; inset-inline-end: auto;",
+      "inset-inline-start: calc(var(--indentation-guide-editing-indent) - 1px); inset-inline-end: auto;",
     );
     expect(selectedLivePreviewOffset?.replace(/\s+/g, " ").trim()).toBe(
       "margin-inline-start: var(--indentation-guide-editing-indent);",
