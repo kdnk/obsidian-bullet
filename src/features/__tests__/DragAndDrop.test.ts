@@ -635,11 +635,9 @@ test("uses neutral Logseq-style drag feedback", () => {
 
 test("uses Logseq-style cursors for drag handles and active drags", () => {
   const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
-  const idleRule = styles.match(
-    /(body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)\s+\.markdown-source-view\.mod-cm6\s+\.cm-formatting-list,\s*body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)\s+\.markdown-source-view\.mod-cm6\s+\.task-list-item-checkbox,\s*body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-list-line\s+\.cm-fold-indicator\s+\.collapse-indicator)\s*\{([^}]*)\}/,
-  );
-  const idleSelector = idleRule?.[1];
-  const idleDeclarations = idleRule?.[2];
+  const idleDeclarations = styles.match(
+    /body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)\s+\.markdown-source-view\.mod-cm6\s+\.cm-formatting-list,\s*body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)\s+\.markdown-source-view\.mod-cm6\s+\.task-list-item-checkbox,\s*body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)\s+\.markdown-source-view\.mod-cm6\s+\.HyperMD-list-line\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
+  )?.[1];
   const draggingDeclarations = styles.match(
     /html\s+body:not\(\.is-mobile\)\.bullet-plugin-dnd\.bullet-plugin-dragging\s+\.markdown-source-view\.mod-cm6,\s*html\s+body:not\(\.is-mobile\)\.bullet-plugin-dnd\.bullet-plugin-dragging\s+\.markdown-source-view\.mod-cm6\s+\*\s*\{([^}]*)\}/,
   )?.[1];
@@ -648,6 +646,8 @@ test("uses Logseq-style cursors for drag handles and active drags", () => {
 
   expect(normalize(idleDeclarations)).toBe("cursor: pointer;");
   expect(normalize(draggingDeclarations)).toBe("cursor: copy !important;");
-  expect(idleSelector).not.toMatch(/\.HyperMD-header|\.cm-indent/);
+  expect(styles).not.toMatch(
+    /body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)[^{}]*(?:\.HyperMD-header|\.cm-indent)[^{}]*\{[^{}]*cursor:\s*pointer\s*;[^{}]*\}/,
+  );
   expect(styles).not.toMatch(/cursor:\s*(?:grab|grabbing)\s*;/);
 });
