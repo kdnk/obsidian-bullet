@@ -298,7 +298,12 @@ export class DragAndDrop implements Feature {
       lines.push(editor.posToOffset({ line: i, ch: 0 }));
     }
     view.dispatch({
-      effects: [dndStarted.of(lines)],
+      effects: [
+        dndStarted.of({
+          lines,
+          sourceLine: editor.posToOffset({ line: fromLine, ch: 0 }),
+        }),
+      ],
     });
 
     state.doc.body.classList.add("bullet-plugin-dragging");
@@ -597,14 +602,26 @@ class DragAndDropState {
   }
 }
 
-const dndStarted = StateEffect.define<number[]>({
-  map: (lines, change) => lines.map((l) => change.mapPos(l)),
+interface DraggingLines {
+  lines: number[];
+  sourceLine: number;
+}
+
+const dndStarted = StateEffect.define<DraggingLines>({
+  map: ({ lines, sourceLine }, change) => ({
+    lines: lines.map((line) => change.mapPos(line)),
+    sourceLine: change.mapPos(sourceLine),
+  }),
 });
 
 const dndEnded = StateEffect.define<void>();
 
 const draggingLineDecoration = Decoration.line({
   class: "bullet-plugin-dragging-line",
+});
+
+const draggingSourceLineDecoration = Decoration.line({
+  class: "bullet-plugin-dragging-line bullet-plugin-dragging-source-line",
 });
 
 const draggingLinesStateField = StateField.define<DecorationSet>({
@@ -616,7 +633,13 @@ const draggingLinesStateField = StateField.define<DecorationSet>({
     for (const e of tr.effects) {
       if (e.is(dndStarted)) {
         dndState = dndState.update({
-          add: e.value.map((l) => draggingLineDecoration.range(l, l)),
+          add: e.value.lines.map((line) => {
+            const decoration =
+              line === e.value.sourceLine
+                ? draggingSourceLineDecoration
+                : draggingLineDecoration;
+            return decoration.range(line, line);
+          }),
         });
       }
 
