@@ -1,3 +1,5 @@
+import { readFileSync } from "fs";
+import { join } from "path";
 import { DragAndDrop } from "../DragAndDrop";
 
 const mockNotice = jest.fn<void, unknown[]>();
@@ -607,4 +609,25 @@ describe("DragAndDrop", () => {
       false,
     );
   });
+});
+
+test("uses neutral Logseq-style drag feedback", () => {
+  const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+  const dragging = styles.match(
+    /\.bullet-plugin-dragging-line\s*\{([^}]*)\}/,
+  )?.[1];
+  const dropZone = styles.match(
+    /\.bullet-plugin-drop-zone\s*\{([^}]*)\}/,
+  )?.[1];
+  const normalize = (value: string | undefined) =>
+    value?.replace(/\s+/g, " ").trim();
+
+  expect(normalize(dragging)).toBe(
+    "background-color: var(--background-modifier-hover);",
+  );
+  expect(normalize(dropZone)).toBe(
+    "width: 300px; height: 3px; background: var(--text-muted); z-index: 999; position: absolute; pointer-events: none;",
+  );
+  expect(styles).not.toMatch(/\.bullet-plugin-drop-zone(?:::before|-inside|-padding)/);
+  expect(styles).not.toContain(".bullet-plugin-dropping-line");
 });
