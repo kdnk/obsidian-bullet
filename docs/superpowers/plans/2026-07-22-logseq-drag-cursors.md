@@ -59,7 +59,7 @@ test("uses Logseq-style cursors for drag handles and active drags", () => {
     value?.replace(/\s+/g, " ").trim();
 
   expect(normalize(idleDeclarations)).toBe("cursor: pointer;");
-  expect(normalize(draggingDeclarations)).toBe("cursor: copy !important;");
+  expect(normalize(draggingDeclarations)).toBe("cursor: copy;");
   expect(styles).not.toMatch(
     /body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)[^{}]*(?:\.HyperMD-header|\.cm-indent)[^{}]*\{[^{}]*cursor:\s*pointer\s*;[^{}]*\}/,
   );
@@ -103,11 +103,11 @@ html
   body:not(.is-mobile).bullet-plugin-dnd.bullet-plugin-dragging
   .markdown-source-view.mod-cm6
   * {
-  cursor: copy !important;
+  cursor: copy;
 }
 ```
 
-The descendant rule uses `!important` so Obsidian's `text`, `pointer`, and resize cursors cannot remove the plus badge while the pointer crosses editor children.
+The body and Live Preview editor classes give the active selector enough specificity to override Obsidian's `text`, `pointer`, and resize cursors while the pointer crosses editor children.
 
 - [ ] **Step 4: Run the focused test and verify GREEN**
 

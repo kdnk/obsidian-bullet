@@ -42,7 +42,9 @@ Bulletは独自のmouse eventでリスト移動を実装しているため、同
 
 pointerが6pxの開始距離へ達して`bullet-plugin-dragging`が付いた後は、ドラッグ対象とdrop候補を含むeditor領域へ`cursor: copy`を適用する。
 
-ドラッグ中は子要素が持つ`text`や`pointer`より`copy`を優先し、pointer位置によってplus記号が消えないようにする。
+ドラッグ中はpluginのbody classとLive Preview editor classを含むselectorの詳細度で、子要素が持つ`text`や`pointer`より`copy`を優先する。
+
+editorとそのすべての子要素へ同じselectorを適用し、pointer位置によってplus記号が消えないようにする。
 
 drop、mouse up、Escape、window close、feature unloadで既存の`bullet-plugin-dragging`が外れた後は、通常時の`pointer`へ戻る。
 

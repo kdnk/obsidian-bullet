@@ -645,7 +645,7 @@ test("uses Logseq-style cursors for drag handles and active drags", () => {
     value?.replace(/\s+/g, " ").trim();
 
   expect(normalize(idleDeclarations)).toBe("cursor: pointer;");
-  expect(normalize(draggingDeclarations)).toBe("cursor: copy !important;");
+  expect(normalize(draggingDeclarations)).toBe("cursor: copy;");
   expect(styles).not.toMatch(
     /body:not\(\.is-mobile\)\.bullet-plugin-dnd:not\(\.bullet-plugin-dragging\)[^{}]*(?:\.HyperMD-header|\.cm-indent)[^{}]*\{[^{}]*cursor:\s*pointer\s*;[^{}]*\}/,
   );

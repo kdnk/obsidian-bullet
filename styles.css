@@ -454,5 +454,5 @@ html
   body:not(.is-mobile).bullet-plugin-dnd.bullet-plugin-dragging
   .markdown-source-view.mod-cm6
   * {
-  cursor: copy !important;
+  cursor: copy;
 }
