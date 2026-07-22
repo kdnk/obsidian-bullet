@@ -1014,7 +1014,7 @@ describe("GuideFolding outer guide styles", () => {
     expect(declarations).toContain("pointer-events: auto;");
   });
 
-  test("keeps the fallback at the widget end and aligns desktop Live Preview to native guides", () => {
+  test("keeps the fallback at the widget end and clears the desktop chevron", () => {
     const baseDeclarations = styles.match(
       /\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
@@ -1028,7 +1028,7 @@ describe("GuideFolding outer guide styles", () => {
     expect(baseDeclarations).toContain("inset-inline-end: 0;");
     expect(desktopNormalDeclarations).toBeUndefined();
     expect(desktopLivePreviewDeclarations?.replace(/\s+/g, " ").trim()).toBe(
-      "inset-inline-start: var(--indentation-guide-editing-indent); inset-inline-end: auto;",
+      "inset-inline-start: auto; inset-inline-end: calc(var(--icon-xs) / 2);",
     );
   });
 
@@ -1072,7 +1072,7 @@ describe("GuideFolding outer guide styles", () => {
       "border-end-start-radius: 2px; border-end-end-radius: 2px;",
     );
     expect(desktopEnhancedHovered?.replace(/\s+/g, " ").trim()).toBe(
-      "inset-inline-start: calc(var(--indentation-guide-editing-indent) - 1px); inset-inline-end: auto;",
+      "inset-inline-start: auto; inset-inline-end: calc(var(--icon-xs) / 2 - 1px);",
     );
     expect(normalizedEnhancedHovered).not.toMatch(
       /(?:^|;)\s*(?:left|right)\s*:/,
@@ -1191,7 +1191,7 @@ describe("GuideFolding outer guide styles", () => {
       "border-end-start-radius: 2px; border-end-end-radius: 2px;",
     );
     expect(desktopEnhancedSelectedOuter?.replace(/\s+/g, " ").trim()).toBe(
-      "inset-inline-start: calc(var(--indentation-guide-editing-indent) - 1px); inset-inline-end: auto;",
+      "inset-inline-start: auto; inset-inline-end: calc(var(--icon-xs) / 2 - 1px);",
     );
     expect(selectedLivePreviewOffset?.replace(/\s+/g, " ").trim()).toBe(
       "margin-inline-start: var(--indentation-guide-editing-indent);",
