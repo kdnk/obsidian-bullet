@@ -1014,18 +1014,16 @@ describe("GuideFolding outer guide styles", () => {
     expect(declarations).toContain("pointer-events: auto;");
   });
 
-  test("moves only the desktop outer line to the widget inline start", () => {
+  test("keeps the normal outer line at the widget inline end on desktop", () => {
     const baseDeclarations = styles.match(
       /\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
-    const desktopDeclarations = styles.match(
+    const desktopNormalDeclarations = styles.match(
       /body:not\(\.is-mobile\)\s+\.markdown-source-view\.mod-cm6\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
 
     expect(baseDeclarations).toContain("inset-inline-end: 0;");
-    expect(desktopDeclarations?.replace(/\s+/g, " ").trim()).toBe(
-      "inset-inline-start: 0; inset-inline-end: auto;",
-    );
+    expect(desktopNormalDeclarations).toBeUndefined();
   });
 
   test("draws normal, native-active, and enhanced segments with theme variables", () => {
