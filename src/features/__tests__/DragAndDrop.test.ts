@@ -1,3 +1,11 @@
+import {
+  EditorState,
+  Extension,
+  StateField,
+  TransactionSpec,
+} from "@codemirror/state";
+import { DecorationSet } from "@codemirror/view";
+
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -158,6 +166,108 @@ describe("DragAndDrop", () => {
 
     await feature.unload();
     expect(settings.removeCallback).toHaveBeenCalledWith(expect.any(Function));
+  });
+
+  test("marks only the dragged item's first line as the source", async () => {
+    const document = makeDocument();
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: document,
+    });
+    const settings = {
+      dragAndDrop: true,
+      onChange: jest.fn(),
+      removeCallback: jest.fn(),
+    };
+    const plugin = {
+      app: { workspace: { on: jest.fn().mockReturnValue({}) } },
+      registerEditorExtension: jest.fn<void, [Extension]>(),
+      registerEvent: jest.fn(),
+    };
+    const feature = new DragAndDrop(
+      plugin as never,
+      settings as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await feature.load();
+
+    const extension = plugin.registerEditorExtension.mock.calls[0]?.[0];
+    if (!Array.isArray(extension) || !extension[0]) {
+      throw new Error("DragAndDrop did not register its decoration state");
+    }
+    const decorationField = extension[0] as StateField<DecorationSet>;
+    let editorState = EditorState.create({
+      doc: "- parent\n\t- child\n\t- leaf",
+      extensions: extension,
+    });
+    const view = {
+      get state() {
+        return editorState;
+      },
+      dispatch: jest.fn((spec: TransactionSpec) => {
+        editorState = editorState.update(spec).state;
+      }),
+    };
+    const editor = {
+      posToOffset: jest.fn(({ line }: { line: number }) => {
+        return editorState.doc.line(line + 1).from;
+      }),
+    };
+    const list = {
+      getFirstLineContentStart: jest.fn().mockReturnValue({ line: 0, ch: 0 }),
+      getContentEndIncludingChildren: jest
+        .fn()
+        .mockReturnValue({ line: 2, ch: 6 }),
+    };
+    (
+      feature as unknown as {
+        state: unknown;
+      }
+    ).state = { document, doc: document, editor, list, view };
+
+    (
+      feature as unknown as {
+        highlightDraggingLines: () => void;
+      }
+    ).highlightDraggingLines();
+
+    const renderedDecorations: Array<{
+      from: number;
+      className: string | undefined;
+    }> = [];
+    const decorations = editorState.field(decorationField);
+    for (let cursor = decorations.iter(); cursor.value; cursor.next()) {
+      renderedDecorations.push({
+        from: cursor.from,
+        className: (
+          cursor.value.spec as {
+            class?: string;
+          }
+        ).class,
+      });
+    }
+
+    expect(renderedDecorations).toEqual([
+      {
+        from: editorState.doc.line(1).from,
+        className:
+          "bullet-plugin-dragging-line bullet-plugin-dragging-source-line",
+      },
+      {
+        from: editorState.doc.line(2).from,
+        className: "bullet-plugin-dragging-line",
+      },
+      {
+        from: editorState.doc.line(3).from,
+        className: "bullet-plugin-dragging-line",
+      },
+    ]);
+    expect(document.body.classList.contains("bullet-plugin-dragging")).toBe(
+      true,
+    );
   });
 
   interface DragMeasurement {
