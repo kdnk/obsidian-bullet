@@ -444,7 +444,7 @@ describe("DragAndDrop", () => {
     expect(popoutDocument.body.classList.contains("bullet-plugin-dnd")).toBe(
       true,
     );
-    expect(popoutDocument.win.createDiv).toHaveBeenCalledTimes(2);
+    expect(popoutDocument.win.createDiv).toHaveBeenCalledTimes(1);
     expect(popoutDocument.appended).toHaveLength(1);
     expect(popoutDocument.addEventListener).toHaveBeenCalledTimes(4);
 
@@ -558,14 +558,7 @@ describe("DragAndDrop", () => {
     expect(startDragging).toHaveBeenCalledTimes(1);
   });
 
-  test("should mark the drop zone when moving an item inside another item", () => {
-    Object.defineProperty(global, "getComputedStyle", {
-      configurable: true,
-      value: jest.fn().mockReturnValue({
-        getPropertyValue: jest.fn().mockReturnValue("#8a5cf6"),
-      }),
-    });
-
+  test("draws the same single separator at the semantic indent for an inside drop", () => {
     const feature = new DragAndDrop(
       {} as never,
       { dragAndDrop: true } as never,
@@ -575,38 +568,26 @@ describe("DragAndDrop", () => {
     );
     const doc = makeDocument();
     const dropZone = makeElement();
-    const dropZonePadding = makeElement();
-    const parent = {
-      getLevel: jest.fn().mockReturnValue(2),
-      getParent: jest.fn().mockReturnValue(null),
-      getFirstLineContentStart: jest.fn().mockReturnValue({ line: 1, ch: 0 }),
-    };
 
     (
       feature as unknown as {
         documents: Map<unknown, unknown>;
         state: unknown;
       }
-    ).documents.set(doc, { doc, dropZone, dropZonePadding });
+    ).documents.set(doc, { doc, dropZone });
     (
       feature as unknown as {
         state: unknown;
       }
     ).state = {
       doc,
-      view: {
-        contentDOM: { offsetWidth: 400 },
-        dispatch: jest.fn(),
-      },
-      editor: { posToOffset: jest.fn().mockReturnValue(0) },
+      view: { contentDOM: { offsetWidth: 400 } },
       dropVariant: {
         left: 80,
         top: 120,
         whereToMove: "inside",
-        placeToMove: parent,
       },
       leftPadding: 20,
-      tabWidth: 30,
     };
 
     (
@@ -615,8 +596,15 @@ describe("DragAndDrop", () => {
       }
     ).drawDropZone();
 
+    expect(dropZone.style).toEqual({
+      display: "block",
+      top: "120px",
+      left: "80px",
+      width: "340px",
+    });
+    expect(dropZone.children).toEqual([]);
     expect(dropZone.classList.contains("bullet-plugin-drop-zone-inside")).toBe(
-      true,
+      false,
     );
   });
 });

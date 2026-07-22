@@ -21,7 +21,6 @@ const DRAG_START_DISTANCE_PX = 6;
 interface DragAndDropDocumentContext {
   doc: Document;
   dropZone: HTMLDivElement;
-  dropZonePadding: HTMLDivElement;
 }
 
 export class DragAndDrop implements Feature {
@@ -38,10 +37,7 @@ export class DragAndDrop implements Feature {
   ) {}
 
   async load() {
-    this.plugin.registerEditorExtension([
-      draggingLinesStateField,
-      droppingLinesStateField,
-    ]);
+    this.plugin.registerEditorExtension([draggingLinesStateField]);
     this.enableFeatureToggle();
     this.addManagedDocument(activeDocument);
     this.plugin.registerEvent(
@@ -85,19 +81,12 @@ export class DragAndDrop implements Feature {
     }
 
     const domWindow = getObsidianDomWindow(doc);
-    const dropZonePadding = domWindow.createDiv();
-    dropZonePadding.classList.add("bullet-plugin-drop-zone-padding");
     const dropZone = domWindow.createDiv();
     dropZone.classList.add("bullet-plugin-drop-zone");
     dropZone.setCssStyles({ display: "none" });
-    dropZone.appendChild(dropZonePadding);
     doc.body.appendChild(dropZone);
 
-    this.documents.set(doc, {
-      doc,
-      dropZone,
-      dropZonePadding,
-    });
+    this.documents.set(doc, { doc, dropZone });
     this.addEventListeners(doc);
 
     if (isFeatureSupported() && this.settings.dragAndDrop) {
@@ -333,70 +322,21 @@ export class DragAndDrop implements Feature {
 
   private drawDropZone() {
     const state = this.getState();
-    const { view, editor, dropVariant } = state;
+    const { view, dropVariant } = state;
     if (!dropVariant) {
       return;
     }
 
-    const { dropZone, dropZonePadding, doc } = this.getDocumentContext(
-      state.doc,
+    const { dropZone } = this.getDocumentContext(state.doc);
+    const width = Math.round(
+      view.contentDOM.offsetWidth - (dropVariant.left - state.leftPadding),
     );
 
-    const newParent =
-      dropVariant.whereToMove === "inside"
-        ? dropVariant.placeToMove
-        : dropVariant.placeToMove.getParent();
-    if (!newParent) {
-      return;
-    }
-
-    const newParentIsRootList = !newParent.getParent();
-
-    {
-      const width = Math.round(
-        view.contentDOM.offsetWidth - (dropVariant.left - state.leftPadding),
-      );
-
-      dropZone.setCssStyles({
-        display: "block",
-        top: dropVariant.top + "px",
-        left: dropVariant.left + "px",
-        width: width + "px",
-      });
-      dropZone.classList.toggle(
-        "bullet-plugin-drop-zone-inside",
-        dropVariant.whereToMove === "inside",
-      );
-    }
-
-    {
-      const level = newParent.getLevel();
-      const indentWidth = state.tabWidth;
-      const width = indentWidth * level;
-      const dashPadding = 3;
-      const dashWidth = indentWidth - dashPadding;
-      const color = doc.defaultView
-        ?.getComputedStyle(doc.body)
-        .getPropertyValue("--color-accent");
-
-      dropZonePadding.setCssStyles({
-        width: `${width}px`,
-        marginLeft: `-${width}px`,
-        backgroundImage: `url('data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%20${width}%204%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cline%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%22${width}%22%20y2%3D%220%22%20stroke%3D%22${color ?? ""}%22%20stroke-width%3D%228%22%20stroke-dasharray%3D%22${dashWidth}%20${dashPadding}%22%2F%3E%3C%2Fsvg%3E')`,
-      });
-    }
-
-    state.view.dispatch({
-      effects: [
-        dndMoved.of(
-          newParentIsRootList
-            ? null
-            : editor.posToOffset({
-                line: newParent.getFirstLineContentStart().line,
-                ch: 0,
-              }),
-        ),
-      ],
+    dropZone.setCssStyles({
+      display: "block",
+      top: dropVariant.top + "px",
+      left: dropVariant.left + "px",
+      width: width + "px",
     });
   }
 
@@ -661,18 +601,10 @@ const dndStarted = StateEffect.define<number[]>({
   map: (lines, change) => lines.map((l) => change.mapPos(l)),
 });
 
-const dndMoved = StateEffect.define<number | null>({
-  map: (line, change) => (line !== null ? change.mapPos(line) : line),
-});
-
 const dndEnded = StateEffect.define<void>();
 
 const draggingLineDecoration = Decoration.line({
   class: "bullet-plugin-dragging-line",
-});
-
-const droppingLineDecoration = Decoration.line({
-  class: "bullet-plugin-dropping-line",
 });
 
 const draggingLinesStateField = StateField.define<DecorationSet>({
@@ -694,31 +626,6 @@ const draggingLinesStateField = StateField.define<DecorationSet>({
     }
 
     return dndState;
-  },
-
-  provide: (f) => EditorView.decorations.from(f),
-});
-
-const droppingLinesStateField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
-
-  update: (dndDroppingState, tr) => {
-    dndDroppingState = dndDroppingState.map(tr.changes);
-
-    for (const e of tr.effects) {
-      if (e.is(dndMoved)) {
-        dndDroppingState =
-          e.value === null
-            ? Decoration.none
-            : Decoration.set(droppingLineDecoration.range(e.value, e.value));
-      }
-
-      if (e.is(dndEnded)) {
-        dndDroppingState = Decoration.none;
-      }
-    }
-
-    return dndDroppingState;
   },
 
   provide: (f) => EditorView.decorations.from(f),
