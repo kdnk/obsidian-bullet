@@ -138,13 +138,50 @@ function makeFoldEditor() {
   };
 }
 
-function makeGuideLine(indentSegments: string[] = ["  "]) {
-  const line = {};
+function makeGuideLine(
+  indentSegments: string[] = ["  "],
+  options: {
+    guideRects?: Array<{ left: number; right: number }>;
+    livePreview?: boolean;
+    mobile?: boolean;
+  } = {},
+) {
+  const editorRoot = {};
+  let guides: Array<{
+    textContent: string;
+    parentElement: typeof indentContainer;
+    classList: ReturnType<typeof makeClassList>;
+    matches: jest.Mock;
+    closest: jest.Mock;
+    getBoundingClientRect: jest.Mock;
+  }> = [];
+  const line = {
+    ownerDocument: {
+      body: {
+        classList: {
+          contains: (className: string) =>
+            className === "is-mobile" && options.mobile !== false,
+        },
+      },
+    },
+    matches: jest.fn((selector: string) => selector === ".cm-line"),
+    closest: jest.fn(),
+    querySelectorAll: jest.fn((selector: string) =>
+      selector === ".cm-hmd-list-indent > .cm-indent" ? guides : [],
+    ),
+  };
+  line.closest.mockImplementation((selector: string) => {
+    if (selector === ".cm-line") return line;
+    if (selector === ".markdown-source-view.mod-cm6.is-live-preview") {
+      return options.livePreview === false ? null : editorRoot;
+    }
+    return null;
+  });
   const indentContainer = {
     matches: jest.fn((selector: string) => selector === ".cm-hmd-list-indent"),
     childNodes: [] as Array<{ textContent: string | null }>,
   };
-  const guides = indentSegments.map((textContent) => ({
+  guides = indentSegments.map((textContent, index) => ({
     textContent,
     parentElement: indentContainer,
     classList: makeClassList(),
@@ -152,6 +189,10 @@ function makeGuideLine(indentSegments: string[] = ["  "]) {
     closest: jest.fn((selector: string) =>
       selector === ".cm-line" ? line : null,
     ),
+    getBoundingClientRect: jest.fn(() => ({
+      left: options.guideRects?.[index]?.left ?? index * 36,
+      right: options.guideRects?.[index]?.right ?? (index + 1) * 36,
+    })),
   }));
   indentContainer.childNodes.push(...guides);
 
@@ -1256,7 +1297,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     }
   });
 
-  function makeEvent(target: unknown) {
+  function makeEvent(target: unknown, clientX?: number) {
     let defaultPrevented = false;
     const preventDefault = jest.fn(() => {
       defaultPrevented = true;
@@ -1265,6 +1306,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     return {
       event: {
         target,
+        clientX,
         get defaultPrevented() {
           return defaultPrevented;
         },
@@ -1704,6 +1746,112 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(views.every((view) => view.dispatch.mock.calls.length === 1)).toBe(
       true,
     );
+  });
+
+  test("routes a wrapped mobile indentation lane to its rendered guide", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- parent\n    - branch\n        - leaf",
+        cursor: { line: 2, ch: 8 },
+      }),
+    });
+    const editor = makeFoldEditor();
+    mockGetEditorFromState.mockReturnValue(editor);
+    const pluginValue = makeInteractionHarness(
+      { verticalLinesAction: "toggle-folding" },
+      { parse: jest.fn().mockReturnValue(root) },
+    );
+    const { line } = makeGuideLine(["    "], {
+      guideRects: [{ left: 24, right: 60 }],
+    });
+    const mouseDown = makeEvent(line, 50);
+    const click = makeEvent(line, 50);
+
+    expect(pluginValue.mouseDown(mouseDown.event, makeView(2))).toBe(true);
+    expect(foldable).not.toHaveBeenCalled();
+    expect(mouseDown.preventDefault).toHaveBeenCalledTimes(1);
+    expect(mouseDown.stopPropagation).toHaveBeenCalledTimes(1);
+
+    expect(pluginValue.click(click.event, makeView(2))).toBe(true);
+    expect(foldable).toHaveBeenCalledTimes(1);
+    expect(click.preventDefault).toHaveBeenCalledTimes(1);
+    expect(click.stopPropagation).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    {
+      name: "outside a wrapped guide lane",
+      clientX: 60,
+      guideOptions: {},
+      settings: { verticalLinesAction: "toggle-folding" },
+    },
+    {
+      name: "desktop wrapped indentation",
+      clientX: 50,
+      guideOptions: { mobile: false },
+      settings: { verticalLinesAction: "toggle-folding" },
+    },
+    {
+      name: "Source mode wrapped indentation",
+      clientX: 50,
+      guideOptions: { livePreview: false },
+      settings: { verticalLinesAction: "toggle-folding" },
+    },
+    {
+      name: "wrapped indentation when folding is disabled",
+      clientX: 50,
+      guideOptions: {},
+      settings: { verticalLinesAction: "none" },
+    },
+  ])(
+    "leaves $name to normal editing",
+    ({ clientX, guideOptions, settings }) => {
+      const pluginValue = makeInteractionHarness(settings, {
+        parse: jest.fn(),
+      });
+      const { line } = makeGuideLine(["    "], {
+        guideRects: [{ left: 24, right: 60 }],
+        ...guideOptions,
+      });
+
+      for (const interact of [pluginValue.mouseDown, pluginValue.click]) {
+        const interaction = makeEvent(line, clientX);
+
+        expect(interact(interaction.event, makeView(2))).toBe(false);
+        expect(interaction.preventDefault).not.toHaveBeenCalled();
+        expect(interaction.stopPropagation).not.toHaveBeenCalled();
+      }
+      expect(foldable).not.toHaveBeenCalled();
+    },
+  );
+
+  test("leaves a wrapped guide lane descendant to its native interaction", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- parent\n    - branch\n        - leaf",
+        cursor: { line: 2, ch: 8 },
+      }),
+    });
+    mockGetEditorFromState.mockReturnValue(makeFoldEditor());
+    const pluginValue = makeInteractionHarness(
+      { verticalLinesAction: "toggle-folding" },
+      { parse: jest.fn().mockReturnValue(root) },
+    );
+    const { line } = makeGuideLine(["    "], {
+      guideRects: [{ left: 24, right: 60 }],
+    });
+    const descendant = {
+      matches: jest.fn(() => false),
+      closest: jest.fn((selector: string) =>
+        selector === ".cm-line" ? line : null,
+      ),
+    };
+    const interaction = makeEvent(descendant, 50);
+
+    expect(pluginValue.click(interaction.event, makeView(2))).toBe(false);
+    expect(interaction.preventDefault).not.toHaveBeenCalled();
+    expect(interaction.stopPropagation).not.toHaveBeenCalled();
+    expect(foldable).not.toHaveBeenCalled();
   });
 
   test("uses the painted boundary when native indentation is combined", () => {

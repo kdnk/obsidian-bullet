@@ -28,7 +28,10 @@ import { Settings } from "../services/Settings";
 
 const INDENT_GUIDE_SELECTOR = ".cm-indent";
 const INDENT_CONTAINER_SELECTOR = ".cm-hmd-list-indent";
+const LINE_INDENT_GUIDE_SELECTOR = ".cm-hmd-list-indent > .cm-indent";
 const LINE_SELECTOR = ".cm-line";
+const LIVE_PREVIEW_EDITOR_SELECTOR =
+  ".markdown-source-view.mod-cm6.is-live-preview";
 const PERSISTENT_GUIDE_MARKER = "bullet-plugin-persistent-indent-guide";
 const PERSISTENT_GUIDE_SELECTOR = `.${PERSISTENT_GUIDE_MARKER}`;
 const PERSISTENT_GUIDE_CANDIDATE_SELECTOR =
@@ -548,17 +551,17 @@ export class GuideFoldingPluginValue implements PluginValue {
   }
 
   private handleGuideInteraction(event: MouseEvent, shouldToggle: boolean) {
-    const pressedGuide = event.target;
-    if (!isElementLike(pressedGuide)) {
+    const pressedTarget = event.target;
+    if (!isElementLike(pressedTarget)) {
       return false;
     }
 
-    if (pressedGuide.matches(OUTER_LIST_GUIDE_SELECTOR)) {
+    if (pressedTarget.matches(OUTER_LIST_GUIDE_SELECTOR)) {
       if (!this.settings.outerVerticalLines) {
         return false;
       }
-      const startAttribute = pressedGuide.getAttribute("data-chunk-start");
-      const endAttribute = pressedGuide.getAttribute("data-chunk-end");
+      const startAttribute = pressedTarget.getAttribute("data-chunk-start");
+      const endAttribute = pressedTarget.getAttribute("data-chunk-end");
       if (
         startAttribute === null ||
         endAttribute === null ||
@@ -599,7 +602,7 @@ export class GuideFoldingPluginValue implements PluginValue {
       if (
         !shouldToggle ||
         !this.interactionEnabled() ||
-        pressedGuide.getAttribute("data-actionable") !== "true"
+        pressedTarget.getAttribute("data-actionable") !== "true"
       ) {
         event.preventDefault();
         return true;
@@ -625,7 +628,10 @@ export class GuideFoldingPluginValue implements PluginValue {
       return true;
     }
 
-    if (!pressedGuide.matches(INDENT_GUIDE_SELECTOR)) {
+    const pressedGuide = pressedTarget.matches(INDENT_GUIDE_SELECTOR)
+      ? pressedTarget
+      : this.resolveMobileIndentGuide(pressedTarget, event.clientX);
+    if (!pressedGuide) {
       return false;
     }
 
@@ -674,6 +680,32 @@ export class GuideFoldingPluginValue implements PluginValue {
 
     event.preventDefault();
     return true;
+  }
+
+  private resolveMobileIndentGuide(target: Element, clientX: number) {
+    if (
+      !this.interactionEnabled() ||
+      !target.matches(LINE_SELECTOR) ||
+      !Number.isFinite(clientX)
+    ) {
+      return null;
+    }
+
+    if (
+      !target.ownerDocument.body.classList.contains("is-mobile") ||
+      !target.closest(LIVE_PREVIEW_EDITOR_SELECTOR)
+    ) {
+      return null;
+    }
+
+    return (
+      Array.from(target.querySelectorAll(LINE_INDENT_GUIDE_SELECTOR)).find(
+        (guide) => {
+          const rect = guide.getBoundingClientRect();
+          return rect.left <= clientX && clientX < rect.right;
+        },
+      ) ?? null
+    );
   }
 
   destroy() {
