@@ -158,7 +158,7 @@ describe("BetterListsStyles", () => {
       /\.bullet-plugin-better-lists\s+\.list-bullet::after\s*\{([^}]*)\}/,
     )?.[1];
     const foldableDeclarations = styles.match(
-      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.list-bullet::after\s*\{([^}]*)\}/,
+      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s+\.cm-fold-indicator\s+~\s+:where\(\.cm-formatting-list\)\s+\.list-bullet::after\s*\{([^}]*)\}/,
     )?.[1];
     const collapsedDeclarations = styles.match(
       /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s+\.is-collapsed\s*~\s*\.cm-formatting-list\s+\.list-bullet::after\s*\{([^}]*)\}/,
@@ -182,7 +182,7 @@ describe("BetterListsStyles", () => {
       /\.bullet-plugin-better-lists\s+\.list-bullet\s*\{([^}]*)\}/,
     )?.[1];
     const sharedHalo = styles.match(
-      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.list-bullet:hover::before,\s*body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s+\.is-collapsed\s*~\s*\.cm-formatting-list\s+\.list-bullet::before,\s*body:not\(\s*\.is-mobile\s*\)\.bullet-plugin-better-lists\.bullet-plugin-dnd\.bullet-plugin-dragging\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-dragging-source-line\s+\.list-bullet::before\s*\{([^}]*)\}/,
+      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s+\.cm-fold-indicator\s+~\s+:where\(\.cm-formatting-list\)\s+\.list-bullet:hover::before,\s*body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s+\.is-collapsed\s*~\s*\.cm-formatting-list\s+\.list-bullet::before,\s*body:not\(\s*\.is-mobile\s*\)\.bullet-plugin-better-lists\.bullet-plugin-dnd\.bullet-plugin-dragging\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-dragging-source-line\s+\.list-bullet::before\s*\{([^}]*)\}/,
     )?.[1];
     const dragSourceSelector = styles.match(
       /(body:not\(\s*\.is-mobile\s*\)\.bullet-plugin-better-lists\.bullet-plugin-dnd\.bullet-plugin-dragging\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-dragging-source-line\s+\.list-bullet::before)\s*\{/,
@@ -221,7 +221,7 @@ describe("BetterListsStyles", () => {
   test("keeps styled desktop chevrons clear of the halo", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const spacingDeclarations = styles.match(
-      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
+      /body:not\(\.is-mobile\)\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s+\.cm-fold-indicator\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
     )?.[1];
 
     expect(spacingDeclarations?.replace(/\s+/g, " ").trim()).toBe(

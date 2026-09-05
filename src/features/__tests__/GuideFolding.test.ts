@@ -975,19 +975,19 @@ describe("GuideFolding persistent guide styles", () => {
   test("shows desktop list chevrons only on row hover at the Logseq spacing", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const hiddenDeclarations = styles.match(
-      /body:not\(\.is-mobile\)\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\)\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
+      /body:not\(\.is-mobile\)\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line\s+\.cm-fold-indicator\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
     )?.[1];
     const hoveredDeclarations = styles.match(
-      /body:not\(\.is-mobile\)\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\):hover\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
+      /body:not\(\.is-mobile\)\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:hover\s+\.cm-fold-indicator\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
     )?.[1];
     const competingParentDeclarations = styles.match(
-      /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\):hover\s+\.cm-fold-indicator\s*\{([^}]*)\}/,
+      /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:hover\s+\.cm-fold-indicator\.cm-fold-indicator\s*\{([^}]*)\}/,
     )?.[1];
     const competingControlDeclarations = styles.match(
-      /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\):hover\s+\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
+      /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:hover\s+\.cm-fold-indicator\.cm-fold-indicator\s+\.collapse-indicator\s*\{([^}]*)\}/,
     )?.[1];
     const competingIconDeclarations = styles.match(
-      /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:has\(\.cm-fold-indicator\):hover\s+\.cm-fold-indicator\s+\.collapse-indicator\s+svg\.svg-icon\s*\{([^}]*)\}/,
+      /body:not\(\.is-mobile\)\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.HyperMD-list-line:hover\s+\.cm-fold-indicator\.cm-fold-indicator\s+\.collapse-indicator\s+svg\.svg-icon\s*\{([^}]*)\}/,
     )?.[1];
 
     expect(hiddenDeclarations).toContain("display: flex;");

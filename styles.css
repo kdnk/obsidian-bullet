@@ -22,7 +22,9 @@
 
 body:not(.is-mobile).bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line.HyperMD-list-line:has(.cm-fold-indicator)
+  .cm-line.HyperMD-list-line
+  .cm-fold-indicator
+  ~ :where(.cm-formatting-list)
   .list-bullet::after {
   transition: none;
 }
@@ -40,7 +42,9 @@ body:not(.is-mobile).bullet-plugin-better-lists
 
 body:not(.is-mobile).bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line.HyperMD-list-line:has(.cm-fold-indicator)
+  .cm-line.HyperMD-list-line
+  .cm-fold-indicator
+  ~ :where(.cm-formatting-list)
   .list-bullet:hover::before,
 body:not(.is-mobile).bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
@@ -280,10 +284,11 @@ body:not(
   margin-inline-start: var(--indentation-guide-source-indent);
 }
 
+/* Repeat the fold class to preserve specificity against native theme rules. */
 body:not(.is-mobile)
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line.HyperMD-list-line:has(.cm-fold-indicator)
-  .cm-fold-indicator
+  .cm-line.HyperMD-list-line
+  .cm-fold-indicator.cm-fold-indicator
   .collapse-indicator {
   display: flex;
   box-sizing: border-box;
@@ -300,16 +305,16 @@ body:not(.is-mobile)
 
 body:not(.is-mobile).bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line.HyperMD-list-line:has(.cm-fold-indicator)
-  .cm-fold-indicator
+  .cm-line.HyperMD-list-line
+  .cm-fold-indicator.cm-fold-indicator
   .collapse-indicator {
   inset-inline-start: -7px;
 }
 
 body:not(.is-mobile)
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line.HyperMD-list-line:has(.cm-fold-indicator):hover
-  .cm-fold-indicator
+  .cm-line.HyperMD-list-line:hover
+  .cm-fold-indicator.cm-fold-indicator
   .collapse-indicator {
   opacity: 1;
   visibility: visible;
@@ -318,23 +323,23 @@ body:not(.is-mobile)
 
 body:not(.is-mobile).bullet-plugin-vertical-lines-action-toggle-folding
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line.HyperMD-list-line:has(.cm-fold-indicator):hover
-  .cm-fold-indicator {
+  .cm-line.HyperMD-list-line:hover
+  .cm-fold-indicator.cm-fold-indicator {
   z-index: 3;
 }
 
 body:not(.is-mobile).bullet-plugin-vertical-lines-action-toggle-folding
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line.HyperMD-list-line:has(.cm-fold-indicator):hover
-  .cm-fold-indicator
+  .cm-line.HyperMD-list-line:hover
+  .cm-fold-indicator.cm-fold-indicator
   .collapse-indicator {
   pointer-events: none;
 }
 
 body:not(.is-mobile).bullet-plugin-vertical-lines-action-toggle-folding
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line.HyperMD-list-line:has(.cm-fold-indicator):hover
-  .cm-fold-indicator
+  .cm-line.HyperMD-list-line:hover
+  .cm-fold-indicator.cm-fold-indicator
   .collapse-indicator
   svg.svg-icon {
   pointer-events: auto;
@@ -349,8 +354,8 @@ body:not(.is-mobile).bullet-plugin-vertical-lines-action-toggle-folding
 
 .bullet-plugin-mobile-right-fold-controls
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line.HyperMD-list-line:has(.cm-fold-indicator)
-  .cm-fold-indicator
+  .cm-line.HyperMD-list-line
+  .cm-fold-indicator.cm-fold-indicator
   .collapse-indicator {
   display: flex;
   box-sizing: border-box;
@@ -386,8 +391,8 @@ body:not(.is-mobile).bullet-plugin-vertical-lines-action-toggle-folding
 
 .bullet-plugin-mobile-right-fold-controls
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line.HyperMD-header:has(.cm-fold-indicator)
-  .cm-fold-indicator
+  .cm-line.HyperMD-header
+  .cm-fold-indicator.cm-fold-indicator
   .collapse-indicator {
   display: flex;
   box-sizing: border-box;

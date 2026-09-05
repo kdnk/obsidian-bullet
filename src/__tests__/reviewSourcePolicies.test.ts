@@ -41,6 +41,12 @@ describe("Obsidian review source policies", () => {
     expect(styles).not.toContain(importantDeclaration);
   });
 
+  test("does not use relational CSS selectors", () => {
+    const styles = readFileSync(join(projectRoot, "styles.css"), "utf8");
+
+    expect(styles).not.toMatch(/:has\s*\(/i);
+  });
+
   test("does not access the system clipboard", () => {
     const clipboardMember = ["navigator", "clipboard"].join(".");
 
