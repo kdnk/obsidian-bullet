@@ -1,11 +1,15 @@
 import { Command, editorInfoField } from "obsidian";
 
+import { codeFolding, foldEffect, foldedRanges } from "@codemirror/language";
 import {
   EditorSelection,
   EditorState,
   Extension,
   StateEffect,
+  Transaction,
+  TransactionSpec,
 } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 
 import { makeLogger, makeSettings } from "../../__mocks__";
 import { Parser } from "../../services/Parser";
@@ -160,6 +164,92 @@ test("the zoom command accepts an empty bare marker at EOF", async () => {
   ).toBe(true);
   expect(view.state.selection.main.head).toBe(1);
   expect(view.state.doc.toString()).toBe("-");
+});
+
+test("restores the original viewport anchor after folding a zoomed branch below Properties", async () => {
+  const commands: Command[] = [];
+  const extensions: Extension[] = [codeFolding()];
+  const feature = new ListZoom(
+    {
+      addCommand: (command: Command) => commands.push(command),
+      registerEditorExtension: (extension: Extension) =>
+        extensions.push(extension),
+    } as never,
+    new Parser(makeLogger(), makeSettings()),
+  );
+  await feature.load();
+  const text = [
+    "- before 1",
+    "- before 2",
+    "- before 3",
+    "- parent",
+    "\t- branch",
+    "\t\t- leaf 1",
+    "\t\t- leaf 2",
+    "\t- sibling",
+    "- after",
+  ].join("\n");
+  const transactions: Transaction[] = [];
+  // Browser layout: 192px of Properties followed by 48px document lines.
+  // At scrollTop=240 the viewport starts on before 2, but a raw snapshot
+  // mistakes scrollTop for a document height and anchors inside leaf 1.
+  const view = {
+    state: EditorState.create({ doc: text, extensions }),
+    dom: { ownerDocument: { defaultView: { devicePixelRatio: 2 } } },
+    scaleY: 1,
+    documentTop: -48,
+    scrollDOM: {
+      scrollTop: 240,
+      scrollLeft: 0,
+      getBoundingClientRect: () => ({ top: 0 }),
+    },
+    lineBlockAtHeight: (height: number) => {
+      const index = Math.min(8, Math.max(0, Math.floor(height / 48)));
+      return { from: view.state.doc.line(index + 1).from, top: index * 48 };
+    },
+    viewState: {
+      scrollAnchorAt: (scrollTop: number) =>
+        view.lineBlockAtHeight(scrollTop + 8),
+    },
+    // Use CodeMirror's real snapshot effect, including its mapping behavior.
+    scrollSnapshot: () =>
+      EditorView.prototype.scrollSnapshot.call(view as never),
+    dispatch: (spec: TransactionSpec) => {
+      const transaction = view.state.update(spec);
+      view.state = transaction.state;
+      transactions.push(transaction);
+    },
+    focus: () => undefined,
+  };
+  const run = (id: string) =>
+    commands.find((entry) => entry.id === id)!.editorCheckCallback!(
+      false,
+      { cm: view } as never,
+      {} as never,
+    );
+  view.dispatch({ selection: { anchor: view.state.doc.line(4).from } });
+  expect(run("zoom-in")).toBe(true);
+  const branch = {
+    from: view.state.doc.line(5).to,
+    to: view.state.doc.line(7).to,
+  };
+  view.dispatch({ effects: foldEffect.of(branch) });
+
+  expect(run("zoom-reset")).toBe(true);
+
+  const restored = transactions[transactions.length - 1];
+  const snapshot = restored.effects.find((effect) => !effect.is(setListZoom));
+  expect(snapshot?.value).toMatchObject({
+    range: { anchor: 11, head: 11 },
+    yMargin: -192,
+    isSnapshot: true,
+  });
+  const remainingFolds: { from: number; to: number }[] = [];
+  foldedRanges(restored.state).between(0, text.length, (from, to) => {
+    remainingFolds.push({ from, to });
+  });
+  expect(remainingFolds).toEqual([branch]);
+  expect(restored.state.doc.toString()).toBe(text);
 });
 
 test("accepts Obsidian set transactions from another pane and leaves zoom", () => {

@@ -1,6 +1,5 @@
 import { Decoration, DecorationSet, ViewPlugin } from "@codemirror/view";
 
-import { GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION } from "../GuideFolding";
 import { VerticalLines } from "../VerticalLines";
 
 const mockGuideFoldingFactory = jest.fn<
@@ -11,7 +10,6 @@ const mockGuideFoldingFactory = jest.fn<
 }));
 
 jest.mock("../GuideFolding", () => ({
-  GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION: {},
   GuideFoldingPluginValue: jest.fn(
     (settings: unknown, parser: unknown, view: unknown) =>
       mockGuideFoldingFactory(settings, parser, view),
@@ -220,58 +218,6 @@ describe("VerticalLines", () => {
       actionSettingsCallback,
     );
     expect(settings.removeCallback).toHaveBeenCalledWith(hoverSettingsCallback);
-  });
-
-  test("reserves scroll-past-end space only while guide folding is enabled", async () => {
-    Object.defineProperty(global, "activeDocument", {
-      configurable: true,
-      value: makeDocument(),
-    });
-    const { plugin, workspace } = makePlugin();
-    const settingsCallbacks: Array<() => void> = [];
-    const settings = {
-      verticalLinesAction: "toggle-folding",
-      enhancedVerticalLineHover: true,
-      onChange: jest.fn((keys: unknown, callback?: () => void) => {
-        settingsCallbacks.push(callback ?? (keys as () => void));
-      }),
-      removeCallback: jest.fn(),
-    };
-    const feature = new VerticalLines(
-      plugin as never,
-      settings as never,
-      {} as never,
-    );
-
-    await feature.load();
-
-    const registeredExtensions = plugin.registerEditorExtension.mock
-      .calls[0]?.[0] as unknown[];
-    expect(registeredExtensions).toContain(
-      GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION,
-    );
-    expect(workspace.updateOptions).not.toHaveBeenCalled();
-
-    const settingsCallback = settingsCallbacks[0];
-    if (!settingsCallback) {
-      throw new Error("Expected settings callback to be registered");
-    }
-
-    settings.verticalLinesAction = "none";
-    settingsCallback();
-
-    expect(registeredExtensions).not.toContain(
-      GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION,
-    );
-    expect(workspace.updateOptions).toHaveBeenCalledTimes(1);
-
-    settings.verticalLinesAction = "toggle-folding";
-    settingsCallback();
-
-    expect(registeredExtensions).toContain(
-      GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION,
-    );
-    expect(workspace.updateOptions).toHaveBeenCalledTimes(2);
   });
 
   test("exposes plugin value decorations through the view plugin", async () => {

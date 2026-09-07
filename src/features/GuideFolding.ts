@@ -4,7 +4,7 @@ import {
   foldedRanges,
   unfoldEffect,
 } from "@codemirror/language";
-import { Extension, Range, Text } from "@codemirror/state";
+import { Range, Text } from "@codemirror/state";
 import {
   Decoration,
   DecorationSet,
@@ -18,7 +18,6 @@ import {
   ensureFoldScrollReserve,
   stableFoldScrollSnapshot,
 } from "./FoldScroll";
-import { foldScrollReserve } from "./FoldScrollReserve";
 
 import { MyEditorPosition, getEditorFromState } from "../editor";
 import { getObsidianDomWindow } from "../obsidianDom";
@@ -74,9 +73,6 @@ const SELECTED_OUTER_LIST_GUIDE_END_CLASS =
   "bullet-plugin-selected-outer-list-guide-end";
 const SELECTED_OUTER_LIST_GUIDE_END_SELECTOR = `.${SELECTED_OUTER_LIST_GUIDE_END_CLASS}`;
 const CHUNK_LINE_ATTRIBUTE_RE = /^(0|[1-9]\d*)$/;
-
-export const GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION: Extension =
-  foldScrollReserve();
 
 type GuideMeasurement = {
   indentGuides: Element[];

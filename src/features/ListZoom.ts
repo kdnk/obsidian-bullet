@@ -20,6 +20,7 @@ import {
 } from "@codemirror/view";
 
 import { Feature } from "./Feature";
+import { stableFoldScrollSnapshot } from "./FoldScroll";
 import { ListZoomInteraction } from "./ListZoomInteraction";
 
 import { MyEditor } from "../editor";
@@ -264,7 +265,7 @@ export class ListZoom implements Feature {
     const effects: StateEffect<unknown>[] = [setListZoom.of(from)];
     if (from !== null) {
       if (!this.zoom.range(view.state))
-        this.snapshots.set(view, view.scrollSnapshot());
+        this.snapshots.set(view, stableFoldScrollSnapshot(view));
       const range = this.zoom.resolve(view.state, from);
       if (!range) return;
       // Reveal ancestors as well as a folded focused root before narrowing.

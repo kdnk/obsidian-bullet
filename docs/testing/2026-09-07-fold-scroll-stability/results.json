@@ -1,0 +1,762 @@
+{
+  "status": "passed",
+  "scope": [
+    "native fold reserve with guide action disabled",
+    "whole-note zoom restoration after a child fold",
+    "window and pane width reflow near the folded document end"
+  ],
+  "environment": {
+    "node": "22.23.1",
+    "obsidian": "1.14.0",
+    "vault": "repository vault",
+    "testBuildSha256": "6eb079f399fe116f0dd04722ff5174e2f7f5591be626b2a106aab14fd6084ff0",
+    "fullSuitePreflight": {
+      "height": 900,
+      "mobile": false,
+      "panes": 1,
+      "reserve": true,
+      "tabSize": 4,
+      "title": "test - vault - Obsidian 1.14.0",
+      "useTab": true,
+      "width": 1100
+    }
+  },
+  "fullSuite": {
+    "command": "n exec 22.23.1 npm test -- --runInBand",
+    "passedSuites": 82,
+    "passedTests": 917,
+    "skippedTests": 15,
+    "failedTests": 0,
+    "unit": {
+      "suites": 62,
+      "passed": 769
+    },
+    "integration": {
+      "suites": 20,
+      "passed": 148,
+      "existingSkips": 15
+    },
+    "initialRun": "One obsolete feature-order source assertion failed. It was updated to include the shared reserve before native folding; the entire suite passed on rerun."
+  },
+  "staticChecks": [
+    "npm run lint",
+    "npx tsc --noEmit",
+    "Prettier for the three scroll verification scripts",
+    "npm run build-with-tests"
+  ],
+  "standaloneReplaySummary": [
+    {
+      "name": "final-resize-on-plain",
+      "passed": true,
+      "line": 51,
+      "y": [-2.5625, -2.5625, -2.5625],
+      "padding": "797.5px"
+    },
+    {
+      "name": "final-resize-on-properties",
+      "passed": true,
+      "line": 65,
+      "y": [-2.5, -2.5, -2.5],
+      "padding": "797.5px"
+    },
+    {
+      "name": "final-resize-off-plain",
+      "passed": true,
+      "line": 51,
+      "y": [-2.5625, -2.5625, -2.5625],
+      "padding": "797.5px"
+    },
+    {
+      "name": "final-resize-off-properties",
+      "passed": true,
+      "line": 65,
+      "y": [-2.5, -2.5, -2.5],
+      "padding": "797.5px"
+    },
+    {
+      "name": "window",
+      "passed": true,
+      "steps": 9
+    },
+    {
+      "name": "pane",
+      "passed": true,
+      "steps": 9
+    },
+    {
+      "name": "zoom",
+      "passed": true,
+      "steps": 4
+    },
+    {
+      "name": "navigation",
+      "passed": true,
+      "steps": 4
+    }
+  ],
+  "reserveResizeReplays": {
+    "final-resize-on-plain": {
+      "before": {
+        "effectivePadding": "797.5px",
+        "inlinePadding": "797.5px",
+        "line": 51,
+        "metadataHeight": 0,
+        "parentFolded": true,
+        "scrollTop": 1426,
+        "visibleProperties": 0,
+        "width": 900,
+        "y": -2.5625
+      },
+      "narrow": {
+        "effectivePadding": "797.5px",
+        "inlinePadding": "100px",
+        "line": 51,
+        "metadataHeight": 0,
+        "parentFolded": true,
+        "scrollTop": 1426,
+        "visibleProperties": 0,
+        "width": 700,
+        "y": -2.5625
+      },
+      "after": {
+        "effectivePadding": "797.5px",
+        "inlinePadding": "100px",
+        "line": 51,
+        "metadataHeight": 0,
+        "parentFolded": true,
+        "scrollTop": 1426,
+        "visibleProperties": 0,
+        "width": 900,
+        "y": -2.5625
+      }
+    },
+    "final-resize-on-properties": {
+      "before": {
+        "effectivePadding": "797.5px",
+        "inlinePadding": "797.5px",
+        "line": 65,
+        "metadataHeight": 337.1875,
+        "parentFolded": true,
+        "scrollTop": 1836,
+        "visibleProperties": 8,
+        "width": 900,
+        "y": -2.5
+      },
+      "narrow": {
+        "effectivePadding": "797.5px",
+        "inlinePadding": "100px",
+        "line": 65,
+        "metadataHeight": 337.1875,
+        "parentFolded": true,
+        "scrollTop": 1836,
+        "visibleProperties": 8,
+        "width": 700,
+        "y": -2.5
+      },
+      "after": {
+        "effectivePadding": "797.5px",
+        "inlinePadding": "100px",
+        "line": 65,
+        "metadataHeight": 337.1875,
+        "parentFolded": true,
+        "scrollTop": 1836,
+        "visibleProperties": 8,
+        "width": 900,
+        "y": -2.5
+      }
+    },
+    "final-resize-off-plain": {
+      "before": {
+        "effectivePadding": "797.5px",
+        "inlinePadding": "797.5px",
+        "line": 51,
+        "metadataHeight": 0,
+        "parentFolded": true,
+        "scrollTop": 1426,
+        "visibleProperties": 0,
+        "width": 900,
+        "y": -2.5625
+      },
+      "narrow": {
+        "effectivePadding": "797.5px",
+        "inlinePadding": "100px",
+        "line": 51,
+        "metadataHeight": 0,
+        "parentFolded": true,
+        "scrollTop": 1426,
+        "visibleProperties": 0,
+        "width": 700,
+        "y": -2.5625
+      },
+      "after": {
+        "effectivePadding": "797.5px",
+        "inlinePadding": "100px",
+        "line": 51,
+        "metadataHeight": 0,
+        "parentFolded": true,
+        "scrollTop": 1426,
+        "visibleProperties": 0,
+        "width": 900,
+        "y": -2.5625
+      }
+    },
+    "final-resize-off-properties": {
+      "before": {
+        "effectivePadding": "797.5px",
+        "inlinePadding": "797.5px",
+        "line": 65,
+        "metadataHeight": 337.1875,
+        "parentFolded": true,
+        "scrollTop": 1836,
+        "visibleProperties": 8,
+        "width": 900,
+        "y": -2.5
+      },
+      "narrow": {
+        "effectivePadding": "797.5px",
+        "inlinePadding": "100px",
+        "line": 65,
+        "metadataHeight": 337.1875,
+        "parentFolded": true,
+        "scrollTop": 1836,
+        "visibleProperties": 8,
+        "width": 700,
+        "y": -2.5
+      },
+      "after": {
+        "effectivePadding": "797.5px",
+        "inlinePadding": "100px",
+        "line": 65,
+        "metadataHeight": 337.1875,
+        "parentFolded": true,
+        "scrollTop": 1836,
+        "visibleProperties": 8,
+        "width": 900,
+        "y": -2.5
+      }
+    }
+  },
+  "stabilityReplays": {
+    "window": {
+      "input": "Obsidian CLI/CDP, synthetic native pointer sequence",
+      "samples": [
+        {
+          "step": "before fold",
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 159.75,
+          "scrollHeight": 9548,
+          "scrollTop": 7730,
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": 1.5,
+          "zoom": false
+        },
+        {
+          "step": "folded",
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.75,
+          "scrollHeight": 8757,
+          "scrollTop": 7730,
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": 1.5,
+          "zoom": false
+        },
+        {
+          "step": "resize 500",
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.75,
+          "scrollHeight": 9333,
+          "scrollTop": 8306,
+          "viewportHeight": 622.234375,
+          "width": 441,
+          "y": 1.5,
+          "zoom": false
+        },
+        {
+          "step": "resize 900",
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.75,
+          "scrollHeight": 8757,
+          "scrollTop": 7730,
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": 1.5,
+          "zoom": false
+        },
+        {
+          "step": "resize 500",
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.75,
+          "scrollHeight": 9333,
+          "scrollTop": 8306,
+          "viewportHeight": 622.234375,
+          "width": 441,
+          "y": 1.5,
+          "zoom": false
+        },
+        {
+          "step": "resize 900",
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.75,
+          "scrollHeight": 8757,
+          "scrollTop": 7730,
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": 1.5,
+          "zoom": false
+        },
+        {
+          "step": "scroll up",
+          "line": 68,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 259.75,
+          "scrollHeight": 8757,
+          "scrollTop": 7630,
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": -4,
+          "zoom": false
+        },
+        {
+          "step": "resize after scroll 500",
+          "line": 68,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 259.75,
+          "scrollHeight": 9333,
+          "scrollTop": 8206,
+          "viewportHeight": 622.234375,
+          "width": 441,
+          "y": -4,
+          "zoom": false
+        },
+        {
+          "step": "resize after scroll 900",
+          "line": 68,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 259.75,
+          "scrollHeight": 8757,
+          "scrollTop": 7630,
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": -4,
+          "zoom": false
+        }
+      ]
+    },
+    "pane": {
+      "input": "Obsidian CLI/CDP, synthetic native pointer sequence",
+      "samples": [
+        {
+          "step": "before fold",
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 159.75,
+          "scrollHeight": 9548,
+          "scrollTop": 7730,
+          "viewportHeight": 622.234375,
+          "width": 885,
+          "y": 1.5,
+          "zoom": false
+        },
+        {
+          "step": "folded",
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.75,
+          "scrollHeight": 8757,
+          "scrollTop": 7730,
+          "viewportHeight": 622.234375,
+          "width": 885,
+          "y": 1.5,
+          "zoom": false
+        },
+        {
+          "step": "resize 500",
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.75,
+          "scrollHeight": 9213,
+          "scrollTop": 8186,
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": 1.5,
+          "zoom": false
+        },
+        {
+          "step": "resize 900",
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.75,
+          "scrollHeight": 8757,
+          "scrollTop": 7730,
+          "viewportHeight": 622.234375,
+          "width": 885,
+          "y": 1.5,
+          "zoom": false
+        },
+        {
+          "step": "resize 500",
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.75,
+          "scrollHeight": 9213,
+          "scrollTop": 8186,
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": 1.5,
+          "zoom": false
+        },
+        {
+          "step": "resize 900",
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.75,
+          "scrollHeight": 8757,
+          "scrollTop": 7730,
+          "viewportHeight": 622.234375,
+          "width": 885,
+          "y": 1.5,
+          "zoom": false
+        },
+        {
+          "step": "scroll up",
+          "line": 68,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 259.75,
+          "scrollHeight": 8757,
+          "scrollTop": 7630,
+          "viewportHeight": 622.234375,
+          "width": 885,
+          "y": -4,
+          "zoom": false
+        },
+        {
+          "step": "resize after scroll 500",
+          "line": 68,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 259.75,
+          "scrollHeight": 9213,
+          "scrollTop": 8086,
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": -4,
+          "zoom": false
+        },
+        {
+          "step": "resize after scroll 900",
+          "line": 68,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 259.75,
+          "scrollHeight": 8757,
+          "scrollTop": 7630,
+          "viewportHeight": 622.234375,
+          "width": 885,
+          "y": -4,
+          "zoom": false
+        }
+      ]
+    },
+    "zoom": {
+      "input": "Obsidian CLI/CDP, synthetic native pointer sequence",
+      "samples": [
+        {
+          "step": "before zoom",
+          "line": 71,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 159.5625,
+          "scrollHeight": 3768,
+          "scrollTop": 1962,
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": 1.3125,
+          "zoom": false
+        },
+        {
+          "step": "zoom in",
+          "line": 77,
+          "padding": "549.5px",
+          "parentFolded": false,
+          "parentY": 2,
+          "scrollHeight": 1684,
+          "scrollTop": 74,
+          "viewportHeight": 574.234375,
+          "width": 841,
+          "y": 2,
+          "zoom": true
+        },
+        {
+          "step": "fold child",
+          "line": 77,
+          "padding": "549.5px",
+          "parentFolded": false,
+          "parentY": 2,
+          "scrollHeight": 1578,
+          "scrollTop": 74,
+          "viewportHeight": 574.234375,
+          "width": 841,
+          "y": 2,
+          "zoom": true
+        },
+        {
+          "step": "whole note",
+          "line": 71,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 159.5625,
+          "scrollHeight": 3712,
+          "scrollTop": 2000,
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": 1.3125,
+          "zoom": false
+        }
+      ]
+    },
+    "navigation": {
+      "input": "Obsidian CLI/CDP, synthetic native pointer sequence",
+      "samples": [
+        {
+          "step": "navigation selection, measured=false",
+          "cursorBottom": 275.8125,
+          "cursorY": 257.8125,
+          "line": 64,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 543.75,
+          "scrollHeight": 9932,
+          "scrollTop": 7730,
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": -209.5,
+          "zoom": false
+        },
+        {
+          "step": "navigation selection, measured=true",
+          "cursorBottom": 22.8125,
+          "cursorY": 4.8125,
+          "line": 67,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 290.75,
+          "scrollHeight": 9932,
+          "scrollTop": 7983,
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": 0.625,
+          "zoom": false
+        },
+        {
+          "step": "navigation effect, measured=false",
+          "cursorBottom": 19.8125,
+          "cursorY": 1.8125,
+          "line": 67,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 287.75,
+          "scrollHeight": 9932,
+          "scrollTop": 7986,
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": -2.375,
+          "zoom": false
+        },
+        {
+          "step": "navigation effect, measured=true",
+          "cursorBottom": 19.8125,
+          "cursorY": 1.8125,
+          "line": 67,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 287.75,
+          "scrollHeight": 9932,
+          "scrollTop": 7986,
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": -2.375,
+          "zoom": false
+        }
+      ]
+    }
+  },
+  "mobileSettingsTransitions": [
+    {
+      "guides": false,
+      "mobile": true,
+      "padding": "0px",
+      "reserve": false,
+      "right": false,
+      "rightClass": false
+    },
+    {
+      "guides": false,
+      "mobile": true,
+      "padding": "1217.5px",
+      "reserve": true,
+      "right": true,
+      "rightClass": true
+    },
+    {
+      "guides": true,
+      "mobile": true,
+      "padding": "1217.5px",
+      "reserve": true,
+      "right": false,
+      "rightClass": false
+    },
+    {
+      "guides": true,
+      "mobile": true,
+      "padding": "1217.5px",
+      "reserve": true,
+      "right": true,
+      "rightClass": true
+    },
+    {
+      "guides": false,
+      "mobile": true,
+      "padding": "0px",
+      "reserve": false,
+      "right": false,
+      "rightClass": false
+    }
+  ],
+  "review": {
+    "independentReview": "cleared after reproducing and resolving findings",
+    "regressionsCovered": [
+      "pending selection navigation",
+      "pending explicit scroll effect",
+      "queued measure before navigation with no geometry flags",
+      "automatic anchoring after editing above the viewport",
+      "background effects re-arm the checkpoint",
+      "destruction makes queued capture inert"
+    ]
+  },
+  "restoration": {
+    "rendererExitedBeforeRestore": true,
+    "restoredAt": "2026-09-07T08:24:40.803446+00:00",
+    "firstHashCheck": [
+      {
+        "path": "vault/test.md",
+        "sha256": "3b41a8cfcfc20a345fa3b2d33a909f1fb00bdd00d2302223bedefc0ed9c96f0b",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/app.json",
+        "sha256": "e949bbfb9ca1ba57966c1b863bc4235d9dec2b6a6830b60b2aa989417655ae4d",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/workspace.json",
+        "sha256": "64b9b3054d45c1259173c29f213fbd622a2211a7cca29ec2a929ee9ef822b499",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/community-plugins.json",
+        "sha256": "151d2673e37d12ee4c28da149d892f48823bae733e5f6b1f5eda98374c766929",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/plugins/bullet/main.js",
+        "sha256": "4863135249a0a84b051257f47fc720efd3743c7d20b50cf2b4aacbc655d890f0",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/plugins/bullet/styles.css",
+        "sha256": "2edb97de13f8a049f0605bf191834dd6d6b30b5f350896e8c28b4f025adb7e0a",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/plugins/bullet/manifest.json",
+        "sha256": "a303b2b05bb9056d311eeee6c2b2ec7e0c85e002c6f2b99da8807f630e9b0ec7",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/plugins/bullet/data.json",
+        "sha256": "7f97c30c82b143091f9d8610913ba7895b7f0cd7d248a4b536f83e559fa8ed94",
+        "matches": true
+      }
+    ],
+    "secondHashCheckAt": "2026-09-07T08:25:18.478132+00:00",
+    "secondsAfterRestore": 37.674686,
+    "secondHashCheck": [
+      {
+        "path": "vault/test.md",
+        "sha256": "3b41a8cfcfc20a345fa3b2d33a909f1fb00bdd00d2302223bedefc0ed9c96f0b",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/app.json",
+        "sha256": "e949bbfb9ca1ba57966c1b863bc4235d9dec2b6a6830b60b2aa989417655ae4d",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/workspace.json",
+        "sha256": "64b9b3054d45c1259173c29f213fbd622a2211a7cca29ec2a929ee9ef822b499",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/community-plugins.json",
+        "sha256": "151d2673e37d12ee4c28da149d892f48823bae733e5f6b1f5eda98374c766929",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/plugins/bullet/main.js",
+        "sha256": "4863135249a0a84b051257f47fc720efd3743c7d20b50cf2b4aacbc655d890f0",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/plugins/bullet/styles.css",
+        "sha256": "2edb97de13f8a049f0605bf191834dd6d6b30b5f350896e8c28b4f025adb7e0a",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/plugins/bullet/manifest.json",
+        "sha256": "a303b2b05bb9056d311eeee6c2b2ec7e0c85e002c6f2b99da8807f630e9b0ec7",
+        "matches": true
+      },
+      {
+        "path": "vault/.obsidian/plugins/bullet/data.json",
+        "sha256": "7f97c30c82b143091f9d8610913ba7895b7f0cd7d248a4b536f83e559fa8ed94",
+        "matches": true
+      }
+    ],
+    "window": {
+      "height": 1242,
+      "mobile": false,
+      "panes": 1,
+      "title": "test - vault - Obsidian 1.14.0",
+      "width": 337
+    }
+  },
+  "limitations": [
+    "The Mac was locked and Computer Use auto-unlock failed. No physical pointer actions were claimed.",
+    "Real-renderer checks used vault-scoped Obsidian CLI/CDP, synthetic native pointerdown/pointerup/click sequences, and editor commands.",
+    "Width comparisons use visible reference rows; a partially visible wrapped logical line may legitimately change its offscreen top."
+  ]
+}
