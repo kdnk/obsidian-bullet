@@ -1,49 +1,11 @@
 // Run with the current test build deployed to the repository's running vault.
 // Requires obsidian-cli; run separately from full tests or other UI checks.
 const assert = require("node:assert/strict");
-const { execFileSync } = require("node:child_process");
 const { randomUUID } = require("node:crypto");
-const path = require("node:path");
 
-const vaultPath = path.resolve(__dirname, "../vault");
+const { cdp, evaluate } = require("./obsidian-scroll-driver.cjs");
 const notePath = `bullet-resize-verification-${randomUUID()}.md`;
 const withFrontmatter = process.argv.includes("--frontmatter");
-
-function cdp(method, params) {
-  return JSON.parse(
-    execFileSync(
-      "obsidian-cli",
-      [
-        "vault=vault",
-        "dev:cdp",
-        `method=${method}`,
-        `params=${JSON.stringify(params)}`,
-      ],
-      { encoding: "utf8" },
-    ),
-  );
-}
-
-function evaluate(fn, ...args) {
-  const expression = `(async () => {
-    if (app.vault.adapter.getBasePath() !== ${JSON.stringify(vaultPath)} ||
-        app.vault.config.useTab !== true || app.vault.config.tabSize !== 4 ||
-        document.body.classList.contains('is-mobile')) throw Error('Test vault guard');
-    return (${fn.toString()})(...${JSON.stringify(args)});
-  })()`;
-  const result = cdp("Runtime.evaluate", {
-    expression,
-    awaitPromise: true,
-    returnByValue: true,
-  });
-  if (result.exceptionDetails) {
-    throw Error(
-      result.exceptionDetails.exception?.description ??
-        result.exceptionDetails.text,
-    );
-  }
-  return result.result.value;
-}
 
 function sample() {
   return evaluate(async () => {

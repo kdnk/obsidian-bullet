@@ -1,14 +1,10 @@
 import { Plugin } from "obsidian";
 
-import { Extension } from "@codemirror/state";
 import { ViewPlugin } from "@codemirror/view";
 
 import { DocumentBodyClass } from "./DocumentBodyClass";
 import { Feature } from "./Feature";
-import {
-  GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION,
-  GuideFoldingPluginValue,
-} from "./GuideFolding";
+import { GuideFoldingPluginValue } from "./GuideFolding";
 
 import { Parser } from "../services/Parser";
 import { Settings } from "../services/Settings";
@@ -21,7 +17,6 @@ const ENHANCED_VERTICAL_LINE_HOVER_BODY_CLASS =
 export class VerticalLines implements Feature {
   private actionBodyClass: DocumentBodyClass;
   private hoverBodyClass: DocumentBodyClass;
-  private editorExtensions: Extension[] = [];
 
   constructor(
     private plugin: Plugin,
@@ -41,14 +36,12 @@ export class VerticalLines implements Feature {
   }
 
   async load() {
-    this.editorExtensions = [
+    this.plugin.registerEditorExtension([
       ViewPlugin.define(
         (view) => new GuideFoldingPluginValue(this.settings, this.parser, view),
         { decorations: (value) => value.decorations },
       ),
-    ];
-    this.synchronizeScrollPastEndExtension(false);
-    this.plugin.registerEditorExtension(this.editorExtensions);
+    ]);
 
     this.settings.onChange(["listLineAction"], this.updateActionState);
     this.settings.onChange(
@@ -68,33 +61,11 @@ export class VerticalLines implements Feature {
 
   private updateActionState = () => {
     this.actionBodyClass.update();
-    this.synchronizeScrollPastEndExtension(true);
   };
 
   private updateHoverBodyClass = () => {
     this.hoverBodyClass.update();
   };
-
-  private synchronizeScrollPastEndExtension(updateViews: boolean) {
-    const extensionIndex = this.editorExtensions.indexOf(
-      GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION,
-    );
-    const enabled = extensionIndex !== -1;
-    const shouldEnable = this.shouldApplyActionBodyClass();
-    if (enabled === shouldEnable) {
-      return;
-    }
-
-    if (shouldEnable) {
-      this.editorExtensions.push(GUIDE_FOLDING_SCROLL_PAST_END_EXTENSION);
-    } else {
-      this.editorExtensions.splice(extensionIndex, 1);
-    }
-
-    if (updateViews) {
-      this.plugin.app.workspace.updateOptions();
-    }
-  }
 
   private shouldApplyActionBodyClass = () => {
     return this.settings.verticalLinesAction === "toggle-folding";

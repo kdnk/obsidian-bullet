@@ -1,4 +1,16 @@
-import { FoldScrollReservePluginValue } from "../FoldScrollReserve";
+import { Platform } from "obsidian";
+
+import { Extension } from "@codemirror/state";
+
+import { Settings } from "../../services/Settings";
+import {
+  FoldScrollReserve,
+  FoldScrollReservePluginValue,
+} from "../FoldScrollReserve";
+
+jest.mock("obsidian", () => ({ Platform: { isMobile: false } }), {
+  virtual: true,
+});
 
 function makeView() {
   const properties = new Map<string, string>();
@@ -57,5 +69,75 @@ describe("fold scroll reserve", () => {
     flush();
     expect(properties.size).toBe(0);
     expect(classes.size).toBe(0);
+  });
+});
+
+describe("fold reserve ownership", () => {
+  function setup(mobile: boolean, guides: boolean, rightControls: boolean) {
+    (Platform as { isMobile: boolean }).isMobile = mobile;
+    const settings = new Settings({
+      loadData: async () => null,
+      saveData: async () => {},
+    });
+    settings.verticalLinesAction = guides ? "toggle-folding" : "none";
+    settings.mobileRightFoldControls = rightControls;
+    let extensions: Extension[] = [];
+    const updateOptions = jest.fn();
+    const feature = new FoldScrollReserve(
+      {
+        app: { workspace: { updateOptions } },
+        registerEditorExtension: (value: Extension[]) => {
+          extensions = value;
+        },
+      } as never,
+      settings,
+    );
+    return { feature, settings, updateOptions, extensions: () => extensions };
+  }
+
+  test.each([
+    [false, false, false, true],
+    [false, true, false, true],
+    [true, false, false, false],
+    [true, false, true, true],
+    [true, true, false, true],
+    [true, true, true, true],
+  ])(
+    "mobile=%s guides=%s rightControls=%s reserves=%s",
+    async (mobile, guides, rightControls, enabled) => {
+      const context = setup(mobile, guides, rightControls);
+      await context.feature.load();
+      expect(context.extensions()).toHaveLength(enabled ? 1 : 0);
+      expect(context.updateOptions).not.toHaveBeenCalled();
+      await context.feature.unload();
+    },
+  );
+
+  test("keeps desktop native folding protected when guides are disabled", async () => {
+    const context = setup(false, true, false);
+    await context.feature.load();
+    const reserve = context.extensions()[0];
+    context.settings.verticalLinesAction = "none";
+    expect(context.extensions()).toEqual([reserve]);
+    expect(context.updateOptions).not.toHaveBeenCalled();
+    await context.feature.unload();
+  });
+
+  test("shares the mobile reserve and reconfigures only when the last consumer changes", async () => {
+    const context = setup(true, true, true);
+    await context.feature.load();
+    const reserve = context.extensions()[0];
+    context.settings.verticalLinesAction = "none";
+    expect(context.extensions()).toEqual([reserve]);
+    expect(context.updateOptions).not.toHaveBeenCalled();
+    context.settings.mobileRightFoldControls = false;
+    expect(context.extensions()).toEqual([]);
+    expect(context.updateOptions).toHaveBeenCalledTimes(1);
+    context.settings.verticalLinesAction = "toggle-folding";
+    expect(context.extensions()).toEqual([reserve]);
+    expect(context.updateOptions).toHaveBeenCalledTimes(2);
+    await context.feature.unload();
+    context.settings.verticalLinesAction = "none";
+    expect(context.updateOptions).toHaveBeenCalledTimes(2);
   });
 });

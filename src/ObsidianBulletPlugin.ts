@@ -10,6 +10,7 @@ import { DragAndDrop } from "./features/DragAndDrop";
 import { EditorSelectionsBehaviourOverride } from "./features/EditorSelectionsBehaviourOverride";
 import { EnterBehaviourOverride } from "./features/EnterBehaviourOverride";
 import { Feature } from "./features/Feature";
+import { FoldScrollReserve } from "./features/FoldScrollReserve";
 import { ListZoom } from "./features/ListZoom";
 import { ListsFoldingCommands } from "./features/ListsFoldingCommands";
 import { ListsMovementCommands } from "./features/ListsMovementCommands";
@@ -152,6 +153,7 @@ export default class ObsidianBulletPlugin extends Plugin {
 
       // features based on settings.mobileRightFoldControls
       new MobileRightFoldControls(this, this.settings),
+      new FoldScrollReserve(this, this.settings),
       new NativeFoldScroll(this),
 
       // vertical-line folding and outer list guides
