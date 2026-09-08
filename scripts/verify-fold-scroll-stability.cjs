@@ -16,8 +16,8 @@ const initial = evaluate(() => {
 });
 const results = [];
 
-function sample() {
-  return evaluate(() => {
+function sample(targetText = "Last parent") {
+  return evaluate((targetText) => {
     const view = app.workspace.activeLeaf.view.editor.cm;
     const bounds = view.scrollDOM.getBoundingClientRect();
     const lines = [...view.contentDOM.querySelectorAll(".cm-line")];
@@ -27,6 +27,11 @@ function sample() {
     });
     const parent = lines.find((line) =>
       line.textContent.includes("Last parent"),
+    );
+    const target = lines.find(
+      (line) =>
+        view.state.doc.lineAt(view.posAtDOM(line)).text.trim() ===
+        `- ${targetText}`,
     );
     const cursor = view.coordsAtPos(view.state.selection.main.head);
     return {
@@ -42,15 +47,26 @@ function sample() {
       scrollHeight: view.scrollDOM.scrollHeight,
       padding: getComputedStyle(view.contentDOM).paddingBottom,
       zoom: !!view.dom.closest(".bullet-zoom-active"),
+      zoomTarget:
+        view.dom.querySelector(
+          '.bullet-zoom-breadcrumbs [aria-current="location"]',
+        )?.textContent ?? null,
+      target: target
+        ? {
+            line: view.state.doc.lineAt(view.posAtDOM(target)).number,
+            text: view.state.doc.lineAt(view.posAtDOM(target)).text.trim(),
+            folded: !!target.querySelector(".cm-fold-indicator.is-collapsed"),
+          }
+        : null,
     };
-  });
+  }, targetText);
 }
 
-function settle() {
+function settle(targetText) {
   evaluate(async () => {
     await new Promise((resolve) => setTimeout(resolve, 350));
   });
-  return sample();
+  return sample(targetText);
 }
 
 function resize(width) {
@@ -109,7 +125,8 @@ function nativeFold(text) {
   evaluate((text) => {
     const view = app.workspace.activeLeaf.view.editor.cm;
     const line = [...view.contentDOM.querySelectorAll(".cm-line")].find(
-      (line) => line.textContent.includes(text),
+      (line) =>
+        view.state.doc.lineAt(view.posAtDOM(line)).text.trim() === `- ${text}`,
     );
     const control = line?.querySelector(".collapse-indicator");
     if (!control) throw Error(`Missing native control: ${text}`);
@@ -130,7 +147,7 @@ function nativeFold(text) {
       );
     }
   }, text);
-  return settle();
+  return settle(text);
 }
 
 function command(id) {
@@ -220,8 +237,39 @@ try {
     });
     const before = settle();
     results.push({ step: "before zoom", ...before });
-    results.push({ step: "zoom in", ...command("zoom-in") });
-    results.push({ step: "fold child", ...nativeFold("Branch 0") });
+    assert.equal(
+      before.zoom,
+      false,
+      "The scenario must start in the whole note",
+    );
+    assert.equal(before.target?.text, "- Last parent");
+    const zoomed = command("zoom-in");
+    results.push({ step: "zoom in", ...zoomed });
+    assert.equal(zoomed.zoom, true, "Zoom must activate before folding");
+    assert.equal(
+      zoomed.zoomTarget,
+      "Last parent",
+      "Zoom must focus the fixture parent",
+    );
+    assert.equal(zoomed.target?.line, before.target.line);
+    const child = sample("Branch 0");
+    results.push({ step: "before child fold", ...child });
+    assert.equal(child.target?.text, "- Branch 0");
+    assert.equal(child.target.folded, false, "The child must start expanded");
+    const folded = nativeFold("Branch 0");
+    results.push({ step: "fold child", ...folded });
+    assert.equal(folded.zoom, true, "Folding must retain zoom");
+    assert.equal(folded.zoomTarget, "Last parent");
+    assert.equal(
+      folded.target?.line,
+      child.target.line,
+      "Fold the intended child",
+    );
+    assert.equal(
+      folded.target.folded,
+      true,
+      "The child must fold before zoom reset",
+    );
     const restored = command("zoom-reset");
     results.push({ step: "whole note", ...restored });
     assert.equal(restored.zoom, false);

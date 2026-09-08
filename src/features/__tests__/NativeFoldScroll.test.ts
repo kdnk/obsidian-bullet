@@ -5,6 +5,7 @@ import {
   unfoldEffect,
 } from "@codemirror/language";
 import { EditorState, StateEffect } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 
 import {
   NativeFoldScrollPluginValue,
@@ -48,6 +49,13 @@ function makeView(state: EditorState, document = makeDocument()) {
     scrollDOM,
     state,
   };
+}
+
+function makeScrollSnapshot(position: number) {
+  return EditorView.prototype.scrollSnapshot.call({
+    scrollDOM: { scrollTop: 24, scrollLeft: 0 },
+    viewState: { scrollAnchorAt: () => ({ from: position, top: 24 }) },
+  } as never);
 }
 
 const nativeControl = (matchingSelector: string) => ({
@@ -237,8 +245,67 @@ describe("NativeFoldScroll", () => {
     const nativeTransaction = selectionTransaction.state.update({
       effects: unfoldEffect.of({ from: 0, to: 1 }),
     });
+    const laterTransaction = nativeTransaction.state.update({
+      effects: foldEffect.of({ from: 0, to: 1 }),
+    });
 
+    expect(selectionTransaction.effects).not.toContain(snapshot);
     expect(nativeTransaction.effects).toContain(snapshot);
+    expect(laterTransaction.effects).not.toContain(snapshot);
+  });
+
+  test.each([false, true])(
+    "invalidates a snapshot after an insertion with existing folds=%s",
+    (initiallyFolded) => {
+      const snapshot = makeScrollSnapshot(18);
+      const foldScroll = new NativeFoldScrollState(() => snapshot);
+      const initialState = EditorState.create({
+        doc: "- parent\n\t- child\n- sibling",
+        extensions: [codeFolding(), foldScroll.extension],
+      });
+      const state = initiallyFolded
+        ? initialState.update({
+            effects: foldEffect.of({ from: 8, to: 17 }),
+          }).state
+        : initialState;
+      const view = makeView(state);
+
+      foldScroll.prepare(view as never);
+      const editTransaction = state.update({
+        changes: { from: 0, insert: "- added\n" },
+      });
+      const nativeTransaction = editTransaction.state.update({
+        effects: (initiallyFolded ? unfoldEffect : foldEffect).of({
+          from: 16,
+          to: 25,
+        }),
+      });
+
+      expect(editTransaction.effects).not.toContain(snapshot);
+      expect(nativeTransaction.effects).not.toContain(snapshot);
+      expect(foldedRanges(nativeTransaction.state).size).toBe(
+        initiallyFolded ? 0 : 1,
+      );
+    },
+  );
+
+  test("invalidates a snapshot when the folding transaction also changes the document", () => {
+    const snapshot = makeScrollSnapshot(18);
+    const foldScroll = new NativeFoldScrollState(() => snapshot);
+    const state = EditorState.create({
+      doc: "- parent\n\t- child\n- sibling",
+      extensions: [codeFolding(), foldScroll.extension],
+    });
+    const view = makeView(state);
+
+    foldScroll.prepare(view as never);
+    const transaction = state.update({
+      changes: { from: 0, insert: "- added\n" },
+      effects: foldEffect.of({ from: 16, to: 25 }),
+    });
+
+    expect(transaction.effects).not.toContain(snapshot);
+    expect(foldedRanges(transaction.state).size).toBe(1);
   });
 
   test("expires a snapshot after an intermediate selection before a later native transaction", () => {

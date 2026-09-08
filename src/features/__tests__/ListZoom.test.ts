@@ -59,6 +59,93 @@ test("recomputes the focused subtree after editing its children", () => {
   );
 });
 
+test("typing within a zoomed item does not scan thousands of hidden siblings", () => {
+  const parser = new Parser(makeLogger(), makeSettings());
+  const parse = parser.parse.bind(parser);
+  let lineReads = 0;
+  jest.spyOn(parser, "parse").mockImplementation((reader, cursor) =>
+    parse(
+      {
+        ...reader,
+        getLine: (line) => {
+          lineReads++;
+          return reader.getLine(line);
+        },
+      },
+      cursor,
+    ),
+  );
+  const zoom = new ListZoomState(parser);
+  const text = [
+    "- work",
+    "\t- project",
+    "\t\t- task",
+    ...Array.from({ length: 1000 }, (_, i) => `\t- hidden ${i}`),
+  ].join("\n");
+  let state = EditorState.create({
+    doc: text,
+    extensions: zoom.extension,
+  }).update({ effects: setListZoom.of(7) }).state;
+  lineReads = 0;
+  state = state.update({ changes: { from: 26, insert: "!" } }).state;
+  state = state.update({ changes: { from: 17, insert: "!" } }).state;
+
+  expect(state.doc.sliceString(7, zoom.range(state)!.to)).toBe(
+    "\t- project!\n\t\t- task!",
+  );
+  expect(zoom.range(state)!.ancestors).toEqual([
+    { from: 0, label: "work" },
+    { from: 7, label: "project!" },
+  ]);
+  // A small fixed budget, independent of the number of hidden siblings.
+  expect(lineReads).toBeLessThan(50);
+});
+
+test.each([true, false])(
+  "typing at the visible end keeps new text outside hidden decorations (following text: %s)",
+  (hasFollowingText) => {
+    const zoom = new ListZoomState(new Parser(makeLogger(), makeSettings()));
+    const state = EditorState.create({
+      doc: hasFollowingText ? doc : doc.slice(0, 26),
+      extensions: zoom.extension,
+    }).update({ effects: setListZoom.of(7) }).state;
+    const edited = state.update({
+      changes: [
+        { from: 17, insert: "!" },
+        { from: 26, insert: " [done]" },
+      ],
+    }).state;
+    const range = zoom.range(edited)!;
+    const decorations: [number, number][] = [];
+    range.decorations.between(0, edited.doc.length, (from, to) => {
+      decorations.push([from, to]);
+    });
+
+    expect(range).toMatchObject({ from: 7, to: 34, indent: "\t" });
+    expect(decorations).toEqual([
+      [0, 7],
+      [7, 8],
+      [19, 20],
+      ...(hasFollowingText ? [[34, 54]] : []),
+    ]);
+    const undone = edited.update({
+      changes: { from: 29, to: 34 },
+      filter: false,
+    }).state;
+    expect(zoom.range(undone)?.to).toBe(29);
+  },
+);
+
+test("outdenting a child still recomputes the visible subtree", () => {
+  const { zoom, state } = setup();
+  const focused = state.update({ effects: setListZoom.of(7) }).state;
+  const edited = focused.update({
+    changes: { from: 18, to: 20, insert: "\t" },
+  }).state;
+  expect(zoom.range(edited)).toMatchObject({ from: 7, to: 17 });
+  expect(edited.doc.sliceString(7, zoom.range(edited)!.to)).toBe("\t- project");
+});
+
 test("rejects edits that cross into hidden content", () => {
   const { state } = setup();
   const focused = state.update({
@@ -345,4 +432,79 @@ test("the breadcrumb panel tolerates the zoom field disappearing during plugin r
     docChanged: false,
   } as never);
   expect(labels).toEqual(["Whole note"]);
+});
+
+test("unchanged breadcrumbs retain their buttons while edited labels refresh", async () => {
+  const extensions: Extension[] = [];
+  const feature = new ListZoom(
+    {
+      addCommand: () => undefined,
+      registerEditorExtension: (extension: Extension) =>
+        extensions.push(extension),
+    } as never,
+    new Parser(makeLogger(), makeSettings()),
+  );
+  await feature.load();
+  const buttons: { title: string }[] = [];
+  const panelDom = {
+    classList: { add: () => undefined },
+    setAttribute: () => undefined,
+    replaceChildren: () => {
+      buttons.length = 0;
+    },
+    createSpan: () => undefined,
+    createEl: () => {
+      const button = {
+        title: "",
+        setAttribute: () => undefined,
+        addEventListener: () => undefined,
+      };
+      buttons.push(button);
+      return button;
+    },
+  };
+  const view = {
+    state: EditorState.create({ doc, extensions }).update({
+      effects: setListZoom.of(7),
+    }).state,
+    dom: { ownerDocument: { win: { createDiv: () => panelDom } } },
+  };
+  const panel = (
+    feature as unknown as {
+      panel(view: unknown): import("@codemirror/view").Panel;
+    }
+  ).panel(view);
+  const originalButtons = [...buttons];
+  const edit = (changes: TransactionSpec["changes"]) => {
+    const startState = view.state;
+    const transaction = startState.update({ changes });
+    view.state = transaction.state;
+    panel.update!({
+      startState,
+      state: view.state,
+      docChanged: true,
+      changes: transaction.changes,
+    } as never);
+  };
+
+  edit({ from: 26, insert: "!" });
+  expect(buttons.map((button) => button.title)).toEqual([
+    "Whole note",
+    "work",
+    "project",
+  ]);
+  buttons.forEach((button, index) =>
+    expect(button).toBe(originalButtons[index]),
+  );
+  // Structural edits must also preserve the controls when their labels and targets are unchanged.
+  edit({ from: 27, insert: "\n\t\t- next" });
+  buttons.forEach((button, index) =>
+    expect(button).toBe(originalButtons[index]),
+  );
+  edit({ from: 10, to: 17, insert: "renamed" });
+  expect(buttons.map((button) => button.title)).toEqual([
+    "Whole note",
+    "work",
+    "renamed",
+  ]);
 });

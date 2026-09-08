@@ -8,6 +8,7 @@ import {
   MapMode,
   StateEffect,
   StateField,
+  Transaction,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -30,13 +31,29 @@ import { Parser, Reader } from "../services/Parser";
 
 export const setListZoom = StateEffect.define<number | null>();
 
+const listBodyPrefixRe = /^[ \t]*(?:[-*+]|\d+\.)[ \t]/;
+
 interface ZoomRange {
   filePath: string | null;
   from: number;
   to: number;
   indent: string;
   ancestors: { from: number; label: string }[];
+  indents: DecorationSet;
   decorations: DecorationSet;
+}
+
+function zoomDecorations(
+  indents: DecorationSet,
+  from: number,
+  to: number,
+  length: number,
+): DecorationSet {
+  const hidden = [];
+  if (from > 0) hidden.push(Decoration.replace({ block: true }).range(0, from));
+  if (to < length)
+    hidden.push(Decoration.replace({ block: true }).range(to, length));
+  return indents.update({ add: hidden, sort: true });
 }
 
 function reader(state: EditorState): Reader {
@@ -81,6 +98,8 @@ export class ListZoomState {
         // Native history and synchronization can bypass transaction filters.
         // Reveal their result rather than leave a hidden change on screen.
         if (changedOutside) return null;
+        const bodyEdit = this.mapBodyEdits(value, tr);
+        if (bodyEdit) return bodyEdit;
         const mapped = tr.changes.mapPos(value.from, 1, MapMode.TrackDel);
         if (mapped === null) return null;
         const next = this.resolve(tr.state, mapped);
@@ -134,6 +153,50 @@ export class ListZoomState {
     return state.field(this.field, false) ?? null;
   }
 
+  private mapBodyEdits(value: ZoomRange, tr: Transaction): ZoomRange | null {
+    let onlyBodyEdits = true;
+    let focusedLabel: string | undefined;
+    tr.changes.iterChanges((from, to, fromAfter, _toAfter, inserted) => {
+      if (!onlyBodyEdits) return;
+      const line = tr.startState.doc.lineAt(from);
+      const prefix = listBodyPrefixRe.exec(line.text)?.[0];
+      // Keep markers, indentation and line breaks on the full parser path.
+      // A bare marker also needs parsing when its first separator is added.
+      if (
+        !prefix ||
+        from < line.from + prefix.length ||
+        to > line.to ||
+        inserted.lines !== 1
+      ) {
+        onlyBodyEdits = false;
+        return;
+      }
+      if (line.from === value.from)
+        focusedLabel =
+          tr.newDoc.lineAt(fromAfter).text.slice(prefix.length) || "Empty item";
+    }, true);
+    if (!onlyBodyEdits) return null;
+    const to = tr.changes.mapPos(value.to, 1);
+    const indents = value.indents.map(tr.changes);
+    const label = focusedLabel;
+    const ancestors =
+      label === undefined ||
+      label === value.ancestors[value.ancestors.length - 1]?.label
+        ? value.ancestors
+        : value.ancestors.map((ancestor) =>
+            ancestor.from === value.from ? { ...ancestor, label } : ancestor,
+          );
+    return {
+      ...value,
+      to,
+      ancestors,
+      indents,
+      // Rebuild the two boundaries so text inserted at the visible end stays
+      // visible; mapping an inclusive block replacement would hide it.
+      decorations: zoomDecorations(indents, value.from, to, tr.newDoc.length),
+    };
+  }
+
   resolve(state: EditorState, offset: number): ZoomRange | null {
     if (offset < 0 || offset > state.doc.length) return null;
     const line = state.doc.lineAt(offset).number - 1;
@@ -158,12 +221,6 @@ export class ListZoomState {
       ancestor = ancestor.getParent();
     }
     const decorations = [];
-    if (from > 0)
-      decorations.push(Decoration.replace({ block: true }).range(0, from));
-    if (to < state.doc.length)
-      decorations.push(
-        Decoration.replace({ block: true }).range(to, state.doc.length),
-      );
     if (indent) {
       for (
         let n = state.doc.lineAt(from).number;
@@ -180,13 +237,15 @@ export class ListZoomState {
           );
       }
     }
+    const indents = Decoration.set(decorations, true);
     return {
       filePath: state.field(editorInfoField, false)?.file?.path ?? null,
       from,
       to,
       indent,
       ancestors,
-      decorations: Decoration.set(decorations, true),
+      indents,
+      decorations: zoomDecorations(indents, from, to, state.doc.length),
     };
   }
 }
@@ -324,8 +383,15 @@ export class ListZoom implements Feature {
           const mapped = snapshot.map(update.changes);
           if (mapped) this.snapshots.set(view, mapped);
         }
+        const before = this.zoom.range(update.startState)?.ancestors ?? [];
+        const after = this.zoom.range(update.state)?.ancestors ?? [];
         if (
-          this.zoom.range(update.startState) !== this.zoom.range(update.state)
+          before.length !== after.length ||
+          before.some(
+            (ancestor, index) =>
+              ancestor.from !== after[index].from ||
+              ancestor.label !== after[index].label,
+          )
         )
           render();
       },

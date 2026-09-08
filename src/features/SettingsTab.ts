@@ -90,7 +90,7 @@ const SETTING_GROUPS = [
       },
       {
         name: "Enhance the Ctrl+A or Cmd+A behavior",
-        desc: "Press the hotkey once to select the current list item. Press the hotkey twice to select the entire list.",
+        desc: "Repeated presses select the item's text, include its children if any, then select its parent and all descendants (or the whole list for a top-level item). Press again to return to the item's text.",
         control: {
           type: "toggle",
           key: "overrideSelectAllBehaviour",
@@ -142,7 +142,7 @@ const SETTING_GROUPS = [
       },
       {
         name: "Fold lists from vertical indentation lines",
-        desc: "Click a vertical indentation line to fold or unfold that list.",
+        desc: "Click a vertical indentation line to fold its direct child branches together, or unfold them when all are folded. Items without children stay visible.",
         control: {
           type: "toggle",
           key: "verticalLinesActionEnabled",
