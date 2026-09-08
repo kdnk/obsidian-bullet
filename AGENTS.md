@@ -30,6 +30,7 @@
     - macOSでfull testを実行する前に、`~/Library/Application Support/obsidian/Local Storage/leveldb/LOCK`のownerを`lsof`で確認してください。小文字の`obsidian` CLI processがownerの場合、global setupの`killall Obsidian`では終了しないため、そのowner processを終了し、lock解放を確認してからtestを開始してください。lock file自体は削除しないでください。
     - 実Obsidianのmobile検証後にfull testを実行する場合は、test vaultをguardした状態で`app.emulateMobile(false)`へ戻し、workspace再構成後に対象noteを開き直してpluginを再読込してからtestを開始してください。mobile emulationはObsidian restart後も残る場合があり、その状態ではdesktop-onlyのDragAndDrop統合specがdrop無反応で一斉に失敗します。sourceを変更する前に、同じbundleをdesktopへ戻して`specs/features/DragAndDrop.spec.md`だけ再実行し、environment起因か確認してください。
     - ノート間DnDの手動検証で作った左右分割はfull test前に閉じ、test noteを1ペインへ戻してください。狭いペインでlistが折り返すと`ArrowUp`が同じ物理行内を移動し、`ChangesApplicator.spec.md`のcursor期待値が失敗します。この場合はsourceを変更する前に1ペインで対象specを再実行してください。
+    - 1ペインでも左右のsidebarで本文幅が不足すると同じ折り返しが起きます。full test前にtest vaultのsidebarを畳んで本文幅を確保し、検証後は退避したworkspace設定へ戻してください。
     - `src` 配下の unit test だけを `npx jest` で直接実行するときは、必ず `SKIP_OBSIDIAN=1` を付けるか `npm run test:unit` を使ってください。付けない場合は Jest の global setup が実 Obsidian を終了し、`vault/test.md` を上書きします。
     - `.spec.md` の統合 spec やフルテストは `dist/main.js` を実行するため、`src` を変更した後に実行する場合は先に `npm run build-with-tests` を実行してください。
     - `src` を変更していない場合も、`dist/main.js` がproduction buildか不明なときは、フルテスト前に`npm run build-with-tests`を実行してください。
@@ -48,6 +49,7 @@
 - エディタごとの非同期処理について
     - `getEditorFromState()`は呼び出すたびに新しい`MyEditor`ラッパーを返します。エディタごとの予約処理を置換・取り消すキーには、`getCodeMirrorView()`が返す同一の`EditorView`を使ってください。プラグイン終了時は、すべてのエディタの予約処理を取り消してください。
 - ズームと複数ペインの同期について
+    - CodeMirrorのblock replacementは、既定で境界に挿入した文字も含みます。ズーム中の本文編集でdecorationsを再利用する場合はindent部分をmapし、非表示部分の境界は更新後のfrom/toで作り直してください。表示末尾への追記が隠れないことを、EOFと後続の兄弟項目がある場合の両方で確認してください。
     - Obsidianは別ペインからの同期とfile loadを`userEvent: "set"`のtransactionで適用します。ズームの編集範囲filterでこれを拒否せず、非表示部分が変わった場合はズームを解除してください。native Undo/Redoは`filter: false`でfilterを迂回するため、同じ解除判定をStateField側にも置いてください。同じnoteを2ペインで開いた実検証で同期を確認してください。
     - bulletクリックのズームはpointerdownからclickまでの移動距離でDnDと区別し、一度drag閾値を超えたら開始位置へ戻ってもzoomしないでください。checkboxとnative chevronのclickは対象外とし、listenerはViewPlugin destroy時に解除してください。
     - ズーム中のextension再構成ではStateFieldが消えるため、transaction filterとbreadcrumb panelの更新はfield不在を許容してください。ズーム状態でpluginを無効化・再読込しても例外が出ないことを検証してください。
@@ -77,6 +79,7 @@
     - outer guide は document chunk の開始・終了行を key とする CodeMirror widget decoration として各行へ配置してください。空行・空白だけの行・見出しで chunk を分割し、同じ chunk id の表示中 segment だけを一括 hover / toggle の対象にしてください。独立 overlay、screen 座標測定、座標 cache は追加しないでください。
     - outer guideの空白行によるchunk分割では、対象itemの最初の継続本文行で確立した非空indent prefixを保つ段落間の空白行を継続本文として残してください。完全な空行とdedentした区切りは分割します。Parserが既存notes indentのraw prefixより深い継続行を受け入れる場合、余分なindentは本文として保持し、`print()`でround-tripすることを検証してください。
 - native chevron のスクロール保持について
+    - native foldのpending snapshotは、`docChanged`のtransactionでfolded rangeを比較する前に無効化してください。文書変更はfold範囲の位置だけを動かすことがあり、変更前のsnapshotを未mapのまま適用すると別の行へ戻ります。selection-onlyの中間transactionは引き続き同じevent turn内で引き継いでください。
     - viewport snapshotの取得やリサイズ処理を変更した場合は、deploy済みtest buildに対して`n exec 22.23.1 node scripts/verify-fold-scroll-stability.cjs`を通常実行、`--pane`、`--zoom`、`--navigation`の4通りで、他のUI検証やfull testとは別に実行してください。長文の幅変更、通常スクロール後の再変更、折りたたみ後のズーム解除、測定前後のnavigationをそれぞれ検証します。
     - CodeMirrorの`requestMeasure()`のread/writeはpending scroll targetの適用より前に実行され、測定でgeometry/viewport flagが変わらなければupdate listenerも呼ばれません。文書変更や新しいnavigation intentで破棄したviewport snapshotを、この測定中に古い位置から保存し直さないでください。実際のscroll/layout完了後の位置を取得し、後続のリサイズで新しい移動先を上書きしないことを検証してください。
     - When changing fold-scroll reserve behavior, run `n exec 22.23.1 node scripts/verify-fold-scroll-resize.cjs` with and without `--frontmatter` against the deployed test build in the repository vault, separately from other UI checks and full tests. It folds a visible parent near the document end, resizes the viewport, and asserts the visible line and its screen position; `scrollTop` alone is unreliable when CodeMirror rebuilds its height map. Obsidian rewrites inline bottom padding to `100px` on resize, so verify computed padding as well.

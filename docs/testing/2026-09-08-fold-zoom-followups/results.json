@@ -1,0 +1,843 @@
+{
+  "base": "43c31f3 (5.17.0)",
+  "environment": {
+    "node": "22.23.1",
+    "obsidian": "1.14.0",
+    "platform": "macOS",
+    "vault": "repository vault",
+    "mobile": false
+  },
+  "fullTests": {
+    "numPassedTestSuites": 82,
+    "numFailedTestSuites": 0,
+    "numPassedTests": 925,
+    "numFailedTests": 0,
+    "numPendingTests": 15,
+    "numTotalTests": 940
+  },
+  "skips": "15 Linux-only keyboard variants; matching macOS variants pass",
+  "initialFailure": {
+    "test": "ChangesApplicator: should keep subfoldind on change, issue #258",
+    "cause": "Sidebar left only 81px of content width, wrapping a short list row. Collapsing test-vault sidebars provided 381px. The same build passed the 3-test spec and then all 82 suites."
+  },
+  "zoomParserWork": [
+    {
+      "adjacentSiblings": 100,
+      "focusedLines": 2,
+      "parsesForOneCharacter": 0,
+      "lineReadsForOneCharacter": 0,
+      "reusesBreadcrumbData": true,
+      "lineReadsBefore": 211
+    },
+    {
+      "adjacentSiblings": 1000,
+      "focusedLines": 2,
+      "parsesForOneCharacter": 0,
+      "lineReadsForOneCharacter": 0,
+      "reusesBreadcrumbData": true,
+      "lineReadsBefore": 2011
+    },
+    {
+      "adjacentSiblings": 10000,
+      "focusedLines": 2,
+      "parsesForOneCharacter": 0,
+      "lineReadsForOneCharacter": 0,
+      "reusesBreadcrumbData": true,
+      "lineReadsBefore": 20011
+    }
+  ],
+  "differentialReview": {
+    "cases": 11610,
+    "mismatches": 0,
+    "scope": "Fresh full parse versus mapped zoom range, ancestors and decoration boundaries; marker styles, empty/task labels, insertion/deletion/replacement, multiple edits, EOF and hidden suffix"
+  },
+  "layout": {
+    "scroll-zoom": {
+      "zoom": true,
+      "pane": false,
+      "input": "Obsidian CLI/CDP, synthetic native pointer sequence",
+      "results": [
+        {
+          "step": "before zoom",
+          "cursorBottom": 182.375,
+          "cursorY": 164.375,
+          "line": 71,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 160.1875,
+          "scrollHeight": 3803,
+          "scrollTop": 1997,
+          "target": {
+            "folded": false,
+            "line": 77,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": 1.9375,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "zoom in",
+          "cursorBottom": 23,
+          "cursorY": 5,
+          "line": 77,
+          "padding": "549.5px",
+          "parentFolded": false,
+          "parentY": 2,
+          "scrollHeight": 1684,
+          "scrollTop": 74,
+          "target": {
+            "folded": false,
+            "line": 77,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 574.234375,
+          "width": 841,
+          "y": 2,
+          "zoom": true,
+          "zoomTarget": "Last parent"
+        },
+        {
+          "step": "before child fold",
+          "cursorBottom": 23,
+          "cursorY": 5,
+          "line": 77,
+          "padding": "549.5px",
+          "parentFolded": false,
+          "parentY": 2,
+          "scrollHeight": 1684,
+          "scrollTop": 74,
+          "target": {
+            "folded": false,
+            "line": 78,
+            "text": "- Branch 0"
+          },
+          "viewportHeight": 574.234375,
+          "width": 841,
+          "y": 2,
+          "zoom": true,
+          "zoomTarget": "Last parent"
+        },
+        {
+          "step": "fold child",
+          "cursorBottom": 23,
+          "cursorY": 5,
+          "line": 77,
+          "padding": "549.5px",
+          "parentFolded": false,
+          "parentY": 2,
+          "scrollHeight": 1578,
+          "scrollTop": 74,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Branch 0"
+          },
+          "viewportHeight": 574.234375,
+          "width": 841,
+          "y": 2,
+          "zoom": true,
+          "zoomTarget": "Last parent"
+        },
+        {
+          "step": "whole note",
+          "cursorBottom": 182.75,
+          "cursorY": 164.75,
+          "line": 71,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 160.5625,
+          "scrollHeight": 3712,
+          "scrollTop": 1999,
+          "target": {
+            "folded": false,
+            "line": 77,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": 2.3125,
+          "zoom": false,
+          "zoomTarget": null
+        }
+      ]
+    },
+    "scroll-reflow": {
+      "zoom": false,
+      "pane": false,
+      "input": "Obsidian CLI/CDP, synthetic native pointer sequence",
+      "results": [
+        {
+          "step": "before fold",
+          "cursorBottom": -7554,
+          "cursorY": -7572,
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 159.625,
+          "scrollHeight": 9469,
+          "scrollTop": 7651,
+          "target": {
+            "folded": false,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": 1.375,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "folded",
+          "cursorBottom": -7554,
+          "cursorY": -7572,
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.625,
+          "scrollHeight": 8678,
+          "scrollTop": 7651,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": 1.375,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "resize 500",
+          "cursorBottom": -8130,
+          "cursorY": -8148,
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.625,
+          "scrollHeight": 9254,
+          "scrollTop": 8227,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 441,
+          "y": 1.375,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "resize 900",
+          "cursorBottom": -7554,
+          "cursorY": -7572,
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.625,
+          "scrollHeight": 8678,
+          "scrollTop": 7651,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": 1.375,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "resize 500",
+          "cursorBottom": -8130,
+          "cursorY": -8148,
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.625,
+          "scrollHeight": 9254,
+          "scrollTop": 8227,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 441,
+          "y": 1.375,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "resize 900",
+          "cursorBottom": -7554,
+          "cursorY": -7572,
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.625,
+          "scrollHeight": 8678,
+          "scrollTop": 7651,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": 1.375,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "scroll up",
+          "cursorBottom": -7454,
+          "cursorY": -7472,
+          "line": 68,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 259.625,
+          "scrollHeight": 8678,
+          "scrollTop": 7551,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": -4.125,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "resize after scroll 500",
+          "cursorBottom": -8030,
+          "cursorY": -8048,
+          "line": 68,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 259.625,
+          "scrollHeight": 9254,
+          "scrollTop": 8127,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 441,
+          "y": -4.125,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "resize after scroll 900",
+          "cursorBottom": -7454,
+          "cursorY": -7472,
+          "line": 68,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 259.625,
+          "scrollHeight": 8678,
+          "scrollTop": 7551,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 841,
+          "y": -4.125,
+          "zoom": false,
+          "zoomTarget": null
+        }
+      ]
+    },
+    "scroll-pane": {
+      "zoom": false,
+      "pane": true,
+      "input": "Obsidian CLI/CDP, synthetic native pointer sequence",
+      "results": [
+        {
+          "step": "before fold",
+          "cursorBottom": -7554,
+          "cursorY": -7572,
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 159.625,
+          "scrollHeight": 9469,
+          "scrollTop": 7651,
+          "target": {
+            "folded": false,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 885,
+          "y": 1.375,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "folded",
+          "cursorBottom": -7554,
+          "cursorY": -7572,
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.625,
+          "scrollHeight": 8678,
+          "scrollTop": 7651,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 885,
+          "y": 1.375,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "resize 500",
+          "cursorBottom": -8010,
+          "cursorY": -8028,
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.625,
+          "scrollHeight": 9134,
+          "scrollTop": 8107,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": 1.375,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "resize 900",
+          "cursorBottom": -7554,
+          "cursorY": -7572,
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.625,
+          "scrollHeight": 8678,
+          "scrollTop": 7651,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 885,
+          "y": 1.375,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "resize 500",
+          "cursorBottom": -8010,
+          "cursorY": -8028,
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.625,
+          "scrollHeight": 9134,
+          "scrollTop": 8107,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": 1.375,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "resize 900",
+          "cursorBottom": -7554,
+          "cursorY": -7572,
+          "line": 72,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 159.625,
+          "scrollHeight": 8678,
+          "scrollTop": 7651,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 885,
+          "y": 1.375,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "scroll up",
+          "cursorBottom": -7454,
+          "cursorY": -7472,
+          "line": 68,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 259.625,
+          "scrollHeight": 8678,
+          "scrollTop": 7551,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 885,
+          "y": -4.125,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "resize after scroll 500",
+          "cursorBottom": -7910,
+          "cursorY": -7928,
+          "line": 68,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 259.625,
+          "scrollHeight": 9134,
+          "scrollTop": 8007,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": -4.125,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "resize after scroll 900",
+          "cursorBottom": -7454,
+          "cursorY": -7472,
+          "line": 68,
+          "padding": "597.5px",
+          "parentFolded": true,
+          "parentY": 259.625,
+          "scrollHeight": 8678,
+          "scrollTop": 7551,
+          "target": {
+            "folded": true,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 885,
+          "y": -4.125,
+          "zoom": false,
+          "zoomTarget": null
+        }
+      ]
+    },
+    "scroll-navigation": {
+      "zoom": false,
+      "pane": true,
+      "input": "Obsidian CLI/CDP, synthetic native pointer sequence",
+      "results": [
+        {
+          "step": "navigation selection, measured=false",
+          "cursorBottom": 275.6875,
+          "cursorY": 257.6875,
+          "line": 64,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 543.625,
+          "scrollHeight": 9853,
+          "scrollTop": 7651,
+          "target": {
+            "folded": false,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": -209.625,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "navigation selection, measured=true",
+          "cursorBottom": 22.6875,
+          "cursorY": 4.6875,
+          "line": 67,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 290.625,
+          "scrollHeight": 9853,
+          "scrollTop": 7904,
+          "target": {
+            "folded": false,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": 0.5,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "navigation effect, measured=false",
+          "cursorBottom": 19.6875,
+          "cursorY": 1.6875,
+          "line": 67,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 287.625,
+          "scrollHeight": 9853,
+          "scrollTop": 7907,
+          "target": {
+            "folded": false,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": -2.5,
+          "zoom": false,
+          "zoomTarget": null
+        },
+        {
+          "step": "navigation effect, measured=true",
+          "cursorBottom": 19.6875,
+          "cursorY": 1.6875,
+          "line": 67,
+          "padding": "597.5px",
+          "parentFolded": false,
+          "parentY": 287.625,
+          "scrollHeight": 9853,
+          "scrollTop": 7907,
+          "target": {
+            "folded": false,
+            "line": 78,
+            "text": "- Last parent"
+          },
+          "viewportHeight": 622.234375,
+          "width": 485,
+          "y": -2.5,
+          "zoom": false,
+          "zoomTarget": null
+        }
+      ]
+    },
+    "reserve-resize": {
+      "before": {
+        "effectivePadding": "1138.5px",
+        "inlinePadding": "1138.5px",
+        "line": 45,
+        "metadataHeight": 0,
+        "parentFolded": true,
+        "scrollTop": 1283,
+        "visibleProperties": 0,
+        "width": 900,
+        "y": -17.8125
+      },
+      "narrow": {
+        "effectivePadding": "1138.5px",
+        "inlinePadding": "100px",
+        "line": 45,
+        "metadataHeight": 0,
+        "parentFolded": true,
+        "scrollTop": 1283,
+        "visibleProperties": 0,
+        "width": 700,
+        "y": -17.8125
+      },
+      "after": {
+        "effectivePadding": "1138.5px",
+        "inlinePadding": "100px",
+        "line": 45,
+        "metadataHeight": 0,
+        "parentFolded": true,
+        "scrollTop": 1283,
+        "visibleProperties": 0,
+        "width": 900,
+        "y": -17.8125
+      }
+    },
+    "reserve-frontmatter": {
+      "before": {
+        "effectivePadding": "1138.5px",
+        "inlinePadding": "1138.5px",
+        "line": 57,
+        "metadataHeight": 337.1875,
+        "parentFolded": true,
+        "scrollTop": 1637,
+        "visibleProperties": 8,
+        "width": 900,
+        "y": -2.625
+      },
+      "narrow": {
+        "effectivePadding": "1138.5px",
+        "inlinePadding": "100px",
+        "line": 57,
+        "metadataHeight": 337.1875,
+        "parentFolded": true,
+        "scrollTop": 1637,
+        "visibleProperties": 8,
+        "width": 700,
+        "y": -2.625
+      },
+      "after": {
+        "effectivePadding": "1138.5px",
+        "inlinePadding": "100px",
+        "line": 57,
+        "metadataHeight": 337.1875,
+        "parentFolded": true,
+        "scrollTop": 1637,
+        "visibleProperties": 8,
+        "width": 900,
+        "y": -2.625
+      }
+    }
+  },
+  "zoomEditing": [
+    {
+      "step": "zoomed",
+      "firstLines": "- root\n\t- focus\n\t\t- child\n\t\t- sibling\n\t- hidden 0",
+      "labels": ["Whole note", "root", "focus"],
+      "mutations": 0,
+      "sameButtons": true,
+      "visible": ["- focus", "\t- child", "\t- sibling"],
+      "zoom": true
+    },
+    {
+      "step": "typed in child",
+      "firstLines": "- root\n\t- focus\n\t\t- child!\n\t\t- sibling\n\t- hidden 0",
+      "labels": ["Whole note", "root", "focus"],
+      "mutations": 0,
+      "sameButtons": true,
+      "visible": ["- focus", "\t- child!", "\t- sibling"],
+      "zoom": true
+    },
+    {
+      "step": "added child at visible end",
+      "firstLines": "- root\n\t- focus\n\t\t- child!\n\t\t- sibling\n\t\t- added",
+      "labels": ["Whole note", "root", "focus"],
+      "mutations": 0,
+      "sameButtons": true,
+      "visible": ["- focus", "\t- child!", "\t- sibling", "\t- added"],
+      "zoom": true
+    },
+    {
+      "step": "renamed focused item",
+      "firstLines": "- root\n\t- renamed\n\t\t- child!\n\t\t- sibling\n\t\t- added",
+      "labels": ["Whole note", "root", "renamed"],
+      "mutations": 6,
+      "sameButtons": false,
+      "visible": ["- renamed", "\t- child!", "\t- sibling", "\t- added"],
+      "zoom": true
+    },
+    {
+      "step": "synchronized hidden edit from another pane",
+      "firstLine": "- root changed",
+      "sameDocument": true,
+      "zoom": false
+    },
+    {
+      "step": "reload while zoomed",
+      "firstLines": "- root changed\n\t- renamed\n\t\t- child!\n\t\t- sibling\n\t\t- added",
+      "labels": [],
+      "mutations": 6,
+      "sameButtons": false,
+      "visible": [
+        "- root changed",
+        "\t- renamed",
+        "\t\t- child!",
+        "\t\t- sibling",
+        "\t\t- added",
+        "",
+        "\t- hidden 0",
+        "\t- hidden 1",
+        "\t- hidden 2",
+        "\t- hidden 3",
+        "\t- hidden 4",
+        "\t- hidden 5",
+        "\t- hidden 6",
+        "\t- hidden 7",
+        "\t- hidden 8",
+        "\t- hidden 9",
+        "\t- hidden 10",
+        "\t- hidden 11",
+        "\t- hidden 12",
+        "\t- hidden 13",
+        "\t- hidden 14",
+        "\t- hidden 15",
+        "\t- hidden 16",
+        "\t- hidden 17",
+        "\t- hidden 18",
+        "\t- hidden 19",
+        "\t- hidden 20",
+        "\t- hidden 21",
+        "\t- hidden 22",
+        "\t- hidden 23",
+        "\t- hidden 24",
+        "\t- hidden 25",
+        "\t- hidden 26",
+        "\t- hidden 27",
+        "\t- hidden 28",
+        "\t- hidden 29",
+        "\t- hidden 30",
+        "\t- hidden 31",
+        "\t- hidden 32",
+        "\t- hidden 33",
+        "\t- hidden 34",
+        "\t- hidden 35",
+        "\t- hidden 36",
+        "\t- hidden 37",
+        "\t- hidden 38",
+        "\t- hidden 39",
+        "\t- hidden 40",
+        "\t- hidden 41",
+        "\t- hidden 42",
+        "\t- hidden 43",
+        "\t- hidden 44",
+        "\t- hidden 45",
+        "\t- hidden 46"
+      ],
+      "zoom": false
+    }
+  ],
+  "inputMethod": "Obsidian CLI/CDP: Input.insertText for typing; synthetic pointerdown/pointerup/click for native chevrons; actual renderer geometry and DOM identity checks",
+  "computerUse": "Native mouse actions unavailable because macOS was locked. No OS unlock attempted.",
+  "rendererErrors": "No errors captured.",
+  "restoration": {
+    "rendererExited": 39309,
+    "filesRestored": 8,
+    "hashChecks": 2,
+    "matched": true
+  },
+  "sourceSha256": {
+    "src/features/ListZoom.ts": "543d5a66b1dcc8fbce310dd47b07702dbfd92b3033f6cf6bbfd038d8303f2b49",
+    "src/features/NativeFoldScroll.ts": "3bd1207c03727576afe4bfec4d33e7a64f2d477f84a03e0ff94c36e6a7262e19",
+    "src/features/SettingsTab.ts": "59a3090ee4d1df766a19e749337a9cacfe30273ee75b0b9a32f74ee7ef23feae",
+    "scripts/verify-fold-scroll-stability.cjs": "2ec2a3822f60f020889c443bb6571da4d4acf0ff48cf4eca43884aa8d4e55551"
+  }
+}

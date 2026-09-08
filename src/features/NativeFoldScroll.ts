@@ -58,6 +58,12 @@ export class NativeFoldScrollState {
       }
 
       this.pendingSnapshots.delete(transaction.startState);
+      // The snapshot belongs to the document at click time. An edit can also
+      // move folded ranges without toggling them, so invalidate before comparing.
+      if (transaction.docChanged) {
+        pending.active = false;
+        return null;
+      }
       if (
         transaction.effects.some(
           (effect) => effect.is(foldEffect) || effect.is(unfoldEffect),
