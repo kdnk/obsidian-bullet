@@ -2,7 +2,7 @@
 
 Turn Markdown lists into a fast, keyboard-driven outliner.
 
-Bullet makes nested lists feel closer to Workflowy or Roam Research without giving up the plain-text structure of an Obsidian note. Type, move, indent, select, fold, and drag entire branches while Bullet keeps their hierarchy intact.
+Bullet makes nested lists feel closer to Workflowy or Roam Research without giving up the plain-text structure of an Obsidian note. Zoom into a branch, move it between notes, or rearrange an entire outline while Bullet keeps its hierarchy intact.
 
 [Latest release](https://github.com/kdnk/obsidian-bullet/releases/latest) · [Report an issue](https://github.com/kdnk/obsidian-bullet/issues)
 
@@ -11,9 +11,11 @@ Requires Obsidian 1.12.7 or later. Bullet supports desktop and mobile.
 ## What Bullet changes
 
 - **List-aware editing:** `Enter`, `Shift`+`Enter`, `Tab`, `Shift`+`Tab`, and repeated `Command`+`A` or `Ctrl`+`A` operate on list structure instead of raw Markdown prefixes.
-- **Whole-branch movement:** move or drag an item together with every nested child.
+- **[Branch zoom](#zoom-into-a-branch):** click a bullet to focus on that item and its descendants, then navigate back with breadcrumbs.
+- **[Drag-and-drop across files](#drag-and-drop-across-files):** move a complete branch between notes open side by side, including into an empty note or ordinary text.
+- **Whole-branch movement:** move, indent, or outdent an item together with every nested child.
 - **Focused navigation:** keep the caret in editable content and away from hidden bullet or checkbox markup.
-- **Visible structure:** connect nested items with indentation guides, add guides beside root list chunks, and fold branches from the guides themselves.
+- **[Guide folding](#fold-from-indentation-guides):** connect nested items with indentation guides and fold or unfold their child branches together with one click.
 - **Mobile-friendly folding:** move native list and heading fold controls to the right edge in Live Preview.
 
 Automatic editing, appearance, folding, and drag-and-drop behavior can be adjusted from **Settings → Bullet**.
@@ -67,7 +69,39 @@ Create a nested list, place the caret in one of its items, and try the following
 
 The movement shortcuts are registered by Bullet. The other controls replace Obsidian's behavior only while their corresponding Bullet settings are enabled and the caret is in a list.
 
+To try zoom, click a bullet and use **Whole note** above the editor to return. To try moving a branch between files, open two notes side by side and drag a bullet into the other editor.
+
 ## Features
+
+### Zoom into a branch
+
+Focus on one part of a long outline while editing the original note:
+
+1. Click an item's bullet, or place the caret in the item and run **Bullet: Zoom into list** from the Command Palette.
+2. Edit the focused item and its descendants. Their indentation shifts toward the left edge, and the rest of the note is hidden in that pane. Click a child bullet to zoom further in.
+3. Use the breadcrumbs above the editor to return to an ancestor, or choose **Whole note** to show the full document. **Bullet: Zoom out one level** and **Bullet: Show whole note** provide the same navigation from the Command Palette.
+
+Zoom is available on desktop and mobile. The zoom commands have no default shortcuts; assign your own under **Settings → Hotkeys**, or add them to the mobile toolbar. A bullet click zooms; dragging it on desktop moves the branch. Checkboxes and fold arrows keep their usual click actions.
+
+Zoom applies only to the current editor pane, so another pane can show the whole note at the same time. Properties are hidden in the zoomed pane and return when you show the whole note. Zoom resets when you switch files or reload; no block IDs or additional notes are created.
+
+Selections and direct edits stay within the visible branch. If Undo, Redo, or synchronization from another pane changes hidden content, Bullet reveals the whole note so you can see the change.
+
+### Drag and drop across files
+
+On desktop, drag a bullet, fold indicator, or checkbox to move its complete branch, including nested children and continuation lines. **Drag-and-Drop** is enabled by default under **Settings → Bullet**.
+
+To move a branch to another note:
+
+1. Open the source and destination notes in editor panes side by side in the same window.
+2. Drag the source item's bullet into the destination editor. Drop into an existing list, an empty note, or before or after a line of ordinary text.
+3. Follow the insertion line to choose the position and indentation, then release. Bullet moves the branch out of the source note and focuses it in the destination pane.
+
+Drops onto frontmatter text are placed after its closing delimiter. Fenced code blocks do not accept drops. Both notes must be open in editable panes in the same window; drops onto unopened tabs or the file explorer, and drags between separate windows, are not supported.
+
+Undo or Redo in either editor restores both sides of the move while both original editors remain open on those notes and writable. If you have since edited the other note, undo those later edits there first.
+
+Drag-and-drop is a desktop feature. The keyboard and Command Palette movement actions remain available on mobile.
 
 ### Keep editing inside the outline
 
@@ -97,23 +131,17 @@ Hold <kbd>Alt</kbd> or <kbd>Option</kbd> while navigating or clicking to place t
 
 ### Fold from indentation guides
 
-Bullet can draw native-looking guides between nested items and beside each root-level list chunk. With guide actions enabled, click a guide to fold or unfold the child branches it connects.
+Bullet can draw native-looking guides between nested items and beside each root-level list chunk. With **Fold lists from vertical indentation lines** enabled, click a guide to toggle its direct child branches together:
+
+- If any child branch is open, fold all child branches.
+- If all child branches are folded, unfold them together.
+- Items without children stay visible, as does the parent represented by the guide.
+
+Hovering highlights the connected guide segments so you can see which part of the outline the action affects. **Enhance vertical lines** strengthens the guides and gives the highlight rounded ends. On mobile, you can also tap the guide beside the continuation of a wrapped list line.
+
+Bullet preserves the viewport position when folding from a guide or a native fold arrow in Live Preview. On mobile, native fold-arrow scroll preservation applies when **Show fold controls on the right on mobile** is enabled.
 
 The separate **Fold the list** and **Unfold the list** commands operate on the item at the caret. These commands do not have default shortcuts, so you can assign your own under **Settings → Hotkeys**.
-
-### Focus on one branch
-
-Click a bullet, or place the caret in an item and run **Bullet: Zoom into list**. Only that item and its descendants remain visible, with their indentation shifted toward the left edge. Editing still updates the original Markdown note. Properties are hidden only in the zoomed pane and return when you show the whole note.
-
-Use the breadcrumb buttons above the editor to return to an ancestor or **Whole note**. **Zoom out one level** and **Show whole note** are also available in the Command Palette. Zoom belongs to the current editor and resets on reload; no block IDs or additional notes are created. Edits that cross into hidden content are blocked. If native Undo or synchronization changes hidden content, Bullet reveals the whole note so the change is visible.
-
-### Drag branches on desktop
-
-Drag a bullet, fold indicator, or checkbox to move its complete branch. To move it to another note, open both notes side by side in the same window, then drag into a list, an empty note, or a line of ordinary text. Drops on frontmatter are placed after its closing delimiter; fenced code blocks do not accept drops. The insertion line shows the destination position and indentation.
-
-Undo or Redo in either editor restores both sides of a cross-note move while both editors remain open on those notes. If you have since edited the other note, undo those later edits there first. Drops onto unopened tabs or the file explorer are not supported.
-
-Drag-and-drop is a desktop feature; the keyboard and Command Palette movement actions remain available on mobile.
 
 ### Use Vim and mobile controls
 
@@ -125,20 +153,20 @@ On mobile, Bullet can move the native fold controls for list items and headings 
 
 Bullet registers these actions in Obsidian's Command Palette. You can assign custom shortcuts under **Settings → Hotkeys**; editor commands can also be added to the mobile toolbar.
 
-| Command                           | What it does                                         |
-| --------------------------------- | ---------------------------------------------------- |
-| **Move list and sublists up**     | Move the current branch before its previous sibling. |
-| **Move list and sublists down**   | Move the current branch after its next sibling.      |
-| **Indent the list and sublists**  | Nest the current branch one level deeper.            |
-| **Outdent the list and sublists** | Move the current branch one level outward.           |
-| **Fold the list**                 | Fold the item at the caret.                          |
-| **Unfold the list**               | Unfold the item at the caret.                        |
-| **Insert note line**              | Add a continuation line without a bullet.            |
-| **Select list content**           | Expand selection through the current list scopes.    |
-| **Zoom into list**              | Focus the editor on the current item and its descendants. |
-| **Zoom out one level**          | Show the focused item’s parent branch. |
-| **Show whole note**             | Leave the focused view. |
-| **Show System Info**              | Display environment details for a bug report.        |
+| Command                           | What it does                                                     |
+| --------------------------------- | ---------------------------------------------------------------- |
+| **Move list and sublists up**     | Move the current branch before its previous sibling.             |
+| **Move list and sublists down**   | Move the current branch after its next sibling.                  |
+| **Indent the list and sublists**  | Nest the current branch one level deeper.                        |
+| **Outdent the list and sublists** | Move the current branch one level outward.                       |
+| **Fold the list**                 | Fold the item at the caret.                                      |
+| **Unfold the list**               | Unfold the item at the caret.                                    |
+| **Insert note line**              | Add a continuation line without a bullet.                        |
+| **Select list content**           | Expand selection through the current list scopes.                |
+| **Zoom into list**                | Focus the editor on the current item and its descendants.        |
+| **Zoom out one level**            | Show the parent branch, or the whole note from a top-level item. |
+| **Show whole note**               | Leave zoom and show the full note in the current pane.           |
+| **Show System Info**              | Display environment details for a bug report.                    |
 
 ## Settings
 
@@ -146,30 +174,30 @@ All settings are under **Settings → Bullet**.
 
 ### Editing
 
-| Setting                                  |                 Default                 | Effect                                                               |
-| ---------------------------------------- | :-------------------------------------: | -------------------------------------------------------------------- |
-| **Keep typed text in lists**             |                   On                    | Add list markers when directly typed body text would sit outside one. |
-| **Keep cursor out of list markers**      | Keep out of bullets and checkboxes      | Move the caret outside bullet, number, and checkbox prefixes.         |
-| **Enhance the Tab key**                  |                   On                    | Indent and outdent complete branches.                                 |
-| **Enhance the Enter key**                |                   On                    | Create and outdent items with outliner-style behavior.                |
-| **Vim-mode o/O inserts bullets**         |                   On                    | Create list items from Vim's `o` and `O` actions.                     |
-| **Enhance the Ctrl+A or Cmd+A behavior** |                   On                    | Expand selection through list scopes.                                 |
-| **Drag-and-Drop**                        |                   On                    | Move branches by dragging on desktop.                                 |
+| Setting                                  |              Default               | Effect                                                                              |
+| ---------------------------------------- | :--------------------------------: | ----------------------------------------------------------------------------------- |
+| **Keep typed text in lists**             |                 On                 | Add list markers when directly typed body text would sit outside one.               |
+| **Keep cursor out of list markers**      | Keep out of bullets and checkboxes | Move the caret outside bullet, number, and checkbox prefixes.                       |
+| **Enhance the Tab key**                  |                 On                 | Indent and outdent complete branches.                                               |
+| **Enhance the Enter key**                |                 On                 | Create and outdent items with outliner-style behavior.                              |
+| **Vim-mode o/O inserts bullets**         |                 On                 | Create list items from Vim's `o` and `O` actions.                                   |
+| **Enhance the Ctrl+A or Cmd+A behavior** |                 On                 | Expand selection through list scopes.                                               |
+| **Drag-and-Drop**                        |                 On                 | Drag complete branches within a list or between notes open side by side on desktop. |
 
 ### Appearance
 
-| Setting                    | Default | Effect                                                                                             |
-| -------------------------- | :-----: | -------------------------------------------------------------------------------------------------- |
-| **Style list bullets**     |   On    | Use Bullet's marker spacing, larger dots, and parent hover feedback with active theme colors.      |
-| **Enhance vertical lines** |   On    | Strengthen indentation guides and use a continuous rounded hover.                                  |
+| Setting                    | Default | Effect                                                                                        |
+| -------------------------- | :-----: | --------------------------------------------------------------------------------------------- |
+| **Style list bullets**     |   On    | Use Bullet's marker spacing, larger dots, and parent hover feedback with active theme colors. |
+| **Enhance vertical lines** |   On    | Strengthen indentation guides and use a continuous rounded hover.                             |
 
 ### Folding
 
-| Setting                                        | Default | Effect                                                                     |
-| ---------------------------------------------- | :-----: | -------------------------------------------------------------------------- |
-| **Draw outer list lines**                      |   On    | Draw a guide beside each contiguous root list chunk.                       |
-| **Fold lists from vertical indentation lines** |   On    | Make visible guides clickable for folding.                                 |
-| **Show fold controls on the right on mobile**  |   On    | Move native list and heading controls to the right in mobile Live Preview. |
+| Setting                                        | Default | Effect                                                                                        |
+| ---------------------------------------------- | :-----: | --------------------------------------------------------------------------------------------- |
+| **Draw outer list lines**                      |   On    | Draw a guide beside each contiguous root list chunk.                                          |
+| **Fold lists from vertical indentation lines** |   On    | Click a guide to fold its direct child branches together, or unfold them when all are folded. |
+| **Show fold controls on the right on mobile**  |   On    | Move native list and heading controls to the right in mobile Live Preview.                    |
 
 ### Advanced
 
