@@ -9,7 +9,7 @@ import {
   Transaction,
   TransactionSpec,
 } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { EditorView, showPanel } from "@codemirror/view";
 
 import { makeLogger, makeSettings } from "../../__mocks__";
 import { Parser } from "../../services/Parser";
@@ -537,7 +537,7 @@ test("unchanged breadcrumbs retain their buttons while edited labels refresh", a
     new Parser(makeLogger(), makeSettings()),
   );
   await feature.load();
-  const buttons: { title: string }[] = [];
+  const buttons: { title: string; click: () => void }[] = [];
   const panelDom = {
     classList: { add: () => undefined },
     setAttribute: () => undefined,
@@ -548,18 +548,29 @@ test("unchanged breadcrumbs retain their buttons while edited labels refresh", a
     createEl: () => {
       const button = {
         title: "",
+        click: () => undefined as void,
         setAttribute: () => undefined,
-        addEventListener: () => undefined,
+        addEventListener: (_event: string, callback: () => void) => {
+          button.click = callback;
+        },
       };
       buttons.push(button);
       return button;
     },
   };
+  const info = { file: { path: "folder/Daily.md", basename: "Daily" } };
   const view = {
-    state: EditorState.create({ doc, extensions }).update({
+    state: EditorState.create({
+      doc,
+      extensions: [extensions, editorInfoField.init(() => info as never)],
+    }).update({
       effects: setListZoom.of(7),
     }).state,
     dom: { ownerDocument: { win: { createDiv: () => panelDom } } },
+    dispatch: (spec: TransactionSpec) => {
+      view.state = view.state.update(spec).state;
+    },
+    focus: () => undefined,
   };
   const panel = (
     feature as unknown as {
@@ -580,7 +591,11 @@ test("unchanged breadcrumbs retain their buttons while edited labels refresh", a
   };
 
   edit({ from: 26, insert: "!" });
-  expect(buttons.map((button) => button.title)).toEqual(["work", "project"]);
+  expect(buttons.map((button) => button.title)).toEqual([
+    "Daily",
+    "work",
+    "project",
+  ]);
   buttons.forEach((button, index) =>
     expect(button).toBe(originalButtons[index]),
   );
@@ -590,5 +605,16 @@ test("unchanged breadcrumbs retain their buttons while edited labels refresh", a
     expect(button).toBe(originalButtons[index]),
   );
   edit({ from: 10, to: 17, insert: "renamed" });
-  expect(buttons.map((button) => button.title)).toEqual(["work", "renamed"]);
+  expect(buttons.map((button) => button.title)).toEqual([
+    "Daily",
+    "work",
+    "renamed",
+  ]);
+  info.file.basename = "Today";
+  edit({ from: 26, insert: "!" });
+  expect(buttons[0].title).toBe("Today");
+  const content = view.state.doc.toString();
+  buttons[0].click();
+  expect(view.state.facet(showPanel)).toEqual([null]);
+  expect(view.state.doc.toString()).toBe(content);
 });

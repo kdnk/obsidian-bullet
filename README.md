@@ -69,7 +69,7 @@ Create a nested list, place the caret in one of its items, and try the following
 
 The movement shortcuts are registered by Bullet. The other controls replace Obsidian's behavior only while their corresponding Bullet settings are enabled and the caret is in a list.
 
-To try zoom, click a bullet and use **Bullet: Show whole note** from the Command Palette to return. To try moving a branch between files, open two notes side by side and drag a bullet into the other editor.
+To try zoom, click a bullet and click the note name above the editor to return. To try moving a branch between files, open two notes side by side and drag a bullet into the other editor.
 
 ## Features
 
@@ -79,7 +79,7 @@ Focus on one part of a long outline while editing the original note:
 
 1. Click an item's bullet, or place the caret in the item and run **Bullet: Zoom into list** from the Command Palette.
 2. Edit the focused item and its descendants. Their indentation shifts toward the left edge, and the rest of the note is hidden in that pane. Click a child bullet to zoom further in.
-3. Use the breadcrumbs above the editor to return to an ancestor. From the Command Palette, **Bullet: Zoom out one level** returns to the parent branch, and **Bullet: Show whole note** shows the full document.
+3. Use the breadcrumbs above the editor to return to an ancestor, or click the note name at the start to show the full document. From the Command Palette, **Bullet: Zoom out one level** returns to the parent branch, and **Bullet: Show whole note** shows the full document.
 
 Zoom is available on desktop and mobile. The zoom commands have no default shortcuts; assign your own under **Settings → Hotkeys**, or add them to the mobile toolbar. A bullet click zooms; dragging it on desktop moves the branch. Checkboxes and fold arrows keep their usual click actions.
 
