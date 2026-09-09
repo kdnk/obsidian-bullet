@@ -523,7 +523,7 @@ test("the breadcrumb panel tolerates the zoom field disappearing during plugin r
     state: view.state,
     docChanged: false,
   } as never);
-  expect(labels).toEqual(["Whole note"]);
+  expect(labels).toEqual([]);
 });
 
 test("unchanged breadcrumbs retain their buttons while edited labels refresh", async () => {
@@ -580,11 +580,7 @@ test("unchanged breadcrumbs retain their buttons while edited labels refresh", a
   };
 
   edit({ from: 26, insert: "!" });
-  expect(buttons.map((button) => button.title)).toEqual([
-    "Whole note",
-    "work",
-    "project",
-  ]);
+  expect(buttons.map((button) => button.title)).toEqual(["work", "project"]);
   buttons.forEach((button, index) =>
     expect(button).toBe(originalButtons[index]),
   );
@@ -594,9 +590,5 @@ test("unchanged breadcrumbs retain their buttons while edited labels refresh", a
     expect(button).toBe(originalButtons[index]),
   );
   edit({ from: 10, to: 17, insert: "renamed" });
-  expect(buttons.map((button) => button.title)).toEqual([
-    "Whole note",
-    "work",
-    "renamed",
-  ]);
+  expect(buttons.map((button) => button.title)).toEqual(["work", "renamed"]);
 });

@@ -371,10 +371,7 @@ export class ListZoom implements Feature {
     const render = () => {
       dom.replaceChildren();
       const range = this.zoom.range(view.state);
-      const items = [
-        { from: null, label: "Whole note" },
-        ...(range?.ancestors ?? []),
-      ];
+      const items = range?.ancestors ?? [];
       for (const [index, item] of items.entries()) {
         if (index) dom.createSpan({ text: "›", cls: "bullet-zoom-separator" });
         const button = dom.createEl("button", { text: item.label });
