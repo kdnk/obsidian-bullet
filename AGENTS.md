@@ -49,6 +49,7 @@
 - エディタごとの非同期処理について
     - `getEditorFromState()`は呼び出すたびに新しい`MyEditor`ラッパーを返します。エディタごとの予約処理を置換・取り消すキーには、`getCodeMirrorView()`が返す同一の`EditorView`を使ってください。プラグイン終了時は、すべてのエディタの予約処理を取り消してください。
 - ズームと複数ペインの同期について
+    - For zoom/save changes, distinguish Linter's sequential, unannotated `filter: false` edits from `set`, `undo`, and `redo` transactions. Map the focused item through formatter edits to hidden frontmatter or EOF, and detect deletion of its marker character so deleting the entire subtree cannot focus its next sibling. Verify the deployed test build with `n exec 22.23.1 node scripts/verify-zoom-save.cjs <installed-linter-main.js>`; this exercises Linter's actual diff application and saves, plus synchronization from another pane.
     - CodeMirrorのblock replacementは、既定で境界に挿入した文字も含みます。ズーム中の本文編集でdecorationsを再利用する場合はindent部分をmapし、非表示部分の境界は更新後のfrom/toで作り直してください。表示末尾への追記が隠れないことを、EOFと後続の兄弟項目がある場合の両方で確認してください。
     - Obsidianは別ペインからの同期とfile loadを`userEvent: "set"`のtransactionで適用します。ズームの編集範囲filterでこれを拒否せず、非表示部分が変わった場合はズームを解除してください。native Undo/Redoは`filter: false`でfilterを迂回するため、同じ解除判定をStateField側にも置いてください。同じnoteを2ペインで開いた実検証で同期を確認してください。
     - bulletクリックのズームはpointerdownからclickまでの移動距離でDnDと区別し、一度drag閾値を超えたら開始位置へ戻ってもzoomしないでください。checkboxとnative chevronのclickは対象外とし、listenerはViewPlugin destroy時に解除してください。
