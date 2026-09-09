@@ -83,6 +83,8 @@ CodeMirror extensions and editor utilities. Registers keymaps, handles checkbox 
 
 ## Tests
 
+- For zoom/save changes, follow the Linter diff and cross-pane verification procedure in `AGENTS.md` (zoom and multi-pane synchronization).
+
 - For Computer Use tests in Live Preview, follow the caret-position verification procedure in `AGENTS.md` before entering test input.
 
 - For fold-scroll reserve changes, follow the real-Obsidian resize verification procedure in `AGENTS.md` (native chevron scroll retention).

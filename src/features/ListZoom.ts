@@ -92,13 +92,24 @@ export class ListZoomState {
           return null;
         if (!tr.docChanged) return value;
         let changedOutside = false;
+        let removedRootLine = false;
+        const rootLine = tr.startState.doc.lineAt(value.from);
         tr.changes.iterChangedRanges((from, to) => {
           if (from < value.from || to > value.to) changedOutside = true;
+          // Removing the marker through the line break can move the next
+          // sibling to the old root's boundary. Marker-only changes are safe.
+          if (from <= value.from + value.indent.length && to > rootLine.to)
+            removedRootLine = true;
         });
-        // Native history and synchronization can bypass transaction filters.
-        // Reveal their result rather than leave a hidden change on screen.
-        if (changedOutside) return null;
-        const bodyEdit = this.mapBodyEdits(value, tr);
+        // Native history and synchronization carry a userEvent. Linter applies
+        // unannotated, filter:false diffs, including frontmatter and EOF fixes.
+        // Track the focused item through those programmatic changes instead.
+        if (
+          removedRootLine ||
+          (changedOutside && tr.annotation(Transaction.userEvent) !== undefined)
+        )
+          return null;
+        const bodyEdit = changedOutside ? null : this.mapBodyEdits(value, tr);
         if (bodyEdit) return bodyEdit;
         const mapped = tr.changes.mapPos(value.from, 1, MapMode.TrackDel);
         if (mapped === null) return null;

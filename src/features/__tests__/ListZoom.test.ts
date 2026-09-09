@@ -195,19 +195,23 @@ test("returning to the note leaves content unchanged", () => {
   expect(restored.doc.toString()).toBe(doc);
 });
 
-test("reveals the note when native history or synchronization changes hidden text", () => {
-  const { zoom, state } = setup();
-  const focused = state.update({
-    effects: setListZoom.of(7),
-    selection: { anchor: 10 },
-  }).state;
-  const changed = focused.update({
-    changes: { from: 2, to: 6, insert: "office" },
-    filter: false,
-  }).state;
-  expect(zoom.range(changed)).toBeNull();
-  expect(changed.doc.toString()).toContain("- office");
-});
+test.each(["undo", "redo", "set"])(
+  "reveals hidden changes from %s",
+  (userEvent) => {
+    const { zoom, state } = setup();
+    const focused = state.update({
+      effects: setListZoom.of(7),
+      selection: { anchor: 10 },
+    }).state;
+    const changed = focused.update({
+      changes: { from: 2, to: 6, insert: "office" },
+      filter: false,
+      userEvent,
+    }).state;
+    expect(zoom.range(changed)).toBeNull();
+    expect(changed.doc.toString()).toContain("- office");
+  },
+);
 
 test("adds another child at the visible end without absorbing the next sibling", () => {
   const { zoom, state } = setup();
@@ -358,6 +362,94 @@ test("accepts Obsidian set transactions from another pane and leaves zoom", () =
   );
   expect(zoom.range(synced)).toBeNull();
 });
+
+test.each([
+  { from: doc.length, insert: "\n", wantFrom: 7, wantTo: 26 },
+  { from: 0, insert: "---\nmodified: today\n---\n", wantFrom: 31, wantTo: 50 },
+])(
+  "keeps zoom when a formatter changes hidden text at $from",
+  ({ from, insert, wantFrom, wantTo }) => {
+    const { zoom, state } = setup();
+    const focused = state.update({
+      effects: setListZoom.of(7),
+      selection: { anchor: 10 },
+    }).state;
+    const synced = focused.update({
+      changes: { from, insert },
+      filter: false,
+    }).state;
+
+    expect(synced.doc.toString()).toBe(
+      doc.slice(0, from) + insert + doc.slice(from),
+    );
+    expect(zoom.range(synced)).toMatchObject({
+      from: wantFrom,
+      to: wantTo,
+      indent: "\t",
+    });
+  },
+);
+
+test("keeps the focused item through sequential linter deletes and inserts", () => {
+  const text = "---\nmodified: old\n---\n" + doc;
+  const zoom = new ListZoomState(new Parser(makeLogger(), makeSettings()));
+  let state = EditorState.create({
+    doc: text,
+    extensions: zoom.extension,
+  }).update({ effects: setListZoom.of(text.indexOf("\t- project")) }).state;
+  for (const changes of [
+    { from: 14, to: 17, insert: "" },
+    { from: 14, insert: "new timestamp" },
+  ]) {
+    state = state.update({ changes, filter: false }).state;
+    const range = zoom.range(state);
+    expect(range).not.toBeNull();
+    expect(state.doc.sliceString(range!.from, range!.to)).toBe(
+      "\t- project\n\t\t- task",
+    );
+    expect(
+      range!.ancestors.map((ancestor) =>
+        state.doc.lineAt(ancestor.from).text.trim(),
+      ),
+    ).toEqual(["- work", "- project"]);
+  }
+});
+
+test("does not focus the next sibling when a formatter removes the entire zoomed subtree", () => {
+  const { zoom, state } = setup();
+  const focused = state.update({ effects: setListZoom.of(7) }).state;
+  const deleted = focused.update({
+    changes: { from: 7, to: 27 },
+    filter: false,
+  }).state;
+  expect(deleted.doc.toString()).toBe("- work\n\t- other\n- personal");
+  expect(zoom.range(deleted)).toBeNull();
+});
+
+test.each([
+  { marker: "-", replacement: "*" },
+  { marker: "2.", replacement: "1." },
+])(
+  "keeps zoom when a formatter changes $marker to $replacement",
+  ({ marker, replacement }) => {
+    const text = doc.replace("\t- project", `\t${marker} project`);
+    const zoom = new ListZoomState(new Parser(makeLogger(), makeSettings()));
+    const focused = EditorState.create({
+      doc: text,
+      extensions: zoom.extension,
+    }).update({ effects: setListZoom.of(7) }).state;
+    const formatted = focused.update({
+      changes: { from: 8, to: 8 + marker.length, insert: replacement },
+      filter: false,
+    }).state;
+    expect(
+      zoom.range(formatted)?.ancestors.map((ancestor) => ancestor.label),
+    ).toEqual(["work", "project"]);
+    expect(formatted.doc.toString()).toBe(
+      text.replace(`${marker} project`, `${replacement} project`),
+    );
+  },
+);
 
 test("clears zoom when a reused editor changes files without changing text", () => {
   const zoom = new ListZoomState(new Parser(makeLogger(), makeSettings()));
