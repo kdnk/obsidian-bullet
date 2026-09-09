@@ -368,10 +368,16 @@ export class ListZoom implements Feature {
     dom.classList.add("bullet-zoom-breadcrumbs");
     dom.setAttribute("role", "navigation");
     dom.setAttribute("aria-label", "List zoom");
+    const noteName = () =>
+      view.state.field(editorInfoField, false)?.file?.basename ?? "Note";
+    let renderedNoteName = "";
     const render = () => {
       dom.replaceChildren();
       const range = this.zoom.range(view.state);
-      const items = range?.ancestors ?? [];
+      renderedNoteName = noteName();
+      const items = range
+        ? [{ from: null, label: renderedNoteName }, ...range.ancestors]
+        : [];
       for (const [index, item] of items.entries()) {
         if (index) dom.createSpan({ text: "›", cls: "bullet-zoom-separator" });
         const button = dom.createEl("button", { text: item.label });
@@ -394,6 +400,7 @@ export class ListZoom implements Feature {
         const before = this.zoom.range(update.startState)?.ancestors ?? [];
         const after = this.zoom.range(update.state)?.ancestors ?? [];
         if (
+          renderedNoteName !== noteName() ||
           before.length !== after.length ||
           before.some(
             (ancestor, index) =>
