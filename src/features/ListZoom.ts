@@ -1,7 +1,9 @@
-import { Plugin, editorInfoField } from "obsidian";
+import { Plugin, TFile, editorInfoField } from "obsidian";
 
 import { foldedRanges, unfoldEffect } from "@codemirror/language";
 import {
+  ChangeSet,
+  ChangeSpec,
   EditorSelection,
   EditorState,
   Extension,
@@ -22,6 +24,7 @@ import {
 
 import { Feature } from "./Feature";
 import { stableFoldScrollSnapshot } from "./FoldScroll";
+import { zoomIndentDecorations } from "./ListZoomIndent";
 import { ListZoomInteraction } from "./ListZoomInteraction";
 
 import { MyEditor } from "../editor";
@@ -34,13 +37,51 @@ export const setListZoom = StateEffect.define<number | null>();
 const listBodyPrefixRe = /^[ \t]*(?:[-*+]|\d+\.)[ \t]/;
 
 interface ZoomRange {
-  filePath: string | null;
+  file: TFile | null;
   from: number;
   to: number;
   indent: string;
   ancestors: { from: number; label: string }[];
   indents: DecorationSet;
   decorations: DecorationSet;
+}
+
+function isWholeDocumentReplacement(tr: Transaction): boolean {
+  let whole = false;
+  tr.changes.iterChanges((from, to, _a, _b, inserted) => {
+    if (from === 0 && to === tr.startState.doc.length && inserted.length > 0)
+      whole = true;
+  });
+  return whole;
+}
+
+// A coarse replacement can include unchanged root/hidden text. Use its actual
+// difference for identity tracking without rewriting the editor transaction.
+function effectiveChanges(tr: Transaction): ChangeSet {
+  const changes: ChangeSpec[] = [];
+  tr.changes.iterChanges((from, to, _a, _b, inserted) => {
+    const before = tr.startState.doc.sliceString(from, to);
+    const after = inserted.toString();
+    let prefix = 0;
+    while (
+      prefix < Math.min(before.length, after.length) &&
+      before[prefix] === after[prefix]
+    )
+      prefix++;
+    let suffix = 0;
+    while (
+      suffix < Math.min(before.length, after.length) - prefix &&
+      before[before.length - suffix - 1] === after[after.length - suffix - 1]
+    )
+      suffix++;
+    if (prefix !== before.length || prefix !== after.length)
+      changes.push({
+        from: from + prefix,
+        to: to - suffix,
+        insert: after.slice(prefix, after.length - suffix),
+      });
+  }, true);
+  return ChangeSet.of(changes, tr.startState.doc.length);
 }
 
 function zoomDecorations(
@@ -86,15 +127,18 @@ export class ListZoomState {
         }
         if (!value) return null;
         if (
-          (tr.state.field(editorInfoField, false)?.file?.path ?? null) !==
-          value.filePath
+          (tr.state.field(editorInfoField, false)?.file ?? null) !== value.file
         )
           return null;
-        if (!tr.docChanged) return value;
+        if (!tr.docChanged)
+          return tr.startState.tabSize === tr.state.tabSize
+            ? value
+            : this.resolve(tr.state, value.from);
+        const changes = effectiveChanges(tr);
         let changedOutside = false;
         let removedRootLine = false;
         const rootLine = tr.startState.doc.lineAt(value.from);
-        tr.changes.iterChangedRanges((from, to) => {
+        changes.iterChangedRanges((from, to) => {
           if (from < value.from || to > value.to) changedOutside = true;
           // Removing the marker through the line break can move the next
           // sibling to the old root's boundary. Marker-only changes are safe.
@@ -106,12 +150,14 @@ export class ListZoomState {
         // Track the focused item through those programmatic changes instead.
         if (
           removedRootLine ||
-          (changedOutside && tr.annotation(Transaction.userEvent) !== undefined)
+          (changedOutside &&
+            (tr.annotation(Transaction.userEvent) !== undefined ||
+              isWholeDocumentReplacement(tr)))
         )
           return null;
         const bodyEdit = changedOutside ? null : this.mapBodyEdits(value, tr);
         if (bodyEdit) return bodyEdit;
-        const mapped = tr.changes.mapPos(value.from, 1, MapMode.TrackDel);
+        const mapped = changes.mapPos(value.from, 1, MapMode.TrackDel);
         if (mapped === null) return null;
         const next = this.resolve(tr.state, mapped);
         // A removed marker must not silently focus its parent or next sibling.
@@ -128,34 +174,50 @@ export class ListZoomState {
     this.extension = [
       this.field,
       EditorState.transactionFilter.of((tr) => {
-        const range = tr.startState.field(this.field);
-        // Obsidian synchronizes other panes and file loads with userEvent=set.
-        // These updates must reach the document; the field then exits zoom.
-        if (
-          !range ||
+        const range = tr.startState.field(this.field, false);
+        if (!range || tr.effects.some((e) => e.is(setListZoom))) return tr;
+        // Allow file synchronization and programmatic setValue, then correct
+        // the selection too if the same focused item survives the update.
+        const whole = isWholeDocumentReplacement(tr);
+        const external =
           tr.isUserEvent("set") ||
-          tr.effects.some((e) => e.is(setListZoom))
-        )
-          return tr;
+          (tr.annotation(Transaction.userEvent) === undefined && whole);
         let outside = false;
         tr.changes.iterChangedRanges((from, to) => {
           if (from < range.from || to > range.to) outside = true;
         });
-        if (outside) return [];
+        if (outside && !external) return [];
         const next = tr.state.field(this.field, false);
         if (!next) return tr;
         const low = next.from + next.indent.length;
         const clamp = (pos: number) => Math.max(low, Math.min(next.to, pos));
-        const ranges = tr.newSelection.ranges.map((r) =>
+        const mappedSelection =
+          whole && !tr.selection
+            ? tr.startState.selection.map(effectiveChanges(tr))
+            : tr.newSelection;
+        const ranges = mappedSelection.ranges.map((r) =>
           EditorSelection.range(clamp(r.anchor), clamp(r.head)),
         );
         const selection = EditorSelection.create(
           ranges,
-          tr.newSelection.mainIndex,
+          mappedSelection.mainIndex,
         );
         return selection.eq(tr.newSelection)
           ? tr
           : [tr, { selection, sequential: true }];
+      }),
+      // Extenders also run for filter:false. Respect caller-owned selection,
+      // but never leave it hidden after a coarse replacement bypasses clamping.
+      EditorState.transactionExtender.of((tr) => {
+        if (!isWholeDocumentReplacement(tr)) return null;
+        const next = tr.state.field(this.field, false);
+        if (!next) return null;
+        const low = next.from + next.indent.length;
+        return tr.newSelection.ranges.some(
+          (range) => range.from < low || range.to > next.to,
+        )
+          ? { effects: setListZoom.of(null) }
+          : null;
       }),
     ];
   }
@@ -231,26 +293,9 @@ export class ListZoomState {
       });
       ancestor = ancestor.getParent();
     }
-    const decorations = [];
-    if (indent) {
-      for (
-        let n = state.doc.lineAt(from).number;
-        n <= state.doc.lineAt(to).number;
-        n++
-      ) {
-        const current = state.doc.line(n);
-        if (current.text.startsWith(indent))
-          decorations.push(
-            Decoration.replace({}).range(
-              current.from,
-              current.from + indent.length,
-            ),
-          );
-      }
-    }
-    const indents = Decoration.set(decorations, true);
+    const indents = zoomIndentDecorations(state, from, to, indent);
     return {
-      filePath: state.field(editorInfoField, false)?.file?.path ?? null,
+      file: state.field(editorInfoField, false)?.file ?? null,
       from,
       to,
       indent,
@@ -388,9 +433,14 @@ export class ListZoom implements Feature {
       }
     };
     render();
+    const vault = this.plugin.app.vault;
+    const rename = vault.on("rename", (file) => {
+      if (file === view.state.field(editorInfoField, false)?.file) render();
+    });
     return {
       dom,
       top: true,
+      destroy: () => vault.offref(rename),
       update: (update: ViewUpdate) => {
         const snapshot = this.snapshots.get(view);
         if (snapshot && update.docChanged) {

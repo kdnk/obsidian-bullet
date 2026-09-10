@@ -1,5 +1,5 @@
 // Exploratory, real-Obsidian checks. Deploy build-with-tests before running.
-// Uses only the repository vault. Findings are recorded without fixing source.
+// Uses only the repository vault. Pass a fresh output directory for regression runs.
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
@@ -396,7 +396,25 @@ try {
     });
     settle();
     assert.ok(state().doc.includes("task changed"));
-    assert.ok(state().range, "Visible-only setValue cleared zoom");
+    const after = state();
+    if (after.range) {
+      assert.ok(
+        after.selection.from >= after.range.from + after.range.indent.length,
+      );
+      assert.ok(after.selection.to <= after.range.to);
+    }
+    results.push({
+      name: "setValue-selection-policy",
+      status: "observation",
+      detail: after,
+    });
+    type(" next");
+    assert.ok(
+      state().doc.includes(" next"),
+      "Typing after setValue was rejected",
+    );
+    if (after.range)
+      assert.ok(state().range, "Typing after setValue cleared zoom");
   });
   check("replace-visible-subtree", () => {
     prepare();
@@ -415,6 +433,28 @@ try {
       state().range,
       "Replacing visible subtree with same root cleared zoom",
     );
+  });
+  check("whole-replacement-with-visible-selection", () => {
+    prepare();
+    cursor("- project");
+    evaluate(() => {
+      const e = window.__zoomExplore.leaf.view.editor;
+      e.cm.dispatch({
+        changes: {
+          from: 0,
+          to: e.cm.state.doc.length,
+          insert: e.getValue().replace("task", "updated task"),
+        },
+        selection: e.cm.state.selection,
+        filter: false,
+      });
+    });
+    settle();
+    assert.ok(state().range);
+    assert.ok(state().doc.includes("updated task"));
+    type(" continued");
+    assert.ok(state().doc.includes("project continued"));
+    assert.ok(state().range);
   });
   check("mixed-indentation", () => {
     const positions = () =>
@@ -441,6 +481,81 @@ try {
       tabs.find((x) => x.text.includes("task")).bullet,
       "Equivalent space indent displays at different X after zoom",
     );
+  });
+  check("partial-tab-indentation", () => {
+    const measure = () =>
+      evaluate(() => {
+        const cm = window.__zoomExplore.leaf.view.editor.cm;
+        return [...cm.contentDOM.querySelectorAll(".cm-line")].map((el) => ({
+          text: el.textContent,
+          bullet: el.querySelector(".list-bullet")?.getBoundingClientRect().x,
+          guides: [...el.querySelectorAll(".cm-indent")].map((g) => ({
+            text: g.textContent,
+            x: g.getBoundingClientRect().x,
+            parent: g.parentElement.className,
+          })),
+        }));
+      });
+    for (const [parent, child, columns] of [
+      ["      ", "\t\t", 2],
+      ["      ", "\t\t\t", 6],
+      ["      ", "\t \t", 2],
+      ["\t  ", "\t\t  ", 4],
+    ]) {
+      const make = (indent) =>
+        `- work\n  - area\n${parent}- project\n${columns === 6 ? "        - branch\n" : ""}${indent}- task\n- other`;
+      prepare(make(" ".repeat(6 + columns)));
+      cursor("- project");
+      const spaces = measure();
+      prepare(make(child));
+      command("bullet:zoom-reset");
+      cursor("- project");
+      const native = measure();
+      command("bullet:zoom-in");
+      cursor("- project");
+      const mixed = measure();
+      results.push({
+        name: "partial-tab-positions",
+        status: "observation",
+        detail: { parent, child, columns, native, spaces, mixed },
+      });
+      const x = (lines) =>
+        lines.find((line) => line.text.includes("task"))?.bullet;
+      if (typeof x(native) !== "number") {
+        assert.equal(x(mixed), undefined, "Zoom invented a native bullet");
+        assert.equal(state().doc, make(child));
+        results.push({
+          name: "native-non-list-indent",
+          status: "observation",
+          detail: {
+            parent,
+            child,
+            reason:
+              "Obsidian does not render this prefix as a list even without zoom",
+          },
+        });
+        continue;
+      }
+      assert.equal(typeof x(mixed), "number", "Child lost its native bullet");
+      assert.equal(
+        x(mixed),
+        x(spaces),
+        "Partial tab remainder differs from equivalent spaces",
+      );
+      assert.equal(state().doc, make(child), "Display changed Markdown");
+      const guides = (lines) =>
+        lines.find((line) => line.text.includes("task")).guides;
+      assert.deepEqual(
+        guides(mixed).map((g) => g.x),
+        guides(spaces).map((g) => g.x),
+        "Native guide positions differ",
+      );
+      assert.ok(
+        guides(mixed).every((g) => g.parent.includes("cm-hmd-list-indent")),
+        "A zoom mark broke native guide ancestry",
+      );
+      screenshot(`partial-tab-${columns}-${child.length}`);
+    }
   });
   check("same-note-other-pane-visible-change", () => {
     prepare();
@@ -495,6 +610,10 @@ try {
     settle();
     assert.ok(state().range, "Renaming the same note cleared zoom");
     const renamed = state();
+    assert.ok(
+      renamed.breadcrumbs[0].endsWith("-renamed"),
+      "Breadcrumb stayed stale until an editor transaction",
+    );
     cursor("- task");
     type(" after rename");
     results.push({
