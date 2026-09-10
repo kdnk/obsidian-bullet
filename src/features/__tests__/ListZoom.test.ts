@@ -2,12 +2,14 @@ import { Command, editorInfoField } from "obsidian";
 
 import { codeFolding, foldEffect, foldedRanges } from "@codemirror/language";
 import {
+  Compartment,
   EditorSelection,
   EditorState,
   Extension,
   StateEffect,
   Transaction,
   TransactionSpec,
+  countColumn,
 } from "@codemirror/state";
 import { EditorView, showPanel } from "@codemirror/view";
 
@@ -466,6 +468,189 @@ test("clears zoom when a reused editor changes files without changing text", () 
   expect(zoom.range(focused.update({}).state)).toBeNull();
 });
 
+test.each(["subtree", "whole-document", "unfiltered", "set"])(
+  "keeps the same root through a coarse %s replacement",
+  (kind) => {
+    const { zoom, state } = setup();
+    const focused = state.update({ effects: setListZoom.of(7) }).state;
+    const next = focused.update({
+      changes:
+        kind === "subtree"
+          ? { from: 8, to: 26, insert: "- project\n\t\t- updated task" }
+          : {
+              from: 0,
+              to: doc.length,
+              insert: doc.replace("task", "updated task"),
+            },
+      ...(kind === "unfiltered"
+        ? { filter: false, selection: { anchor: 10 } }
+        : {}),
+      ...(kind === "set" ? { userEvent: "set" } : {}),
+    }).state;
+    expect(next.doc.toString()).toBe(doc.replace("task", "updated task"));
+    expect(zoom.range(next)).toMatchObject({ from: 7, to: 34 });
+  },
+);
+
+test("applies whole-document programmatic changes but reveals changed hidden content", () => {
+  const { zoom, state } = setup();
+  const focused = state.update({ effects: setListZoom.of(7) }).state;
+  const text = doc.replace("personal", "private");
+  const next = focused.update({
+    changes: { from: 0, to: doc.length, insert: text },
+  }).state;
+  expect(next.doc.toString()).toBe(text);
+  expect(zoom.range(next)).toBeNull();
+});
+
+test.each([undefined, "set"])(
+  "keeps the cursor editable after a coarse replacement (%s)",
+  (userEvent) => {
+    const { zoom, state } = setup();
+    const focused = state.update({
+      effects: setListZoom.of(7),
+      selection: { anchor: 10 },
+    }).state;
+    const replaced = focused.update({
+      changes: {
+        from: 0,
+        to: doc.length,
+        insert: doc.replace("task", "updated task"),
+      },
+      userEvent,
+    }).state;
+    expect(replaced.selection.main.head).toBe(10);
+    const typed = replaced.update({
+      changes: { from: replaced.selection.main.head, insert: "new " },
+      userEvent: "input",
+    }).state;
+    expect(typed.doc.toString()).toContain("- new project");
+    expect(zoom.range(typed)).not.toBeNull();
+  },
+);
+
+test("does not allow an annotated whole-note editing command to erase hidden content", () => {
+  const { state } = setup();
+  const focused = state.update({ effects: setListZoom.of(7) }).state;
+  expect(
+    focused
+      .update({
+        changes: { from: 0, to: doc.length, insert: "oops" },
+        userEvent: "input",
+      })
+      .state.doc.toString(),
+  ).toBe(doc);
+});
+
+test("reveals an unfiltered whole-document replacement whose caller leaves the cursor hidden", () => {
+  const { zoom, state } = setup();
+  const focused = state.update({
+    effects: setListZoom.of(7),
+    selection: { anchor: 10 },
+  }).state;
+  const next = focused.update({
+    changes: {
+      from: 0,
+      to: doc.length,
+      insert: doc.replace("task", "updated task"),
+    },
+    filter: false,
+  }).state;
+  expect(next.selection.main.head).toBe(0);
+  expect(zoom.range(next)).toBeNull();
+  const typed = next.update({
+    changes: { from: 0, insert: "X" },
+    userEvent: "input",
+  }).state;
+  expect(typed.doc.toString()).toBe("X" + doc.replace("task", "updated task"));
+});
+
+test("deleting a root does not focus an identical next sibling", () => {
+  const zoom = new ListZoomState(new Parser(makeLogger(), makeSettings()));
+  const text = doc.replace("other", "project");
+  const state = EditorState.create({
+    doc: text,
+    extensions: zoom.extension,
+  }).update({ effects: setListZoom.of(7) }).state;
+  const next = state.update({
+    changes: { from: 7, to: 27 },
+    filter: false,
+  }).state;
+  expect(next.doc.toString()).toBe("- work\n\t- project\n- personal");
+  expect(zoom.range(next)).toBeNull();
+});
+
+test("keeps zoom when the same file is renamed", () => {
+  const zoom = new ListZoomState(new Parser(makeLogger(), makeSettings()));
+  const info = { file: { path: "first.md" } };
+  const state = EditorState.create({
+    doc,
+    extensions: [zoom.extension, editorInfoField.init(() => info as never)],
+  }).update({ effects: setListZoom.of(7) }).state;
+  info.file.path = "renamed.md";
+  const next = state.update({ changes: { from: 26, insert: "!" } }).state;
+  expect(zoom.range(next)).toMatchObject({ from: 7, to: 27 });
+});
+
+test.each([
+  ["\t", "        ", 4],
+  ["    ", "\t\t", 4],
+  ["      ", "        ", 2],
+  ["      ", "\t\t", 2],
+  ["      ", "\t\t\t", 6],
+  ["      ", "\t \t", 2],
+  ["\t  ", "\t\t  ", 4],
+])(
+  "removes visual indent %j from %j leaving %i columns",
+  (parent, child, columns) => {
+    const zoom = new ListZoomState(new Parser(makeLogger(), makeSettings()));
+    const text = `- work\n${parent}- project\n${child}- task\n- other`;
+    const state = EditorState.create({
+      doc: text,
+      extensions: [zoom.extension, EditorState.tabSize.of(4)],
+    }).update({ effects: setListZoom.of(7) }).state;
+    const range = zoom.range(state)!;
+    const line = state.doc.line(3);
+    let offset = line.from;
+    let displayed = "";
+    range.indents.between(line.from, line.to, (from, to, decoration) => {
+      if (from < line.from) return;
+      displayed += state.doc.sliceString(offset, from);
+      const spec = decoration.spec as {
+        class?: string;
+        attributes?: { style: string };
+        widget?: unknown;
+      };
+      expect(spec.widget).toBeUndefined();
+      if (spec.class === "bullet-zoom-tab")
+        displayed += " ".repeat(
+          Number(/: (\d+)ch/.exec(spec.attributes!.style)![1]),
+        );
+      offset = to;
+    });
+    displayed += state.doc.sliceString(offset, line.from + child.length);
+    expect(countColumn(displayed, 4)).toBe(columns);
+    expect(state.doc.toString()).toBe(text);
+  },
+);
+
+test("rebuilds indentation when tab size changes without document edits", () => {
+  const zoom = new ListZoomState(new Parser(makeLogger(), makeSettings()));
+  const tabs = new Compartment();
+  const state = EditorState.create({
+    doc: "- work\n\t- project\n        - task",
+    extensions: [zoom.extension, tabs.of(EditorState.tabSize.of(4))],
+  }).update({ effects: setListZoom.of(7) }).state;
+  const next = state.update({
+    effects: tabs.reconfigure(EditorState.tabSize.of(8)),
+  }).state;
+  const indents: [number, number][] = [];
+  zoom.range(next)!.indents.between(18, next.doc.length, (from, to) => {
+    indents.push([from, to]);
+  });
+  expect(indents).toEqual([[18, 26]]);
+});
+
 test("removing the plugin extension while zoomed reveals the unchanged document", () => {
   const { state, zoom } = setup();
   const focused = state.update({ effects: setListZoom.of(7) }).state;
@@ -480,6 +665,7 @@ test("the breadcrumb panel tolerates the zoom field disappearing during plugin r
   const extensions: Extension[] = [];
   const feature = new ListZoom(
     {
+      app: { vault: { on: jest.fn(), offref: jest.fn() } },
       addCommand: () => undefined,
       registerEditorExtension: (extension: Extension) =>
         extensions.push(extension),
@@ -528,8 +714,19 @@ test("the breadcrumb panel tolerates the zoom field disappearing during plugin r
 
 test("unchanged breadcrumbs retain their buttons while edited labels refresh", async () => {
   const extensions: Extension[] = [];
+  let onRename: (file: unknown) => void = () => undefined;
+  const ref = {};
+  const vault = {
+    on: jest.fn((event: string, callback: typeof onRename) => {
+      expect(event).toBe("rename");
+      onRename = callback;
+      return ref;
+    }),
+    offref: jest.fn(),
+  };
   const feature = new ListZoom(
     {
+      app: { vault },
       addCommand: () => undefined,
       registerEditorExtension: (extension: Extension) =>
         extensions.push(extension),
@@ -611,10 +808,17 @@ test("unchanged breadcrumbs retain their buttons while edited labels refresh", a
     "renamed",
   ]);
   info.file.basename = "Today";
+  info.file.path = "folder/Today.md";
+  onRename({ path: "unrelated.md" });
+  expect(buttons[0].title).toBe("Daily");
+  onRename(info.file);
+  expect(buttons[0].title).toBe("Today");
   edit({ from: 26, insert: "!" });
   expect(buttons[0].title).toBe("Today");
   const content = view.state.doc.toString();
   buttons[0].click();
   expect(view.state.facet(showPanel)).toEqual([null]);
   expect(view.state.doc.toString()).toBe(content);
+  panel.destroy!();
+  expect(vault.offref).toHaveBeenCalledWith(ref);
 });

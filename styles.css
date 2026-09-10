@@ -468,6 +468,11 @@ html
   cursor: copy;
 }
 
+.bullet-zoom-tab .cm-tab {
+  min-width: var(--bullet-zoom-tab-width);
+  max-width: var(--bullet-zoom-tab-width);
+}
+
 .bullet-zoom-breadcrumbs {
   display: flex;
   align-items: center;

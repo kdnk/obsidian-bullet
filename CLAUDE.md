@@ -83,6 +83,8 @@ CodeMirror extensions and editor utilities. Registers keymaps, handles checkbox 
 
 ## Tests
 
+- For mixed-indent zoom or whole-document replacement changes, follow the native-guide, unzoomed-baseline, and next-input checks in `AGENTS.md` (zoom and multi-pane synchronization).
+
 - For zoom/save changes, follow the Linter diff and cross-pane verification procedure in `AGENTS.md` (zoom and multi-pane synchronization).
 
 - For Computer Use tests in Live Preview, follow the caret-position verification procedure in `AGENTS.md` before entering test input.
