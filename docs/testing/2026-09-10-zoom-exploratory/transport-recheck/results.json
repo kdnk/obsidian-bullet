@@ -1,0 +1,37 @@
+[
+  {
+    "name": "native-fold-within-zoom",
+    "status": "pass"
+  },
+  {
+    "name": "typing-undo-redo",
+    "status": "pass"
+  },
+  {
+    "name": "backspace-at-root-content-start",
+    "status": "inconclusive-transport",
+    "error": "spawnSync obsidian-cli ETIMEDOUT",
+    "detail": {
+      "active": false,
+      "breadcrumbs": [],
+      "cursor": {
+        "ch": 2,
+        "line": 3
+      },
+      "doc": "---\nkind: zoom-test\n---\n- work\n\t- project\n\t\t- task\n\t\t- [ ] checkbox\n\t\t- branch\n\t\t\t- deep\n\t- other\n- personal",
+      "range": null,
+      "scrollWidth": 1041,
+      "selection": {
+        "from": 26,
+        "to": 26
+      },
+      "visible": "- work\t- project\t\t- task\t\t checkbox\t\t- branch\t\t\t- deep\t- other- personal",
+      "width": 1041
+    }
+  },
+  {
+    "name": "renderer-errors",
+    "status": "pass",
+    "detail": []
+  }
+]

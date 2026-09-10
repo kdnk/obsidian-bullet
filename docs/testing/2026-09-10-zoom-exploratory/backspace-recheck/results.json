@@ -1,0 +1,40 @@
+[
+  {
+    "name": "backspace-at-root-content-start",
+    "status": "pass",
+    "detail": {
+      "active": true,
+      "breadcrumbs": [
+        "zoom-explore-43ce6aa7",
+        "work",
+        "project"
+      ],
+      "cursor": {
+        "ch": 3,
+        "line": 4
+      },
+      "doc": "---\nkind: zoom-test\n---\n- work\n\t- project\n\t\t- task\n\t\t- [ ] checkbox\n\t\t- branch\n\t\t\t- deep\n\t- other\n- personal",
+      "range": {
+        "from": 31,
+        "indent": "\t",
+        "labels": [
+          "work",
+          "project"
+        ],
+        "to": 88
+      },
+      "scrollWidth": 1041,
+      "selection": {
+        "from": 34,
+        "to": 34
+      },
+      "visible": "- project\t- task\t checkbox\t- branch\t\t- deep",
+      "width": 1041
+    }
+  },
+  {
+    "name": "renderer-errors",
+    "status": "pass",
+    "detail": []
+  }
+]

@@ -1,0 +1,487 @@
+[
+  {
+    "name": "nested-navigation",
+    "status": "pass"
+  },
+  {
+    "name": "bullet-click-and-checkbox",
+    "status": "pass"
+  },
+  {
+    "name": "native-fold-within-zoom",
+    "status": "inconclusive-transport",
+    "error": "spawnSync obsidian-cli ETIMEDOUT",
+    "detail": {
+      "active": true,
+      "breadcrumbs": [
+        "zoom-explore-38f539a8",
+        "work",
+        "project"
+      ],
+      "cursor": {
+        "ch": 10,
+        "line": 4
+      },
+      "doc": "---\nkind: zoom-test\n---\n- work\n\t- project\n\t\t- task\n\t\t- [ ] checkbox\n\t\t- branch\n\t\t\t- deep\n\t- other\n- personal",
+      "range": {
+        "from": 31,
+        "indent": "\t",
+        "labels": [
+          "work",
+          "project"
+        ],
+        "to": 88
+      },
+      "scrollWidth": 1041,
+      "selection": {
+        "from": 41,
+        "to": 41
+      },
+      "visible": "- project\t- task\t checkbox\t- branch\t\t- deep",
+      "width": 1041
+    }
+  },
+  {
+    "name": "typing-undo-redo",
+    "status": "inconclusive-transport",
+    "error": "spawnSync obsidian-cli ETIMEDOUT",
+    "detail": {
+      "active": true,
+      "breadcrumbs": [
+        "zoom-explore-38f539a8",
+        "work",
+        "project"
+      ],
+      "cursor": {
+        "ch": 15,
+        "line": 5
+      },
+      "doc": "---\nkind: zoom-test\n---\n- work\n\t- project\n\t\t- task edited\n\t\t- [ ] checkbox\n\t\t- branch\n\t\t\t- deep\n\t- other\n- personal",
+      "range": {
+        "from": 31,
+        "indent": "\t",
+        "labels": [
+          "work",
+          "project"
+        ],
+        "to": 95
+      },
+      "scrollWidth": 1041,
+      "selection": {
+        "from": 57,
+        "to": 57
+      },
+      "visible": "- project\t- task edited\t checkbox\t- branch\t\t- deep",
+      "width": 1041
+    }
+  },
+  {
+    "name": "enter-at-visible-end",
+    "status": "pass",
+    "detail": {
+      "active": true,
+      "breadcrumbs": [
+        "zoom-explore-38f539a8",
+        "work",
+        "project"
+      ],
+      "cursor": {
+        "ch": 14,
+        "line": 9
+      },
+      "doc": "---\nkind: zoom-test\n---\n- work\n\t- project\n\t\t- task\n\t\t- [ ] checkbox\n\t\t- branch\n\t\t\t- deep\n\t\t\t- new child\n\t- other\n- personal",
+      "range": {
+        "from": 31,
+        "indent": "\t",
+        "labels": [
+          "work",
+          "project"
+        ],
+        "to": 103
+      },
+      "scrollWidth": 1041,
+      "selection": {
+        "from": 103,
+        "to": 103
+      },
+      "visible": "- project\t- task\t checkbox\t- branch\t\t- deep\t\t- new child",
+      "width": 1041
+    }
+  },
+  {
+    "name": "select-all-delete",
+    "status": "pass",
+    "detail": {
+      "selected": {
+        "active": true,
+        "breadcrumbs": [
+          "zoom-explore-38f539a8",
+          "work",
+          "project"
+        ],
+        "cursor": {
+          "ch": 9,
+          "line": 8
+        },
+        "doc": "---\nkind: zoom-test\n---\n- work\n\t- project\n\t\t- task\n\t\t- [ ] checkbox\n\t\t- branch\n\t\t\t- deep\n\t- other\n- personal",
+        "range": {
+          "from": 31,
+          "indent": "\t",
+          "labels": [
+            "work",
+            "project"
+          ],
+          "to": 88
+        },
+        "scrollWidth": 1041,
+        "selection": {
+          "from": 32,
+          "to": 88
+        },
+        "visible": "- project\t- task\t- [ ] checkbox\t- branch\t\t- deep",
+        "width": 1041
+      },
+      "after": {
+        "active": false,
+        "breadcrumbs": [],
+        "cursor": {
+          "ch": 3,
+          "line": 4
+        },
+        "doc": "---\nkind: zoom-test\n---\n- work\n\t- \n\t- other\n- personal",
+        "range": null,
+        "scrollWidth": 1041,
+        "selection": {
+          "from": 34,
+          "to": 34
+        },
+        "visible": "- work\t- \t- other- personal",
+        "width": 1041
+      }
+    }
+  },
+  {
+    "name": "backspace-at-root-content-start",
+    "status": "inconclusive-transport",
+    "error": "spawnSync obsidian-cli ETIMEDOUT",
+    "detail": {
+      "active": false,
+      "breadcrumbs": [],
+      "cursor": {
+        "ch": 3,
+        "line": 4
+      },
+      "doc": "---\nkind: zoom-test\n---\n- work\n\t- \n\t- other\n- personal",
+      "range": null,
+      "scrollWidth": 1041,
+      "selection": {
+        "from": 34,
+        "to": 34
+      },
+      "visible": "- work\t- \t- other- personal",
+      "width": 1041
+    }
+  },
+  {
+    "name": "outdent-focused-root-boundary",
+    "status": "pass",
+    "detail": {
+      "active": true,
+      "breadcrumbs": [
+        "zoom-explore-38f539a8",
+        "work",
+        "project"
+      ],
+      "cursor": {
+        "ch": 8,
+        "line": 5
+      },
+      "doc": "---\nkind: zoom-test\n---\n- work\n\t- project\n\t\t- task\n\t\t- [ ] checkbox\n\t\t- branch\n\t\t\t- deep\n\t- other\n- personal",
+      "range": {
+        "from": 31,
+        "indent": "\t",
+        "labels": [
+          "work",
+          "project"
+        ],
+        "to": 88
+      },
+      "scrollWidth": 1041,
+      "selection": {
+        "from": 50,
+        "to": 50
+      },
+      "visible": "- project\t- task\t checkbox\t- branch\t\t- deep",
+      "width": 1041
+    }
+  },
+  {
+    "name": "multiline-continuation",
+    "status": "pass",
+    "detail": {
+      "active": true,
+      "breadcrumbs": [
+        "zoom-explore-38f539a8",
+        "work",
+        "project"
+      ],
+      "cursor": {
+        "ch": 3,
+        "line": 1
+      },
+      "doc": "- work\n\t- project\n\t  continuation\n\t  \n\t  paragraph\n\t\t- child\n\t- other\n- personal",
+      "range": {
+        "from": 7,
+        "indent": "\t",
+        "labels": [
+          "work",
+          "project"
+        ],
+        "to": 60
+      },
+      "scrollWidth": 1041,
+      "selection": {
+        "from": 10,
+        "to": 10
+      },
+      "visible": "- project  continuation    paragraph\t- child",
+      "width": 1041
+    }
+  },
+  {
+    "name": "save-whole-document-visible-change",
+    "status": "finding",
+    "error": "The expression evaluated to a falsy value:\n\n  assert.ok(state().doc.includes(\"task changed\"))\n",
+    "detail": {
+      "active": true,
+      "breadcrumbs": [
+        "zoom-explore-38f539a8",
+        "work",
+        "project"
+      ],
+      "cursor": {
+        "ch": 3,
+        "line": 4
+      },
+      "doc": "---\nkind: zoom-test\n---\n- work\n\t- project\n\t\t- task\n\t\t- [ ] checkbox\n\t\t- branch\n\t\t\t- deep\n\t- other\n- personal",
+      "range": {
+        "from": 31,
+        "indent": "\t",
+        "labels": [
+          "work",
+          "project"
+        ],
+        "to": 88
+      },
+      "scrollWidth": 1041,
+      "selection": {
+        "from": 34,
+        "to": 34
+      },
+      "visible": "- project\t- task\t checkbox\t- branch\t\t- deep",
+      "width": 1041
+    }
+  },
+  {
+    "name": "replace-visible-subtree",
+    "status": "finding",
+    "error": "Replacing visible subtree with same root cleared zoom",
+    "detail": {
+      "active": false,
+      "breadcrumbs": [],
+      "cursor": {
+        "ch": 16,
+        "line": 5
+      },
+      "doc": "---\nkind: zoom-test\n---\n- work\n\t- project\n\t\t- updated task\n\t- other\n- personal",
+      "range": null,
+      "scrollWidth": 1041,
+      "selection": {
+        "from": 58,
+        "to": 58
+      },
+      "visible": "- work\t- project\t\t- updated task\t- other- personal",
+      "width": 1041
+    }
+  },
+  {
+    "name": "mixed-indentation-positions",
+    "status": "observation",
+    "detail": {
+      "tabs": [
+        {
+          "bullet": 226.5,
+          "text": "- project"
+        },
+        {
+          "bullet": 262.5,
+          "text": "\t- task"
+        }
+      ],
+      "mixed": [
+        {
+          "bullet": 226.5,
+          "text": "- project"
+        },
+        {
+          "bullet": 298.5,
+          "text": "        - task"
+        }
+      ]
+    }
+  },
+  {
+    "name": "mixed-indentation",
+    "status": "finding",
+    "error": "Equivalent space indent displays at different X after zoom\n\n298.5 !== 262.5\n",
+    "detail": {
+      "active": true,
+      "breadcrumbs": [
+        "zoom-explore-38f539a8",
+        "work",
+        "project"
+      ],
+      "cursor": {
+        "ch": 10,
+        "line": 1
+      },
+      "doc": "- work\n\t- project\n        - task\n\t- other",
+      "range": {
+        "from": 7,
+        "indent": "\t",
+        "labels": [
+          "work",
+          "project"
+        ],
+        "to": 32
+      },
+      "scrollWidth": 1041,
+      "selection": {
+        "from": 17,
+        "to": 17
+      },
+      "visible": "- project        - task",
+      "width": 1041
+    }
+  },
+  {
+    "name": "same-note-other-pane-visible-change",
+    "status": "pass",
+    "detail": {
+      "active": true,
+      "breadcrumbs": [
+        "zoom-explore-38f539a8",
+        "work",
+        "project"
+      ],
+      "cursor": {
+        "ch": 3,
+        "line": 4
+      },
+      "doc": "---\nkind: zoom-test\n---\n- work\n\t- project\n\t\t- task changed\n\t\t- [ ] checkbox\n\t\t- branch\n\t\t\t- deep\n\t- other\n- personal",
+      "range": {
+        "from": 31,
+        "indent": "\t",
+        "labels": [
+          "work",
+          "project"
+        ],
+        "to": 96
+      },
+      "scrollWidth": 513,
+      "selection": {
+        "from": 34,
+        "to": 34
+      },
+      "visible": "- project\t- task changed\t checkbox\t- branch\t\t- deep",
+      "width": 513
+    }
+  },
+  {
+    "name": "note-switch-identical-content",
+    "status": "pass"
+  },
+  {
+    "name": "rename-edit-observation",
+    "status": "observation",
+    "detail": {
+      "renamed": {
+        "active": true,
+        "breadcrumbs": [
+          "zoom-explore-38f539a8",
+          "work",
+          "project"
+        ],
+        "cursor": {
+          "ch": 3,
+          "line": 4
+        },
+        "doc": "---\nkind: zoom-test\n---\n- work\n\t- project\n\t\t- task\n\t\t- [ ] checkbox\n\t\t- branch\n\t\t\t- deep\n\t- other\n- personal",
+        "range": {
+          "from": 31,
+          "indent": "\t",
+          "labels": [
+            "work",
+            "project"
+          ],
+          "to": 88
+        },
+        "scrollWidth": 1041,
+        "selection": {
+          "from": 34,
+          "to": 34
+        },
+        "visible": "- project\t- task\t checkbox\t- branch\t\t- deep",
+        "width": 1041
+      },
+      "edited": {
+        "active": false,
+        "breadcrumbs": [],
+        "cursor": {
+          "ch": 21,
+          "line": 5
+        },
+        "doc": "---\nkind: zoom-test\n---\n- work\n\t- project\n\t\t- task after rename\n\t\t- [ ] checkbox\n\t\t- branch\n\t\t\t- deep\n\t- other\n- personal",
+        "range": null,
+        "scrollWidth": 1041,
+        "selection": {
+          "from": 63,
+          "to": 63
+        },
+        "visible": "- work\t- project\t\t- task after rename\t\t checkbox\t\t- branch\t\t\t- deep\t- other- personal",
+        "width": 1041
+      }
+    }
+  },
+  {
+    "name": "note-rename-while-zoomed",
+    "status": "finding",
+    "error": "First edit after rename cleared zoom",
+    "detail": {
+      "active": false,
+      "breadcrumbs": [],
+      "cursor": {
+        "ch": 21,
+        "line": 5
+      },
+      "doc": "---\nkind: zoom-test\n---\n- work\n\t- project\n\t\t- task after rename\n\t\t- [ ] checkbox\n\t\t- branch\n\t\t\t- deep\n\t- other\n- personal",
+      "range": null,
+      "scrollWidth": 1041,
+      "selection": {
+        "from": 63,
+        "to": 63
+      },
+      "visible": "- work\t- project\t\t- task after rename\t\t checkbox\t\t- branch\t\t\t- deep\t- other- personal",
+      "width": 1041
+    }
+  },
+  {
+    "name": "plugin-reload",
+    "status": "pass"
+  },
+  {
+    "name": "renderer-errors",
+    "status": "pass",
+    "detail": []
+  }
+]
