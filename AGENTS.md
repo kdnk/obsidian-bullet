@@ -104,3 +104,6 @@
     - 作業中に「指示通りに進められない」「ツールやコマンドが失敗する」「どの手順を使うべきか不明」といった状況に当たった場合は、ユーザーに繰り返し確認せず、まずローカルのヘルプ、CLI の `--help`、プロジェクト内ドキュメント、利用可能なスキル/プラグインの説明を自分で調べてください。
     - 調べた結果、再発防止のためにエージェント向け指示へ残すべき運用ルール・例外・診断手順が分かった場合は、同じ変更範囲に含めてこのファイルを改善してください。
     - ただし、既存のユーザー意図を弱める変更、危険な権限拡大、リポジトリの運用方針を大きく変える変更は避けてください。
+
+- List marker spacing
+    - When changing deletion guards, allow surplus spaces or tabs after a list marker to be deleted while preserving its indentation, marker, and at least one separator. Verify the resulting document and cursor through `BulletTypingGuard` transactions; classifier prefixes include editable spacing as well as required syntax.

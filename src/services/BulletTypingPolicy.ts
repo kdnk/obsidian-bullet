@@ -132,6 +132,15 @@ export class BulletTypingPolicy {
         mappedLine.from,
         mappedLine.contentStart,
       );
+      // Only the marker and a separator are required. Surplus spacing must
+      // remain editable even though the classifier includes it in the prefix.
+      if (
+        existingPrefix.trimEnd() === listItem.prefix.trimEnd() &&
+        /[ \t]$/.test(existingPrefix)
+      ) {
+        continue;
+      }
+
       if (existingPrefix !== listItem.prefix) {
         corrections.push({
           from: mappedLine.from,

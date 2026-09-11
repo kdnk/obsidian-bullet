@@ -105,6 +105,74 @@ describe("BulletTypingGuard", () => {
     expect(transaction.newDoc.toString()).toBe("a");
   });
 
+  test.each([
+    {
+      doc: "-   `upstream`: fork 元。更新の取得元",
+      from: 3,
+      to: 4,
+      event: "delete.backward",
+      expected: "-  `upstream`: fork 元。更新の取得元",
+    },
+    {
+      doc: "-   item",
+      from: 2,
+      to: 4,
+      event: "delete.selection",
+      expected: "- item",
+    },
+    {
+      doc: "-   item",
+      from: 1,
+      to: 3,
+      event: "delete.forward",
+      expected: "- item",
+    },
+    {
+      doc: "- \t item",
+      from: 2,
+      to: 3,
+      event: "input.type",
+      expected: "-  item",
+    },
+    {
+      doc: "- \t item",
+      from: 1,
+      to: 2,
+      event: "delete.cut",
+      expected: "-\t item",
+    },
+    {
+      doc: "- parent\n\t12.   item",
+      from: 14,
+      to: 16,
+      event: "delete.selection",
+      expected: "- parent\n\t12. item",
+    },
+    {
+      doc: "-   [ ] task",
+      from: 2,
+      to: 4,
+      event: "delete.selection",
+      expected: "- [ ] task",
+    },
+  ])(
+    "allows surplus marker whitespace deletion: $doc ($event)",
+    async ({ doc, from, to, event, expected }) => {
+      const guard = await loadGuard();
+      const state = EditorState.create({ doc, extensions: guard });
+      const transaction = state.update({
+        changes: { from, to },
+        selection: { anchor: from },
+        userEvent: event,
+      });
+
+      expect(transaction.newDoc.toString()).toBe(expected);
+      expect(transaction.newSelection.main).toEqual(
+        EditorSelection.cursor(from),
+      );
+    },
+  );
+
   test("prefixes directly typed body text", async () => {
     const guard = await loadGuard();
     const state = EditorState.create({ extensions: guard });
