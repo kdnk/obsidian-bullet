@@ -132,3 +132,6 @@ SKIP_OBSIDIAN=1 npx jest path/to/test.ts --forceExit --verbose
 ## Build
 
 Rollup bundles to a single CJS `dist/main.js`. `PLUGIN_VERSION` and `CHANGELOG_MD` globals are injected at build time. Obsidian, CodeMirror packages are externalized.
+
+- List marker spacing
+    - When changing deletion guards, allow surplus spaces or tabs after a list marker to be deleted while preserving its indentation, marker, and at least one separator. Verify the resulting document and cursor through `BulletTypingGuard` transactions; classifier prefixes include editable spacing as well as required syntax.
