@@ -174,6 +174,25 @@ describe("parseList", () => {
     },
   );
 
+  test("round-trips a fenced code block used directly as a nested list item", () => {
+    const parser = makeParser();
+    const text = ["- aaa", "\t- ```go", "\t  aaa", "\t  ", "\t  ```", "-"].join(
+      "\n",
+    );
+    const editor = makeEditor({ text, cursor: { line: 2, ch: 4 } });
+
+    const root = parser.parse(editor);
+
+    expect(root).toBeTruthy();
+    expect(root!.getChildren()[0].getChildren()[0].getLines()).toEqual([
+      "```go",
+      "aaa",
+      "",
+      "```",
+    ]);
+    expect(root!.print()).toBe(text);
+  });
+
   test("should retain equal-width mixed note indentation normalization", () => {
     const parser = makeParser();
     const editor = makeEditor({

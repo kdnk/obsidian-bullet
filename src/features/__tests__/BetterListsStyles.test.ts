@@ -32,6 +32,7 @@ function makePlugin() {
       eventHandlers.set(eventName, handler);
       return { eventName };
     }),
+    updateOptions: jest.fn(),
   };
 
   return {
@@ -42,6 +43,7 @@ function makePlugin() {
         vault: { config: { cssTheme: "" } },
       },
       registerEvent: jest.fn(),
+      registerEditorExtension: jest.fn<void, [unknown[]]>(),
     },
     workspace,
   };
@@ -89,6 +91,7 @@ describe("BetterListsStyles", () => {
       "css-change",
       expect.any(Function),
     );
+    expect(plugin.registerEditorExtension).toHaveBeenCalledTimes(1);
     expect(
       mainDocument.body.classList.contains("bullet-plugin-better-lists"),
     ).toBe(true);
@@ -114,6 +117,8 @@ describe("BetterListsStyles", () => {
     expect(
       popoutDocument.body.classList.contains("bullet-plugin-better-lists"),
     ).toBe(false);
+    expect(workspace.updateOptions).toHaveBeenCalledTimes(1);
+    expect(plugin.registerEditorExtension.mock.calls[0][0]).toHaveLength(0);
 
     eventHandlers.get("window-close")?.(
       {} as never,
@@ -150,6 +155,29 @@ describe("BetterListsStyles", () => {
     ).toBe(true);
 
     await feature.unload();
+  });
+
+  test("paints nested code blocks from the list content edge in Live Preview", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const line = styles.match(
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-nested-code-block\s*\{([^}]*)\}/,
+    )?.[1];
+    const background = styles.match(
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-nested-code-block::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const content = styles.match(
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-nested-code-block\s+\.bullet-plugin-nested-code-block-content\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(line?.replace(/\s+/g, " ").trim()).toBe(
+      "background-color: transparent; isolation: isolate;",
+    );
+    expect(background?.replace(/\s+/g, " ").trim()).toBe(
+      'content: ""; position: absolute; z-index: -1; inset-block: 0; inset-inline-start: var(--bullet-nested-code-block-inset); inset-inline-end: 0; background-color: var(--code-background);',
+    );
+    expect(content?.replace(/\s+/g, " ").trim()).toBe(
+      "padding-inline-start: var(--list-padding-inline-start);",
+    );
   });
 
   test("renders a theme-aware bullet as a seven-pixel circle", () => {
