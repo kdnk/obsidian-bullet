@@ -102,6 +102,34 @@
   - |
 ```
 
+# enter after a nested fenced code block should create a sibling item
+
+- applyState:
+
+````md
+- parent
+	- ```go
+	    additionally indented
+
+	  - literal list marker
+	  ```|
+	- after
+````
+
+- keydown: `Enter`
+- assertState:
+
+````md
+- parent
+	- ```go
+	    additionally indented
+
+	  - literal list marker
+	  ```
+	- |
+	- after
+````
+
 # enter should create new item on the same level and split the text
 
 - applyState:

@@ -44,6 +44,7 @@ interface ZoomRange {
   ancestors: { from: number; label: string }[];
   indents: DecorationSet;
   decorations: DecorationSet;
+  pendingMarkerRepair?: boolean;
 }
 
 function isWholeDocumentReplacement(tr: Transaction): boolean {
@@ -135,6 +136,14 @@ export class ListZoomState {
             ? value
             : this.resolve(tr.state, value.from);
         const changes = effectiveChanges(tr);
+        const mapped = changes.mapPos(value.from, 1, MapMode.TrackDel);
+        if (mapped === null) return null;
+        if (value.pendingMarkerRepair) {
+          const repaired = this.resolve(tr.state, mapped);
+          return repaired?.from === tr.state.doc.lineAt(mapped).from
+            ? repaired
+            : null;
+        }
         let changedOutside = false;
         let removedRootLine = false;
         const rootLine = tr.startState.doc.lineAt(value.from);
@@ -157,12 +166,13 @@ export class ListZoomState {
           return null;
         const bodyEdit = changedOutside ? null : this.mapBodyEdits(value, tr);
         if (bodyEdit) return bodyEdit;
-        const mapped = changes.mapPos(value.from, 1, MapMode.TrackDel);
-        if (mapped === null) return null;
         const next = this.resolve(tr.state, mapped);
         // A removed marker must not silently focus its parent or next sibling.
-        if (!next || next.from !== tr.state.doc.lineAt(mapped).from)
-          return null;
+        if (!next || next.from !== tr.state.doc.lineAt(mapped).from) {
+          return this.isUnannotatedMarkerDeletion(value, tr)
+            ? this.mapPendingMarkerRepair(value, tr, mapped)
+            : null;
+        }
         return next;
       },
       provide: (field) =>
@@ -267,6 +277,64 @@ export class ListZoomState {
       // Rebuild the two boundaries so text inserted at the visible end stays
       // visible; mapping an inclusive block replacement would hide it.
       decorations: zoomDecorations(indents, value.from, to, tr.newDoc.length),
+    };
+  }
+
+  private isUnannotatedMarkerDeletion(
+    value: ZoomRange,
+    tr: Transaction,
+  ): boolean {
+    if (tr.annotation(Transaction.userEvent) !== undefined) return false;
+    const deletions: { from: number; to: number }[] = [];
+    let invalid = false;
+    tr.changes.iterChanges((from, to, _fromAfter, _toAfter, inserted) => {
+      if (inserted.length !== 0 || from === to) {
+        invalid = true;
+        return;
+      }
+      deletions.push({ from, to });
+    });
+    if (invalid || deletions.length !== 1) return false;
+    const deletion = deletions[0];
+    const line = tr.startState.doc.lineAt(deletion.from);
+    const match = /^([ \t]*)(?:[-*+]|\d+\.)/.exec(line.text);
+    if (
+      match === null ||
+      deletion.from !== line.from + match[1].length ||
+      deletion.to !== line.from + match[0].length
+    ) {
+      return false;
+    }
+    const root = this.parser.parse(reader(tr.startState), {
+      line: line.number - 1,
+      ch: 0,
+    });
+    if (!root) return false;
+    const focusedLine = tr.startState.doc.lineAt(value.from).number - 1;
+    return (
+      root.getContentStart().line <= focusedLine &&
+      root.getContentEnd().line >= focusedLine
+    );
+  }
+
+  private mapPendingMarkerRepair(
+    value: ZoomRange,
+    tr: Transaction,
+    from: number,
+  ): ZoomRange {
+    const to = tr.changes.mapPos(value.to, 1);
+    const indents = value.indents.map(tr.changes);
+    return {
+      ...value,
+      from,
+      to,
+      ancestors: value.ancestors.map((ancestor) => ({
+        ...ancestor,
+        from: tr.changes.mapPos(ancestor.from, 1),
+      })),
+      indents,
+      decorations: zoomDecorations(indents, from, to, tr.newDoc.length),
+      pendingMarkerRepair: true,
     };
   }
 
