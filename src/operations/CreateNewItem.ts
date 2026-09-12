@@ -7,6 +7,11 @@ import {
 
 import { List, Root, recalculateNumericBullets } from "../root";
 import { checkboxRe } from "../utils/checkboxRe";
+import {
+  endsWithClosedFence,
+  getFenceOpening,
+  isFenceClosing,
+} from "../utils/fencedCode";
 import { isEmptyLineOrEmptyCheckbox } from "../utils/isEmptyLineOrEmptyCheckbox";
 
 export class CreateNewItem implements Operation {
@@ -91,17 +96,36 @@ export class CreateNewItem implements Operation {
       newLines = [""];
     }
 
-    const codeBlockBacticks = oldLines.join("\n").split("```").length - 1;
-    const codeBlockBacticksBeforeRoot =
-      this.documentPrefixBeforeRoot.split("```").length - 1;
-    const isInsideCodeblock =
-      (codeBlockBacticksBeforeRoot + codeBlockBacticks) % 2 !== 0;
+    let opening: ReturnType<typeof getFenceOpening> = null;
+    for (const line of [
+      ...this.documentPrefixBeforeRoot.split("\n"),
+      ...oldLines,
+    ]) {
+      if (opening) {
+        if (isFenceClosing(line, opening)) opening = null;
+      } else {
+        opening = getFenceOpening(line);
+      }
+    }
+    const isInsideCodeblock = opening !== null;
 
     if (isInsideCodeblock) {
       return NO_OP_OUTCOME;
     }
 
-    if (lineIndex > 0 && list.isEmpty() && !hasCheckbox) {
+    const cursorAtLineEnd =
+      cursor.ch - lineUnderCursor.from.ch === lineUnderCursor.text.length;
+    const createSiblingAfterFence =
+      lineIndex === lines.length - 1 &&
+      cursorAtLineEnd &&
+      endsWithClosedFence(oldLines);
+
+    if (
+      lineIndex > 0 &&
+      list.isEmpty() &&
+      !hasCheckbox &&
+      !createSiblingAfterFence
+    ) {
       const lineOffset = cursor.ch - lineUnderCursor.from.ch;
       const line = lines[lineIndex];
       if (!line) {

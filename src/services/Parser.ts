@@ -3,6 +3,11 @@ import { Settings } from "./Settings";
 
 import { List, Root } from "../root";
 import { checkboxRe } from "../utils/checkboxRe";
+import {
+  FenceMarker,
+  getFenceOpening,
+  isFenceClosing,
+} from "../utils/fencedCode";
 
 const bulletSignRe = `(?:[-*+]|\\d+\\.)`;
 const optionalCheckboxRe = `(?:${checkboxRe})?`;
@@ -34,9 +39,10 @@ export interface Reader {
 
 interface ParseListList {
   getFirstLineIndent(): string;
+  getLines(): string[];
   setNotesIndent(notesIndent: string): void;
   getNotesIndent(): string | null;
-  addLine(text: string): void;
+  addLine(text: string, indentOverride?: string | null): void;
   getParent(): ParseListList | null;
   addAfterAll(list: ParseListList): void;
 }
@@ -104,7 +110,12 @@ export class Parser {
     }
 
     if (listLookingPos === null) {
-      return null;
+      listLookingPos = this.findFenceOwnerAt(
+        editor,
+        parsingStartLine,
+        limitFrom,
+      );
+      if (listLookingPos === null) return null;
     }
 
     let listStartLine: number | null = null;
@@ -127,15 +138,73 @@ export class Parser {
       return null;
     }
 
-    let listEndLine = listLookingPos;
-    let listEndLineLookup = listLookingPos;
+    if (
+      listStartLine > limitFrom &&
+      editor.getLine(listStartLine - 1).length === 0
+    ) {
+      const fenceOwner = this.findFenceOwnerAt(
+        editor,
+        parsingStartLine,
+        limitFrom,
+      );
+      if (fenceOwner !== null && fenceOwner < listStartLine) {
+        listStartLine = fenceOwner;
+        while (listStartLine > limitFrom) {
+          const previous = editor.getLine(listStartLine - 1);
+          if (!this.isListItem(previous) && !this.isLineWithIndent(previous))
+            break;
+          listStartLine--;
+        }
+      }
+    }
+
+    let listEndLine = listStartLine;
+    let listEndLineLookup = listStartLine;
+    let rangeFence: {
+      marker: FenceMarker;
+      containerIndent: string;
+    } | null = null;
+    let listEndLineWasAcceptedInsideFence = false;
     while (listEndLineLookup <= editor.lastLine()) {
       const line = editor.getLine(listEndLineLookup);
+      if (rangeFence) {
+        if (line.length === 0) {
+          listEndLine = listEndLineLookup++;
+          listEndLineWasAcceptedInsideFence = true;
+          continue;
+        }
+        if (!line.startsWith(rangeFence.containerIndent)) break;
+        const content = line.slice(rangeFence.containerIndent.length);
+        listEndLine = listEndLineLookup;
+        listEndLineWasAcceptedInsideFence = true;
+        if (isFenceClosing(content, rangeFence.marker)) rangeFence = null;
+        if (listEndLineLookup >= limitTo) break;
+        listEndLineLookup++;
+        continue;
+      }
       if (!this.isListItem(line) && !this.isLineWithIndent(line)) {
         break;
       }
       if (!this.isEmptyLine(line)) {
         listEndLine = listEndLineLookup;
+        listEndLineWasAcceptedInsideFence = false;
+      }
+      const listMatch = parseListItemRe.exec(line);
+      if (listMatch) {
+        const content = listMatch[5] ?? "";
+        const marker = getFenceOpening(content);
+        if (marker) {
+          const indent = listMatch[1];
+          rangeFence = {
+            marker,
+            containerIndent:
+              indent + " ".repeat(line.length - content.length - indent.length),
+          };
+        }
+      } else {
+        const indent = line.match(/^[ \t]*/)?.[0] ?? "";
+        const marker = getFenceOpening(line.slice(indent.length));
+        if (marker) rangeFence = { marker, containerIndent: indent };
       }
       if (listEndLineLookup >= limitTo) {
         listEndLine = limitTo;
@@ -150,7 +219,7 @@ export class Parser {
 
     // if the last line contains only spaces and that's incorrect indent, then ignore the last line
     // https://github.com/vslinko/obsidian-outliner/issues/368
-    if (listEndLine > listStartLine) {
+    if (listEndLine > listStartLine && !listEndLineWasAcceptedInsideFence) {
       const lastLine = editor.getLine(listEndLine);
       if (lastLine.trim().length === 0) {
         const prevLine = editor.getLine(listEndLine - 1);
@@ -180,11 +249,63 @@ export class Parser {
     indentWidths.set(currentParent, 0);
     let currentList: ParseListList | null = null;
     let currentIndentWidth = 0;
+    let activeFence: { marker: FenceMarker; owner: ParseListList } | null =
+      null;
 
     const foldedLines = editor.getAllFoldedLines();
 
     for (let l = listStartLine; l <= listEndLine; l++) {
       const line = editor.getLine(l);
+
+      if (activeFence) {
+        const owner: ParseListList = activeFence.owner;
+        const marker: FenceMarker = activeFence.marker;
+        if (line.length === 0) {
+          owner.addLine("", "");
+          currentList = owner;
+          continue;
+        }
+        const noteIndentRaw = line.match(/^[ \t]*/)?.[0] || "";
+        const noteIndentWidth =
+          this.getIndentWidth(noteIndentRaw) - baseIndentWidth;
+        const listIndentWidth = indentWidths.get(owner);
+        if (listIndentWidth === undefined) {
+          return error(`Unable to parse list: missing indent width`);
+        }
+        const expectedNoteIndent = owner.getNotesIndent();
+        const expectedNoteIndentWidth = expectedNoteIndent
+          ? this.getIndentWidth(expectedNoteIndent) - baseIndentWidth
+          : null;
+        const hasDeeperNoteIndent =
+          expectedNoteIndent !== null &&
+          expectedNoteIndentWidth !== null &&
+          noteIndentWidth > expectedNoteIndentWidth &&
+          noteIndentRaw.startsWith(expectedNoteIndent);
+
+        if (
+          expectedNoteIndentWidth !== null &&
+          noteIndentWidth !== expectedNoteIndentWidth &&
+          !hasDeeperNoteIndent
+        ) {
+          return error(`Unable to parse fenced code: unexpected indentation`);
+        }
+        if (!expectedNoteIndent) {
+          if (!noteIndentRaw || noteIndentWidth <= listIndentWidth) {
+            return error(`Unable to parse fenced code: expected indentation`);
+          }
+          owner.setNotesIndent(noteIndentRaw);
+        }
+
+        const contentStart = hasDeeperNoteIndent
+          ? expectedNoteIndent.length
+          : noteIndentRaw.length;
+        const content = line.slice(contentStart);
+        owner.addLine(content);
+        currentList = owner;
+        if (isFenceClosing(content, marker)) activeFence = null;
+        continue;
+      }
+
       const matches = parseListItemRe.exec(line);
 
       if (matches) {
@@ -239,6 +360,21 @@ export class Parser {
         );
         currentParent.addAfterAll(currentList);
         indentWidths.set(currentList, indentWidth);
+        const opening = getFenceOpening(currentList.getLines()[0]);
+        if (opening) {
+          const contentStart =
+            currentList.getFirstLineIndent().length +
+            bullet.length +
+            spaceAfterBullet.length +
+            optionalCheckbox.length;
+          currentList.setNotesIndent(
+            currentList.getFirstLineIndent() +
+              " ".repeat(
+                contentStart - currentList.getFirstLineIndent().length,
+              ),
+          );
+          activeFence = { marker: opening, owner: currentList };
+        }
       } else if (this.isLineWithIndent(line)) {
         if (!currentList) {
           return error(
@@ -297,7 +433,10 @@ export class Parser {
         const contentStart = hasDeeperNoteIndent
           ? expectedNoteIndent.length
           : noteIndentRaw.length;
-        currentList.addLine(line.slice(contentStart));
+        const content = line.slice(contentStart);
+        currentList.addLine(content);
+        const opening = getFenceOpening(content);
+        if (opening) activeFence = { marker: opening, owner: currentList };
       } else {
         return error(
           `Unable to parse list: expected list item or note, got "${line}"`,
@@ -332,5 +471,88 @@ export class Parser {
     }
 
     return width;
+  }
+
+  private findFenceOwnerAt(
+    editor: Reader,
+    targetLine: number,
+    fromLine: number,
+  ): number | null {
+    let scanStart = fromLine;
+    for (
+      let lineNumber = targetLine - 1;
+      lineNumber >= fromLine;
+      lineNumber--
+    ) {
+      const line = editor.getLine(lineNumber);
+      if (
+        line.length > 0 &&
+        !this.isListItem(line) &&
+        !this.isLineWithIndent(line)
+      ) {
+        scanStart = lineNumber + 1;
+        break;
+      }
+    }
+
+    let activeFence: {
+      marker: FenceMarker;
+      containerIndent: string;
+      ownerLine: number;
+    } | null = null;
+    let lastListOwner: number | null = null;
+
+    for (let lineNumber = scanStart; lineNumber < targetLine; lineNumber++) {
+      const line = editor.getLine(lineNumber);
+
+      if (activeFence) {
+        if (line.length === 0) continue;
+        if (line.startsWith(activeFence.containerIndent)) {
+          const content = line.slice(activeFence.containerIndent.length);
+          if (isFenceClosing(content, activeFence.marker)) activeFence = null;
+          continue;
+        }
+        activeFence = null;
+      }
+
+      if (line.length === 0) {
+        lastListOwner = null;
+        continue;
+      }
+
+      const listMatch = parseListItemRe.exec(line);
+      if (listMatch) {
+        const content = listMatch[5] ?? "";
+        const marker = getFenceOpening(content);
+        lastListOwner = lineNumber;
+        if (marker) {
+          const indent = listMatch[1];
+          activeFence = {
+            marker,
+            containerIndent:
+              indent + " ".repeat(line.length - content.length - indent.length),
+            ownerLine: lineNumber,
+          };
+        }
+      } else if (this.isLineWithIndent(line)) {
+        const indent = line.match(/^[ \t]*/)?.[0] ?? "";
+        const marker = getFenceOpening(line.slice(indent.length));
+        if (marker && lastListOwner !== null) {
+          activeFence = {
+            marker,
+            containerIndent: indent,
+            ownerLine: lastListOwner,
+          };
+        }
+      } else {
+        lastListOwner = null;
+      }
+    }
+
+    if (!activeFence) return null;
+    const target = editor.getLine(targetLine);
+    return target.length === 0 || target.startsWith(activeFence.containerIndent)
+      ? activeFence.ownerLine
+      : null;
   }
 }

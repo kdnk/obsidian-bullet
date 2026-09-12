@@ -331,6 +331,69 @@ describe("CreateNewItem operation", () => {
     expect(root.print()).toBe("- code line");
   });
 
+  test("should do nothing inside a nested tilde-fenced code block", () => {
+    const text = [
+      "- parent",
+      "\t- ~~~~go",
+      "\t  - literal list marker",
+      "\t  ~~~~",
+    ].join("\n");
+    const root = makeRoot({
+      editor: makeEditor({
+        text,
+        cursor: { line: 2, ch: "\t  - literal".length },
+      }),
+      settings: makeSettings(),
+    });
+
+    const op = new CreateNewItem(root, "\t", true);
+
+    expect(op.perform()).toEqual(NO_OP_OUTCOME);
+    expect(root.print()).toBe(text);
+  });
+
+  test.each([
+    { opening: "```go", closing: "```" },
+    { opening: "~~~~go", closing: "~~~~~" },
+  ])(
+    "should create a sibling after a nested fenced code block ending with $closing",
+    ({ opening, closing }) => {
+      const text = [
+        "- parent",
+        `\t- ${opening}`,
+        "\t    additionally indented",
+        "",
+        "\t  - literal list marker",
+        `\t  ${closing}`,
+        "\t- after",
+      ].join("\n");
+      const root = makeRoot({
+        editor: makeEditor({
+          text,
+          cursor: { line: 5, ch: `\t  ${closing}`.length },
+        }),
+        settings: makeSettings(),
+      });
+
+      const op = new CreateNewItem(root, "\t", true);
+
+      expect(op.perform()).toEqual(UPDATED_OUTCOME);
+      expect(root.print()).toBe(
+        [
+          "- parent",
+          `\t- ${opening}`,
+          "\t    additionally indented",
+          "",
+          "\t  - literal list marker",
+          `\t  ${closing}`,
+          "\t- ",
+          "\t- after",
+        ].join("\n"),
+      );
+      expect(root.getCursor()).toEqual({ line: 6, ch: 3 });
+    },
+  );
+
   test("should create another note line when pressing Enter on an existing note line", () => {
     const root = makeRoot({
       editor: makeEditor({

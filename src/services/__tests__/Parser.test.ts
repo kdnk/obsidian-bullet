@@ -174,6 +174,50 @@ describe("parseList", () => {
     },
   );
 
+  test("preserves a physical blank line at EOF inside an unclosed fence", () => {
+    const parser = makeParser();
+    const text = ["- parent", "\t- ```go", "\t  code", ""].join("\n");
+    const editor = makeEditor({ text, cursor: { line: 3, ch: 0 } });
+
+    const root = parser.parse(editor);
+
+    expect(root).toBeTruthy();
+    const code = root!.getChildren()[0].getChildren()[0];
+    expect(code.getLines()).toEqual(["```go", "code", ""]);
+    expect(code.getLastLineContentEnd()).toEqual({ line: 3, ch: 0 });
+    expect(root!.print()).toBe(text);
+  });
+
+  test("does not treat a fence-looking code line as the owner of a later blank", () => {
+    const parser = makeParser();
+    const text = [
+      "- parent",
+      "\t- ~~~",
+      "\t  before",
+      "",
+      "\t  - ```js",
+      "\t    literal code",
+      "",
+      "\t  after",
+    ].join("\n");
+    const editor = makeEditor({ text, cursor: { line: 6, ch: 0 } });
+
+    const root = parser.parse(editor);
+
+    expect(root).toBeTruthy();
+    const code = root!.getChildren()[0].getChildren()[0];
+    expect(code.getLines()).toEqual([
+      "~~~",
+      "before",
+      "",
+      "- ```js",
+      "  literal code",
+      "",
+      "after",
+    ]);
+    expect(root!.print()).toBe(text);
+  });
+
   test("round-trips a fenced code block used directly as a nested list item", () => {
     const parser = makeParser();
     const text = ["- aaa", "\t- ```go", "\t  aaa", "\t  ", "\t  ```", "-"].join(
@@ -192,6 +236,66 @@ describe("parseList", () => {
     ]);
     expect(root!.print()).toBe(text);
   });
+
+  test("treats list-looking lines inside a nested fenced code block as code", () => {
+    const parser = makeParser();
+    const text = [
+      "- aaa",
+      "\t- ```go",
+      "\t  const  value = 1;  ",
+      "\t  - literal list marker",
+      "\t  ```",
+      "\t- next",
+      "- after",
+    ].join("\n");
+    const editor = makeEditor({ text, cursor: { line: 3, ch: 8 } });
+
+    const root = parser.parse(editor);
+
+    expect(root).toBeTruthy();
+    const code = root!.getChildren()[0].getChildren()[0];
+    expect(code.getLines()).toEqual([
+      "```go",
+      "const  value = 1;  ",
+      "- literal list marker",
+      "```",
+    ]);
+    expect(root!.print()).toBe(text);
+  });
+
+  test.each([
+    { opening: "```go", closing: "```" },
+    { opening: "~~~~go", closing: "~~~~~" },
+  ])(
+    "preserves extra code indentation and physical blank lines inside $opening",
+    ({ opening, closing }) => {
+      const parser = makeParser();
+      const text = [
+        "- aaa",
+        `\t- ${opening}`,
+        "\t    additionally indented",
+        "",
+        "\t  - literal list marker",
+        `\t  ${closing}`,
+        "\t- next",
+        "- after",
+      ].join("\n");
+      const editor = makeEditor({ text, cursor: { line: 4, ch: 8 } });
+
+      const root = parser.parse(editor);
+
+      expect(root).toBeTruthy();
+      const code = root!.getChildren()[0].getChildren()[0];
+      expect(code.getLines()).toEqual([
+        opening,
+        "  additionally indented",
+        "",
+        "- literal list marker",
+        closing,
+      ]);
+      expect(root!.print()).toBe(text);
+    },
+  );
 
   test("should retain equal-width mixed note indentation normalization", () => {
     const parser = makeParser();

@@ -37,7 +37,7 @@ jest.mock(
   { virtual: true },
 );
 
-function setup(targetText: string) {
+function setup(targetText: string, sourceText = "- move\n\t- child\n- keep") {
   const doc = {
     body: { classList: { add() {}, remove() {} } },
     elementFromPoint: (): unknown => target.dom,
@@ -102,7 +102,7 @@ function setup(targetText: string) {
     coordinateCrossNoteHistory(view);
     return view;
   }
-  const source = makeView("- move\n\t- child\n- keep", "source.md", 0);
+  const source = makeView(sourceText, "source.md", 0);
   const target = makeView(targetText, "target.md", 500);
   jest
     .spyOn(EditorView, "findFromDOM")
@@ -157,6 +157,48 @@ test("routes a drag to another pane, draws its indent, and moves a subtree as a 
   undo(target);
   expect(source.state.doc.toString()).toBe("- move\n\t- child\n- keep");
   expect(target.state.doc.toString()).toBe("- parent");
+});
+
+test("moves a fenced-code subtree containing list-looking code to another note", () => {
+  const sourceText = [
+    "- move",
+    "\t- ```go",
+    "\t  const value = 1;",
+    "\t  - literal list marker",
+    "\t  ```",
+    "\t- child",
+    "- keep",
+  ].join("\n");
+  const { source, target, internals } = setup("- destination", sourceText);
+
+  internals.detectAndDrawDropZone(500, 0);
+  internals.stopDragging();
+
+  expect(source.state.doc.toString()).toBe("- keep");
+  expect(target.state.doc.toString()).toBe(
+    sourceText.replace("\n- keep", "\n- destination"),
+  );
+});
+
+test("moves a fenced-code subtree with extra indentation and a physical blank line", () => {
+  const sourceText = [
+    "- move",
+    "\t- ```go",
+    "\t    additionally indented",
+    "",
+    "\t  - literal list marker",
+    "\t  ```",
+    "- keep",
+  ].join("\n");
+  const { source, target, internals } = setup("- destination", sourceText);
+
+  internals.detectAndDrawDropZone(500, 0);
+  internals.stopDragging();
+
+  expect(source.state.doc.toString()).toBe("- keep");
+  expect(target.state.doc.toString()).toBe(
+    sourceText.replace("\n- keep", "\n- destination"),
+  );
 });
 
 test("routes a drop into an empty note", () => {

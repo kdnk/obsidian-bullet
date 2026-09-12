@@ -61,6 +61,7 @@ export class List {
   private children: List[] = [];
   private notesIndent: string | null = null;
   private lines: string[] = [];
+  private lineIndentOverrides: (string | null)[] = [];
 
   constructor(
     private root: Root,
@@ -74,6 +75,7 @@ export class List {
   ) {
     this.id = idSeq++;
     this.lines.push(firstLine);
+    this.lineIndentOverrides.push(null);
   }
 
   getID() {
@@ -99,7 +101,7 @@ export class List {
     this.notesIndent = notesIndent;
   }
 
-  addLine(text: string) {
+  addLine(text: string, indentOverride: string | null = null) {
     if (this.notesIndent === null) {
       throw new Error(
         `Unable to add line, notes indent should be provided first`,
@@ -107,6 +109,7 @@ export class List {
     }
 
     this.lines.push(text);
+    this.lineIndentOverrides.push(indentOverride);
   }
 
   replaceLines(lines: string[]) {
@@ -116,7 +119,28 @@ export class List {
       );
     }
 
+    const overrides = Array<string | null>(lines.length).fill(null);
+    let prefix = 0;
+    while (
+      prefix < Math.min(this.lines.length, lines.length) &&
+      this.lines[prefix] === lines[prefix]
+    ) {
+      overrides[prefix] = this.lineIndentOverrides[prefix] ?? null;
+      prefix++;
+    }
+    let oldSuffix = this.lines.length - 1;
+    let newSuffix = lines.length - 1;
+    while (
+      oldSuffix >= prefix &&
+      newSuffix >= prefix &&
+      this.lines[oldSuffix] === lines[newSuffix]
+    ) {
+      overrides[newSuffix] = this.lineIndentOverrides[oldSuffix] ?? null;
+      oldSuffix--;
+      newSuffix--;
+    }
     this.lines = lines;
+    this.lineIndentOverrides = overrides;
   }
 
   getLineCount() {
@@ -139,7 +163,8 @@ export class List {
       const startCh =
         i === 0
           ? this.getContentStartCh()
-          : this.getNotesIndentOrThrow().length;
+          : (this.lineIndentOverrides[i] ?? this.getNotesIndentOrThrow())
+              .length;
       const endCh = startCh + row.length;
 
       return {
@@ -174,11 +199,14 @@ export class List {
 
   getLastLineContentEnd() {
     const endLine = this.root.getContentLinesRangeOf(this)[1];
+    const lastLineIndex = this.lines.length - 1;
     const endCh =
       this.lines.length === 1
         ? this.getContentStartCh() + this.lines[0].length
-        : this.getNotesIndentOrThrow().length +
-          this.lines[this.lines.length - 1].length;
+        : (
+            this.lineIndentOverrides[lastLineIndex] ??
+            this.getNotesIndentOrThrow()
+          ).length + this.lines[lastLineIndex].length;
 
     return {
       line: endLine,
@@ -360,7 +388,7 @@ export class List {
       res +=
         i === 0
           ? this.indent + this.bullet + this.spaceAfterBullet
-          : this.getNotesIndentOrThrow();
+          : (this.lineIndentOverrides[i] ?? this.getNotesIndentOrThrow());
       res += this.lines[i];
       res += "\n";
     }
@@ -385,6 +413,7 @@ export class List {
     );
     clone.id = this.id;
     clone.lines = this.lines.concat();
+    clone.lineIndentOverrides = this.lineIndentOverrides.concat();
     clone.notesIndent = this.notesIndent;
     for (const child of this.children) {
       clone.addAfterAll(child.clone(newRoot));

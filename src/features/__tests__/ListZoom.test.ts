@@ -48,6 +48,59 @@ test("focuses a subtree without changing Markdown or another editor", () => {
   expect(zoom.range(state)).toBeNull();
 });
 
+test("focuses a nested fenced-code item whose code looks like a list", () => {
+  const text = [
+    "- aaa",
+    "\t- ```go",
+    "\t  const value = 1;",
+    "\t  - literal list marker",
+    "\t  ```",
+    "\t- next",
+    "- after",
+  ].join("\n");
+  const zoom = new ListZoomState(new Parser(makeLogger(), makeSettings()));
+  const state = EditorState.create({ doc: text, extensions: zoom.extension });
+  const from = state.doc.line(2).from;
+
+  const focused = state.update({ effects: setListZoom.of(from) }).state;
+
+  expect(zoom.range(focused)).toMatchObject({
+    from,
+    to: state.doc.line(5).to,
+    indent: "\t",
+  });
+  expect(zoom.range(focused)?.ancestors.map(({ label }) => label)).toEqual([
+    "aaa",
+    "```go",
+  ]);
+  expect(focused.doc.toString()).toBe(text);
+});
+
+test("focuses a fenced-code item across extra indentation and a physical blank line", () => {
+  const text = [
+    "- aaa",
+    "\t- ```go",
+    "\t    additionally indented",
+    "",
+    "\t  - literal list marker",
+    "\t  ```",
+    "\t- next",
+    "- after",
+  ].join("\n");
+  const zoom = new ListZoomState(new Parser(makeLogger(), makeSettings()));
+  const state = EditorState.create({ doc: text, extensions: zoom.extension });
+  const from = state.doc.line(2).from;
+
+  const focused = state.update({ effects: setListZoom.of(from) }).state;
+
+  expect(zoom.range(focused)).toMatchObject({
+    from,
+    to: state.doc.line(6).to,
+    indent: "\t",
+  });
+  expect(focused.doc.toString()).toBe(text);
+});
+
 test("recomputes the focused subtree after editing its children", () => {
   const { zoom, state } = setup();
   const focused = state.update({
@@ -415,6 +468,39 @@ test("keeps the focused item through sequential linter deletes and inserts", () 
       ),
     ).toEqual(["- work", "- project"]);
   }
+});
+
+test("keeps the focused item through sequential linter marker replacements", () => {
+  const zoom = new ListZoomState(new Parser(makeLogger(), makeSettings()));
+  let state = EditorState.create({
+    doc,
+    extensions: zoom.extension,
+  }).update({ effects: setListZoom.of(7) }).state;
+
+  for (const originalMarker of [0, 8, 20, 28, 36]) {
+    const marker = state.doc.sliceString(originalMarker, originalMarker + 1);
+    expect(marker).toBe("-");
+    state = state.update({
+      changes: { from: originalMarker, to: originalMarker + 1 },
+      filter: false,
+    }).state;
+    if (!zoom.range(state))
+      throw new Error(`lost zoom after deleting marker at ${originalMarker}`);
+    state = state.update({
+      changes: { from: originalMarker, insert: "*" },
+      filter: false,
+    }).state;
+    if (!zoom.range(state))
+      throw new Error(`lost zoom after inserting marker at ${originalMarker}`);
+  }
+
+  expect(state.doc.toString()).toBe(
+    "* work\n\t* project\n\t\t* task\n\t* other\n* personal",
+  );
+  expect(zoom.range(state)?.ancestors.map(({ label }) => label)).toEqual([
+    "work",
+    "project",
+  ]);
 });
 
 test("does not focus the next sibling when a formatter removes the entire zoomed subtree", () => {
