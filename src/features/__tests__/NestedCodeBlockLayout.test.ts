@@ -51,6 +51,7 @@ function makeLine(
     right?: number;
     openingContentLeft?: number;
     openingContentRight?: number;
+    markerEnd?: number;
     direction?: "ltr" | "rtl";
   },
 ) {
@@ -62,12 +63,30 @@ function makeLine(
         }),
       }
     : null;
-  const marker = markerNext ? { nextElementSibling: markerNext } : null;
+  const marker =
+    markerNext || options.markerEnd !== undefined
+      ? {
+          nextElementSibling: markerNext,
+          getBoundingClientRect: () => ({
+            left:
+              (options.direction === "rtl"
+                ? options.openingContentRight
+                : options.openingContentLeft) ?? options.markerEnd,
+            right:
+              options.openingContentRight ??
+              options.openingContentLeft ??
+              options.markerEnd,
+          }),
+        }
+      : null;
   return {
     position: options.position,
     ownerDocument: {
       defaultView: {
-        getComputedStyle: () => ({ direction: options.direction ?? "ltr" }),
+        getComputedStyle: () => ({
+          direction: options.direction ?? "ltr",
+          marginInlineEnd: "0px",
+        }),
       },
     },
     classList: makeClassList("cm-line", ...classes),
@@ -148,6 +167,57 @@ test("aligns every visible line to the measured list content edge", () => {
       line.style.getPropertyValue("--bullet-nested-code-block-inset"),
     ).toBe("");
   }
+});
+
+test("insets a rendered code embed from its owning list marker when the fence text is hidden", () => {
+  const state = EditorState.create({
+    doc: "\t- ```js\n\t  code\n\t  ```\n\n```js\ncode\n```",
+  });
+  const opening = makeLine(
+    ["HyperMD-codeblock", "HyperMD-codeblock-begin", "HyperMD-list-line"],
+    { position: 0, markerEnd: 164 },
+  );
+  const embed = makeLine(["cm-preview-code-block"], { position: 3 });
+  const outsideEmbed = makeLine(["cm-preview-code-block"], {
+    position: state.doc.line(5).from,
+  });
+  const measurements: Measurement[] = [];
+  const frames: FrameRequestCallback[] = [];
+  const view = {
+    state,
+    visibleRanges: [{ from: 0, to: state.doc.length }],
+    contentDOM: { querySelectorAll: () => [opening, embed, outsideEmbed] },
+    posAtDOM: (element: { position: number }) => element.position,
+    // Hidden source coordinates point to the full-width embed, not the marker.
+    coordsAtPos: () => ({ left: 100, right: 100 }),
+    dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+    requestMeasure: (measurement: Measurement) =>
+      measurements.push(measurement),
+  };
+  const plugin = new NestedCodeBlockLayoutPluginValue(
+    view as never,
+    names(BEGIN, CONTENT, END, null, "HyperMD-codeblock"),
+  );
+  frames[0](0);
+  measurements[0].write(measurements[0].read());
+  for (const element of [opening, embed]) {
+    expect(
+      element.style.getPropertyValue("--bullet-nested-code-block-inset"),
+    ).toBe("64px");
+    expect(element.classList.contains("bullet-plugin-nested-code-block")).toBe(
+      true,
+    );
+  }
+  expect(
+    outsideEmbed.classList.contains("bullet-plugin-nested-code-block"),
+  ).toBe(false);
+  plugin.destroy();
+  expect(embed.style.getPropertyValue("--bullet-nested-code-block-inset")).toBe(
+    "",
+  );
+  expect(embed.classList.contains("bullet-plugin-nested-code-block")).toBe(
+    false,
+  );
 });
 
 test("derives an offscreen opening from the rendered continuation indentation", () => {

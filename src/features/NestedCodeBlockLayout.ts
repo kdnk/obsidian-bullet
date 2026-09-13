@@ -210,6 +210,7 @@ export class NestedCodeBlockLayoutPluginValue {
       update.docChanged ||
       update.viewportChanged ||
       update.geometryChanged ||
+      update.selectionSet ||
       treeChanged
     ) {
       this.scheduleMeasure();
@@ -244,7 +245,9 @@ export class NestedCodeBlockLayoutPluginValue {
   private measureLines(): MeasuredLine[] {
     if (this.destroyed) return [];
     const elements = Array.from(
-      this.view.contentDOM.querySelectorAll<HTMLElement>(".cm-line"),
+      this.view.contentDOM.querySelectorAll<HTMLElement>(
+        ".cm-line, .cm-preview-code-block",
+      ),
     );
     const measured: MeasuredLine[] = [];
     const fenceOpeningAt = this.syntaxContext.fenceOpenings.at;
@@ -252,6 +255,23 @@ export class NestedCodeBlockLayoutPluginValue {
     let previousLineNumber: number | null = null;
 
     for (const element of elements) {
+      if (element.classList.contains("cm-preview-code-block")) {
+        const line = documentLineForElement(this.view, element);
+        const opening = line && fenceOpeningAt(line.number);
+        // A rendered processor block shares the opening fence's document
+        // position, but its hidden source coordinates resolve to the embed.
+        // Reuse the preceding, parser-confirmed list marker's measured edge.
+        if (
+          opening &&
+          previousLineNumber === opening.openingLineNumber &&
+          currentInset !== null
+        ) {
+          measured.push({ element, inset: currentInset });
+        }
+        currentInset = null;
+        previousLineNumber = null;
+        continue;
+      }
       if (!isNestedCodeBlockElement(element)) continue;
 
       const line = documentLineForElement(this.view, element);
@@ -464,10 +484,21 @@ function documentLineForElement(view: EditorView, element: HTMLElement) {
 
 function measureOpeningInset(element: HTMLElement): string | null {
   const marker = element.querySelector<HTMLElement>(".cm-formatting-list");
-  const contentStart = marker?.nextElementSibling as HTMLElement | null;
-  if (!contentStart) return null;
-
-  return logicalInset(element, contentStart.getBoundingClientRect(), false);
+  if (!marker) return null;
+  const win = element.ownerDocument.defaultView;
+  const bounds = marker.getBoundingClientRect();
+  const margin =
+    Number.parseFloat(win?.getComputedStyle(marker).marginInlineEnd ?? "0") ||
+    0;
+  return logicalInset(
+    element,
+    {
+      left: bounds.left - margin,
+      right: bounds.right + margin,
+    },
+    false,
+    true,
+  );
 }
 
 function measureContentInset(
@@ -486,12 +517,15 @@ function logicalInset(
   element: HTMLElement,
   content: { left: number; right: number },
   includeCodePadding: boolean,
+  useEnd = false,
 ): string | null {
   const line = element.getBoundingClientRect();
   const rtl =
     element.ownerDocument.defaultView?.getComputedStyle(element).direction ===
     "rtl";
-  const inset = rtl ? line.right - content.right : content.left - line.left;
+  const inset = rtl
+    ? line.right - (useEnd ? content.left : content.right)
+    : (useEnd ? content.right : content.left) - line.left;
   if (!Number.isFinite(inset) || inset < 0) return null;
 
   const measured = `${inset}px`;

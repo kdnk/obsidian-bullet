@@ -48,6 +48,9 @@
     - 複数window環境で`dev:screenshot`の画像が対象vaultのDOMと一致しない場合は、`vault=vault dev:cdp method=Page.captureScreenshot`の`data`をPNGへdecodeして対象rendererを撮影してください。evalのtitleが正しくても画像が同じwindowを示すとは限りません。
 - エディタごとの非同期処理について
     - `getEditorFromState()`は呼び出すたびに新しい`MyEditor`ラッパーを返します。エディタごとの予約処理を置換・取り消すキーには、`getCodeMirrorView()`が返す同一の`EditorView`を使ってください。プラグイン終了時は、すべてのエディタの予約処理を取り消してください。
+- リスト内のコードブロックについて
+    - Live Previewのレイアウト変更は、標準の編集行とShiki Highlighterの`.cm-preview-code-block`の両方で、deployしたtest buildに対して`n exec 22.23.1 node scripts/verify-nested-code-layout.cjs <fresh-output-directory> --long`を実行してください。通常リストとのバレット・native guideの横位置、背景の開始位置、入力後の文書、表示と編集の往復を確認します。埋め込み内部へのguide追加は行いません。
+    - コードフェンスが埋め込みへ置換されると、開始行のlist markerには次のsiblingがなく、非表示のsource positionの座標がembed左端になる場合があります。リスト本文の開始位置はmarker自身のinline endとmarginから測定してください。複数tabがある編集行では、code fontの縮小と`.cm-hmd-codeblock`のguide offsetも通常リストとの比較対象にしてください。
 - ズームと複数ペインの同期について
     - For mixed-indent zoom changes, preserve native `.cm-indent` wrappers: whitespace replacement widgets can remove their minimum width and guide behavior. Verify partial-tab cutoffs against equivalent spaces using `scripts/verify-zoom-exploratory.cjs` with a fresh output directory, comparing bullet positions and guide ancestry. Check the unzoomed native rendering before classifying an irregular Markdown prefix as a zoom regression.
     - For whole-document replacement changes, verify both the resulting document and the next typed input. A retained zoom with its cursor in hidden text is not a successful update; include filtered updates, unfiltered updates with explicit visible selection, and unfiltered cursor-reset updates.
