@@ -38,7 +38,44 @@ body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-preview-code-block.bullet-plugin-nested-code-block {
   box-sizing: border-box;
-  padding-inline-start: var(--bullet-nested-code-block-inset);
+  inset-inline-start: var(--bullet-nested-code-block-inset);
+  inline-size: calc(100% - var(--bullet-nested-code-block-inset));
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-codeblock.HyperMD-list-line.bullet-plugin-code-preview-hidden-fence {
+  block-size: 0;
+  min-block-size: 0;
+  padding-block: 0;
+  overflow: visible;
+  z-index: 1;
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-codeblock-begin.HyperMD-list-line.bullet-plugin-code-preview-opening
+  .cm-formatting-list {
+  position: relative;
+  inset-block-start: var(--bullet-code-preview-marker-offset);
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-codeblock-begin.HyperMD-list-line.bullet-plugin-code-preview-opening
+  .cm-fold-indicator {
+  transform: translateY(var(--bullet-code-preview-marker-offset));
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .bullet-plugin-code-preview-embed-opening
+  .cm-indent::before,
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .bullet-plugin-code-preview-embed-opening
+  .bullet-plugin-outer-list-guide {
+  block-size: var(--bullet-code-preview-height);
 }
 
 body.bullet-plugin-better-lists
@@ -70,6 +107,20 @@ body.bullet-plugin-better-lists
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-nested-code-block.HyperMD-codeblock-end::before {
+  border-end-start-radius: var(--code-radius);
+  border-end-end-radius: var(--code-radius);
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-nested-code-block.bullet-plugin-code-preview-first::before {
+  border-start-start-radius: var(--code-radius);
+  border-start-end-radius: var(--code-radius);
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-nested-code-block.bullet-plugin-code-preview-last::before {
   border-end-start-radius: var(--code-radius);
   border-end-end-radius: var(--code-radius);
 }

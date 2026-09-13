@@ -58,7 +58,7 @@ function isWholeDocumentReplacement(tr: Transaction): boolean {
 
 // A coarse replacement can include unchanged root/hidden text. Use its actual
 // difference for identity tracking without rewriting the editor transaction.
-function effectiveChanges(tr: Transaction): ChangeSet {
+function effectiveChanges(tr: Transaction, focusedFrom: number): ChangeSet {
   const changes: ChangeSpec[] = [];
   tr.changes.iterChanges((from, to, _a, _b, inserted) => {
     const before = tr.startState.doc.sliceString(from, to);
@@ -69,18 +69,45 @@ function effectiveChanges(tr: Transaction): ChangeSet {
       before[prefix] === after[prefix]
     )
       prefix++;
+    // Match unchanged whole lines before resolving shared marker prefixes.
+    // Otherwise inserting "\t- new\n" above "\t- project" makes the retained
+    // "\t- " look like the new item's marker and changes the focused identity.
+    prefix = prefix ? before.lastIndexOf("\n", prefix - 1) + 1 : 0;
     let suffix = 0;
     while (
       suffix < Math.min(before.length, after.length) - prefix &&
       before[before.length - suffix - 1] === after[after.length - suffix - 1]
     )
       suffix++;
-    if (prefix !== before.length || prefix !== after.length)
-      changes.push({
-        from: from + prefix,
-        to: to - suffix,
-        insert: after.slice(prefix, after.length - suffix),
-      });
+    while (
+      prefix < Math.min(before.length, after.length) - suffix &&
+      before[prefix] === after[prefix]
+    )
+      prefix++;
+    if (prefix !== before.length || prefix !== after.length) {
+      let start = from + prefix;
+      let end = to - suffix;
+      let insert = after.slice(prefix, after.length - suffix);
+      // A replacement can anchor before an unchanged separator or identical
+      // empty siblings. Prefer the focused boundary only when moving the
+      // insertion there produces exactly the same text and no other edit
+      // changes the intervening context.
+      if (from !== to && start === end && start < focusedFrom) {
+        const context = tr.startState.doc.sliceString(start, focusedFrom);
+        const combined = insert + context;
+        let contextChanged = false;
+        tr.changes.iterChanges((otherFrom, otherTo) => {
+          if (otherFrom === from && otherTo === to) return;
+          if (otherFrom < focusedFrom && otherTo >= start)
+            contextChanged = true;
+        }, true);
+        if (!contextChanged && combined.startsWith(context)) {
+          start = end = focusedFrom;
+          insert = combined.slice(context.length);
+        }
+      }
+      changes.push({ from: start, to: end, insert });
+    }
   }, true);
   return ChangeSet.of(changes, tr.startState.doc.length);
 }
@@ -135,7 +162,7 @@ export class ListZoomState {
           return tr.startState.tabSize === tr.state.tabSize
             ? value
             : this.resolve(tr.state, value.from);
-        const changes = effectiveChanges(tr);
+        const changes = effectiveChanges(tr, value.from);
         const mapped = changes.mapPos(value.from, 1, MapMode.TrackDel);
         if (mapped === null) return null;
         if (value.pendingMarkerRepair) {
@@ -167,8 +194,14 @@ export class ListZoomState {
         const bodyEdit = changedOutside ? null : this.mapBodyEdits(value, tr);
         if (bodyEdit) return bodyEdit;
         const next = this.resolve(tr.state, mapped);
-        // A removed marker must not silently focus its parent or next sibling.
-        if (!next || next.from !== tr.state.doc.lineAt(mapped).from) {
+        // Prefix formatting may map the old start into the new indentation.
+        // Mapping into body text means the original line merged into another
+        // item; it must not silently become that item's focus.
+        if (
+          !next ||
+          next.from > mapped ||
+          mapped > next.from + next.indent.length
+        ) {
           return this.isUnannotatedMarkerDeletion(value, tr)
             ? this.mapPendingMarkerRepair(value, tr, mapped)
             : null;
@@ -193,7 +226,8 @@ export class ListZoomState {
           tr.isUserEvent("set") ||
           (tr.annotation(Transaction.userEvent) === undefined && whole);
         let outside = false;
-        tr.changes.iterChangedRanges((from, to) => {
+        const changes = effectiveChanges(tr, range.from);
+        changes.iterChangedRanges((from, to) => {
           if (from < range.from || to > range.to) outside = true;
         });
         if (outside && !external) return [];
@@ -201,10 +235,9 @@ export class ListZoomState {
         if (!next) return tr;
         const low = next.from + next.indent.length;
         const clamp = (pos: number) => Math.max(low, Math.min(next.to, pos));
-        const mappedSelection =
-          whole && !tr.selection
-            ? tr.startState.selection.map(effectiveChanges(tr))
-            : tr.newSelection;
+        const mappedSelection = !tr.selection
+          ? tr.startState.selection.map(changes)
+          : tr.newSelection;
         const ranges = mappedSelection.ranges.map((r) =>
           EditorSelection.range(clamp(r.anchor), clamp(r.head)),
         );
@@ -383,6 +416,10 @@ export class ListZoom implements Feature {
     parser: Parser,
   ) {
     this.zoom = new ListZoomState(parser);
+  }
+
+  range(state: EditorState) {
+    return this.zoom.range(state);
   }
 
   async load() {

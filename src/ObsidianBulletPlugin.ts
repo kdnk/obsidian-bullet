@@ -56,6 +56,8 @@ export default class ObsidianBulletPlugin extends Plugin {
     this.imeDetector = new IMEDetector();
     await this.imeDetector.load();
 
+    const listZoom = new ListZoom(this, this.parser);
+
     this.features = [
       // service features
       new SettingsTab(this, this.settings),
@@ -68,7 +70,7 @@ export default class ObsidianBulletPlugin extends Plugin {
         this.operationPerformer,
       ),
       new ListsFoldingCommands(this, this.obsidianSettings),
-      new ListZoom(this, this.parser),
+      listZoom,
 
       // features based on settings.keepBodyTextInBullets
       new BulletTypingGuard(this, this.settings, this.logger),
@@ -166,6 +168,7 @@ export default class ObsidianBulletPlugin extends Plugin {
         this.obsidianSettings,
         this.parser,
         this.operationPerformer,
+        (state) => listZoom.range(state),
       ),
     ];
 

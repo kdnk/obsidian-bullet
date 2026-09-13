@@ -10,11 +10,22 @@ import {
 const CODE_BLOCK_CLASS = "bullet-plugin-nested-code-block";
 const CODE_CONTENT_CLASS = "bullet-plugin-nested-code-block-content";
 const CODE_BLOCK_INSET = "--bullet-nested-code-block-inset";
+const PREVIEW_OPENING_CLASS = "bullet-plugin-code-preview-opening";
+const PREVIEW_EMBED_CLASS = "bullet-plugin-code-preview-embed";
+const PREVIEW_EMBED_OPENING_CLASS = "bullet-plugin-code-preview-embed-opening";
+const HIDDEN_FENCE_CLASS = "bullet-plugin-code-preview-hidden-fence";
+const PREVIEW_FIRST_CLASS = "bullet-plugin-code-preview-first";
+const PREVIEW_LAST_CLASS = "bullet-plugin-code-preview-last";
+const PREVIEW_HEIGHT = "--bullet-code-preview-height";
+const PREVIEW_MARKER_OFFSET = "--bullet-code-preview-marker-offset";
 const listFenceRe = /^([ \t]*)([-*+]|\d+\.)([ \t]+)(`{3,}|~{3,})/;
 
 interface MeasuredLine {
   element: HTMLElement;
   inset: string;
+  preview?: { height: string; markerOffset: string };
+  previewBlock?: HTMLElement;
+  previewEmbed?: boolean;
 }
 
 interface FenceOpening {
@@ -150,10 +161,11 @@ class FenceOpeningIndex {
 
 export class NestedCodeBlockLayoutPluginValue {
   decorations: DecorationSet;
-  private styledLines = new Set<HTMLElement>();
+  private styledLines = new Map<HTMLElement, MeasuredLine>();
   private animationFrame: number | null = null;
   private destroyed = false;
   private syntaxContext: SyntaxContext;
+  private previewObserver: MutationObserver | null = null;
 
   private measurement = {
     read: () => this.measureLines(),
@@ -175,6 +187,46 @@ export class NestedCodeBlockLayoutPluginValue {
       view.state,
       view.visibleRanges,
     );
+    const Observer = view.dom.ownerDocument.defaultView?.MutationObserver;
+    if (Observer) {
+      this.previewObserver = new Observer((records) => {
+        if (this.destroyed) return;
+        let childChanged = false;
+        let rolesMayHaveChanged = false;
+        for (const { target, type } of records) {
+          const element =
+            target.nodeType === 1 ? (target as HTMLElement) : null;
+          const line =
+            element &&
+            (this.styledLines.has(element)
+              ? element
+              : element.closest<HTMLElement>(
+                  ".cm-line, .cm-preview-code-block",
+                ));
+          if (type === "attributes") {
+            if (line && this.styledLines.has(line)) rolesMayHaveChanged = true;
+          } else if (target === view.contentDOM || line) {
+            childChanged = true;
+            rolesMayHaveChanged = true;
+          }
+        }
+        // Native redraws replace line classes. Restore height ownership in the
+        // same mutation turn, before another CodeMirror height-map read. This
+        // only inspects current native markup; geometry stays in requestMeasure.
+        const rolesChanged = rolesMayHaveChanged && this.applyLineRoles();
+        if (childChanged || rolesChanged) {
+          // A processor can replace placeholder content without changing the
+          // widget's height, so geometryChanged alone misses its first line.
+          this.scheduleMeasure();
+        }
+      });
+      this.previewObserver.observe(view.contentDOM, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+    }
     this.scheduleMeasure();
   }
 
@@ -219,6 +271,7 @@ export class NestedCodeBlockLayoutPluginValue {
 
   destroy() {
     this.destroyed = true;
+    this.previewObserver?.disconnect();
     if (this.animationFrame !== null) {
       this.view.dom.ownerDocument.defaultView?.cancelAnimationFrame(
         this.animationFrame,
@@ -267,6 +320,15 @@ export class NestedCodeBlockLayoutPluginValue {
           currentInset !== null
         ) {
           measured.push({ element, inset: currentInset });
+          const preceding = measured[measured.length - 2];
+          if (preceding) {
+            preceding.preview = measurePreviewOpening(
+              preceding.element,
+              element,
+            );
+            preceding.previewBlock = element;
+            measured[measured.length - 1].previewEmbed = !!preceding.preview;
+          }
         }
         currentInset = null;
         previousLineNumber = null;
@@ -309,7 +371,24 @@ export class NestedCodeBlockLayoutPluginValue {
               );
       }
       const inset = currentInset;
-      if (inset !== null) measured.push({ element, inset });
+      if (inset !== null) {
+        const next = element.nextElementSibling;
+        const nativePreview =
+          isNativePreviewOpening(element) && isCodeBody(next);
+        measured.push({
+          element,
+          inset,
+          previewBlock: nativePreview ? (next as HTMLElement) : undefined,
+          preview:
+            nativePreview && next
+              ? measurePreviewOpening(
+                  element,
+                  next as HTMLElement,
+                  next.querySelector(`.${CODE_CONTENT_CLASS}`) ?? next,
+                )
+              : undefined,
+        });
+      }
       previousLineNumber = line.number;
       if (element.classList.contains("HyperMD-codeblock-end")) {
         currentInset = null;
@@ -322,22 +401,131 @@ export class NestedCodeBlockLayoutPluginValue {
 
   private applyMeasurements(lines: MeasuredLine[]) {
     if (this.destroyed) return;
-    this.clearStyles();
-
-    for (const { element, inset } of lines) {
-      element.classList.add(CODE_BLOCK_CLASS);
-      element.style.setProperty(CODE_BLOCK_INSET, inset);
-      this.styledLines.add(element);
+    const current = new Map(lines.map((line) => [line.element, line]));
+    for (const element of this.styledLines.keys()) {
+      if (!current.has(element)) this.clearElementStyles(element);
     }
+
+    for (const { element, inset, preview } of lines) {
+      setStyleProperty(element, CODE_BLOCK_INSET, inset);
+      if (preview) {
+        setStyleProperty(element, PREVIEW_HEIGHT, preview.height);
+        setStyleProperty(element, PREVIEW_MARKER_OFFSET, preview.markerOffset);
+      } else {
+        element.style.removeProperty(PREVIEW_HEIGHT);
+        element.style.removeProperty(PREVIEW_MARKER_OFFSET);
+      }
+    }
+    this.styledLines = current;
+    this.applyLineRoles();
+  }
+
+  private applyLineRoles(): boolean {
+    let changed = false;
+    for (const {
+      element,
+      preview,
+      previewBlock,
+      previewEmbed,
+    } of this.styledLines.values()) {
+      const nested = isNestedCodeBlockElement(element);
+      const embed = element.classList.contains("cm-preview-code-block");
+      if (!nested && !embed) {
+        this.clearElementStyles(element);
+        this.styledLines.delete(element);
+        changed = true;
+        continue;
+      }
+      const next = element.nextElementSibling;
+      const previous = element.previousElementSibling;
+      const nativeOpening = isNativePreviewOpening(element) && isCodeBody(next);
+      const embedOpening =
+        !!preview &&
+        previewBlock === next &&
+        element.classList.contains("HyperMD-codeblock-begin") &&
+        !element.querySelector(".cm-hmd-codeblock") &&
+        !!next?.classList.contains("cm-preview-code-block");
+      const roles: Array<[string, boolean]> = [
+        [CODE_BLOCK_CLASS, true],
+        [
+          PREVIEW_OPENING_CLASS,
+          !!preview && previewBlock === next && (nativeOpening || embedOpening),
+        ],
+        [PREVIEW_EMBED_CLASS, embed && !!previewEmbed],
+        [PREVIEW_EMBED_OPENING_CLASS, embedOpening],
+        [
+          HIDDEN_FENCE_CLASS,
+          nativeOpening || embedOpening || isHiddenClosingFence(element),
+        ],
+        [
+          PREVIEW_FIRST_CLASS,
+          isCodeBody(element) && isNativePreviewOpening(previous),
+        ],
+        [PREVIEW_LAST_CLASS, nested && isHiddenClosingFence(next)],
+      ];
+      for (const [name, enabled] of roles) {
+        changed = setClass(element, name, enabled) || changed;
+      }
+    }
+    return changed;
   }
 
   private clearStyles() {
-    for (const element of this.styledLines) {
-      element.classList.remove(CODE_BLOCK_CLASS);
-      element.style.removeProperty(CODE_BLOCK_INSET);
-    }
+    for (const element of this.styledLines.keys())
+      this.clearElementStyles(element);
     this.styledLines.clear();
   }
+
+  private clearElementStyles(element: HTMLElement) {
+    element.classList.remove(CODE_BLOCK_CLASS);
+    element.classList.remove(PREVIEW_OPENING_CLASS);
+    element.classList.remove(PREVIEW_EMBED_CLASS);
+    element.classList.remove(PREVIEW_EMBED_OPENING_CLASS);
+    element.classList.remove(HIDDEN_FENCE_CLASS);
+    element.classList.remove(PREVIEW_FIRST_CLASS);
+    element.classList.remove(PREVIEW_LAST_CLASS);
+    element.style.removeProperty(CODE_BLOCK_INSET);
+    element.style.removeProperty(PREVIEW_HEIGHT);
+    element.style.removeProperty(PREVIEW_MARKER_OFFSET);
+  }
+}
+
+function setStyleProperty(element: HTMLElement, name: string, value: string) {
+  if (element.style.getPropertyValue(name) !== value) {
+    element.style.setProperty(name, value);
+  }
+}
+
+function setClass(element: HTMLElement, name: string, enabled: boolean) {
+  if (element.classList.contains(name) !== enabled) {
+    if (enabled) element.classList.add(name);
+    else element.classList.remove(name);
+    return true;
+  }
+  return false;
+}
+
+function isNativePreviewOpening(element: Element | null | undefined): boolean {
+  return (
+    !!element?.classList.contains("HyperMD-codeblock-begin") &&
+    !!element.querySelector(".code-block-flair") &&
+    !element.querySelector(".cm-hmd-codeblock")
+  );
+}
+
+function isCodeBody(element: Element | null | undefined): boolean {
+  return (
+    !!element?.classList.contains("HyperMD-codeblock") &&
+    !element.classList.contains("HyperMD-codeblock-begin") &&
+    !element.classList.contains("HyperMD-codeblock-end")
+  );
+}
+
+function isHiddenClosingFence(element: Element | null | undefined): boolean {
+  return (
+    !!element?.classList.contains("HyperMD-codeblock-end") &&
+    !element.querySelector(".cm-hmd-codeblock")
+  );
 }
 
 export function nestedCodeBlockContentDecorations(
@@ -480,6 +668,70 @@ function documentLineForElement(view: EditorView, element: HTMLElement) {
   } catch {
     return null;
   }
+}
+
+function measurePreviewOpening(
+  opening: HTMLElement,
+  embed: HTMLElement,
+  code: Element | null = embed.querySelector(".ec-line .code") ??
+    embed.querySelector("code"),
+): MeasuredLine["preview"] {
+  const marker =
+    opening.querySelector<HTMLElement>(".list-bullet") ??
+    opening.querySelector<HTMLElement>(".cm-formatting-list");
+  if (!marker || !code) return;
+
+  const doc = embed.ownerDocument;
+  const walker = doc.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+  let node: Node | null;
+  let firstLine: { top: number; height: number } | undefined;
+  while ((node = walker.nextNode())) {
+    const range = doc.createRange();
+    range.selectNodeContents(node);
+    firstLine = range.getClientRects()[0];
+    if (firstLine?.height) break;
+  }
+  const blockBounds = embed.getBoundingClientRect();
+  if (!firstLine) {
+    const style = doc.defaultView?.getComputedStyle(code);
+    const height = Number.parseFloat(style?.lineHeight ?? "0");
+    if (!height) return;
+    const codeBounds = code.getBoundingClientRect();
+    const paddingTop = Number.parseFloat(style?.paddingTop ?? "0") || 0;
+    const paddingBottom = Number.parseFloat(style?.paddingBottom ?? "0") || 0;
+    // Empty processor output can consist only of padding, with no text row.
+    firstLine =
+      codeBounds.height <= paddingTop + paddingBottom
+        ? blockBounds
+        : { top: codeBounds.top + paddingTop, height };
+  }
+
+  const lineBounds = opening.getBoundingClientRect();
+  const markerBounds = marker.getBoundingClientRect();
+  const markerContainer = opening.querySelector<HTMLElement>(
+    ".cm-formatting-list",
+  );
+  const previousOffset =
+    Number.parseFloat(
+      markerContainer
+        ? (opening.ownerDocument.defaultView?.getComputedStyle(markerContainer)
+            .insetBlockStart ?? "0")
+        : "0",
+    ) || 0;
+  const markerOffset =
+    firstLine.top +
+    firstLine.height / 2 -
+    blockBounds.top -
+    (markerBounds.top + markerBounds.height / 2 - lineBounds.top) +
+    previousOffset;
+  if (!Number.isFinite(markerOffset) || blockBounds.height <= 0) return;
+
+  // The embed alone owns the rendered block height. Giving both CodeMirror
+  // children that height would double its height map even with CSS overlap.
+  return {
+    height: `${blockBounds.height}px`,
+    markerOffset: `${markerOffset}px`,
+  };
 }
 
 function measureOpeningInset(element: HTMLElement): string | null {

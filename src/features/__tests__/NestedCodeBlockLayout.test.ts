@@ -104,6 +104,276 @@ function names(...values: Array<string | null>) {
   return (lineNumber: number) => values[lineNumber - 1] ?? null;
 }
 
+function makePreviewFixture(empty = false) {
+  const state = EditorState.create({
+    doc: [
+      "\t- ```js",
+      ...(empty ? [] : ["\t  one", "\t  two"]),
+      "\t  ```",
+    ].join("\n"),
+  });
+  const lines = Array.from({ length: state.doc.lines }, (_, index) => {
+    const classes = ["HyperMD-codeblock", "HyperMD-list-line"];
+    if (index === 0) classes.push("HyperMD-codeblock-begin");
+    if (index === state.doc.lines - 1) classes.push("HyperMD-codeblock-end");
+    const line = makeLine(classes, {
+      position: state.doc.line(index + 1).from,
+      markerEnd: 164,
+    });
+    let rawFence = false;
+    const marker = {
+      getBoundingClientRect: () => ({
+        left: 164,
+        right: 164,
+        top: 100,
+        height: 24,
+      }),
+    };
+    line.querySelector = ((selector: string) => {
+      if (selector === ".cm-hmd-codeblock") return rawFence ? {} : null;
+      if (selector === ".code-block-flair") return index === 0 ? {} : null;
+      if (selector === ".cm-formatting-list" || selector === ".list-bullet")
+        return marker;
+      return null;
+    }) as never;
+    line.getBoundingClientRect = () =>
+      ({ left: 100, right: 300, top: 100, height: 24 }) as never;
+    Object.assign(line.ownerDocument, {
+      createTreeWalker: () => ({ nextNode: () => null }),
+    });
+    line.ownerDocument.defaultView.getComputedStyle = (() => ({
+      direction: "ltr",
+      marginInlineEnd: "0px",
+      lineHeight: "24px",
+    })) as never;
+    return Object.assign(line, {
+      nodeType: 1,
+      closest: () => line,
+      setRaw: (value: boolean) => {
+        rawFence = value;
+      },
+      previousElementSibling: null as unknown,
+      nextElementSibling: null as unknown,
+    });
+  });
+  const frames: FrameRequestCallback[] = [];
+  const measurements: Measurement[] = [];
+  let notify: (records: unknown[]) => void = () => {};
+  let rendered = lines;
+  const show = (next: typeof lines) => {
+    rendered = next;
+    next.forEach((line, index) => {
+      line.previousElementSibling = next[index - 1] ?? null;
+      line.nextElementSibling = next[index + 1] ?? null;
+    });
+  };
+  show(lines);
+  const view = {
+    state,
+    visibleRanges: [{ from: 0, to: state.doc.length }],
+    contentDOM: { querySelectorAll: () => rendered },
+    posAtDOM: (element: { position: number }) => element.position,
+    coordsAtPos: () => ({ left: 164, right: 164 }),
+    dom: {
+      ownerDocument: {
+        defaultView: {
+          ...makeAnimationWindow(frames),
+          MutationObserver: class {
+            constructor(callback: typeof notify) {
+              notify = callback;
+            }
+            observe() {}
+            disconnect() {}
+          },
+        },
+      },
+    },
+    requestMeasure: (measurement: Measurement) =>
+      measurements.push(measurement),
+  };
+  const plugin = new NestedCodeBlockLayoutPluginValue(
+    view as never,
+    names(BEGIN, ...(empty ? [] : [CONTENT, CONTENT]), END),
+  );
+  frames[0](0);
+  const measure = () => measurements[0].write(measurements[0].read());
+  return {
+    lines,
+    frames,
+    measure,
+    plugin,
+    show,
+    notify: (target: unknown, type = "childList") => notify([{ target, type }]),
+  };
+}
+
+describe("native preview row roles", () => {
+  const originalNodeFilter = globalThis.NodeFilter;
+  beforeAll(() =>
+    Object.defineProperty(globalThis, "NodeFilter", {
+      value: { SHOW_TEXT: 4 },
+      configurable: true,
+    }),
+  );
+  afterAll(() =>
+    Object.defineProperty(globalThis, "NodeFilter", {
+      value: originalNodeFilter,
+      configurable: true,
+    }),
+  );
+
+  test("collapses hidden fences and rounds the first and last visible code rows", () => {
+    const fixture = makePreviewFixture();
+    const [opening, first, last, closing] = fixture.lines;
+    fixture.measure();
+    expect(
+      opening.classList.contains("bullet-plugin-code-preview-hidden-fence"),
+    ).toBe(true);
+    expect(
+      closing.classList.contains("bullet-plugin-code-preview-hidden-fence"),
+    ).toBe(true);
+    expect(first.classList.contains("bullet-plugin-code-preview-first")).toBe(
+      true,
+    );
+    expect(last.classList.contains("bullet-plugin-code-preview-last")).toBe(
+      true,
+    );
+    expect(
+      opening.classList.contains("bullet-plugin-code-preview-embed-opening"),
+    ).toBe(false);
+    fixture.plugin.destroy();
+    for (const line of fixture.lines) {
+      expect(
+        [...line.classList].filter((name) =>
+          name.startsWith("bullet-plugin-code-preview-"),
+        ),
+      ).toEqual([]);
+    }
+  });
+
+  test("keeps an empty native opener visible while hiding its closing fence", () => {
+    const fixture = makePreviewFixture(true);
+    const [opening, closing] = fixture.lines;
+    fixture.measure();
+    expect(
+      opening.classList.contains("bullet-plugin-code-preview-hidden-fence"),
+    ).toBe(false);
+    expect(opening.classList.contains("bullet-plugin-code-preview-last")).toBe(
+      true,
+    );
+    expect(
+      closing.classList.contains("bullet-plugin-code-preview-hidden-fence"),
+    ).toBe(true);
+    fixture.plugin.destroy();
+  });
+
+  test("restores lost height roles before the next CodeMirror measurement without observing its own classes", () => {
+    const fixture = makePreviewFixture();
+    const [opening] = fixture.lines;
+    fixture.measure();
+    for (const name of [...opening.classList]) {
+      if (name.startsWith("bullet-plugin-")) opening.classList.remove(name);
+    }
+    fixture.notify(opening, "attributes");
+    expect(
+      opening.classList.contains("bullet-plugin-code-preview-hidden-fence"),
+    ).toBe(true);
+    expect(
+      opening.classList.contains("bullet-plugin-code-preview-opening"),
+    ).toBe(true);
+    const pending = fixture.frames.length;
+    fixture.frames[pending - 1](0);
+    fixture.measure();
+    fixture.notify(opening, "attributes");
+    expect(fixture.frames).toHaveLength(pending);
+    fixture.plugin.destroy();
+  });
+
+  test("reveals source fences and removes adjacent preview edges as soon as their children change", () => {
+    const fixture = makePreviewFixture();
+    const [opening, first, last, closing] = fixture.lines;
+    fixture.measure();
+    opening.setRaw(true);
+    closing.setRaw(true);
+    fixture.notify(opening);
+    expect(
+      opening.classList.contains("bullet-plugin-code-preview-hidden-fence"),
+    ).toBe(false);
+    expect(
+      opening.classList.contains("bullet-plugin-code-preview-opening"),
+    ).toBe(false);
+    expect(
+      closing.classList.contains("bullet-plugin-code-preview-hidden-fence"),
+    ).toBe(false);
+    expect(first.classList.contains("bullet-plugin-code-preview-first")).toBe(
+      false,
+    );
+    expect(last.classList.contains("bullet-plugin-code-preview-last")).toBe(
+      false,
+    );
+    opening.setRaw(false);
+    closing.setRaw(false);
+    fixture.notify(closing);
+    expect(
+      opening.classList.contains("bullet-plugin-code-preview-hidden-fence"),
+    ).toBe(true);
+    expect(first.classList.contains("bullet-plugin-code-preview-first")).toBe(
+      true,
+    );
+    expect(last.classList.contains("bullet-plugin-code-preview-last")).toBe(
+      true,
+    );
+    fixture.measure();
+    fixture.plugin.destroy();
+  });
+
+  test("restores embed height and guide roles after a partial class reset, then reveals a raw fence immediately", () => {
+    const fixture = makePreviewFixture();
+    const [opening, embed] = fixture.lines;
+    embed.classList = makeClassList("cm-preview-code-block");
+    embed.position = 3;
+    const code = { getBoundingClientRect: () => ({ top: 100, height: 24 }) };
+    embed.querySelector = ((selector: string) =>
+      selector === ".ec-line .code" ? code : null) as never;
+    fixture.show([opening, embed]);
+    fixture.measure();
+    const openingRoles = [
+      "bullet-plugin-code-preview-hidden-fence",
+      "bullet-plugin-code-preview-opening",
+      "bullet-plugin-code-preview-embed-opening",
+    ];
+    for (const name of openingRoles)
+      expect(opening.classList.contains(name)).toBe(true);
+    expect(embed.classList.contains("bullet-plugin-code-preview-embed")).toBe(
+      true,
+    );
+    for (const name of openingRoles) opening.classList.remove(name);
+    fixture.notify(opening, "attributes");
+    for (const name of openingRoles)
+      expect(opening.classList.contains(name)).toBe(true);
+    const pending = fixture.frames.length;
+    fixture.frames[pending - 1](0);
+    fixture.measure();
+    fixture.notify(opening, "attributes");
+    expect(fixture.frames).toHaveLength(pending);
+
+    // Native children can switch to source before the processor widget leaves.
+    opening.setRaw(true);
+    fixture.notify(opening);
+    for (const name of openingRoles)
+      expect(opening.classList.contains(name)).toBe(false);
+    fixture.show([opening]);
+    fixture.measure();
+    expect(embed.classList.contains("bullet-plugin-code-preview-embed")).toBe(
+      false,
+    );
+    expect(opening.style.getPropertyValue("--bullet-code-preview-height")).toBe(
+      "",
+    );
+    fixture.plugin.destroy();
+  });
+});
+
 test("aligns every visible line to the measured list content edge", () => {
   const state = EditorState.create({
     doc: ["\t- ```ts", "\t  code", "\t  ```", "```ts"].join("\n"),
@@ -218,6 +488,189 @@ test("insets a rendered code embed from its owning list marker when the fence te
   expect(embed.classList.contains("bullet-plugin-nested-code-block")).toBe(
     false,
   );
+});
+
+test.each(["unordered", "ordered", "empty", "empty-no-line-box"])(
+  "keeps %s preview baseline stable after native class redraw",
+  (kind) => {
+    const state = EditorState.create({ doc: "\t- ```js\n\t  code\n\t  ```" });
+    const opening = makeLine(
+      ["HyperMD-codeblock", "HyperMD-codeblock-begin", "HyperMD-list-line"],
+      { position: 0, markerEnd: 164 },
+    );
+    const activeOffset = () =>
+      opening.classList.contains("bullet-plugin-code-preview-opening")
+        ? Number.parseFloat(
+            opening.style.getPropertyValue(
+              "--bullet-code-preview-marker-offset",
+            ),
+          ) || 0
+        : 0;
+    const marker = {
+      getBoundingClientRect: () => ({
+        left: 164,
+        right: 164,
+        top: 100 + activeOffset(),
+        height: 24,
+      }),
+    };
+    opening.querySelector = ((selector: string) =>
+      selector === ".cm-formatting-list" ||
+      (selector === ".list-bullet" && kind !== "ordered")
+        ? marker
+        : null) as typeof opening.querySelector;
+    opening.getBoundingClientRect = () =>
+      ({ left: 100, right: 300, top: 100 }) as never;
+    opening.ownerDocument.defaultView.getComputedStyle = () => ({
+      direction: "ltr",
+      marginInlineEnd: "0px",
+      insetBlockStart: `${activeOffset()}px`,
+    });
+    const embed = makeLine(["cm-preview-code-block"], { position: 3 });
+    Object.assign(opening, { nextElementSibling: embed });
+    Object.assign(embed, { previousElementSibling: opening });
+    embed.querySelector = (() => ({
+      getBoundingClientRect: () => ({
+        top: 126,
+        height: kind === "empty-no-line-box" ? 24 : 16,
+      }),
+    })) as never;
+    embed.ownerDocument.defaultView.getComputedStyle = (() => ({
+      lineHeight: "16px",
+      paddingTop: kind === "empty-no-line-box" ? "12px" : "14px",
+      paddingBottom: kind === "empty-no-line-box" ? "12px" : "0px",
+    })) as never;
+    embed.getBoundingClientRect = () =>
+      ({
+        left: 100,
+        right: 300,
+        top: 126,
+        height: kind === "empty-no-line-box" ? 24 : 45,
+      }) as never;
+    Object.assign(embed.ownerDocument, {
+      createTreeWalker: () => ({
+        nextNode: () => (kind.startsWith("empty") ? null : {}),
+      }),
+      createRange: () => ({
+        selectNodeContents: () => {},
+        getClientRects: () => [{ top: 140, height: 16 }],
+      }),
+    });
+    const measurements: Measurement[] = [];
+    const frames: FrameRequestCallback[] = [];
+    const view = {
+      state,
+      visibleRanges: [{ from: 0, to: state.doc.length }],
+      contentDOM: { querySelectorAll: () => [opening, embed] },
+      posAtDOM: (element: { position: number }) => element.position,
+      dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+      requestMeasure: (measurement: Measurement) =>
+        measurements.push(measurement),
+    };
+    const originalNodeFilter = globalThis.NodeFilter;
+    Object.defineProperty(globalThis, "NodeFilter", {
+      value: { SHOW_TEXT: 4 },
+      configurable: true,
+    });
+    try {
+      const plugin = new NestedCodeBlockLayoutPluginValue(
+        view as never,
+        names(BEGIN, CONTENT, END),
+      );
+      frames[0](0);
+      const measure = () => measurements[0].write(measurements[0].read());
+      measure();
+      expect(
+        opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
+      ).toBe(kind === "empty-no-line-box" ? "0px" : "10px");
+      measure();
+      expect(
+        opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
+      ).toBe(kind === "empty-no-line-box" ? "0px" : "10px");
+      opening.classList.remove("bullet-plugin-code-preview-opening");
+      measure();
+      expect(
+        opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
+      ).toBe(kind === "empty-no-line-box" ? "0px" : "10px");
+      plugin.destroy();
+      expect(
+        opening.style.getPropertyValue("--bullet-code-preview-height"),
+      ).toBe("");
+      expect(embed.classList.contains("bullet-plugin-code-preview-embed")).toBe(
+        false,
+      );
+    } finally {
+      Object.defineProperty(globalThis, "NodeFilter", {
+        value: originalNodeFilter,
+        configurable: true,
+      });
+    }
+  },
+);
+
+test("remeasures async previews and native class resets without observing its own style writes", () => {
+  const state = EditorState.create({ doc: "\t- ```js" });
+  const line = Object.assign(
+    makeLine(
+      ["HyperMD-codeblock", "HyperMD-codeblock-begin", "HyperMD-list-line"],
+      { position: 0, markerEnd: 164 },
+    ),
+    { nodeType: 1, closest: () => null },
+  );
+  const frames: FrameRequestCallback[] = [];
+  const measurements: Measurement[] = [];
+  const disconnect = jest.fn();
+  let notify: (records: unknown[]) => void = () => {};
+  const observe = jest.fn();
+  const view = {
+    state,
+    visibleRanges: [{ from: 0, to: state.doc.length }],
+    contentDOM: { querySelectorAll: () => [line] },
+    posAtDOM: () => 0,
+    dom: {
+      ownerDocument: {
+        defaultView: {
+          ...makeAnimationWindow(frames),
+          MutationObserver: class {
+            constructor(callback: typeof notify) {
+              notify = callback;
+            }
+            observe = observe;
+            disconnect = disconnect;
+          },
+        },
+      },
+    },
+    requestMeasure: (measurement: Measurement) =>
+      measurements.push(measurement),
+  };
+  const plugin = new NestedCodeBlockLayoutPluginValue(
+    view as never,
+    names(BEGIN),
+  );
+  frames[0](0);
+  measurements[0].write(measurements[0].read());
+  notify([{ target: line, type: "attributes" }]);
+  expect(frames).toHaveLength(1);
+  line.classList.remove("bullet-plugin-nested-code-block");
+  notify([{ target: line, type: "attributes" }]);
+  expect(frames).toHaveLength(2);
+  frames[1](0);
+  measurements[1].write(measurements[1].read());
+  notify([{ target: { nodeType: 1, closest: () => ({}) }, type: "childList" }]);
+  expect(frames).toHaveLength(3);
+  expect(observe).toHaveBeenCalledWith(
+    view.contentDOM,
+    expect.objectContaining({
+      childList: true,
+      subtree: true,
+      attributeFilter: ["class"],
+    }),
+  );
+  plugin.destroy();
+  expect(disconnect).toHaveBeenCalledTimes(1);
+  notify([{ target: view.contentDOM, type: "childList" }]);
+  expect(frames).toHaveLength(3);
 });
 
 test("derives an offscreen opening from the rendered continuation indentation", () => {

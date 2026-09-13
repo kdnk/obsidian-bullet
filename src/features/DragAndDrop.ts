@@ -7,7 +7,13 @@ import {
 } from "obsidian";
 
 import { getIndentUnit, indentString } from "@codemirror/language";
-import { StateEffect, StateField, Text } from "@codemirror/state";
+import {
+  EditorState,
+  StateEffect,
+  StateField,
+  Text,
+  countColumn,
+} from "@codemirror/state";
 import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 
 import { CrossNoteMove, crossNoteHistory } from "./CrossNoteMove";
@@ -31,6 +37,14 @@ interface DragAndDropDocumentContext {
   dropZone: HTMLDivElement;
 }
 
+interface DragAndDropZoomRange {
+  from: number;
+  to: number;
+  indent: string;
+}
+
+type GetZoomRange = (state: EditorState) => DragAndDropZoomRange | null;
+
 export class DragAndDrop implements Feature {
   private documents = new Map<Document, DragAndDropDocumentContext>();
   private preStart: DragAndDropPreStartState | null = null;
@@ -45,6 +59,7 @@ export class DragAndDrop implements Feature {
     private obisidian: ObsidianSettings,
     private parser: Parser,
     private operationPerformer: OperationPerformer,
+    private getZoomRange: GetZoomRange = () => null,
   ) {}
 
   async load() {
@@ -243,7 +258,13 @@ export class DragAndDrop implements Feature {
       return;
     }
 
-    const state = new DragAndDropState(view, editor, root, list);
+    const state = new DragAndDropState(
+      view,
+      editor,
+      root,
+      list,
+      this.getZoomRange,
+    );
 
     this.state = state;
     this.highlightDraggingLines();
@@ -293,6 +314,8 @@ export class DragAndDrop implements Feature {
         return;
       const offset = target.posAtCoords({ x, y }, false);
       if (offset === null) return;
+      const zoom = this.getZoomRange(target.state);
+      if (zoom && (offset < zoom.from || offset > zoom.to)) return;
       const protectedBoundary = getProtectedDropBoundary(
         target.state.doc,
         offset,
@@ -304,6 +327,8 @@ export class DragAndDrop implements Feature {
           : null;
       if (!root) {
         this.crossTarget = null;
+        // A zoomed editor only accepts destinations in its visible list tree.
+        if (zoom) return;
         const line = target.state.doc.lineAt(protectedBoundary ?? offset);
         const coords = target.coordsAtPos(line.from);
         if (!coords) return;
@@ -331,6 +356,7 @@ export class DragAndDrop implements Feature {
             targetEditor,
             root,
             state.list,
+            this.getZoomRange,
           );
         }
         const cross = this.crossTarget;
@@ -339,19 +365,7 @@ export class DragAndDrop implements Feature {
         const variant = cross.dropVariant;
         if (!variant) return;
         const list = variant.placeToMove;
-        insertion =
-          variant.whereToMove === "before"
-            ? target.state.doc.line(list.getFirstLineContentStart().line + 1)
-                .from
-            : target.state.doc.line(
-                list.getContentEndIncludingChildren().line + 1,
-              ).to;
-        // Insert at the next physical line to preserve surrounding line breaks.
-        if (
-          variant.whereToMove !== "before" &&
-          insertion < target.state.doc.length
-        )
-          insertion++;
+        insertion = getDropInsertion(target.state.doc, variant);
         indent =
           list.getFirstLineIndent() +
           (variant.whereToMove === "inside"
@@ -552,6 +566,15 @@ interface DropVariant {
   whereToMove: "after" | "before" | "inside";
 }
 
+function getDropInsertion(doc: Text, variant: DropVariant): number {
+  const list = variant.placeToMove;
+  if (variant.whereToMove === "before")
+    return doc.line(list.getFirstLineContentStart().line + 1).from;
+  // Insert at the next physical line to preserve surrounding line breaks.
+  const end = doc.line(list.getContentEndIncludingChildren().line + 1).to;
+  return Math.min(end + 1, doc.length);
+}
+
 interface DragAndDropPreStartState {
   x: number;
   y: number;
@@ -615,6 +638,7 @@ class DragAndDropState {
     public readonly editor: MyEditor,
     public readonly root: Root,
     public readonly list: List,
+    private getZoomRange: GetZoomRange = () => null,
     public readonly doc: Document = view.dom.ownerDocument,
   ) {
     this.snapshot = view.state.doc;
@@ -633,12 +657,36 @@ class DragAndDropState {
 
   calculateNearestDropVariant(x: number, y: number) {
     const { view, editor } = this;
+    if (view.state.doc !== this.snapshot) {
+      this.dropVariant = null;
+      return;
+    }
+    const zoom = this.getZoomRange(view.state);
 
     const dropVariants = this.getDropVariants();
     const possibleDropVariants: DropVariant[] = [];
 
     for (const v of dropVariants) {
       const { placeToMove } = v;
+
+      if (zoom) {
+        const first = view.state.doc.line(
+          placeToMove.getFirstLineContentStart().line + 1,
+        );
+        const end = view.state.doc.line(
+          placeToMove.getContentEndIncludingChildren().line + 1,
+        );
+        // Hidden block replacements can report their visible boundary's
+        // coordinates. Reject them before measuring, and never offer a sibling
+        // outside the focused root or a position its edit filter will reject.
+        if (
+          first.from < zoom.from ||
+          end.to > zoom.to ||
+          (first.from === zoom.from && v.whereToMove !== "inside") ||
+          getDropInsertion(view.state.doc, v) > zoom.to
+        )
+          continue;
+      }
 
       const positionAfterList =
         v.whereToMove === "after" || v.whereToMove === "inside";
@@ -656,7 +704,16 @@ class DragAndDropState {
         continue;
       }
 
-      v.left = this.leftPadding + (v.level - 1) * this.tabWidth;
+      if (zoom) {
+        const unit = getIndentUnit(view.state);
+        const columns =
+          countColumn(placeToMove.getFirstLineIndent(), view.state.tabSize) +
+          (v.whereToMove === "inside" ? unit : 0) -
+          countColumn(zoom.indent, view.state.tabSize);
+        v.left = this.leftPadding + (columns / unit) * this.tabWidth;
+      } else {
+        v.left = this.leftPadding + (v.level - 1) * this.tabWidth;
+      }
       v.top = coords.top;
 
       if (positionAfterList) {

@@ -14,6 +14,10 @@ import {
 import { EditorView, showPanel } from "@codemirror/view";
 
 import { makeLogger, makeSettings } from "../../__mocks__";
+import { MyEditor, MyEditorPosition, MyEditorSelection } from "../../editor";
+import { CreateNewItem } from "../../operations/CreateNewItem";
+import { ChangesApplicator } from "../../services/ChangesApplicator";
+import { OperationPerformer } from "../../services/OperationPerformer";
 import { Parser } from "../../services/Parser";
 import { ListZoom, ListZoomState, setListZoom } from "../ListZoom";
 
@@ -212,6 +216,179 @@ test("rejects edits that cross into hidden content", () => {
       .update({ changes: { from: 0, to: 10, insert: "oops" } })
       .state.doc.toString(),
   ).toBe(doc);
+});
+
+test.each(["precise", "whole-set", "line-set", "parent-context"])(
+  "follows the original focused item when a sibling is inserted immediately above it (%s)",
+  (kind) => {
+    const { zoom, state } = setup();
+    const focused = state.update({
+      effects: setListZoom.of(7),
+      selection: { anchor: 10 },
+    }).state;
+    const inserted = "\t- new\n";
+    const text = doc.slice(0, 7) + inserted + doc.slice(7);
+    const next = focused.update({
+      changes:
+        kind === "precise"
+          ? { from: 7, insert: inserted }
+          : kind === "whole-set"
+            ? { from: 0, to: doc.length, insert: text }
+            : kind === "line-set"
+              ? { from: 7, to: 17, insert: "\t- new\n\t- project" }
+              : { from: 0, to: 6, insert: "- work\n\t- new" },
+      userEvent: kind.endsWith("set") ? "set" : "input",
+    }).state;
+    expect(next.doc.toString()).toBe(text);
+    expect(zoom.range(next)).toMatchObject({ from: 14, to: 33 });
+    expect(zoom.range(next)?.ancestors.map(({ label }) => label)).toEqual([
+      "work",
+      "project",
+    ]);
+    expect(next.selection.main.head).toBe(17);
+    const typed = next.update({
+      changes: { from: next.selection.main.head, insert: "new " },
+      userEvent: "input",
+    }).state;
+    expect(typed.doc.toString()).toBe(text.replace("project", "new project"));
+  },
+);
+
+test("still rejects parent-context replacements that actually change hidden text", () => {
+  const { zoom, state } = setup();
+  const focused = state.update({
+    effects: setListZoom.of(7),
+    selection: { anchor: 10 },
+  }).state;
+  const next = focused.update({
+    changes: { from: 0, to: 6, insert: "- office\n\t- new" },
+    userEvent: "input",
+  }).state;
+  expect(next.doc.toString()).toBe(doc);
+  expect(zoom.range(next)).toMatchObject({ from: 7, to: 26 });
+  expect(next.selection.main.head).toBe(10);
+});
+
+test.each(["input", "set"])(
+  "handles a changed hidden newline without treating it as unchanged (%s)",
+  (userEvent) => {
+    const { zoom, state } = setup();
+    const focused = state.update({
+      effects: setListZoom.of(7),
+      selection: { anchor: 10 },
+    }).state;
+    const next = focused.update({
+      changes: { from: 6, to: 7, insert: "X" },
+      userEvent,
+    }).state;
+    if (userEvent === "input") {
+      expect(next.doc.toString()).toBe(doc);
+      expect(zoom.range(next)).toMatchObject({ from: 7, to: 26 });
+    } else {
+      expect(next.doc.toString()).toBe(doc.replace("\n", "X"));
+      expect(zoom.range(next)).toBeNull();
+    }
+  },
+);
+
+test("does not retarget zoom when a formatter batch also replaces the separator used by a context insertion", () => {
+  const { zoom, state } = setup();
+  const focused = state.update({
+    effects: setListZoom.of(7),
+    selection: { anchor: 10 },
+  }).state;
+  const next = focused.update({
+    changes: [
+      { from: 0, to: 6, insert: "- work\n\t- new" },
+      { from: 6, to: 7, insert: "X" },
+    ],
+    filter: false,
+  }).state;
+  expect(next.doc.toString()).toBe(
+    "- work\n\t- newX\t- project\n\t\t- task\n\t- other\n- personal",
+  );
+  expect(zoom.range(next)).toBeNull();
+});
+
+test("Enter at the focused body's start inserts an empty sibling and keeps the original item editable", () => {
+  const parser = new Parser(makeLogger(), makeSettings());
+  const zoom = new ListZoomState(parser);
+  let state = EditorState.create({ doc, extensions: zoom.extension }).update({
+    effects: setListZoom.of(7),
+    selection: { anchor: 10 },
+  }).state;
+  const offset = (pos: MyEditorPosition) =>
+    state.doc.line(pos.line + 1).from + pos.ch;
+  const position = (offset: number) => {
+    const line = state.doc.lineAt(offset);
+    return { line: line.number - 1, ch: offset - line.from };
+  };
+  const editor = {
+    getCursor: () => position(state.selection.main.head),
+    getLine: (n: number) => state.doc.line(n + 1).text,
+    lastLine: () => state.doc.lines - 1,
+    listSelections: () =>
+      state.selection.ranges.map((r) => ({
+        anchor: position(r.anchor),
+        head: position(r.head),
+      })),
+    getAllFoldedLines: () => [],
+    getRange: (from: MyEditorPosition, to: MyEditorPosition) =>
+      state.doc.sliceString(offset(from), offset(to)),
+    replaceRange: (
+      insert: string,
+      from: MyEditorPosition,
+      to: MyEditorPosition,
+    ) => {
+      state = state.update({
+        changes: { from: offset(from), to: offset(to), insert },
+      }).state;
+    },
+    setSelections: (ranges: MyEditorSelection[]) => {
+      state = state.update({
+        selection: EditorSelection.create(
+          ranges.map((r) =>
+            EditorSelection.range(offset(r.anchor), offset(r.head)),
+          ),
+        ),
+      }).state;
+    },
+    fold: () => {},
+    unfold: () => {},
+  } as unknown as MyEditor;
+  new OperationPerformer(parser, new ChangesApplicator()).perform(
+    (root) => new CreateNewItem(root, "\t", true),
+    editor,
+  );
+  expect(state.doc.toString()).toBe(
+    "- work\n\t- \n\t- project\n\t\t- task\n\t- other\n- personal",
+  );
+  expect(zoom.range(state)).toMatchObject({ from: 11, to: 30 });
+  expect(zoom.range(state)?.ancestors.map(({ label }) => label)).toEqual([
+    "work",
+    "project",
+  ]);
+  expect(state.selection.main.head).toBe(14);
+  state = state.update({
+    changes: { from: state.selection.main.head, insert: "new " },
+    userEvent: "input",
+  }).state;
+  expect(state.doc.line(3).text).toBe("\t- new project");
+  state = state.update({
+    selection: { anchor: state.doc.line(3).from + 3 },
+  }).state;
+  new OperationPerformer(parser, new ChangesApplicator()).perform(
+    (root) => new CreateNewItem(root, "\t", true),
+    editor,
+  );
+  expect(state.doc.toString()).toBe(
+    "- work\n\t- \n\t- \n\t- new project\n\t\t- task\n\t- other\n- personal",
+  );
+  expect(zoom.range(state)?.ancestors.map(({ label }) => label)).toEqual([
+    "work",
+    "new project",
+  ]);
+  expect(state.selection.main.head).toBe(18);
 });
 
 test("limits select-all to visible content", () => {
@@ -536,6 +713,72 @@ test.each([
     expect(formatted.doc.toString()).toBe(
       text.replace(`${marker} project`, `${replacement} project`),
     );
+  },
+);
+
+test.each([
+  { text: doc, root: 7, from: 7, to: 8, insert: "    ", line: "    - project" },
+  {
+    text: doc.replace("\t- project", "    - project"),
+    root: 7,
+    from: 7,
+    to: 11,
+    insert: "\t",
+    line: "\t- project",
+  },
+  {
+    text: "- project\n\t- child\n- other",
+    root: 0,
+    from: 0,
+    to: 1,
+    insert: "*",
+    line: "* project",
+  },
+  {
+    text: doc,
+    root: 7,
+    from: 7,
+    to: 8,
+    insert: "\t\t",
+    line: "\t\t- project",
+    whole: true,
+  },
+  {
+    text: doc.replace("\t- project", "  - project"),
+    root: 7,
+    from: 7,
+    to: 9,
+    insert: "    ",
+    line: "    - project",
+    whole: true,
+  },
+])(
+  "keeps the original focused line when a formatter replaces its leading prefix ($line)",
+  ({ text, root, from, to, insert, line, whole }) => {
+    const zoom = new ListZoomState(new Parser(makeLogger(), makeSettings()));
+    const focused = EditorState.create({
+      doc: text,
+      extensions: zoom.extension,
+    }).update({ effects: setListZoom.of(root) }).state;
+    const next = focused.update({
+      changes: whole
+        ? {
+            from: 0,
+            to: text.length,
+            insert: text.slice(0, from) + insert + text.slice(to),
+          }
+        : { from, to, insert },
+      filter: false,
+      selection: { anchor: root + line.length },
+    }).state;
+    expect(next.doc.lineAt(root).text).toBe(line);
+    expect(zoom.range(next)?.from).toBe(root);
+    expect(
+      zoom
+        .range(next)
+        ?.ancestors.map(({ label }) => label)
+        .pop(),
+    ).toBe("project");
   },
 );
 
