@@ -35,6 +35,7 @@ import { Parser, Reader } from "../services/Parser";
 export const setListZoom = StateEffect.define<number | null>();
 
 const listBodyPrefixRe = /^[ \t]*(?:[-*+]|\d+\.)[ \t]/;
+const emptyOrderedItemRe = /^([ \t]*)\d+\.(?:[ \t]+(?:\[ \][ \t]*)?)?$/;
 
 interface ZoomRange {
   file: TFile | null;
@@ -162,9 +163,38 @@ export class ListZoomState {
           return tr.startState.tabSize === tr.state.tabSize
             ? value
             : this.resolve(tr.state, value.from);
-        const changes = effectiveChanges(tr, value.from);
-        const mapped = changes.mapPos(value.from, 1, MapMode.TrackDel);
+        const orderedInsertion = this.orderedInsertionChanges(tr, value);
+        const changes = orderedInsertion ?? effectiveChanges(tr, value.from);
+        let mapped = changes.mapPos(value.from, 1, MapMode.TrackDel);
         if (mapped === null) return null;
+        const rootLine = tr.startState.doc.lineAt(value.from);
+        // Enter before an ordered body moves it to the following item while
+        // renumbering its marker. The unchanged character prefix belongs to
+        // the new empty sibling, so track the retained body in this case.
+        const ordered = /^([ \t]*)(\d+\.[ \t]+)(\S.*)$/.exec(rootLine.text);
+        if (ordered) {
+          const body = changes.mapPos(
+            rootLine.from + ordered[1].length + ordered[2].length,
+            1,
+            MapMode.TrackDel,
+          );
+          if (body !== null) {
+            const bodyLine = tr.newDoc.lineAt(body);
+            const nextOrdered = /^([ \t]*)(\d+\.[ \t]+)(.*)$/.exec(
+              bodyLine.text,
+            );
+            const previous = tr.newDoc.lineAt(mapped);
+            if (
+              bodyLine.from > mapped &&
+              emptyOrderedItemRe.test(previous.text) &&
+              nextOrdered?.[1] === ordered[1] &&
+              nextOrdered[3] === ordered[3] &&
+              body ===
+                bodyLine.from + nextOrdered[1].length + nextOrdered[2].length
+            )
+              mapped = bodyLine.from;
+          }
+        }
         if (value.pendingMarkerRepair) {
           const repaired = this.resolve(tr.state, mapped);
           return repaired?.from === tr.state.doc.lineAt(mapped).from
@@ -173,7 +203,6 @@ export class ListZoomState {
         }
         let changedOutside = false;
         let removedRootLine = false;
-        const rootLine = tr.startState.doc.lineAt(value.from);
         changes.iterChangedRanges((from, to) => {
           if (from < value.from || to > value.to) changedOutside = true;
           // Removing the marker through the line break can move the next
@@ -187,6 +216,7 @@ export class ListZoomState {
         if (
           removedRootLine ||
           (changedOutside &&
+            !orderedInsertion &&
             (tr.annotation(Transaction.userEvent) !== undefined ||
               isWholeDocumentReplacement(tr)))
         )
@@ -226,11 +256,12 @@ export class ListZoomState {
           tr.isUserEvent("set") ||
           (tr.annotation(Transaction.userEvent) === undefined && whole);
         let outside = false;
-        const changes = effectiveChanges(tr, range.from);
+        const orderedInsertion = this.orderedInsertionChanges(tr, range);
+        const changes = orderedInsertion ?? effectiveChanges(tr, range.from);
         changes.iterChangedRanges((from, to) => {
           if (from < range.from || to > range.to) outside = true;
         });
-        if (outside && !external) return [];
+        if (outside && !external && !orderedInsertion) return [];
         const next = tr.state.field(this.field, false);
         if (!next) return tr;
         const low = next.from + next.indent.length;
@@ -267,6 +298,77 @@ export class ListZoomState {
 
   range(state: EditorState) {
     return state.field(this.field, false) ?? null;
+  }
+
+  private orderedInsertionChanges(
+    tr: Transaction,
+    focused: ZoomRange,
+  ): ChangeSet | null {
+    if (
+      tr.isUserEvent("set") ||
+      tr.isUserEvent("undo") ||
+      tr.isUserEvent("redo")
+    )
+      return null;
+    const added = tr.newDoc.lines - tr.startState.doc.lines;
+    if (added <= 0) return null;
+    const rootLine = tr.startState.doc.lineAt(focused.from);
+    if (!/^[ \t]*\d+\.[ \t]+\S/.test(rootLine.text)) return null;
+    for (let n = rootLine.number; n < rootLine.number + added; n++) {
+      const empty = emptyOrderedItemRe.exec(tr.newDoc.line(n).text);
+      if (empty?.[1] !== focused.indent) return null;
+    }
+    const parsed = this.parser.parse(reader(tr.startState), {
+      line: rootLine.number - 1,
+      ch: 0,
+    });
+    if (!parsed?.getListUnderLine(rootLine.number - 1)) return null;
+    const orderedLines = new Set<number>();
+    let line = parsed.getContentStart().line + 1;
+    const collectOrderedLines = (lists: List[]) => {
+      for (const list of lists) {
+        if (/^\d+\.$/.test(list.getBullet())) orderedLines.add(line);
+        line += list.getLineCount();
+        collectOrderedLines(list.getChildren());
+      }
+    };
+    collectOrderedLines(parsed.getChildren());
+    const changes: ChangeSpec[] = [
+      {
+        from: rootLine.from,
+        insert: tr.newDoc.sliceString(
+          tr.newDoc.line(rootLine.number).from,
+          tr.newDoc.line(rootLine.number + added).from,
+        ),
+      },
+    ];
+    // Recognize only empty siblings inserted before this root, with every
+    // retained body unchanged. CreateNewItem renumbers the entire parsed tree;
+    // hidden number-only edits must be real markers in that tree, never code
+    // content or another list chunk.
+    for (let n = 1; n <= tr.startState.doc.lines; n++) {
+      const before = tr.startState.doc.line(n);
+      const after = tr.newDoc.line(n < rootLine.number ? n : n + added);
+      if (before.text === after.text) continue;
+      const oldMarker = /^([ \t]*)(\d+)(\.(?:[ \t]+.*)?)$/.exec(before.text);
+      const newMarker = /^([ \t]*)(\d+)(\.(?:[ \t]+.*)?)$/.exec(after.text);
+      if (
+        !oldMarker ||
+        !newMarker ||
+        oldMarker[1] !== newMarker[1] ||
+        oldMarker[3] !== newMarker[3] ||
+        ((before.from < focused.from || before.to > focused.to) &&
+          !orderedLines.has(n))
+      )
+        return null;
+      const from = before.from + oldMarker[1].length;
+      changes.push({
+        from,
+        to: from + oldMarker[2].length,
+        insert: newMarker[2],
+      });
+    }
+    return ChangeSet.of(changes, tr.startState.doc.length);
   }
 
   private mapBodyEdits(value: ZoomRange, tr: Transaction): ZoomRange | null {

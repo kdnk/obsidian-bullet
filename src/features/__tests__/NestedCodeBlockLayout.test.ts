@@ -924,3 +924,242 @@ test("marks only parser-confirmed visible code content", () => {
 
   expect(marked).toEqual(["i", " ", "}", "n"]);
 });
+
+test.each(["HyperMD-codeblock", null])(
+  "retains a nested fence across an empty body row whose syntax name is %s",
+  (blankName) => {
+    const state = EditorState.create({
+      doc: "- ```js\n  before\n\n  after\n  ```\n\n  unrelated",
+    });
+    const marked: string[] = [];
+    nestedCodeBlockContentDecorations(
+      state,
+      [{ from: state.doc.line(3).from, to: state.doc.length }],
+      names(BEGIN, CONTENT, blankName, CONTENT, END, null, CONTENT),
+    ).between(0, state.doc.length, (from, to) => {
+      marked.push(state.doc.sliceString(from, to));
+    });
+
+    // The empty body row is transparent to ownership lookup; the closing
+    // fence is not. A later list-like line must not inherit this block.
+    expect(marked).toEqual(["a"]);
+  },
+);
+
+test("uses a visible continuation to inset preceding empty code rows when the opener is offscreen", () => {
+  const state = EditorState.create({
+    doc: "\t- ```js\n\t  before\n\n\t  after\n\t  ```",
+  });
+  const blank = makeLine(["HyperMD-codeblock"], {
+    position: state.doc.line(3).from,
+  });
+  const content = makeLine(["HyperMD-codeblock", "HyperMD-list-line"], {
+    position: state.doc.line(4).from,
+  });
+  const frames: FrameRequestCallback[] = [];
+  const measurements: Measurement[] = [];
+  const view = {
+    state,
+    visibleRanges: [{ from: state.doc.line(3).from, to: state.doc.line(4).to }],
+    contentDOM: { querySelectorAll: () => [blank, content] },
+    posAtDOM: (element: { position: number }) => element.position,
+    coordsAtPos: () => ({ left: 148.5, right: 148.5 }),
+    dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+    requestMeasure: (measurement: Measurement) =>
+      measurements.push(measurement),
+  };
+  const plugin = new NestedCodeBlockLayoutPluginValue(
+    view as never,
+    names(BEGIN, CONTENT, "HyperMD-codeblock", CONTENT, END),
+  );
+  frames[0](0);
+  measurements[0].write(measurements[0].read());
+
+  for (const element of [blank, content]) {
+    expect(element.classList.contains("bullet-plugin-nested-code-block")).toBe(
+      true,
+    );
+    expect(
+      element.style.getPropertyValue("--bullet-nested-code-block-inset"),
+    ).toBe("calc(48.5px + var(--list-padding-inline-start))");
+  }
+  plugin.destroy();
+  expect(blank.classList.contains("bullet-plugin-nested-code-block")).toBe(
+    false,
+  );
+});
+
+test.each(["-", "123."])(
+  "measures an offscreen %s marker with native typography independently of code padding",
+  (markerText) => {
+    const state = EditorState.create({
+      doc: `\t${markerText} \`\`\`js\n\t${" ".repeat(markerText.length + 1)}code`,
+    });
+    const content = makeLine(["HyperMD-codeblock", "HyperMD-list-line"], {
+      position: state.doc.line(2).from,
+    });
+    let markerWidth = 23.4;
+    const aggregatedPrefix = markerText === "123.";
+    const prefixTextNode = {};
+    const range = {
+      setStart: jest.fn(),
+      setEnd: jest.fn(),
+      getClientRects: () => [{ left: 100, right: 172 }],
+    };
+    Object.assign(content.ownerDocument, { createRange: () => range });
+    const nodes: Array<{ remove: jest.Mock }> = [];
+    const doc = {
+      defaultView: {
+        ...makeAnimationWindow([]),
+        getComputedStyle: () => ({ marginInlineEnd: "4.8px" }),
+      },
+      createTextNode: (text: string) => ({ textContent: text }),
+      createRange: () => range,
+    };
+    const create = () => {
+      const element = {
+        ownerDocument: doc,
+        className: "",
+        textContent: "",
+        style: { cssText: "" },
+        setAttribute: jest.fn(),
+        appendChild: jest.fn(),
+        remove: jest.fn(),
+        getBoundingClientRect: () => ({ width: markerWidth }),
+      };
+      nodes.push(element);
+      return element;
+    };
+    Object.assign(doc, { win: { createDiv: create, createSpan: create } });
+    const frames: FrameRequestCallback[] = [];
+    Object.assign(doc.defaultView, makeAnimationWindow(frames));
+    const measurements: Measurement[] = [];
+    const view = {
+      state,
+      visibleRanges: [{ from: state.doc.line(2).from, to: state.doc.length }],
+      contentDOM: { querySelectorAll: () => [content] },
+      dom: { ownerDocument: doc, appendChild: jest.fn() },
+      posAtDOM: (element: { position: number }, offset = 0) =>
+        element.position + (aggregatedPrefix ? offset * 2 : offset),
+      domAtPos: () => ({ node: prefixTextNode, offset: 1 }),
+      // CodeMirror may report a hidden replacement's boundary rectangle while
+      // switching editing state. Native prefix DOM is the measurement source.
+      coordsAtPos: () => {
+        throw Error("Transient CodeMirror boundary geometry");
+      },
+      requestMeasure: (measurement: Measurement) =>
+        measurements.push(measurement),
+    };
+    const indent = {
+      position: state.doc.line(2).from,
+      childNodes: [{}],
+      getBoundingClientRect: () => ({ left: 100, right: 172 }),
+      contains: (node: unknown) => node === prefixTextNode,
+    };
+    Object.assign(content, { querySelectorAll: () => [indent] });
+    const plugin = new NestedCodeBlockLayoutPluginValue(
+      view as never,
+      names(BEGIN, CONTENT),
+    );
+    frames[0](0);
+    const measure = () => measurements[0].write(measurements[0].read());
+    measure();
+    expect(
+      content.style.getPropertyValue("--bullet-nested-code-block-inset"),
+    ).toBe("100.2px");
+    markerWidth = 25.4;
+    measure();
+    expect(
+      content.style.getPropertyValue("--bullet-nested-code-block-inset"),
+    ).toBe("102.2px");
+    expect(view.dom.appendChild).toHaveBeenCalledTimes(1);
+    expect(range.setEnd).toHaveBeenCalledTimes(aggregatedPrefix ? 2 : 0);
+    plugin.destroy();
+    expect(nodes[0].remove).toHaveBeenCalledTimes(1);
+  },
+);
+
+test.each(["", "\t", " "])(
+  "insets a viewport containing only physical empty rows with zoom indent %j",
+  (zoomIndent) => {
+    const state = EditorState.create({ doc: "\t\t- ```js\n\n\n\t\t  ```" });
+    const blank = makeLine(["HyperMD-codeblock"], {
+      position: state.doc.line(3).from,
+    });
+    Object.assign(blank, { querySelectorAll: () => [] });
+    const frames: FrameRequestCallback[] = [];
+    const measurements: Measurement[] = [];
+    const created: Array<{
+      className: string;
+      textContent: string;
+      style: ReturnType<typeof makeStyle>;
+    }> = [];
+    let indentWidth = zoomIndent ? 36 : 72;
+    const doc = {
+      defaultView: {
+        ...makeAnimationWindow(frames),
+        getComputedStyle: () => ({ marginInlineEnd: "4.8px" }),
+      },
+      createTextNode: (text: string) => ({ textContent: text }),
+    };
+    const create = () => {
+      const element = {
+        ownerDocument: doc,
+        className: "",
+        textContent: "",
+        style: makeStyle(),
+        setAttribute: jest.fn(),
+        appendChild: jest.fn(),
+        remove: jest.fn(),
+        getBoundingClientRect: () => ({
+          width:
+            element.className === "bullet-plugin-code-indent-measure"
+              ? indentWidth
+              : 23.4,
+        }),
+      };
+      created.push(element);
+      return element;
+    };
+    Object.assign(doc, { win: { createDiv: create, createSpan: create } });
+    const view = {
+      state,
+      visibleRanges: [
+        { from: state.doc.line(2).from, to: state.doc.line(3).to },
+      ],
+      contentDOM: { querySelectorAll: () => [blank] },
+      dom: { ownerDocument: doc, appendChild: jest.fn() },
+      posAtDOM: (element: { position: number }) => element.position,
+      coordsAtPos: () => {
+        throw Error("No rendered source indentation");
+      },
+      requestMeasure: (measurement: Measurement) =>
+        measurements.push(measurement),
+    };
+    const plugin = new NestedCodeBlockLayoutPluginValue(
+      view as never,
+      names(BEGIN, null, null, END),
+      () => (zoomIndent ? { indent: zoomIndent } : null),
+    );
+    frames[0](0);
+    const measure = () => measurements[0].write(measurements[0].read());
+    measure();
+    expect(
+      blank.style.getPropertyValue("--bullet-nested-code-block-inset"),
+    ).toBe(`${indentWidth + 28.2}px`);
+    expect(blank.classList.contains("bullet-plugin-nested-code-block")).toBe(
+      true,
+    );
+    expect(
+      created
+        .filter((e) => e.className === "bullet-plugin-code-indent-unit")
+        .map((e) => e.textContent),
+    ).toEqual(zoomIndent === " " ? ["\t", "\t"] : [zoomIndent ? "\t" : "\t\t"]);
+    indentWidth += 4;
+    measure();
+    expect(
+      blank.style.getPropertyValue("--bullet-nested-code-block-inset"),
+    ).toBe(`${indentWidth + 28.2}px`);
+    plugin.destroy();
+  },
+);

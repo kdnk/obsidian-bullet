@@ -2,6 +2,8 @@
 // Repeat with Shiki Highlighter disabled/enabled. Uses real CDP mouse/key input;
 // the mousedown -> mousemove -> mouseup flow matches DragAndDrop.spec.md.
 // Add --zoomed-drag to move between two nested, zoomed parents.
+// --source-zoom-only / --target-zoom-only exercise mixed pane states;
+// --last-child moves the final code child before a hidden source sibling.
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
 const fs = require("node:fs");
@@ -18,8 +20,14 @@ const id = randomUUID();
 const key = `__bulletNestedCodeInteractions_${id.replaceAll("-", "")}`;
 const sourcePath = `nested-code-source-${id}.md`;
 const targetPath = `nested-code-target-${id}.md`;
-const zoomedDrag = process.argv.includes("--zoomed-drag");
-const sourceText = [
+const zoomedDrag =
+  process.argv.includes("--zoomed-drag") ||
+  process.argv.includes("--target-zoom-only");
+const sourceZoom =
+  process.argv.includes("--zoomed-drag") ||
+  process.argv.includes("--source-zoom-only");
+const lastChild = process.argv.includes("--last-child");
+const sourceLines = [
   "- source envelope",
   "\t- code group",
   "\t\t- ```js",
@@ -29,7 +37,11 @@ const sourceText = [
   "\t\t- code sibling",
   "\t- source sibling",
   "- keep",
-].join("\n");
+];
+if (lastChild) sourceLines.splice(2, 0, ...sourceLines.splice(6, 1));
+const sourceText = sourceLines.join("\n");
+const codeBodyLine = lastChild ? 4 : 3;
+const codeSiblingLine = lastChild ? 2 : 6;
 const targetText = zoomedDrag
   ? "- destination envelope\n\t- destination group\n\t\t- destination sibling\n\t- destination outside sibling\n- target keep"
   : "- destination\n\t- destination sibling\n- target keep";
@@ -329,31 +341,37 @@ function assertDocuments(name, source, target) {
 function assertZoomRoots(name) {
   const source = snapshot("source"),
     target = snapshot("target");
-  if (zoomedDrag) {
+  if (sourceZoom) {
     check(
       source.zoom?.labels.at(-1) === "code group",
       `${name}: source zoom root survives`,
-    );
-    check(
-      target.zoom?.labels.at(-1) === "destination group",
-      `${name}: destination zoom root survives`,
     );
     check(
       !source.visible.includes("source sibling") &&
         !source.visible.includes("keep"),
       `${name}: source hidden siblings remain hidden`,
     );
+  } else {
+    check(
+      source.zoom === null,
+      `${name}: drag does not accidentally zoom source`,
+    );
+  }
+  if (zoomedDrag) {
+    check(
+      target.zoom?.labels.at(-1) === "destination group",
+      `${name}: destination zoom root survives`,
+    );
     check(
       !target.visible.includes("destination outside sibling") &&
         !target.visible.includes("target keep"),
       `${name}: destination hidden siblings remain hidden`,
     );
-  } else {
+  } else
     check(
-      source.zoom === null && target.zoom === null,
-      `${name}: drag does not accidentally zoom either editor`,
+      target.zoom === null,
+      `${name}: drag does not accidentally zoom destination`,
     );
-  }
 }
 
 try {
@@ -424,7 +442,7 @@ try {
   assert.equal(state.text, sourceText, "zoom does not modify Markdown");
   layout("zoomed-preview", "source", "\t\t- ```js", "\t\t- code sibling");
 
-  cursor("source", 3);
+  cursor("source", codeBodyLine);
   guardWindow();
   cdp("Input.insertText", { text: " // zoom edit" });
   settle();
@@ -438,7 +456,7 @@ try {
     state.zoom?.labels.at(-1) === "code group",
     "code editing retains zoom",
   );
-  cursor("source", 6);
+  cursor("source", codeSiblingLine);
   layout("zoomed-after-edit", "source", "\t\t- ```js", "\t\t- code sibling");
   command("source", "bullet:zoom-out");
   check(
@@ -468,13 +486,14 @@ try {
     cursor("target", 1);
     command("target", "bullet:zoom-in");
     cursor("target", 2);
+  } else cursor("target", 2);
+  if (sourceZoom) {
     cursor("source", 1);
     command("source", "bullet:zoom-in");
-    cursor("source", 6);
+    cursor("source", codeSiblingLine);
     assertZoomRoots("before-zoomed-drag");
     layout("before-zoomed-drag", "source", "\t\t- ```js", "\t\t- code sibling");
   } else {
-    cursor("target", 2);
     cursor("source", 8);
   }
   const start = evaluate((key) => {
@@ -557,7 +576,7 @@ try {
   historyKey(false);
   assertDocuments("paired-undo", editedText, targetText);
   assertZoomRoots("paired-undo");
-  cursor("source", 6);
+  cursor("source", codeSiblingLine);
   layout("after-paired-undo", "source", "\t\t- ```js", "\t\t- code sibling");
   historyKey(true);
   assertDocuments("paired-redo", sourceAfter, targetAfter);

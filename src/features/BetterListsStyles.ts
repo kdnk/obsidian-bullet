@@ -1,6 +1,6 @@
 import { Plugin } from "obsidian";
 
-import { Extension } from "@codemirror/state";
+import { EditorState, Extension } from "@codemirror/state";
 import { ViewPlugin } from "@codemirror/view";
 
 import { DocumentBodyClass } from "./DocumentBodyClass";
@@ -18,6 +18,7 @@ export class BetterListsStyles implements Feature {
   constructor(
     private plugin: Plugin,
     private settings: Settings,
+    private zoomRange?: (state: EditorState) => { indent: string } | null,
   ) {
     this.bodyClass = new DocumentBodyClass(
       this.plugin,
@@ -52,7 +53,12 @@ export class BetterListsStyles implements Feature {
       ...(enabled
         ? [
             ViewPlugin.define(
-              (view) => new NestedCodeBlockLayoutPluginValue(view),
+              (view) =>
+                new NestedCodeBlockLayoutPluginValue(
+                  view,
+                  undefined,
+                  this.zoomRange,
+                ),
               { decorations: (value) => value.decorations },
             ),
           ]

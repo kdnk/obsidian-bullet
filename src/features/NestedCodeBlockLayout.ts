@@ -7,6 +7,8 @@ import {
   ViewUpdate,
 } from "@codemirror/view";
 
+import { getObsidianDomWindow } from "../obsidianDom";
+
 const CODE_BLOCK_CLASS = "bullet-plugin-nested-code-block";
 const CODE_CONTENT_CLASS = "bullet-plugin-nested-code-block-content";
 const CODE_BLOCK_INSET = "--bullet-nested-code-block-inset";
@@ -23,6 +25,7 @@ const listFenceRe = /^([ \t]*)([-*+]|\d+\.)([ \t]+)(`{3,}|~{3,})/;
 interface MeasuredLine {
   element: HTMLElement;
   inset: string;
+  emptyBody?: boolean;
   preview?: { height: string; markerOffset: string };
   previewBlock?: HTMLElement;
   previewEmbed?: boolean;
@@ -30,6 +33,7 @@ interface MeasuredLine {
 
 interface FenceOpening {
   contentColumn: number;
+  indentColumn: number;
   sourceOffset: number;
   openingLineNumber: number;
 }
@@ -53,11 +57,17 @@ class FenceOpeningIndex {
 
   at = (lineNumber: number): FenceOpening | null => {
     const requestedName = this.lineNameAt(lineNumber);
-    if (requestedName === null || !isNestedCodeBlockName(requestedName)) {
+    if (
+      (requestedName === null || !isNestedCodeBlockName(requestedName)) &&
+      this.state.doc.line(lineNumber).text.trim() !== ""
+    ) {
       this.cache.set(lineNumber, null);
       return null;
     }
-    if (hasClassName(requestedName, "HyperMD-codeblock-begin")) {
+    if (
+      requestedName !== null &&
+      hasClassName(requestedName, "HyperMD-codeblock-begin")
+    ) {
       const opening = parseFenceOpening(this.state, lineNumber);
       this.cache.set(lineNumber, opening);
       return opening;
@@ -66,11 +76,22 @@ class FenceOpeningIndex {
 
     let result: FenceOpening | null = null;
     for (let current = lineNumber; current >= 1; current--) {
+      const name = this.lineNameAt(current);
+      // Empty physical code rows have no list class (and a zero-length syntax
+      // node may not resolve at all). They preserve ownership, but a closing
+      // fence must stop a later row from inheriting the preceding block.
+      if (
+        current !== lineNumber &&
+        name !== null &&
+        hasClassName(name, "HyperMD-codeblock-end")
+      ) {
+        break;
+      }
       if (this.cache.has(current)) {
         result = this.cache.get(current) ?? null;
         break;
       }
-      const name = this.lineNameAt(current);
+      if (this.state.doc.line(current).text.trim() === "") continue;
       if (name === null || !isNestedCodeBlockName(name)) break;
       if (!hasClassName(name, "HyperMD-codeblock-begin")) continue;
       result = parseFenceOpening(this.state, current);
@@ -166,6 +187,11 @@ export class NestedCodeBlockLayoutPluginValue {
   private destroyed = false;
   private syntaxContext: SyntaxContext;
   private previewObserver: MutationObserver | null = null;
+  private markerMeasureContainer: HTMLElement | null = null;
+  private markerMeasurements = new Map<
+    number,
+    { marker: HTMLElement; indent: HTMLElement; signature: string }
+  >();
 
   private measurement = {
     read: () => this.measureLines(),
@@ -175,6 +201,7 @@ export class NestedCodeBlockLayoutPluginValue {
   constructor(
     private view: EditorView,
     private lineNameAtOverride?: LineNameAt,
+    private zoomRange?: (state: EditorState) => { indent: string } | null,
   ) {
     this.syntaxContext = makeSyntaxContext(view.state, this.lineNameAtOverride);
     this.decorations = codeBlockContentDecorations(
@@ -279,10 +306,15 @@ export class NestedCodeBlockLayoutPluginValue {
       this.animationFrame = null;
     }
     this.clearStyles();
+    this.markerMeasureContainer?.remove();
+    this.markerMeasureContainer = null;
+    this.markerMeasurements.clear();
   }
 
   private scheduleMeasure() {
-    if (this.destroyed || this.animationFrame !== null) return;
+    if (this.destroyed) return;
+    this.prepareMarkerMeasurements();
+    if (this.animationFrame !== null) return;
     const win = this.view.dom.ownerDocument.defaultView;
     if (!win) {
       this.view.requestMeasure(this.measurement);
@@ -295,6 +327,73 @@ export class NestedCodeBlockLayoutPluginValue {
     });
   }
 
+  private prepareMarkerMeasurements() {
+    const doc = this.view.dom.ownerDocument;
+    if (!doc.win) return;
+    const visible = new Set<number>();
+    for (const range of this.view.visibleRanges) {
+      const first = this.view.state.doc.lineAt(range.from).number;
+      const last = this.view.state.doc.lineAt(range.to).number;
+      for (let n = first; n <= last; n++) {
+        const opening = this.syntaxContext.fenceOpenings.at(n);
+        if (opening) visible.add(opening.openingLineNumber);
+      }
+    }
+    for (const [n, measurement] of this.markerMeasurements) {
+      if (!visible.has(n)) {
+        measurement.marker.remove();
+        measurement.indent.remove();
+        this.markerMeasurements.delete(n);
+      }
+    }
+    if (!visible.size) return;
+    const win = getObsidianDomWindow(doc);
+    if (!this.markerMeasureContainer) {
+      const container = win.createDiv();
+      container.className =
+        "bullet-plugin-code-marker-measure cm-line HyperMD-codeblock HyperMD-list-line";
+      container.setAttribute("aria-hidden", "true");
+      // Native marker typography differs from code typography. Keep only this
+      // nonpainted intrinsic-size probe outside CodeMirror's managed content;
+      // it contains no indentation guides and cannot change scroll dimensions.
+      this.view.dom.appendChild(container);
+      this.markerMeasureContainer = container;
+    }
+    for (const n of visible) {
+      const match = listFenceRe.exec(this.view.state.doc.line(n).text);
+      if (!match) continue;
+      const [, rawIndent, text, spacing] = match;
+      const hiddenIndent = this.zoomRange?.(this.view.state)?.indent ?? "";
+      const ordered = /^\d/.test(text);
+      const level = /(?:^|_)HyperMD-list-line-(\d+)(?:_|$)/.exec(
+        this.syntaxContext.lineNameAt(n) ?? "",
+      )?.[1];
+      const signature = `${rawIndent}\0${hiddenIndent}\0${text}${spacing}\0${level ?? ""}`;
+      if (this.markerMeasurements.get(n)?.signature === signature) continue;
+      this.markerMeasurements.get(n)?.marker.remove();
+      this.markerMeasurements.get(n)?.indent.remove();
+      const indent = makeIndentMeasurement(
+        doc,
+        rawIndent,
+        hiddenIndent,
+        this.view.state.tabSize,
+      );
+      const marker = win.createSpan();
+      marker.className = `cm-formatting cm-formatting-list cm-formatting-list-${ordered ? "ol" : "ul"}${level ? ` cm-list-${level}` : ""}`;
+      if (ordered) marker.textContent = text + spacing;
+      else {
+        const bullet = win.createSpan();
+        bullet.className = "list-bullet";
+        bullet.textContent = text;
+        marker.appendChild(bullet);
+        marker.appendChild(doc.createTextNode(spacing));
+      }
+      this.markerMeasureContainer.appendChild(indent);
+      this.markerMeasureContainer.appendChild(marker);
+      this.markerMeasurements.set(n, { marker, indent, signature });
+    }
+  }
+
   private measureLines(): MeasuredLine[] {
     if (this.destroyed) return [];
     const elements = Array.from(
@@ -303,6 +402,11 @@ export class NestedCodeBlockLayoutPluginValue {
       ),
     );
     const measured: MeasuredLine[] = [];
+    const visibleInsets = new Map<number, string>();
+    const pendingEmptyRows: Array<{
+      element: HTMLElement;
+      openingLineNumber: number;
+    }> = [];
     const fenceOpeningAt = this.syntaxContext.fenceOpenings.at;
     let currentInset: string | null = null;
     let previousLineNumber: number | null = null;
@@ -334,23 +438,48 @@ export class NestedCodeBlockLayoutPluginValue {
         previousLineNumber = null;
         continue;
       }
-      if (!isNestedCodeBlockElement(element)) continue;
+      if (!element.classList.contains("HyperMD-codeblock")) continue;
 
       const line = documentLineForElement(this.view, element);
       if (!line) continue;
+      const emptyBody = line.text.trim() === "";
+      if (!isNestedCodeBlockElement(element) && !emptyBody) continue;
       const opening = fenceOpeningAt(line.number);
       if (!opening) continue;
 
-      const isOpening = element.classList.contains("HyperMD-codeblock-begin");
+      const marker = this.markerMeasurements.get(
+        opening.openingLineNumber,
+      )?.marker;
+      const indentOffset = marker
+        ? offsetAtColumn(
+            line.text,
+            opening.indentColumn,
+            this.view.state.tabSize,
+          )
+        : null;
+      const nativeInset = () =>
+        marker && indentOffset !== null
+          ? measureNativeContinuationInset(
+              this.view,
+              element,
+              line.from + indentOffset,
+              marker,
+            )
+          : null;
+      const isOpening =
+        line.number === opening.openingLineNumber &&
+        element.classList.contains("HyperMD-codeblock-begin");
       if (isOpening) {
         currentInset =
           measureOpeningInset(element) ??
-          measureContentInset(
-            this.view,
-            element,
-            line.from + opening.sourceOffset,
-            false,
-          );
+          (marker
+            ? nativeInset()
+            : measureContentInset(
+                this.view,
+                element,
+                line.from + opening.sourceOffset,
+                false,
+              ));
       } else if (
         previousLineNumber !== line.number - 1 ||
         currentInset === null
@@ -360,8 +489,9 @@ export class NestedCodeBlockLayoutPluginValue {
           opening.contentColumn,
           this.view.state.tabSize,
         );
-        currentInset =
-          contentOffset === null
+        currentInset = marker
+          ? nativeInset()
+          : contentOffset === null
             ? null
             : measureContentInset(
                 this.view,
@@ -372,12 +502,14 @@ export class NestedCodeBlockLayoutPluginValue {
       }
       const inset = currentInset;
       if (inset !== null) {
+        visibleInsets.set(opening.openingLineNumber, inset);
         const next = element.nextElementSibling;
         const nativePreview =
           isNativePreviewOpening(element) && isCodeBody(next);
         measured.push({
           element,
           inset,
+          emptyBody,
           previewBlock: nativePreview ? (next as HTMLElement) : undefined,
           preview:
             nativePreview && next
@@ -388,6 +520,13 @@ export class NestedCodeBlockLayoutPluginValue {
                 )
               : undefined,
         });
+      } else if (emptyBody) {
+        // An empty row has no source indentation to measure. Resolve it from
+        // another visible row of this same fence during this measurement pass.
+        pendingEmptyRows.push({
+          element,
+          openingLineNumber: opening.openingLineNumber,
+        });
       }
       previousLineNumber = line.number;
       if (element.classList.contains("HyperMD-codeblock-end")) {
@@ -396,6 +535,14 @@ export class NestedCodeBlockLayoutPluginValue {
       }
     }
 
+    for (const { element, openingLineNumber } of pendingEmptyRows) {
+      const probe = this.markerMeasurements.get(openingLineNumber);
+      const inset =
+        visibleInsets.get(openingLineNumber) ??
+        (probe ? measureIntrinsicInset(probe.indent, probe.marker) : undefined);
+      if (inset !== undefined)
+        measured.push({ element, inset, emptyBody: true });
+    }
     return measured;
   }
 
@@ -427,8 +574,13 @@ export class NestedCodeBlockLayoutPluginValue {
       preview,
       previewBlock,
       previewEmbed,
+      emptyBody,
     } of this.styledLines.values()) {
-      const nested = isNestedCodeBlockElement(element);
+      const nested =
+        isNestedCodeBlockElement(element) ||
+        (!!emptyBody &&
+          element.classList.contains("HyperMD-codeblock") &&
+          documentLineForElement(this.view, element)?.text.trim() === "");
       const embed = element.classList.contains("cm-preview-code-block");
       if (!nested && !embed) {
         this.clearElementStyles(element);
@@ -639,6 +791,7 @@ function parseFenceOpening(
   const [, indent, marker, spacing] = match;
   return {
     contentColumn: countColumn(indent + marker + spacing, state.tabSize),
+    indentColumn: countColumn(indent, state.tabSize),
     sourceOffset: indent.length + marker.length + spacing.length,
     openingLineNumber: lineNumber,
   };
@@ -763,6 +916,123 @@ function measureContentInset(
   if (!content) return null;
 
   return logicalInset(element, content, includeCodePadding);
+}
+
+// A viewport can consist entirely of physical empty code rows. In that case
+// there is no native prefix to measure. Reproduce its whitespace markup only
+// inside the existing nonpainted probe, without native guide classes. Text is
+// retained rather than pixel widths, so font, theme and zoom changes remeasure.
+function makeIndentMeasurement(
+  doc: Document,
+  raw: string,
+  hidden: string,
+  tabSize: number,
+): HTMLElement {
+  const win = getObsidianDomWindow(doc);
+  const indent = win.createSpan();
+  indent.className = "bullet-plugin-code-indent-measure";
+  const base = countColumn(hidden, tabSize);
+  let column = 0;
+  let hiddenEnd = 0;
+  const partialTabs = new Set<number>();
+  for (let i = 0; i < raw.length; i++) {
+    const next = column + (raw[i] === "\t" ? tabSize - (column % tabSize) : 1);
+    if (next <= base) hiddenEnd = i + 1;
+    else if (raw[i] === "\t") {
+      const visibleBefore = Math.max(0, column - base);
+      const retained = next - base - visibleBefore;
+      if (retained !== tabSize - (visibleBefore % tabSize)) partialTabs.add(i);
+    }
+    column = next;
+  }
+  // Obsidian marks tabs and groups of four spaces; adjacent complete units
+  // share one inline box, while a remaining space prefix uses code typography.
+  const pieces: Array<{ from: number; to: number; unit: boolean }> = [];
+  for (let i = 0; i < raw.length; ) {
+    const from = i;
+    const unit = raw[i] === "\t" || raw.slice(i, i + 4) === "    ";
+    if (unit) i += raw[i] === "\t" ? 1 : 4;
+    else while (raw[i] === " ") i++;
+    const previous = pieces[pieces.length - 1];
+    if (
+      unit &&
+      previous?.unit &&
+      previous.to === from &&
+      !partialTabs.has(from) &&
+      !partialTabs.has(previous.from)
+    )
+      previous.to = i;
+    else pieces.push({ from, to: i, unit });
+  }
+  for (const piece of pieces) {
+    const from = Math.max(hiddenEnd, piece.from);
+    if (from >= piece.to) continue;
+    const span = win.createSpan();
+    span.className = piece.unit
+      ? "bullet-plugin-code-indent-unit"
+      : "bullet-plugin-code-indent-spacing";
+    // Zoom's tab marks split native indent boxes. Obsidian keeps raw tab text
+    // in these boxes, so the existing minimum width still applies; assigning
+    // the mark's ch width directly would incorrectly shrink the whole box.
+    span.textContent = raw.slice(from, piece.to);
+    indent.appendChild(span);
+  }
+  return indent;
+}
+
+function measureIntrinsicInset(
+  indent: HTMLElement,
+  marker: HTMLElement,
+): string {
+  const margin =
+    parseFloat(
+      marker.ownerDocument.defaultView?.getComputedStyle(marker)
+        .marginInlineEnd ?? "0",
+    ) || 0;
+  return `${indent.getBoundingClientRect().width + marker.getBoundingClientRect().width + margin}px`;
+}
+
+function measureNativeContinuationInset(
+  view: EditorView,
+  element: HTMLElement,
+  position: number,
+  marker: HTMLElement,
+): string | null {
+  const line = documentLineForElement(view, element);
+  if (!line) return null;
+  let indentInset: string | null = position === line.from ? "0px" : null;
+  for (const prefix of Array.from(
+    element.querySelectorAll<HTMLElement>(".cm-indent, .cm-indent-spacing"),
+  )) {
+    const from = view.posAtDOM(prefix, 0);
+    const to = view.posAtDOM(prefix, prefix.childNodes.length);
+    if (position < from || position > to) continue;
+    if (position === from || position === to) {
+      // A native indentation span may be wider than its text because of its
+      // minimum width. Preserve that box at whole-span boundaries.
+      indentInset = logicalInset(
+        element,
+        prefix.getBoundingClientRect(),
+        false,
+        position === to,
+      );
+    } else {
+      const point = view.domAtPos(position);
+      if (!prefix.contains(point.node)) continue;
+      const range = element.ownerDocument.createRange();
+      range.setStart(prefix, 0);
+      range.setEnd(point.node, point.offset);
+      const rects = range.getClientRects();
+      const bounds = rects[rects.length - 1];
+      if (bounds) indentInset = logicalInset(element, bounds, false, true);
+    }
+    break;
+  }
+  if (indentInset === null) return null;
+  const style = marker.ownerDocument.defaultView?.getComputedStyle(marker);
+  const width = marker.getBoundingClientRect().width;
+  const margin = Number.parseFloat(style?.marginInlineEnd ?? "0") || 0;
+  return `${Number.parseFloat(indentInset) + width + margin}px`;
 }
 
 function logicalInset(

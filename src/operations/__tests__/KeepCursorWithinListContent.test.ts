@@ -124,3 +124,21 @@ test("should not do anything if there are multiple cursors", () => {
   const op = new KeepCursorWithinListContent(root);
   expect(op.perform()).toEqual(NO_OP_OUTCOME);
 });
+
+test.each(["", "\t  "])(
+  "respects the physical prefix of a blank code row %j without repeated cursor repair",
+  (blank) => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: `- root\n\t- \`\`\`js\n\t  before\n${blank}\n\t  after\n\t  \`\`\`\n- tail`,
+        cursor: { line: 3, ch: 0 },
+      }),
+    });
+    const op = new KeepCursorWithinListContent(root);
+    expect(op.perform()).toEqual(
+      blank.length ? UPDATED_OUTCOME : NO_OP_OUTCOME,
+    );
+    expect(root.getCursor()).toStrictEqual({ line: 3, ch: blank.length });
+    expect(op.perform()).toEqual(NO_OP_OUTCOME);
+  },
+);

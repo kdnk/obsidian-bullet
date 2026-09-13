@@ -1,4 +1,35 @@
 /* lists and bullets */
+.markdown-source-view.mod-cm6 .cm-line.bullet-plugin-code-marker-measure {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 0;
+  height: 0;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  contain: strict;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Intrinsic text measurements only; these spans never paint guides. */
+.bullet-plugin-code-indent-measure {
+  display: inline-block;
+  white-space: pre;
+}
+
+.bullet-plugin-code-indent-unit {
+  tab-size: var(--list-indent);
+  display: inline-block;
+  min-width: var(--list-indent);
+}
+
+.is-live-preview .bullet-plugin-code-indent-unit {
+  font-size: var(--font-text-size);
+}
+
 .bullet-plugin-better-lists .cm-s-obsidian .HyperMD-list-line {
   /* padding-top: 0.4em; */
 }

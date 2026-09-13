@@ -151,7 +151,9 @@ export default class ObsidianBulletPlugin extends Plugin {
       ),
 
       // features based on settings.betterListsStyles
-      new BetterListsStyles(this, this.settings),
+      new BetterListsStyles(this, this.settings, (state) =>
+        listZoom.range(state),
+      ),
 
       // features based on settings.mobileRightFoldControls
       new MobileRightFoldControls(this, this.settings),

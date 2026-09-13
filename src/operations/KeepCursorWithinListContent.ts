@@ -15,10 +15,11 @@ export class KeepCursorWithinListContent implements Operation {
     const cursor = root.getCursor();
     const list = root.getListUnderCursor();
     const contentStart = list.getFirstLineContentStartAfterCheckbox();
+    // Empty code rows can override the shared notes indent with no prefix.
     const linePrefix =
       contentStart.line === cursor.line
         ? contentStart.ch
-        : list.getNotesIndentOrThrow().length;
+        : list.getLinesInfo()[cursor.line - contentStart.line].from.ch;
 
     if (cursor.ch < linePrefix) {
       root.replaceCursor({

@@ -257,12 +257,21 @@ try {
           `${label}: native guide spans preview in indentation area`,
         );
       }
+      const shouldPreview = !(
+        phase.includes("editing") && entry.opening === offset + 6
+      );
       if (sample.shiki)
         check(
-          entry.embedded ===
-            !(phase.includes("editing") && entry.opening === offset + 6),
+          entry.embedded === shouldPreview,
           `${label}: expected preview/editing mode`,
         );
+      else {
+        check(!entry.embedded, `${label}: native renderer is active`);
+        check(
+          !!entry.nativePreview === shouldPreview,
+          `${label}: expected native preview/editing mode`,
+        );
+      }
       for (const [kind, guides] of [
         ["opening", entry.guides],
         ["body", entry.bodyGuides],

@@ -302,9 +302,15 @@ export class CrossNoteMove {
     const insert = prefix + branch + (after ? "\n" : "");
     let from = range.from;
     let to = range.to;
-    if (to < sourceDoc.length && sourceDoc.sliceString(to, to + 1) === "\n")
+    // Either adjacent separator yields the same text for complete lines.
+    // Prefer the preceding one so a last visible child can be removed without
+    // consuming the newline that separates its zoomed tree from hidden text.
+    if (from > 0 && sourceDoc.sliceString(from - 1, from) === "\n") from--;
+    else if (
+      to < sourceDoc.length &&
+      sourceDoc.sliceString(to, to + 1) === "\n"
+    )
       to++;
-    else if (from > 0 && sourceDoc.sliceString(from - 1, from) === "\n") from--;
     const sourceChanges = { from, to, insert: "" };
     const targetChanges = { from: insertion, insert };
     const sourceAfter = source.state.changes(sourceChanges).apply(sourceDoc);
