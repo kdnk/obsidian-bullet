@@ -175,7 +175,7 @@ describe("BetterListsStyles", () => {
       'content: ""; position: absolute; z-index: -1; inset-block: 0; inset-inline-start: var(--bullet-nested-code-block-inset); inset-inline-end: max( 0px, calc(100% - var(--bullet-nested-code-block-end, 100%)) ); background-color: var(--code-background);',
     );
     expect(content?.replace(/\s+/g, " ").trim()).toBe(
-      "padding-inline-start: var(--list-padding-inline-start);",
+      "padding-inline-start: var(--bullet-code-content-padding, var(--size-4-4));",
     );
   });
 

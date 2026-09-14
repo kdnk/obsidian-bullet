@@ -9,6 +9,11 @@
   inline-size: max-content;
 }
 
+.bullet-plugin-code-width-residual {
+  position: absolute;
+  white-space: pre;
+}
+
 .bullet-plugin-code-width-row .bullet-plugin-code-indent-unit {
   tab-size: inherit;
 }
@@ -182,6 +187,7 @@ body.bullet-plugin-better-lists
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-nested-code-block.HyperMD-codeblock-begin::before {
+  inset-block-start: calc(var(--size-4-2) / 2);
   border-start-start-radius: var(--code-radius);
   border-start-end-radius: var(--code-radius);
 }
@@ -189,6 +195,7 @@ body.bullet-plugin-better-lists
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-nested-code-block.HyperMD-codeblock-end::before {
+  inset-block-end: calc(var(--size-4-2) / 2);
   border-end-start-radius: var(--code-radius);
   border-end-end-radius: var(--code-radius);
 }
@@ -196,22 +203,59 @@ body.bullet-plugin-better-lists
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-nested-code-block.bullet-plugin-code-preview-first::before {
-  border-start-start-radius: var(--code-radius);
-  border-start-end-radius: var(--code-radius);
+  border-start-start-radius: 0;
+  border-start-end-radius: 0;
 }
 
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-nested-code-block.bullet-plugin-code-preview-last::before {
-  border-end-start-radius: var(--code-radius);
-  border-end-end-radius: var(--code-radius);
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+
+/* Share the native fence rows' vertical space with plain processor previews.
+   Fence height stays intact for Vim navigation and CodeMirror measurement. */
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-nested-code-block.bullet-plugin-code-preview-embed-opening.bullet-plugin-code-preview-plain::before {
+  background-color: var(--bullet-code-preview-background);
+  inset-inline-end: max(0px, calc(100% - var(--bullet-code-preview-end)));
+  border-start-start-radius: var(--bullet-code-preview-radius);
+  border-start-end-radius: var(--bullet-code-preview-radius);
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-preview-code-block.bullet-plugin-code-preview-plain
+  .expressive-code {
+  padding-block-end: calc(var(--size-4-2) / 2);
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-preview-code-block.bullet-plugin-code-preview-plain
+  .expressive-code
+  pre {
+  border-start-start-radius: 0;
+  border-start-end-radius: 0;
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-preview-code-block.bullet-plugin-code-preview-plain
+  .expressive-code
+  pre
+  > code {
+  padding-block-start: 0;
+  padding-block-end: max(0px, calc(1lh - var(--size-4-2) / 2));
 }
 
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-nested-code-block
   .bullet-plugin-nested-code-block-content {
-  padding-inline-start: var(--list-padding-inline-start);
+  padding-inline-start: var(--bullet-code-content-padding, var(--size-4-4));
 }
 
 body:not(.is-mobile).bullet-plugin-better-lists

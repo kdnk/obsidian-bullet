@@ -11,6 +11,7 @@
     "lint:fix": "prettier --write src jest/*.ts && eslint src jest/*.ts --fix",
     "test": "jest --forceExit",
     "test:unit": "SKIP_OBSIDIAN=1 jest src",
+    "test:code-parity": "node scripts/verify-nested-code-parity.cjs",
     "version": "node release.mjs",
     "prepare": "husky"
   },

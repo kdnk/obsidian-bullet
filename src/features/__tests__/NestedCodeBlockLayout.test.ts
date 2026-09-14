@@ -159,6 +159,9 @@ function makePreviewFixture(empty = false) {
   const frames: FrameRequestCallback[] = [];
   const measurements: Measurement[] = [];
   let notify: (records: unknown[]) => void = () => {};
+  const body = { nodeType: 1 };
+  const observe = jest.fn();
+  const disconnect = jest.fn();
   let rendered = lines;
   const show = (next: typeof lines) => {
     rendered = next;
@@ -176,14 +179,15 @@ function makePreviewFixture(empty = false) {
     coordsAtPos: () => ({ left: 164, right: 164 }),
     dom: {
       ownerDocument: {
+        body,
         defaultView: {
           ...makeAnimationWindow(frames),
           MutationObserver: class {
             constructor(callback: typeof notify) {
               notify = callback;
             }
-            observe() {}
-            disconnect() {}
+            observe = observe;
+            disconnect = disconnect;
           },
         },
       },
@@ -203,6 +207,9 @@ function makePreviewFixture(empty = false) {
     measure,
     plugin,
     show,
+    body,
+    observe,
+    disconnect,
     notify: (target: unknown, type = "childList") => notify([{ target, type }]),
   };
 }
@@ -374,6 +381,202 @@ describe("native preview row roles", () => {
   });
 });
 
+describe("plain Shiki preview appearance", () => {
+  const plainClass = "bullet-plugin-code-preview-plain";
+  const appearanceProperties = [
+    "--bullet-code-preview-background",
+    "--bullet-code-preview-end",
+    "--bullet-code-preview-radius",
+  ];
+  const originalNodeFilter = globalThis.NodeFilter;
+  beforeAll(() =>
+    Object.defineProperty(globalThis, "NodeFilter", {
+      value: { SHOW_TEXT: 4 },
+      configurable: true,
+    }),
+  );
+  afterAll(() =>
+    Object.defineProperty(globalThis, "NodeFilter", {
+      value: originalNodeFilter,
+      configurable: true,
+    }),
+  );
+
+  function setup() {
+    const fixture = makePreviewFixture();
+    const [opening, embed] = fixture.lines;
+    const appearance = {
+      background: "rgb(31, 31, 40)",
+      end: 348,
+      radius: "6px",
+      headerHeight: 0,
+      preAvailable: true,
+    };
+    const pre = {
+      getBoundingClientRect: () => ({ left: 164, right: appearance.end }),
+    };
+    const frame = { classList: makeClassList("frame") };
+    const header = {
+      getBoundingClientRect: () => ({ height: appearance.headerHeight }),
+    };
+    const code = { getBoundingClientRect: () => ({ top: 124, height: 21 }) };
+    embed.classList = makeClassList("cm-preview-code-block");
+    embed.position = 3;
+    embed.querySelector = ((selector: string) => {
+      if (selector === ".expressive-code pre")
+        return appearance.preAvailable ? pre : null;
+      if (selector === ".expressive-code .frame") return frame;
+      if (selector === ".expressive-code .header") return header;
+      if (selector === ".ec-line .code") return code;
+      return null;
+    }) as never;
+    embed.ownerDocument.defaultView.getComputedStyle = ((element: unknown) => {
+      if (element === pre) return { backgroundColor: appearance.background };
+      if (element === frame)
+        return { borderStartStartRadius: appearance.radius };
+      return { lineHeight: "21px", paddingTop: "0px", paddingBottom: "0px" };
+    }) as never;
+    fixture.show([opening, embed]);
+    fixture.measure();
+    return { ...fixture, opening, embed, appearance, frame };
+  }
+
+  test("uses the rendered card's color, inline end, and frame radius without resizing its source fence", () => {
+    const fixture = setup();
+    try {
+      expect(
+        appearanceProperties.map((property) =>
+          fixture.opening.style.getPropertyValue(property),
+        ),
+      ).toEqual(["rgb(31, 31, 40)", "248px", "6px"]);
+      expect(fixture.opening.classList.contains(plainClass)).toBe(true);
+      expect(fixture.embed.classList.contains(plainClass)).toBe(true);
+      expect(fixture.opening.style.getPropertyValue("height")).toBe("");
+      expect(fixture.opening.style.getPropertyValue("block-size")).toBe("");
+      fixture.appearance.end = 402;
+      fixture.appearance.radius = "10px";
+      fixture.measure();
+      expect(
+        fixture.opening.style.getPropertyValue("--bullet-code-preview-end"),
+      ).toBe("302px");
+      expect(
+        fixture.opening.style.getPropertyValue("--bullet-code-preview-radius"),
+      ).toBe("10px");
+    } finally {
+      fixture.plugin.destroy();
+    }
+    for (const element of [fixture.opening, fixture.embed]) {
+      expect(element.classList.contains(plainClass)).toBe(false);
+      for (const property of appearanceProperties)
+        expect(element.style.getPropertyValue(property)).toBe("");
+    }
+  });
+
+  test.each(["has-title", "is-terminal"])(
+    "leaves a visible %s header under the processor's own layout",
+    (kind) => {
+      const fixture = setup();
+      try {
+        fixture.frame.classList.add(kind);
+        fixture.appearance.headerHeight = 28;
+        fixture.measure();
+        for (const element of [fixture.opening, fixture.embed])
+          expect(element.classList.contains(plainClass)).toBe(false);
+        for (const property of appearanceProperties)
+          expect(fixture.opening.style.getPropertyValue(property)).toBe("");
+        expect(
+          fixture.opening.classList.contains(
+            "bullet-plugin-code-preview-hidden-fence",
+          ),
+        ).toBe(true);
+        expect(
+          fixture.embed.classList.contains("bullet-plugin-code-preview-embed"),
+        ).toBe(true);
+      } finally {
+        fixture.plugin.destroy();
+      }
+    },
+  );
+
+  test("clears appearance while an asynchronous renderer has no code card", () => {
+    const fixture = setup();
+    try {
+      fixture.appearance.preAvailable = false;
+      fixture.measure();
+      for (const property of appearanceProperties)
+        expect(fixture.opening.style.getPropertyValue(property)).toBe("");
+      expect(fixture.opening.classList.contains(plainClass)).toBe(false);
+      expect(fixture.embed.classList.contains(plainClass)).toBe(false);
+    } finally {
+      fixture.plugin.destroy();
+    }
+  });
+
+  test("restores plain roles after redraw, then removes their paint when the source fence returns", () => {
+    const fixture = setup();
+    try {
+      fixture.opening.classList.remove(plainClass);
+      fixture.embed.classList.remove(plainClass);
+      fixture.notify(fixture.opening, "attributes");
+      expect(fixture.opening.classList.contains(plainClass)).toBe(true);
+      expect(fixture.embed.classList.contains(plainClass)).toBe(true);
+      const pending = fixture.frames.length;
+      fixture.frames[pending - 1](0);
+      fixture.measure();
+      fixture.notify(fixture.opening, "attributes");
+      expect(fixture.frames).toHaveLength(pending);
+
+      fixture.opening.setRaw(true);
+      fixture.notify(fixture.opening);
+      expect(fixture.opening.classList.contains(plainClass)).toBe(false);
+      fixture.show([fixture.opening]);
+      fixture.measure();
+      for (const element of [fixture.opening, fixture.embed]) {
+        expect(element.classList.contains(plainClass)).toBe(false);
+        for (const property of appearanceProperties)
+          expect(element.style.getPropertyValue(property)).toBe("");
+      }
+    } finally {
+      fixture.plugin.destroy();
+    }
+  });
+
+  test("remeasures a theme repaint even when its card geometry is unchanged", () => {
+    const fixture = setup();
+    try {
+      expect(fixture.observe).toHaveBeenCalledWith(fixture.body, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+      const pending = fixture.frames.length;
+      fixture.appearance.background = "rgb(242, 236, 188)";
+      fixture.notify(fixture.body, "attributes");
+      expect(fixture.frames).toHaveLength(pending + 1);
+      expect(
+        fixture.opening.style.getPropertyValue(
+          "--bullet-code-preview-background",
+        ),
+      ).toBe("rgb(31, 31, 40)");
+      fixture.frames[pending](0);
+      fixture.measure();
+      expect(
+        fixture.opening.style.getPropertyValue(
+          "--bullet-code-preview-background",
+        ),
+      ).toBe("rgb(242, 236, 188)");
+      expect(
+        fixture.opening.style.getPropertyValue("--bullet-code-preview-end"),
+      ).toBe("248px");
+    } finally {
+      fixture.plugin.destroy();
+    }
+    expect(fixture.disconnect).toHaveBeenCalledTimes(1);
+    const stopped = fixture.frames.length;
+    fixture.notify(fixture.body, "attributes");
+    expect(fixture.frames).toHaveLength(stopped);
+  });
+});
+
 test("aligns every visible line to the measured list content edge", () => {
   const state = EditorState.create({
     doc: ["\t- ```ts", "\t  code", "\t  ```", "```ts"].join("\n"),
@@ -490,9 +693,18 @@ test("insets a rendered code embed from its owning list marker when the fence te
   );
 });
 
-test.each(["unordered", "ordered", "empty", "empty-no-line-box"])(
+test.each([
+  "unordered",
+  "ordered",
+  "empty",
+  "empty-no-line-box",
+  "empty-compact-no-line-box",
+])(
   "aligns %s preview below a native-height fence after class redraw",
   (kind) => {
+    const noLineBox = kind.endsWith("no-line-box");
+    const compact = kind === "empty-compact-no-line-box";
+    const expectedOffset = compact ? "23px" : noLineBox ? "26px" : "36px";
     const state = EditorState.create({ doc: "\t- ```js\n\t  code\n\t  ```" });
     const opening = makeLine(
       ["HyperMD-codeblock", "HyperMD-codeblock-begin", "HyperMD-list-line"],
@@ -534,21 +746,21 @@ test.each(["unordered", "ordered", "empty", "empty-no-line-box"])(
         ? {
             getBoundingClientRect: () => ({
               top: 126,
-              height: kind === "empty-no-line-box" ? 24 : 16,
+              height: noLineBox ? 24 : 16,
             }),
           }
         : null) as never;
     embed.ownerDocument.defaultView.getComputedStyle = (() => ({
       lineHeight: "16px",
-      paddingTop: kind === "empty-no-line-box" ? "12px" : "14px",
-      paddingBottom: kind === "empty-no-line-box" ? "12px" : "0px",
+      paddingTop: noLineBox ? "12px" : "14px",
+      paddingBottom: noLineBox ? "12px" : "0px",
     })) as never;
     embed.getBoundingClientRect = () =>
       ({
         left: 100,
         right: 300,
         top: 126,
-        height: kind === "empty-no-line-box" ? 24 : 45,
+        height: compact ? 21 : noLineBox ? 24 : 45,
       }) as never;
     Object.assign(embed.ownerDocument, {
       createTreeWalker: () => ({
@@ -585,19 +797,20 @@ test.each(["unordered", "ordered", "empty", "empty-no-line-box"])(
       measure();
       expect(
         opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
-      ).toBe(kind === "empty-no-line-box" ? "26px" : "36px");
+      ).toBe(expectedOffset);
       measure();
       expect(
         opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
-      ).toBe(kind === "empty-no-line-box" ? "26px" : "36px");
+      ).toBe(expectedOffset);
       opening.classList.remove("bullet-plugin-code-preview-opening");
       measure();
       expect(
         opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
-      ).toBe(kind === "empty-no-line-box" ? "26px" : "36px");
+      ).toBe(expectedOffset);
       expect(
         opening.style.getPropertyValue("--bullet-code-preview-height"),
-      ).toBe(kind === "empty-no-line-box" ? "50px" : "71px");
+      ).toBe(compact ? "47px" : noLineBox ? "50px" : "71px");
+      if (compact) expect(marker.getBoundingClientRect().top + 24).toBe(147);
       plugin.destroy();
       expect(
         opening.style.getPropertyValue("--bullet-code-preview-height"),
@@ -1027,6 +1240,7 @@ test.each(["-", "123."])(
         ownerDocument: doc,
         className: "",
         textContent: "",
+        children: [],
         style: { cssText: "" },
         setAttribute: jest.fn(),
         appendChild: jest.fn(),
@@ -1156,11 +1370,15 @@ test.each(["", "\t", " "])(
     expect(blank.classList.contains("bullet-plugin-nested-code-block")).toBe(
       true,
     );
+    const expectedUnits =
+      zoomIndent === " " ? ["\t", "\t"] : [zoomIndent ? "\t" : "\t\t"];
+    // Both the raw closing fence and the detached list marker retain the
+    // same visible native indentation units.
     expect(
       created
         .filter((e) => e.className === "bullet-plugin-code-indent-unit")
         .map((e) => e.textContent),
-    ).toEqual(zoomIndent === " " ? ["\t", "\t"] : [zoomIndent ? "\t" : "\t\t"]);
+    ).toEqual([...expectedUnits, ...expectedUnits]);
     indentWidth += 4;
     measure();
     expect(
@@ -1261,3 +1479,351 @@ test("preserves unchanged code width probes when one source character changes", 
     plugin.destroy();
   }
 });
+
+test.each([
+  ["\t\t\t- ```js", "\t\t\t  hello", 0],
+  ["\t\t\t- ```js", "\t\t\t    hello", 0],
+  ["- ```js", "\thello", 2],
+])(
+  "pads the source container boundary relative to the background for %j / %j",
+  (openingText, bodyText, residual) => {
+    const state = EditorState.create({ doc: `${openingText}\n${bodyText}` });
+    const opening = makeLine(BEGIN.split("_"), {
+      position: 0,
+      left: 76,
+      markerEnd: 176.222,
+    });
+    const body = makeLine(CONTENT.split("_"), {
+      position: state.doc.line(2).from,
+      left: 76,
+    });
+    const query = body.querySelector;
+    body.querySelector = ((selector: string) =>
+      selector === ".bullet-plugin-nested-code-block-content"
+        ? { getBoundingClientRect: () => ({ left: 164.406, right: 190 }) }
+        : query(selector)) as never;
+    const frames: FrameRequestCallback[] = [];
+    const measurements: Measurement[] = [];
+    const view = {
+      state,
+      visibleRanges: [{ from: 0, to: state.doc.length }],
+      contentDOM: { querySelectorAll: () => [opening, body] },
+      posAtDOM: (element: { position: number }) => element.position,
+      coordsAtPos: () => {
+        throw Error("Padded cursor coordinates must not move the background");
+      },
+      dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+      requestMeasure: (measurement: Measurement) =>
+        measurements.push(measurement),
+    };
+    const plugin = new NestedCodeBlockLayoutPluginValue(
+      view as never,
+      names(BEGIN, CONTENT),
+    );
+    frames[0](0);
+    const measure = () => measurements[0].write(measurements[0].read());
+    measure();
+    const padding = body.style.getPropertyValue(
+      "--bullet-code-content-padding",
+    );
+    expect(padding).toBe(
+      `calc(100.22200000000001px - 88.406px + ${residual}ch + var(--size-4-4))`,
+    );
+    measure();
+    expect(body.style.getPropertyValue("--bullet-code-content-padding")).toBe(
+      padding,
+    );
+    expect(
+      body.style.getPropertyValue("--bullet-nested-code-block-inset"),
+    ).toBe("100.22200000000001px");
+    plugin.destroy();
+    expect(body.style.getPropertyValue("--bullet-code-content-padding")).toBe(
+      "",
+    );
+  },
+);
+
+function makeWidthFixture(
+  openingText: string,
+  firstText: string,
+  indentedText: string,
+  hidden = "",
+  options: {
+    closing?: string;
+    editing?: boolean;
+    flairBottom?: number;
+    firstHeight?: number;
+  } = {},
+) {
+  type Probe = {
+    className: string;
+    textContent: string;
+    children: Probe[];
+    firstChild: Probe | null;
+    ownerDocument: unknown;
+    appendChild: (child: Probe) => void;
+    remove: () => void;
+    setAttribute: () => void;
+    getBoundingClientRect: () => {
+      left: number;
+      right: number;
+      width: number;
+    };
+  };
+  const frames: FrameRequestCallback[] = [];
+  const doc = {
+    defaultView: {
+      ...makeAnimationWindow(frames),
+      getComputedStyle: () => ({ marginInlineEnd: "0px" }),
+    },
+    createRange: () => {
+      let span: Probe;
+      let offset = 0;
+      return {
+        selectNodeContents: (node: Probe) => {
+          span = node;
+        },
+        setEnd: (_node: unknown, n: number) => {
+          offset = n;
+        },
+        getClientRects: () => [
+          { right: span.getBoundingClientRect().left + offset * 8 },
+        ],
+      };
+    },
+  };
+  const create = (): Probe => {
+    let text = "";
+    let parent: Probe | undefined;
+    const width = (node: Probe): number => node.getBoundingClientRect().width;
+    const node: Probe = {
+      className: "",
+      ownerDocument: doc,
+      get textContent() {
+        return text || node.children.map((child) => child.textContent).join("");
+      },
+      set textContent(value) {
+        text = value;
+      },
+      children: [],
+      get firstChild() {
+        return node.children[0] ?? (text ? node : null);
+      },
+      appendChild(child) {
+        (child as Probe & { attach?: (to: Probe) => void }).attach?.(node);
+        node.children.push(child);
+      },
+      remove() {
+        if (parent) parent.children.splice(parent.children.indexOf(node), 1);
+      },
+      setAttribute() {},
+      getBoundingClientRect() {
+        const childrenWidth = node.children
+          .filter(
+            (child) => child.className !== "bullet-plugin-code-width-residual",
+          )
+          .reduce((sum, child) => sum + width(child), 0);
+        const textWidth = [...text].reduce(
+          (sum, char) => sum + (char === "\t" ? 32 : 8),
+          0,
+        );
+        const measuredWidth = Math.max(textWidth, childrenWidth);
+        const left =
+          parent?.className === "bullet-plugin-code-indent-measure"
+            ? parent.children
+                .slice(0, parent.children.indexOf(node))
+                .reduce((sum, child) => sum + width(child), 0)
+            : 0;
+        return { left, right: left + measuredWidth, width: measuredWidth };
+      },
+    };
+    Object.assign(node, {
+      attach: (to: Probe) => {
+        parent = to;
+      },
+    });
+    return node;
+  };
+  Object.assign(doc, {
+    win: { createDiv: create, createSpan: create },
+    createTextNode: (text: string) =>
+      Object.assign(create(), { textContent: text }),
+  });
+  const text = [
+    openingText,
+    firstText,
+    indentedText,
+    options.closing ?? /^[ \t]*/.exec(openingText)![0] + "  ```",
+    "- outside",
+  ].join("\n");
+  const state = EditorState.create({
+    doc: text,
+    selection: { anchor: options.editing ? 0 : text.length },
+  });
+  const opening = makeLine(BEGIN.split("_"), { position: 0, markerEnd: 124 });
+  const first = makeLine(CONTENT.split("_"), {
+    position: state.doc.line(2).from,
+  });
+  const second = makeLine(CONTENT.split("_"), {
+    position: state.doc.line(3).from,
+  });
+  if (options.flairBottom !== undefined) {
+    const originalQuery = opening.querySelector;
+    opening.querySelector = ((selector: string) => {
+      if (selector === ".code-block-flair")
+        return {
+          getBoundingClientRect: () => ({
+            top: 106,
+            bottom: options.flairBottom!,
+            width: 32,
+          }),
+        };
+      // No processor text geometry is needed for this width-only fixture.
+      if (selector === ".cm-hmd-codeblock") return {};
+      return originalQuery(selector);
+    }) as never;
+    opening.ownerDocument.defaultView.getComputedStyle = (() => ({
+      lineHeight: "21px",
+      marginInlineEnd: "0px",
+      direction: "ltr",
+    })) as never;
+    const openingRect = opening.getBoundingClientRect();
+    opening.getBoundingClientRect = () => ({
+      ...openingRect,
+      top: 100,
+      bottom: 124,
+      height: 24,
+    });
+    const firstRect = first.getBoundingClientRect();
+    const firstHeight = options.firstHeight ?? 21;
+    first.getBoundingClientRect = () => ({
+      ...firstRect,
+      top: 124,
+      bottom: 124 + firstHeight,
+      height: firstHeight,
+    });
+    const secondRect = second.getBoundingClientRect();
+    second.getBoundingClientRect = () => ({
+      ...secondRect,
+      top: 124 + firstHeight,
+      bottom: 145 + firstHeight,
+      height: 21,
+    });
+    Object.assign(opening, { nextElementSibling: first });
+    Object.assign(first, { nextElementSibling: second });
+  }
+  const measurements: Measurement[] = [];
+  const view = {
+    state,
+    visibleRanges: [{ from: 0, to: state.doc.length }],
+    contentDOM: { querySelectorAll: () => [opening, first, second] },
+    posAtDOM: (element: { position: number }) => element.position,
+    dom: { ownerDocument: doc, appendChild: jest.fn() },
+    requestMeasure: (measurement: Measurement) =>
+      measurements.push(measurement),
+  };
+  const plugin = new NestedCodeBlockLayoutPluginValue(
+    view as never,
+    names(BEGIN, CONTENT, CONTENT, END, null),
+    () => (hidden ? { indent: hidden } : null),
+  );
+  frames[0](0);
+  const measure = () => {
+    measurements[0].write(measurements[0].read());
+    return first.style.getPropertyValue("--bullet-nested-code-block-end");
+  };
+  return {
+    plugin,
+    measure,
+    updateOpening: (next: string) => {
+      const transaction = view.state.update({
+        changes: { from: 0, to: view.state.doc.line(1).to, insert: next },
+      });
+      view.state = transaction.state;
+      view.visibleRanges = [{ from: 0, to: view.state.doc.length }];
+      first.position = view.state.doc.line(2).from;
+      second.position = view.state.doc.line(3).from;
+      plugin.update({
+        state: view.state,
+        docChanged: true,
+        changes: transaction.changes,
+        view,
+      } as never);
+    },
+  };
+}
+
+test.each([
+  ["- ```js", "  hello", "    nested", ""],
+  ["- ```js", "  hello", "\tnested", ""],
+  ["\t- ```js", "\t  hello", "\t    nested", "\t"],
+])(
+  "fits code-only widths while preserving literal indentation for %j",
+  (openingText, firstText, indentedText, hidden) => {
+    const fixture = makeWidthFixture(
+      openingText,
+      firstText,
+      indentedText,
+      hidden,
+    );
+    // Six code characters plus two literal spaces = 64px. The list container
+    // is removed exactly once; leading and trailing code padding remain.
+    expect(fixture.measure()).toContain("calc(88px + 2 * var(--size-4-4))");
+    fixture.plugin.destroy();
+  },
+);
+
+test.each([
+  [135, 21],
+  [170, 70],
+])(
+  "reserves copy-control width only beside actual overlapping rows (bottom %i, first height %i)",
+  (flairBottom, firstHeight) => {
+    const fixture = makeWidthFixture("- ```js", "  hi", "  abcdefgh", "", {
+      flairBottom,
+      firstHeight,
+    });
+    try {
+      expect(fixture.measure()).toContain("calc(88px + 2 * var(--size-4-4))");
+    } finally {
+      fixture.plugin.destroy();
+    }
+  },
+);
+
+test.each(["", "\t"])(
+  "fits a long unpadded closing fence from its raw continuation prefix with hidden indent %j",
+  (hidden) => {
+    const fixture = makeWidthFixture(
+      `${hidden}- \`\`\`js`,
+      `${hidden}  hi`,
+      `${hidden}  yo`,
+      hidden,
+      { closing: `${hidden}  ${"`".repeat(20)}`, editing: true },
+    );
+    try {
+      // 16px raw continuation + 160px fence, without the list marker's 24px inset.
+      expect(fixture.measure()).toContain("calc(176px + var(--size-4-4))");
+    } finally {
+      fixture.plugin.destroy();
+    }
+  },
+);
+
+test.each(["    abcdef", "\tabcdef"])(
+  "refreshes code width metadata when the source container changes for %j",
+  (raw) => {
+    const fixture = makeWidthFixture("- ```js", raw, raw, "", {
+      closing: "    ```",
+    });
+    try {
+      expect(fixture.measure()).toContain("calc(88px + 2 * var(--size-4-4))");
+      fixture.updateOpening("-   ```js");
+      expect(fixture.measure()).toContain("calc(72px + 2 * var(--size-4-4))");
+      fixture.updateOpening("- ```js");
+      expect(fixture.measure()).toContain("calc(88px + 2 * var(--size-4-4))");
+    } finally {
+      fixture.plugin.destroy();
+    }
+  },
+);

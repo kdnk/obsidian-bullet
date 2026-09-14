@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
+For code-card spacing or padding changes, run the real-renderer parity check described in [docs/testing/code-block-parity.md](docs/testing/code-block-parity.md) and follow the corresponding rule in [AGENTS.md](AGENTS.md).
+
 For fitted code-block width changes, follow the width verification rule under “リスト内のコードブロックについて” in [AGENTS.md](AGENTS.md).
 
 For processor preview changes, follow the code text and copy payload verification rule under “リスト内のコードブロックについて” in [AGENTS.md](AGENTS.md).
