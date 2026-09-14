@@ -1,3 +1,204 @@
+# Enter and following input should stay inside list-attached code after a blank line
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+````md
+- parent
+	- ```js
+
+	  code|
+	  ```
+	- after
+````
+
+- keydown: `Enter`
+- assertState:
+
+````md
+- parent
+	- ```js
+
+	  code
+	  |
+	  ```
+	- after
+````
+
+- typeText: `x`
+- assertState:
+
+````md
+- parent
+	- ```js
+
+	  code
+	  x|
+	  ```
+	- after
+````
+
+# Space inside a physically blank list-attached code line should stay literal
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+````md
+- ```js
+|
+  ```
+````
+
+- typeText: ` `
+- assertState:
+
+````md
+- ```js
+ |
+  ```
+````
+
+# Backspace should delete a literal hyphen in list-attached code
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+````md
+- parent
+	- ```js
+	  -| code
+	  ```
+````
+
+- keydown: `Backspace`
+- assertState:
+
+````md
+- parent
+	- ```js
+	  | code
+	  ```
+````
+
+# Backspace should delete a literal hyphen in list continuation tilde code
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- parent
+	~~~~yaml
+	-| value
+	~~~~
+- after
+```
+
+- keydown: `Backspace`
+- assertState:
+
+```md
+- parent
+	~~~~yaml
+	| value
+	~~~~
+- after
+```
+
+# Enter on a list-attached opening fence should keep the new line inside code
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+````md
+- parent
+	- ```js|
+	  code
+	  ```
+````
+
+- keydown: `Enter`
+- assertState:
+
+````md
+- parent
+	- ```js
+	  |
+	  code
+	  ```
+````
+
+# Backspace should delete code in a root fence shallower than the preceding list content
+
+- setting: `keepBodyTextInBullets=true`
+- setting: `stickCursor="never"`
+- applyState:
+
+````md
+- owner
+ ```js
+-| literal
+ ```
+plain
+````
+
+- keydown: `Backspace`
+- assertState:
+
+````md
+- owner
+ ```js
+| literal
+ ```
+plain
+````
+
+# Backspace should delete code in a list continuation fence after a blank line
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+````md
+- owner
+
+	```js
+	-| literal
+	```
+````
+
+- keydown: `Backspace`
+- assertState:
+
+````md
+- owner
+
+	```js
+	| literal
+	```
+````
+
+# Backspace should delete code with less indentation than its continuation opener
+
+- setting: `keepBodyTextInBullets=true`
+- setting: `stickCursor="never"`
+- applyState:
+
+````md
+- owner
+   ```js
+  -| literal
+  ```
+````
+
+- keydown: `Backspace`
+- assertState:
+
+````md
+- owner
+   ```js
+  | literal
+  ```
+````
+
 # direct body typing should create a bullet
 
 - setting: `keepBodyTextInBullets=true`

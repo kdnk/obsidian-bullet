@@ -61,6 +61,230 @@ describe("MarkdownLineClassifier", () => {
     },
   );
 
+  test.each([
+    {
+      source: "- ```ts\n  - literal\n\n  ```\n- sibling",
+      kinds: ["list-item", "structure", "structure", "structure", "list-item"],
+    },
+    {
+      source: "- parent\n\t- ```ts\n\t\t-\n \n\t\t```\n\t- sibling",
+      kinds: [
+        "list-item",
+        "list-item",
+        "structure",
+        "structure",
+        "structure",
+        "list-item",
+      ],
+    },
+    {
+      source: "- parent\n\t```ts\n\t- literal\n\n\t```\n- sibling",
+      kinds: [
+        "list-item",
+        "structure",
+        "structure",
+        "structure",
+        "structure",
+        "list-item",
+      ],
+    },
+    {
+      source: "- parent\n  - child\n  ~~~\n  - literal\n  ~~~\n- sibling",
+      kinds: [
+        "list-item",
+        "list-item",
+        "structure",
+        "structure",
+        "structure",
+        "list-item",
+      ],
+    },
+    {
+      source: "12. ~~~~text\n\t~~~\n\t```\n\t- literal\n\t~~~~~\nplain",
+      kinds: [
+        "list-item",
+        "structure",
+        "structure",
+        "structure",
+        "structure",
+        "body",
+      ],
+    },
+    {
+      source: "~~~text\n- literal\n\n~~~~\nplain",
+      kinds: ["structure", "structure", "structure", "structure", "body"],
+    },
+    {
+      source: "- ```\n\n- sibling\nplain",
+      kinds: ["list-item", "structure", "list-item", "body"],
+    },
+    {
+      source: "- owner\n\t```\n\t- literal\nplain\n- sibling",
+      kinds: ["list-item", "structure", "structure", "body", "list-item"],
+    },
+    {
+      source: "- owner\n\t```\n - dedented sibling",
+      kinds: ["list-item", "structure", "list-item"],
+    },
+    {
+      source: "plain\n\t```\n\t- item",
+      kinds: ["body", "body", "list-item"],
+    },
+  ])(
+    "tracks list and tilde fence boundaries in $source",
+    ({ source, kinds }) => {
+      const classifier = new MarkdownLineClassifier();
+      for (const extensions of [[], classifier.extension]) {
+        const state = EditorState.create({ doc: source, extensions });
+        expect(
+          kinds.map((_, index) => classifier.classify(state, index + 1)),
+        ).toEqual(kinds);
+      }
+    },
+  );
+
+  test.each([
+    {
+      source: "- owner\n ```js\n- literal\n ```\nplain",
+      kinds: ["list-item", "structure", "structure", "structure", "body"],
+    },
+    {
+      source: "10. owner\n   ```js\n- literal\n   ```\nplain",
+      kinds: ["list-item", "structure", "structure", "structure", "body"],
+    },
+    {
+      source: "- owner\n\n\t```js\n\t- literal\n\t```\n- sibling",
+      kinds: [
+        "list-item",
+        "blank",
+        "structure",
+        "structure",
+        "structure",
+        "list-item",
+      ],
+    },
+    {
+      source: "- owner\n   ```js\n  - literal\n  ```\n- sibling",
+      kinds: ["list-item", "structure", "structure", "structure", "list-item"],
+    },
+    {
+      source: "- owner\n\t```js\n  - literal\n  ```\n- sibling",
+      kinds: ["list-item", "structure", "structure", "structure", "list-item"],
+    },
+    {
+      source: "10. owner\n     ```js\n\t- literal\n\t```\n- sibling",
+      kinds: ["list-item", "structure", "structure", "structure", "list-item"],
+    },
+  ])(
+    "uses the list content column for fences in $source",
+    ({ source, kinds }) => {
+      const classifier = new MarkdownLineClassifier();
+      const state = EditorState.create({
+        doc: source,
+        extensions: classifier.extension,
+      });
+      expect(
+        kinds.map((_, index) => classifier.classify(state, index + 1)),
+      ).toEqual(kinds);
+    },
+  );
+
+  test("preserves list metadata for a fence attached to a nested marker", () => {
+    expect(
+      inspect("- parent\n\t- ```\n\t\t- literal\n\t\t```", 2),
+    ).toMatchObject({
+      kind: "list-item",
+      listItem: {
+        prefix: "\t- ",
+        contentStart: 3,
+        isRoot: false,
+        isPlainEmpty: false,
+      },
+    });
+  });
+
+  test.each([
+    {
+      before: "- owner\n\t``\n\t- literal",
+      line: 2,
+      text: "\t```",
+      target: 3,
+      beforeKind: "list-item",
+      afterKind: "structure",
+    },
+    {
+      before: "- ~~~\n  - literal",
+      line: 1,
+      text: "- ~~",
+      target: 2,
+      beforeKind: "structure",
+      afterKind: "list-item",
+    },
+    {
+      before: "owner\n\t```\n\t- literal",
+      line: 1,
+      text: "- owner",
+      target: 3,
+      beforeKind: "list-item",
+      afterKind: "structure",
+    },
+    {
+      before: "- owner\n\t```\n\t- literal",
+      line: 1,
+      text: "owner",
+      target: 3,
+      beforeKind: "structure",
+      afterKind: "list-item",
+    },
+    {
+      before: "- owner\n\t```\n\t- literal",
+      line: 1,
+      text: "\t- owner",
+      target: 3,
+      beforeKind: "structure",
+      afterKind: "list-item",
+    },
+    {
+      before: "- ```\n  code\n  - literal",
+      line: 2,
+      text: "code",
+      target: 3,
+      beforeKind: "structure",
+      afterKind: "list-item",
+    },
+    {
+      before: "- ```\n\n  - literal",
+      line: 2,
+      text: "code",
+      target: 3,
+      beforeKind: "structure",
+      afterKind: "list-item",
+    },
+    {
+      before: "- ```\n  ``\n  - literal",
+      line: 2,
+      text: "  ```",
+      target: 3,
+      beforeKind: "structure",
+      afterKind: "list-item",
+    },
+  ])(
+    "rebuilds fence ownership after replacing line $line of $before",
+    ({ before, line, text, target, beforeKind, afterKind }) => {
+      const classifier = new MarkdownLineClassifier();
+      let state = EditorState.create({
+        doc: before,
+        extensions: classifier.extension,
+      });
+      expect(classifier.classify(state, target)).toBe(beforeKind);
+      const changedLine = state.doc.line(line);
+      state = state.update({
+        changes: { from: changedLine.from, to: changedLine.to, insert: text },
+      }).state;
+      expect(classifier.classify(state, target)).toBe(afterKind);
+    },
+  );
+
   test("reports the physical line range and text", () => {
     expect(inspect("first\n- item\nlast", 2)).toMatchObject({
       kind: "list-item",

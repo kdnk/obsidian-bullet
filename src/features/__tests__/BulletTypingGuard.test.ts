@@ -61,6 +61,67 @@ function captureInputTransaction() {
 }
 
 describe("BulletTypingGuard", () => {
+  test("allows deleting a literal hyphen inside a list-attached fenced code block", async () => {
+    const guard = await loadGuard();
+    const doc = "- ```js\n  - code\n  ```";
+    const state = EditorState.create({
+      doc,
+      selection: { anchor: 11 },
+      extensions: guard,
+    });
+    const transaction = state.update({
+      changes: { from: 10, to: 11 },
+      selection: { anchor: 10 },
+      userEvent: "delete.backward",
+    });
+
+    expect(transaction.newDoc.toString()).toBe("- ```js\n   code\n  ```");
+    expect(transaction.newSelection.main.head).toBe(10);
+  });
+
+  test("keeps Space literal on a physical blank inside a list-attached fenced code block", async () => {
+    const guard = await loadGuard();
+    const state = EditorState.create({
+      doc: "- ```js\n\n  ```",
+      selection: { anchor: 8 },
+      extensions: guard,
+    });
+    const transaction = state.update({
+      changes: { from: 8, insert: " " },
+      selection: { anchor: 9 },
+      userEvent: "input.type",
+    });
+
+    expect(transaction.newDoc.toString()).toBe("- ```js\n \n  ```");
+    expect(transaction.newSelection.main.head).toBe(9);
+  });
+
+  test("keeps Enter and following input literal after a blank in a list-attached fenced code block", async () => {
+    const guard = await loadGuard();
+    let state = EditorState.create({
+      doc: "- ```js\n\n  code\n  ```",
+      selection: { anchor: 15 },
+      extensions: guard,
+    });
+    state = state.update({
+      changes: { from: 15, insert: "\n  " },
+      selection: { anchor: 18 },
+      userEvent: "input",
+    }).state;
+
+    expect(state.doc.toString()).toBe("- ```js\n\n  code\n  \n  ```");
+    expect(state.selection.main.head).toBe(18);
+
+    state = state.update({
+      changes: { from: 18, insert: "x" },
+      selection: { anchor: 19 },
+      userEvent: "input.type",
+    }).state;
+
+    expect(state.doc.toString()).toBe("- ```js\n\n  code\n  x\n  ```");
+    expect(state.selection.main.head).toBe(19);
+  });
+
   test("returns the original typed transaction while disabled", async () => {
     const guard = await loadGuard({ keepBodyTextInBullets: false });
     const capture = captureInputTransaction();

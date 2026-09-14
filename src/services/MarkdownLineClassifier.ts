@@ -6,6 +6,13 @@ import {
   Transaction,
 } from "@codemirror/state";
 
+import {
+  FenceMarker,
+  getFenceContent,
+  getFenceOpening,
+  isFenceClosing,
+} from "../utils/fencedCode";
+
 export type MarkdownLineKind =
   | "blank"
   | "list-item"
@@ -35,8 +42,6 @@ const listItemRe = /^([ \t]*)([-*+]|\d+\.)(?:([ \t]+)(.*))?$/;
 const atxHeadingRe = /^ {0,3}#{1,6}(?:[ \t]+|$)/;
 const quoteRe = /^ {0,3}>/;
 const horizontalRuleRe = /^ {0,3}(?:-[ \t]*){3,}$/;
-const fenceRe = /^ {0,3}(`{3,})(?:[^`]*)$/;
-const closingFenceRe = /^ {0,3}(`{3,})[ \t]*$/;
 const structurePrefixRe = /^(?:#{1,6}|`{1,2}|-{1,2})$/;
 const indentRe = /^[ \t]+/;
 
@@ -291,8 +296,12 @@ function buildStructuralBlockIndex(
 ): StructuralBlockIndex {
   const ranges: StructuralBlockRange[] = [];
   let frontmatterStart: number | null = null;
-  let fenceStart: number | null = null;
-  let fenceLength: number | null = null;
+  let fence: {
+    from: number;
+    marker: FenceMarker;
+    containerIndent: string;
+  } | null = null;
+  const listContainers: { indent: string; width: number }[] = [];
 
   for (let lineNumber = 1; lineNumber <= lastLineNumber; lineNumber++) {
     const text = doc.line(lineNumber).text;
@@ -310,28 +319,74 @@ function buildStructuralBlockIndex(
       continue;
     }
 
-    if (fenceLength !== null) {
-      const closingFence = closingFenceRe.exec(text);
-      if (closingFence && closingFence[1].length >= fenceLength) {
-        ranges.push({ from: fenceStart!, to: lineNumber });
-        fenceStart = null;
-        fenceLength = null;
+    if (fence !== null) {
+      // Physical blank lines remain code even when their container indent is
+      // absent. A nonblank dedent ends a list's fence before this line.
+      if (text.trim().length === 0) continue;
+      const content = getFenceContent(text, fence.containerIndent);
+      if (content) {
+        if (isFenceClosing(content.text, fence.marker)) {
+          ranges.push({ from: fence.from, to: lineNumber });
+          fence = null;
+        }
+        continue;
+      }
+      if (fence.from < lineNumber) {
+        ranges.push({ from: fence.from, to: lineNumber - 1 });
+      }
+      fence = null;
+    }
+
+    // A blank can separate a list marker from its fenced continuation without
+    // ending that list's container. The blank itself remains ordinary Markdown.
+    if (text.trim().length === 0) continue;
+
+    const listItem = matchListItem(text);
+    const indent = listItem?.indent ?? indentRe.exec(text)?.[0] ?? "";
+    const indentWidth = getIndentWidth(indent);
+    while (
+      listContainers.length > 0 &&
+      listContainers[listContainers.length - 1].width > indentWidth
+    ) {
+      listContainers.pop();
+    }
+
+    if (listItem) {
+      const width = getIndentWidth(listItem.prefix);
+      const containerIndent = indent + " ".repeat(width - indentWidth);
+      listContainers.push({ indent: containerIndent, width });
+      const marker = getFenceOpening(listItem.content);
+      if (marker) {
+        fence = {
+          // Keep the opening list marker available to list editing commands.
+          from: lineNumber + 1,
+          marker,
+          containerIndent,
+        };
       }
       continue;
     }
 
-    const openingFence = fenceRe.exec(text);
-    if (openingFence) {
-      fenceStart = lineNumber;
-      fenceLength = openingFence[1].length;
+    const container = listContainers[listContainers.length - 1];
+    const content = container ? getFenceContent(text, container.indent) : null;
+    const continuationFence = content ? getFenceOpening(content.text) : null;
+    const marker = continuationFence ?? getFenceOpening(text);
+    if (marker) {
+      fence = {
+        from: lineNumber,
+        marker,
+        containerIndent: continuationFence ? container.indent : "",
+      };
+    } else if (classifyLexicalLine(text, false) !== "body") {
+      listContainers.length = 0;
     }
   }
 
   if (frontmatterStart !== null) {
     ranges.push({ from: frontmatterStart, to: lastLineNumber });
   }
-  if (fenceStart !== null) {
-    ranges.push({ from: fenceStart, to: lastLineNumber });
+  if (fence !== null && fence.from <= lastLineNumber) {
+    ranges.push({ from: fence.from, to: lastLineNumber });
   }
 
   return new StructuralBlockIndex(ranges);
@@ -358,7 +413,8 @@ function canReuseStructuralBlockIndex(transaction: Transaction): boolean {
         beforeStartLine.number === beforeEndLine.number &&
         afterStartLine.number === afterEndLine.number &&
         !isStructuralBoundaryCandidate(beforeStartLine.text) &&
-        !isStructuralBoundaryCandidate(afterStartLine.text);
+        !isStructuralBoundaryCandidate(afterStartLine.text) &&
+        hasSameContainerContext(beforeStartLine.text, afterStartLine.text);
     },
     true,
   );
@@ -367,7 +423,19 @@ function canReuseStructuralBlockIndex(transaction: Transaction): boolean {
 }
 
 function isStructuralBoundaryCandidate(text: string): boolean {
-  return text === "---" || fenceRe.test(text);
+  return (
+    text === "---" ||
+    getFenceOpening(text.trimStart()) !== null ||
+    getFenceOpening(matchListItem(text)?.content ?? "") !== null
+  );
+}
+
+function hasSameContainerContext(before: string, after: string): boolean {
+  return (
+    indentRe.exec(before)?.[0] === indentRe.exec(after)?.[0] &&
+    matchListItem(before)?.prefix === matchListItem(after)?.prefix &&
+    classifyLexicalLine(before, false) === classifyLexicalLine(after, false)
+  );
 }
 
 function classifyLexicalLine(
