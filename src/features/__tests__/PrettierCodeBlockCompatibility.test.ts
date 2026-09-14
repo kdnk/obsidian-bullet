@@ -50,6 +50,7 @@ async function setup(
     output?: string;
     gate?: ReturnType<typeof deferred>;
     installed?: boolean;
+    legacyPluginManager?: boolean;
     reject?: boolean;
     gates?: ReturnType<typeof deferred>[];
   } = {},
@@ -108,8 +109,16 @@ async function setup(
   };
   if (options.installed !== false)
     manager.plugins["prettier-format"] = formatter;
+  // Obsidian 1.12.7's plugin manager does not implement the Events API.
+  const pluginManager = options.legacyPluginManager
+    ? { plugins: manager.plugins }
+    : manager;
   const plugin = {
-    app: { workspace, plugins: manager, vault: { getConfig: () => true } },
+    app: {
+      workspace,
+      plugins: pluginManager,
+      vault: { getConfig: () => true },
+    },
     registerEvent: () => {},
   } as unknown as Plugin;
   const feature = new PrettierCodeBlockCompatibility(plugin);
@@ -125,6 +134,13 @@ async function setup(
     changed: () => [...changed].forEach((callback) => callback()),
   };
 }
+
+test("loads and unloads on Obsidian without plugin manager events", async () => {
+  const test = await setup({ legacyPluginManager: true });
+
+  expect(test.formatter.format).toBe(test.original);
+  await expect(test.feature.unload()).resolves.toBeUndefined();
+});
 
 test("keeps formatted nested fences on separate rows in one undoable edit", async () => {
   const test = await setup();

@@ -67,7 +67,14 @@ export class PrettierCodeBlockCompatibility implements Feature {
     this.active = true;
     const app = this.plugin.app as unknown as CompatibilityApp;
     this.manager = app.plugins;
-    if (!this.manager) return;
+    // Older Obsidian versions (including 1.12.7) have no plugin Events API.
+    // Leave formatters untouched when their lifecycle cannot be observed.
+    if (
+      !this.manager ||
+      typeof this.manager.on !== "function" ||
+      typeof this.manager.offref !== "function"
+    )
+      return;
     this.changed = this.manager.on("changed", this.reconcile);
     this.plugin.registerEvent(this.changed);
     this.reconcile();
