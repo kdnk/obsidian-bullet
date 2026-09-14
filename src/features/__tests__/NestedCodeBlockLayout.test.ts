@@ -1166,3 +1166,95 @@ test.each(["", "\t", " "])(
     plugin.destroy();
   },
 );
+
+test("preserves unchanged code width probes when one source character changes", () => {
+  type ProbeNode = {
+    className: string;
+    textContent: string;
+    children: ProbeNode[];
+    parent: ProbeNode | null;
+    appendChild: (child: ProbeNode) => void;
+    remove: jest.Mock;
+    setAttribute: jest.Mock;
+  };
+  const created: ProbeNode[] = [];
+  const create = (): ProbeNode => {
+    const element: ProbeNode = {
+      className: "",
+      textContent: "",
+      children: [],
+      parent: null,
+      appendChild(child) {
+        child.parent = element;
+        element.children.push(child);
+      },
+      remove: jest.fn(() => {
+        if (!element.parent) return;
+        const siblings = element.parent.children;
+        siblings.splice(siblings.indexOf(element), 1);
+        element.parent = null;
+      }),
+      setAttribute: jest.fn(),
+    };
+    created.push(element);
+    return element;
+  };
+  const frames: FrameRequestCallback[] = [];
+  const doc = {
+    defaultView: makeAnimationWindow(frames),
+    win: { createDiv: create, createSpan: create },
+    createTextNode: (text: string) =>
+      Object.assign(create(), { textContent: text }),
+  };
+  const state = EditorState.create({
+    doc: ["\t- ```js", "\t  one", "\t  two", "\t  three", "\t  ```"].join("\n"),
+  });
+  const host = create();
+  const view = {
+    state,
+    visibleRanges: [{ from: 0, to: state.doc.length }],
+    dom: { ownerDocument: doc, appendChild: host.appendChild },
+  };
+  const plugin = new NestedCodeBlockLayoutPluginValue(
+    view as never,
+    names(BEGIN, CONTENT, CONTENT, CONTENT, END),
+  );
+  try {
+    const container = host.children[0];
+    const [codeProbe, fenceProbe] = container.children.filter(
+      (element) => element.className === "bullet-plugin-code-width-measure",
+    );
+    const beforeRows = [...codeProbe.children];
+    const beforeAllocations = created.length;
+    const transaction = state.update({
+      changes: { from: state.doc.line(3).to, insert: "x" },
+    });
+    view.state = transaction.state;
+    view.visibleRanges = [{ from: 0, to: transaction.state.doc.length }];
+    plugin.update({
+      state: transaction.state,
+      docChanged: true,
+      changes: transaction.changes,
+      view,
+    } as never);
+
+    expect(container.children).toContain(codeProbe);
+    expect(container.children).toContain(fenceProbe);
+    expect(codeProbe.children).toHaveLength(3);
+    expect(codeProbe.children).toContain(beforeRows[0]);
+    expect(codeProbe.children).toContain(beforeRows[2]);
+    expect(codeProbe.children).not.toContain(beforeRows[1]);
+    expect(beforeRows[1].remove).toHaveBeenCalledTimes(1);
+    const allocatedRows = created
+      .slice(beforeAllocations)
+      .filter(
+        (element) => element.className === "bullet-plugin-code-width-row",
+      );
+    expect(allocatedRows).toHaveLength(1);
+    expect(codeProbe.children).toContain(allocatedRows[0]);
+    const newRowContents = allocatedRows[0].children;
+    expect(newRowContents[newRowContents.length - 1]?.textContent).toBe("twox");
+  } finally {
+    plugin.destroy();
+  }
+});

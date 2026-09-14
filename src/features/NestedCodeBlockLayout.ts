@@ -10,10 +10,16 @@ import {
 import { NestedCodeBlockPreviews } from "./NestedCodeBlockPreview";
 
 import { getObsidianDomWindow } from "../obsidianDom";
+import {
+  getFenceContent,
+  getFenceOpening,
+  isFenceClosing,
+} from "../utils/fencedCode";
 
 const CODE_BLOCK_CLASS = "bullet-plugin-nested-code-block";
 const CODE_CONTENT_CLASS = "bullet-plugin-nested-code-block-content";
 const CODE_BLOCK_INSET = "--bullet-nested-code-block-inset";
+const CODE_BLOCK_END = "--bullet-nested-code-block-end";
 const PREVIEW_OPENING_CLASS = "bullet-plugin-code-preview-opening";
 const PREVIEW_EMBED_CLASS = "bullet-plugin-code-preview-embed";
 const PREVIEW_EMBED_OPENING_CLASS = "bullet-plugin-code-preview-embed-opening";
@@ -27,6 +33,7 @@ const listFenceRe = /^([ \t]*)([-*+]|\d+\.)([ \t]+)(`{3,}|~{3,})/;
 interface MeasuredLine {
   element: HTMLElement;
   inset: string;
+  end?: string;
   emptyBody?: boolean;
   preview?: { height: string; markerOffset: string };
   previewBlock?: HTMLElement;
@@ -196,6 +203,23 @@ export class NestedCodeBlockLayoutPluginValue {
     { marker: HTMLElement; indent: HTMLElement; signature: string }
   >();
 
+  private codeMeasurements = new Map<
+    number,
+    {
+      doc: EditorState["doc"];
+      element: HTMLElement;
+      rows: HTMLElement[];
+      rowProbes: Map<string, HTMLElement>;
+      fence: HTMLElement;
+      source: string;
+      hidden: string;
+      from: number;
+      to: number;
+      flairWidth: number;
+      flairRows: number;
+    }
+  >();
+
   private measurement = {
     read: () => this.measureLines(),
     write: (lines: MeasuredLine[]) => this.applyMeasurements(lines),
@@ -313,6 +337,7 @@ export class NestedCodeBlockLayoutPluginValue {
     this.markerMeasureContainer?.remove();
     this.markerMeasureContainer = null;
     this.markerMeasurements.clear();
+    this.codeMeasurements.clear();
   }
 
   private scheduleMeasure() {
@@ -348,6 +373,9 @@ export class NestedCodeBlockLayoutPluginValue {
         measurement.marker.remove();
         measurement.indent.remove();
         this.markerMeasurements.delete(n);
+        this.codeMeasurements.get(n)?.element.remove();
+        this.codeMeasurements.get(n)?.fence.remove();
+        this.codeMeasurements.delete(n);
       }
     }
     if (!visible.size) return;
@@ -373,6 +401,7 @@ export class NestedCodeBlockLayoutPluginValue {
         this.syntaxContext.lineNameAt(n) ?? "",
       )?.[1];
       const signature = `${rawIndent}\0${hiddenIndent}\0${text}${spacing}\0${level ?? ""}`;
+      this.prepareCodeMeasurement(n, hiddenIndent);
       if (this.markerMeasurements.get(n)?.signature === signature) continue;
       this.markerMeasurements.get(n)?.marker.remove();
       this.markerMeasurements.get(n)?.indent.remove();
@@ -396,6 +425,122 @@ export class NestedCodeBlockLayoutPluginValue {
       this.markerMeasureContainer.appendChild(marker);
       this.markerMeasurements.set(n, { marker, indent, signature });
     }
+  }
+
+  private prepareCodeMeasurement(n: number, hidden: string) {
+    const state = this.view.state;
+    const previous = this.codeMeasurements.get(n);
+    if (previous?.doc === state.doc && previous.hidden === hidden) return;
+    const opening = state.doc.line(n);
+    const match = listFenceRe.exec(opening.text);
+    if (!match || !this.markerMeasureContainer) return;
+    const container = match[1] + " ".repeat(match[2].length) + match[3];
+    const fenceText = opening.text.slice(
+      match[1].length + match[2].length + match[3].length,
+    );
+    const fence = getFenceOpening(fenceText);
+    if (!fence) return;
+    const rows: string[] = [];
+    let to = opening.to;
+    let closingText = "";
+    for (let i = n + 1; i <= state.doc.lines; i++) {
+      const line = state.doc.line(i);
+      const content = getFenceContent(line.text, container);
+      if (!content && line.text.trim()) break;
+      to = line.to;
+      if (content && isFenceClosing(content.text, fence)) {
+        closingText = content.text;
+        break;
+      }
+      rows.push(line.text);
+    }
+    const source = state.doc.sliceString(opening.from, to);
+    if (previous?.source === source && previous.hidden === hidden) {
+      previous.doc = state.doc;
+      previous.from = opening.from;
+      previous.to = to;
+      return;
+    }
+    const reusable = previous?.hidden === hidden ? previous : undefined;
+    if (!reusable) {
+      previous?.element.remove();
+      previous?.fence.remove();
+    }
+    const doc = this.view.dom.ownerDocument;
+    const win = getObsidianDomWindow(doc);
+    const element = reusable?.element ?? win.createSpan();
+    element.className = "bullet-plugin-code-width-measure";
+    const rowProbes = reusable?.rowProbes ?? new Map<string, HTMLElement>();
+    const uniqueRows = new Set(rows);
+    for (const [raw, row] of rowProbes) {
+      if (!uniqueRows.has(raw)) {
+        row.remove();
+        rowProbes.delete(raw);
+      }
+    }
+    // Probe complete source, not just mounted rows: scrolling must not change
+    // the width when the longest code line leaves the viewport. Native indent
+    // boxes retain their minimum widths independently of the code text.
+    for (const raw of uniqueRows) {
+      if (rowProbes.has(raw)) continue;
+      const row = win.createSpan();
+      const indent = /^[ \t]*/.exec(raw)![0];
+      row.appendChild(
+        makeIndentMeasurement(doc, indent, hidden, state.tabSize),
+      );
+      row.appendChild(doc.createTextNode(raw.slice(indent.length)));
+      row.className = "bullet-plugin-code-width-row";
+      element.appendChild(row);
+      rowProbes.set(raw, row);
+    }
+    const fenceProbe = reusable?.fence ?? win.createSpan();
+    fenceProbe.className = "bullet-plugin-code-width-measure";
+    const fenceSource = fenceText + "\n" + closingText;
+    if (fenceProbe.textContent !== fenceSource)
+      fenceProbe.textContent = fenceSource;
+    if (!reusable) {
+      this.markerMeasureContainer.appendChild(element);
+      this.markerMeasureContainer.appendChild(fenceProbe);
+    }
+    this.codeMeasurements.set(n, {
+      doc: state.doc,
+      element,
+      rows: rows.map((raw) => rowProbes.get(raw)!),
+      rowProbes,
+      fence: fenceProbe,
+      source,
+      hidden,
+      from: opening.from,
+      to,
+      flairWidth: previous?.flairWidth ?? 0,
+      flairRows: previous?.flairRows ?? 1,
+    });
+  }
+
+  private measureCodeEnd(opening: number, inset: string): string | undefined {
+    const probe = this.codeMeasurements.get(opening);
+    if (!probe) return;
+    const editing = this.view.state.selection.ranges.some(
+      (range) => range.from <= probe.to && range.to >= probe.from,
+    );
+    const bodyEnd = probe.element.getBoundingClientRect().width;
+    const leadingEnd = Math.max(
+      Number.parseFloat(inset),
+      ...probe.rows
+        .slice(0, probe.flairRows)
+        .map((row) => row.getBoundingClientRect().width),
+    );
+    const fenceEnd = editing
+      ? Number.parseFloat(inset) + probe.fence.getBoundingClientRect().width
+      : 0;
+    const end = Math.max(
+      bodyEnd,
+      leadingEnd + (editing ? 0 : probe.flairWidth),
+    );
+    // The content-start decoration contributes one padding unit; keep another
+    // after the final character, including empty blocks. Fences have no
+    // content-start decoration, so they need only the trailing unit.
+    return `max(calc(${inset} + 2 * var(--list-padding-inline-start)), calc(${end}px + 2 * var(--list-padding-inline-start)), calc(${fenceEnd}px + var(--list-padding-inline-start)))`;
   }
 
   private measureLines(): MeasuredLine[] {
@@ -506,6 +651,26 @@ export class NestedCodeBlockLayoutPluginValue {
       }
       const inset = currentInset;
       if (inset !== null) {
+        const flair = element.querySelector<HTMLElement>(".code-block-flair");
+        const codeProbe = this.codeMeasurements.get(opening.openingLineNumber);
+        if (flair && codeProbe) {
+          const bounds = flair.getBoundingClientRect();
+          const lineHeight = Number.parseFloat(
+            element.ownerDocument.defaultView?.getComputedStyle(element)
+              .lineHeight ?? "0",
+          );
+          codeProbe.flairWidth = bounds.width;
+          codeProbe.flairRows =
+            lineHeight > 0
+              ? Math.max(
+                  1,
+                  Math.ceil(
+                    (bounds.bottom - element.getBoundingClientRect().top) /
+                      lineHeight,
+                  ),
+                )
+              : 1;
+        }
         visibleInsets.set(opening.openingLineNumber, inset);
         const next = element.nextElementSibling;
         const nativePreview =
@@ -513,6 +678,7 @@ export class NestedCodeBlockLayoutPluginValue {
         measured.push({
           element,
           inset,
+          end: this.measureCodeEnd(opening.openingLineNumber, inset),
           emptyBody,
           previewBlock: nativePreview ? (next as HTMLElement) : undefined,
           preview:
@@ -545,7 +711,12 @@ export class NestedCodeBlockLayoutPluginValue {
         visibleInsets.get(openingLineNumber) ??
         (probe ? measureIntrinsicInset(probe.indent, probe.marker) : undefined);
       if (inset !== undefined)
-        measured.push({ element, inset, emptyBody: true });
+        measured.push({
+          element,
+          inset,
+          end: this.measureCodeEnd(openingLineNumber, inset),
+          emptyBody: true,
+        });
     }
     return measured;
   }
@@ -558,8 +729,10 @@ export class NestedCodeBlockLayoutPluginValue {
     }
 
     let previewChanged = false;
-    for (const { element, inset, preview } of lines) {
+    for (const { element, inset, end, preview } of lines) {
       setStyleProperty(element, CODE_BLOCK_INSET, inset);
+      if (end) setStyleProperty(element, CODE_BLOCK_END, end);
+      else element.style.removeProperty(CODE_BLOCK_END);
       if (preview) {
         setStyleProperty(element, PREVIEW_HEIGHT, preview.height);
         setStyleProperty(element, PREVIEW_MARKER_OFFSET, preview.markerOffset);
@@ -681,6 +854,7 @@ export class NestedCodeBlockLayoutPluginValue {
     element.classList.remove(PREVIEW_FIRST_CLASS);
     element.classList.remove(PREVIEW_LAST_CLASS);
     element.style.removeProperty(CODE_BLOCK_INSET);
+    element.style.removeProperty(CODE_BLOCK_END);
     element.style.removeProperty(PREVIEW_HEIGHT);
     element.style.removeProperty(PREVIEW_MARKER_OFFSET);
   }
