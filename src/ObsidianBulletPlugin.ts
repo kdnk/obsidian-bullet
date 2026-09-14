@@ -17,6 +17,7 @@ import { ListsMovementCommands } from "./features/ListsMovementCommands";
 import { MetaBackspaceBehaviourOverride } from "./features/MetaBackspaceBehaviourOverride";
 import { MobileRightFoldControls } from "./features/MobileRightFoldControls";
 import { NativeFoldScroll } from "./features/NativeFoldScroll";
+import { PrettierCodeBlockCompatibility } from "./features/PrettierCodeBlockCompatibility";
 import { SettingsTab } from "./features/SettingsTab";
 import { ShiftTabBehaviourOverride } from "./features/ShiftTabBehaviourOverride";
 import { SystemInfo } from "./features/SystemInfo";
@@ -62,6 +63,7 @@ export default class ObsidianBulletPlugin extends Plugin {
       // service features
       new SettingsTab(this, this.settings),
       new SystemInfo(this, this.settings),
+      new PrettierCodeBlockCompatibility(this),
 
       // general features
       new ListsMovementCommands(
