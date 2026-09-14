@@ -5,8 +5,9 @@ const path = require("node:path");
 const vaultPath = path.resolve(__dirname, "../vault");
 
 function cdp(method, params = {}) {
-  return JSON.parse(
-    execFileSync(
+  let output;
+  try {
+    output = execFileSync(
       "obsidian-cli",
       [
         "vault=vault",
@@ -14,9 +15,36 @@ function cdp(method, params = {}) {
         `method=${method}`,
         `params=${JSON.stringify(params)}`,
       ],
-      { encoding: "utf8", timeout: 20000, killSignal: "SIGKILL" },
-    ),
-  );
+      {
+        encoding: "utf8",
+        timeout: 20000,
+        killSignal: "SIGKILL",
+        maxBuffer: 16 * 1024 * 1024,
+      },
+    );
+  } catch (error) {
+    // The CLI can print a complete CDP reply and then hang during shutdown.
+    // Consume that reply once; retrying could repeat an editing command.
+    if (error.code === "ETIMEDOUT" && error.stdout) {
+      try {
+        const response = JSON.parse(error.stdout);
+        if (
+          response &&
+          typeof response === "object" &&
+          !Array.isArray(response)
+        ) {
+          console.warn(
+            `CDP ${method}: reply received before CLI shutdown timeout`,
+          );
+          return response;
+        }
+      } catch {
+        // Incomplete output is still a transport failure.
+      }
+    }
+    throw error;
+  }
+  return JSON.parse(output);
 }
 
 function evaluate(fn, ...args) {

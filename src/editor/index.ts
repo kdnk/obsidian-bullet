@@ -6,7 +6,7 @@ import {
   foldedRanges,
   unfoldEffect,
 } from "@codemirror/language";
-import { EditorSelection, EditorState } from "@codemirror/state";
+import { Annotation, EditorSelection, EditorState } from "@codemirror/state";
 import { EditorView, runScopeHandlers } from "@codemirror/view";
 
 export interface MyEditorPosition {
@@ -23,6 +23,9 @@ export interface MyEditorSelection {
   anchor: MyEditorPosition;
   head: MyEditorPosition;
 }
+
+/** Marks a completed CreateNewItem operation, including its number normalization. */
+export const listItemInsertion = Annotation.define<boolean>();
 
 interface EditorWithCodeMirrorView extends Editor {
   cm: EditorView;
@@ -95,8 +98,32 @@ export class MyEditor {
     replacement: string,
     from: MyEditorPosition,
     to: MyEditorPosition,
+    selections?: MyEditorSelection[],
+    isListInsertion = false,
   ): void {
-    return this.e.replaceRange(replacement, from, to);
+    if (!selections) return this.e.replaceRange(replacement, from, to);
+    const changes = this.view.state.changes({
+      from: this.posToDocOffset(from),
+      to: this.posToDocOffset(to),
+      insert: replacement,
+    });
+    const doc = changes.apply(this.view.state.doc);
+    const offset = (position: MyEditorPosition) => {
+      const line = doc.line(position.line + 1);
+      return Math.min(line.from + position.ch, line.to);
+    };
+    // Filters need the intended destination while deciding whether this edit
+    // stays inside the focused list or must reveal a newly inserted sibling.
+    this.view.dispatch({
+      changes,
+      selection: EditorSelection.create(
+        selections.map(({ anchor, head }) =>
+          EditorSelection.range(offset(anchor), offset(head)),
+        ),
+        selections.length - 1,
+      ),
+      annotations: isListInsertion ? listItemInsertion.of(true) : undefined,
+    });
   }
 
   setSelections(selections: MyEditorSelection[]): void {

@@ -7,6 +7,18 @@ import {
 } from "../Operation";
 
 describe("MoveListUp operation", () => {
+  test("moves a fence with tab-indented content as one item", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- previous\n- ```js\n\tcode\n\t```\n- next",
+        cursor: { line: 1, ch: 3 },
+      }),
+    });
+
+    expect(new MoveListUp(root, false).perform()).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe("- ```js\n\tcode\n\t```\n- previous\n- next");
+  });
+
   test("should move a list item up before its sibling", () => {
     const root = makeRoot({
       editor: makeEditor({

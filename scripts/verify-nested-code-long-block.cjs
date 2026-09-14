@@ -101,6 +101,51 @@ function position(phase, targetLine, editing = false, insert = false) {
             observer.observe(cm.contentDOM, { childList: true, subtree: true });
           });
         }
+        // Processor rows can exist before CodeMirror finishes the measurement
+        // and scroll-anchor work requested by opener navigation. Wait for its
+        // geometry to settle before the single target scroll below.
+        const geometry = () => {
+          const block = cm.contentDOM.querySelector(".cm-preview-code-block");
+          const row = block?.querySelectorAll(".ec-line")[rowIndex];
+          if (!block || !row) return null;
+          const blockBounds = block.getBoundingClientRect();
+          const rowBounds = row.getBoundingClientRect();
+          return {
+            block,
+            row,
+            values: [
+              blockBounds.top,
+              blockBounds.height,
+              blockBounds.width,
+              rowBounds.top,
+              rowBounds.height,
+              rowBounds.width,
+              cm.scrollDOM.scrollTop,
+              cm.scrollDOM.scrollHeight,
+              cm.scrollDOM.clientHeight,
+            ],
+          };
+        };
+        let previous = geometry();
+        let stableFrames = 0;
+        for (let frame = 1; frame <= 30 && stableFrames < 3; frame++) {
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+          const current = geometry();
+          const stable =
+            current &&
+            previous &&
+            current.block === previous.block &&
+            current.row === previous.row &&
+            current.values.every(
+              (value, i) => Math.abs(value - previous.values[i]) < 0.25,
+            );
+          stableFrames = stable ? stableFrames + 1 : 0;
+          previous = current;
+        }
+        if (stableFrames < 3)
+          throw Error(
+            "Shiki target geometry did not settle before single scroll",
+          );
       }
       const embed = cm.contentDOM.querySelector(".cm-preview-code-block");
       if (embed) {

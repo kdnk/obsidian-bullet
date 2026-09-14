@@ -335,14 +335,16 @@ test("Enter at the focused body's start inserts an empty sibling and keeps the o
     getAllFoldedLines: () => [],
     getRange: (from: MyEditorPosition, to: MyEditorPosition) =>
       state.doc.sliceString(offset(from), offset(to)),
-    replaceRange: (
-      insert: string,
-      from: MyEditorPosition,
-      to: MyEditorPosition,
-    ) => {
-      state = state.update({
-        changes: { from: offset(from), to: offset(to), insert },
-      }).state;
+    replaceRange: (...args: Parameters<MyEditor["replaceRange"]>) => {
+      const view = {
+        get state() {
+          return state;
+        },
+        dispatch(tr: Transaction | TransactionSpec) {
+          state = tr instanceof Transaction ? tr.state : state.update(tr).state;
+        },
+      };
+      new MyEditor({ cm: view } as never).replaceRange(...args);
     },
     setSelections: (ranges: MyEditorSelection[]) => {
       state = state.update({

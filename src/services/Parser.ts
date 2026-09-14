@@ -5,6 +5,7 @@ import { List, Root } from "../root";
 import { checkboxRe } from "../utils/checkboxRe";
 import {
   FenceMarker,
+  getFenceContent,
   getFenceOpening,
   isFenceClosing,
 } from "../utils/fencedCode";
@@ -89,6 +90,7 @@ export class Parser {
     };
 
     const line = editor.getLine(parsingStartLine);
+    const fenceOwners = new Map<number, number | null>();
 
     let listLookingPos: number | null = null;
 
@@ -114,6 +116,7 @@ export class Parser {
         editor,
         parsingStartLine,
         limitFrom,
+        fenceOwners,
       );
       if (listLookingPos === null) return null;
     }
@@ -138,23 +141,25 @@ export class Parser {
       return null;
     }
 
-    if (
-      listStartLine > limitFrom &&
-      editor.getLine(listStartLine - 1).length === 0
+    while (
+      listStartLineLookup >= limitFrom &&
+      editor.getLine(listStartLineLookup).length === 0
     ) {
       const fenceOwner = this.findFenceOwnerAt(
         editor,
-        parsingStartLine,
+        listStartLineLookup,
         limitFrom,
+        fenceOwners,
       );
-      if (fenceOwner !== null && fenceOwner < listStartLine) {
-        listStartLine = fenceOwner;
-        while (listStartLine > limitFrom) {
-          const previous = editor.getLine(listStartLine - 1);
-          if (!this.isListItem(previous) && !this.isLineWithIndent(previous))
-            break;
-          listStartLine--;
-        }
+      if (fenceOwner === null || fenceOwner >= listStartLine) break;
+      listStartLine = fenceOwner;
+      listStartLineLookup = fenceOwner - 1;
+      while (listStartLineLookup >= limitFrom) {
+        const previous = editor.getLine(listStartLineLookup);
+        if (!this.isListItem(previous) && !this.isLineWithIndent(previous))
+          break;
+        if (this.isListItem(previous)) listStartLine = listStartLineLookup;
+        listStartLineLookup--;
       }
     }
 
@@ -165,19 +170,19 @@ export class Parser {
       containerIndent: string;
     } | null = null;
     let listEndLineWasAcceptedInsideFence = false;
-    while (listEndLineLookup <= editor.lastLine()) {
+    while (listEndLineLookup <= Math.min(limitTo, editor.lastLine())) {
       const line = editor.getLine(listEndLineLookup);
       if (rangeFence) {
-        if (line.length === 0) {
+        if (line.trim().length === 0) {
           listEndLine = listEndLineLookup++;
           listEndLineWasAcceptedInsideFence = true;
           continue;
         }
-        if (!line.startsWith(rangeFence.containerIndent)) break;
-        const content = line.slice(rangeFence.containerIndent.length);
+        const content = getFenceContent(line, rangeFence.containerIndent);
+        if (!content) break;
         listEndLine = listEndLineLookup;
         listEndLineWasAcceptedInsideFence = true;
-        if (isFenceClosing(content, rangeFence.marker)) rangeFence = null;
+        if (isFenceClosing(content.text, rangeFence.marker)) rangeFence = null;
         if (listEndLineLookup >= limitTo) break;
         listEndLineLookup++;
         continue;
@@ -265,44 +270,26 @@ export class Parser {
           currentList = owner;
           continue;
         }
-        const noteIndentRaw = line.match(/^[ \t]*/)?.[0] || "";
-        const noteIndentWidth =
-          this.getIndentWidth(noteIndentRaw) - baseIndentWidth;
-        const listIndentWidth = indentWidths.get(owner);
-        if (listIndentWidth === undefined) {
-          return error(`Unable to parse list: missing indent width`);
+        const expectedIndent = owner.getNotesIndent();
+        const content =
+          expectedIndent !== null
+            ? getFenceContent(line, expectedIndent)
+            : null;
+        if (!content && line.trim().length === 0) {
+          owner.addLine(line, "");
+          currentList = owner;
+          continue;
         }
-        const expectedNoteIndent = owner.getNotesIndent();
-        const expectedNoteIndentWidth = expectedNoteIndent
-          ? this.getIndentWidth(expectedNoteIndent) - baseIndentWidth
-          : null;
-        const hasDeeperNoteIndent =
-          expectedNoteIndent !== null &&
-          expectedNoteIndentWidth !== null &&
-          noteIndentWidth > expectedNoteIndentWidth &&
-          noteIndentRaw.startsWith(expectedNoteIndent);
-
-        if (
-          expectedNoteIndentWidth !== null &&
-          noteIndentWidth !== expectedNoteIndentWidth &&
-          !hasDeeperNoteIndent
-        ) {
+        if (!content) {
           return error(`Unable to parse fenced code: unexpected indentation`);
         }
-        if (!expectedNoteIndent) {
-          if (!noteIndentRaw || noteIndentWidth <= listIndentWidth) {
-            return error(`Unable to parse fenced code: expected indentation`);
-          }
-          owner.setNotesIndent(noteIndentRaw);
-        }
-
-        const contentStart = hasDeeperNoteIndent
-          ? expectedNoteIndent.length
-          : noteIndentRaw.length;
-        const content = line.slice(contentStart);
-        owner.addLine(content);
+        const rawIndent = line.slice(0, content.offset);
+        owner.addLine(
+          line.slice(content.offset),
+          rawIndent === expectedIndent ? null : rawIndent,
+        );
         currentList = owner;
-        if (isFenceClosing(content, marker)) activeFence = null;
+        if (isFenceClosing(content.text, marker)) activeFence = null;
         continue;
       }
 
@@ -477,7 +464,9 @@ export class Parser {
     editor: Reader,
     targetLine: number,
     fromLine: number,
+    cache: Map<number, number | null>,
   ): number | null {
+    if (cache.has(targetLine)) return cache.get(targetLine) ?? null;
     let scanStart = fromLine;
     for (
       let lineNumber = targetLine - 1;
@@ -506,16 +495,23 @@ export class Parser {
       const line = editor.getLine(lineNumber);
 
       if (activeFence) {
-        if (line.length === 0) continue;
-        if (line.startsWith(activeFence.containerIndent)) {
-          const content = line.slice(activeFence.containerIndent.length);
-          if (isFenceClosing(content, activeFence.marker)) activeFence = null;
+        if (line.trim().length === 0) {
+          // Later backward recovery may reach every blank in this run. Record
+          // ownership once so a long sequence of blocks stays linear to parse.
+          cache.set(lineNumber, activeFence.ownerLine);
+          continue;
+        }
+        const content = getFenceContent(line, activeFence.containerIndent);
+        if (content) {
+          if (isFenceClosing(content.text, activeFence.marker))
+            activeFence = null;
           continue;
         }
         activeFence = null;
       }
 
       if (line.length === 0) {
+        cache.set(lineNumber, null);
         lastListOwner = null;
         continue;
       }
@@ -549,10 +545,17 @@ export class Parser {
       }
     }
 
-    if (!activeFence) return null;
+    if (!activeFence) {
+      cache.set(targetLine, null);
+      return null;
+    }
     const target = editor.getLine(targetLine);
-    return target.length === 0 || target.startsWith(activeFence.containerIndent)
-      ? activeFence.ownerLine
-      : null;
+    const owner =
+      target.trim().length === 0 ||
+      getFenceContent(target, activeFence.containerIndent)
+        ? activeFence.ownerLine
+        : null;
+    cache.set(targetLine, owner);
+    return owner;
   }
 }

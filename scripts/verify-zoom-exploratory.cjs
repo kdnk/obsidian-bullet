@@ -176,25 +176,73 @@ function type(text) {
 }
 function click(selector, label) {
   focus();
-  const p = evaluate(
-    (selector, label) => {
-      const cm = window.__zoomExplore.leaf.view.editor.cm;
-      const candidates = [...cm.contentDOM.querySelectorAll(".cm-line")];
-      const line = candidates.find(
-        (el) => cm.state.doc.lineAt(cm.posAtDOM(el)).text.trim() === label,
-      );
-      const el = line?.querySelector(selector);
-      if (!el) throw Error(`Missing ${selector} on ${label}`);
-      const rect = el.getBoundingClientRect();
-      const x = rect.left + rect.width / 2,
-        y = rect.top + rect.height / 2;
-      if (!el.contains(document.elementFromPoint(x, y)))
-        throw Error("Click target is occluded");
-      return { x, y };
-    },
-    selector,
-    label,
-  );
+  const point = (checkHit) =>
+    evaluate(
+      (selector, label, checkHit) => {
+        const cm = window.__zoomExplore.leaf.view.editor.cm;
+        const candidates = [...cm.contentDOM.querySelectorAll(".cm-line")];
+        const line = candidates.find(
+          (el) => cm.state.doc.lineAt(cm.posAtDOM(el)).text.trim() === label,
+        );
+        const control = line?.querySelector(selector);
+        if (!control) throw Error(`Missing ${selector} on ${label}`);
+        const el =
+          selector === ".collapse-indicator"
+            ? control.querySelector("svg.svg-icon")
+            : control;
+        if (!el) throw Error(`Missing native chevron SVG on ${label}`);
+        const rect = el.getBoundingClientRect();
+        const x = rect.left + rect.width / 2,
+          y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        if (checkHit && !el.contains(hit)) {
+          const describe = (element) => {
+            if (!element) return null;
+            const bounds = element.getBoundingClientRect();
+            const css = getComputedStyle(element);
+            return {
+              html: element.outerHTML.slice(0, 1000),
+              bounds: {
+                left: bounds.left,
+                top: bounds.top,
+                width: bounds.width,
+                height: bounds.height,
+              },
+              hovered: element.matches(":hover"),
+              pointerEvents: css.pointerEvents,
+              visibility: css.visibility,
+              display: css.display,
+              zIndex: css.zIndex,
+            };
+          };
+          throw Error(
+            `Click target is occluded: ${JSON.stringify({
+              selector,
+              label,
+              point: { x, y },
+              target: describe(el),
+              control: describe(control),
+              hit: describe(hit),
+              line: describe(line),
+            })}`,
+          );
+        }
+        return { x, y };
+      },
+      selector,
+      label,
+      checkHit,
+    );
+  if (selector === ".collapse-indicator") {
+    // Native chevrons become interactive on hover. Their SVG remains the hit
+    // target when the surrounding control lets indentation-guide clicks pass.
+    cdp("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      ...point(false),
+    });
+    settle();
+  }
+  const p = point(true);
   cdp("Input.dispatchMouseEvent", {
     type: "mousePressed",
     ...p,
@@ -672,3 +720,11 @@ try {
     JSON.stringify(results, null, 2) + "\n",
   );
 }
+
+// Findings are saved for inspection and must also fail automated verification.
+if (
+  results.some(
+    ({ status }) => status === "finding" || status === "inconclusive-transport",
+  )
+)
+  process.exitCode = 1;

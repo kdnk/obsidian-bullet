@@ -2,6 +2,7 @@ import { ChangesApplicator } from "./ChangesApplicator";
 import { Parser } from "./Parser";
 
 import { MyEditor } from "../editor";
+import { CreateNewItem } from "../operations/CreateNewItem";
 import {
   NO_OP_OUTCOME,
   Operation,
@@ -20,7 +21,12 @@ export class OperationPerformer {
     const outcome = op.perform();
 
     if (outcome.shouldUpdate) {
-      this.changesApplicator.apply(editor, prevRoot, root);
+      this.changesApplicator.apply(
+        editor,
+        prevRoot,
+        root,
+        op instanceof CreateNewItem,
+      );
     }
 
     return outcome;

@@ -1,5 +1,6 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { MoveListDown } from "../MoveListDown";
+import { MoveListUp } from "../MoveListUp";
 import {
   NO_OP_OUTCOME,
   STOP_ONLY_OUTCOME,
@@ -7,6 +8,39 @@ import {
 } from "../Operation";
 
 describe("MoveListDown operation", () => {
+  test.each([
+    { lastSingleWidth: 9, bodyIndent: "   ", codeIndent: "     " },
+    { lastSingleWidth: 9, bodyIndent: "\t", codeIndent: "\t  " },
+    { lastSingleWidth: 99, bodyIndent: "    ", codeIndent: "      " },
+    { lastSingleWidth: 99, bodyIndent: "\t", codeIndent: "\t  " },
+  ])(
+    "preserves fenced code across $lastSingleWidth and the next number with $bodyIndent",
+    ({ lastSingleWidth, bodyIndent, codeIndent }) => {
+      const prefix = Array.from(
+        { length: lastSingleWidth - 1 },
+        (_, index) => `${index + 1}. before`,
+      ).join("\n");
+      const text = `${prefix}\n${lastSingleWidth}. \`\`\`js\n${codeIndent}code\n\n${bodyIndent}\`\`\`\n${lastSingleWidth + 1}. next`;
+      const root = makeRoot({
+        editor: makeEditor({
+          text,
+          cursor: { line: lastSingleWidth - 1, ch: 3 },
+        }),
+      });
+
+      expect(new MoveListDown(root, true).perform()).toEqual(UPDATED_OUTCOME);
+      const moved = `${prefix}\n${lastSingleWidth}. next\n${lastSingleWidth + 1}. \`\`\`js\n${codeIndent} code\n\n${bodyIndent} \`\`\``;
+      expect(root.print()).toBe(moved);
+      const reparsed = makeRoot({
+        editor: makeEditor({ text: moved, cursor: root.getCursor() }),
+      });
+      expect(reparsed.print()).toBe(moved);
+
+      expect(new MoveListUp(reparsed, true).perform()).toEqual(UPDATED_OUTCOME);
+      expect(reparsed.print()).toBe(text);
+    },
+  );
+
   test("should move a list item down below its next sibling", () => {
     const root = makeRoot({
       editor: makeEditor({

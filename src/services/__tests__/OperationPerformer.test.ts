@@ -83,7 +83,7 @@ describe("OperationPerformer", () => {
 
     const result = performer.execute(root, operation, editor);
 
-    expect(apply).toHaveBeenCalledWith(editor, previousRoot, root);
+    expect(apply).toHaveBeenCalledWith(editor, previousRoot, root, false);
     expect(result).toBe(UPDATED_OUTCOME);
   });
 

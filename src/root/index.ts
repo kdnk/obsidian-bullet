@@ -1,3 +1,10 @@
+import {
+  getFenceContent,
+  getFenceOpening,
+  reindentListPrefix,
+  shiftIndentColumns,
+} from "../utils/fencedCode";
+
 export function cmpPos(a: Position, b: Position) {
   return a.line - b.line || a.ch - b.ch;
 }
@@ -179,6 +186,16 @@ export class List {
     return this.lines.concat();
   }
 
+  getLinesForFenceParsing(lines: readonly string[] = this.lines): string[] {
+    // Cursor offsets retain raw tabs; fence syntax also needs any columns of a
+    // tab that cross the container boundary and belong to the code itself.
+    return lines.map((text, index) => {
+      if (index === 0 || this.notesIndent === null) return text;
+      const raw = (this.lineIndentOverrides[index] ?? this.notesIndent) + text;
+      return getFenceContent(raw, this.notesIndent)?.text ?? text;
+    });
+  }
+
   getFirstLineContentStart() {
     const startLine = this.root.getContentLinesRangeOf(this)[0];
 
@@ -275,11 +292,16 @@ export class List {
   }
 
   unindentContent(from: number, till: number) {
+    const oldIndent = this.indent;
+    const oldNotesIndent = this.notesIndent;
     this.indent = this.indent.slice(0, from) + this.indent.slice(till);
     if (this.notesIndent !== null) {
       this.notesIndent =
         this.notesIndent.slice(0, from) + this.notesIndent.slice(till);
     }
+    this.reindentNotes(oldNotesIndent, (indent) =>
+      reindentListPrefix(indent, oldIndent, this.indent),
+    );
 
     for (const child of this.children) {
       child.unindentContent(from, till);
@@ -287,6 +309,8 @@ export class List {
   }
 
   indentContent(indentPos: number, indentChars: string) {
+    const oldIndent = this.indent;
+    const oldNotesIndent = this.notesIndent;
     this.indent =
       this.indent.slice(0, indentPos) +
       indentChars +
@@ -297,6 +321,9 @@ export class List {
         indentChars +
         this.notesIndent.slice(indentPos);
     }
+    this.reindentNotes(oldNotesIndent, (indent) =>
+      reindentListPrefix(indent, oldIndent, this.indent),
+    );
 
     for (const child of this.children) {
       child.indentContent(indentPos, indentChars);
@@ -324,7 +351,41 @@ export class List {
   }
 
   replateBullet(bullet: string) {
+    const widthChange = bullet.length - this.bullet.length;
+    if (
+      widthChange &&
+      this.notesIndent !== null &&
+      getFenceOpening(this.lines[0])
+    ) {
+      // A fence directly after the marker owns continuation indentation relative
+      // to that marker. Renumbering 9. to 10. must not strand its closing fence.
+      const oldIndent = this.notesIndent;
+      this.notesIndent = shiftIndentColumns(oldIndent, widthChange);
+      this.reindentNotes(oldIndent, (indent) =>
+        shiftIndentColumns(indent, widthChange),
+      );
+    }
     this.bullet = bullet;
+  }
+
+  private reindentNotes(
+    oldIndent: string | null,
+    transform: (indent: string) => string,
+  ) {
+    if (oldIndent === null || this.notesIndent === null) return;
+    for (let index = 1; index < this.lines.length; index++) {
+      const raw =
+        (this.lineIndentOverrides[index] ?? oldIndent) + this.lines[index];
+      if (raw.length === 0) continue;
+      const rawIndent = raw.match(/^[ \t]*/)?.[0] ?? "";
+      const adjusted = transform(rawIndent) + raw.slice(rawIndent.length);
+      const content = getFenceContent(adjusted, this.notesIndent);
+      if (!content) continue;
+      this.lines[index] = adjusted.slice(content.offset);
+      const prefix = adjusted.slice(0, content.offset);
+      this.lineIndentOverrides[index] =
+        prefix === this.notesIndent ? null : prefix;
+    }
   }
 
   getParent() {

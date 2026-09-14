@@ -69,6 +69,14 @@ function resize(width) {
 }
 
 try {
+  // Background Electron pages can reflow DOM while animation-frame callbacks
+  // are paused. Geometry assertions require the same visible state as UI use.
+  cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
+  evaluate(() => {
+    window.focus();
+    if (document.visibilityState !== "visible")
+      throw Error("Fold verification requires a visible renderer");
+  });
   evaluate(
     async (filePath, frontmatter) => {
       const text =
@@ -181,17 +189,23 @@ try {
     );
   }
 } finally {
-  cdp("Emulation.clearDeviceMetricsOverride", {});
-  evaluate(
-    async (filePath, previousPath) => {
-      const previous =
-        previousPath && app.vault.getAbstractFileByPath(previousPath);
-      if (previous) await app.workspace.getLeaf(false).openFile(previous);
-      else app.workspace.activeLeaf.detach();
-      const fixture = app.vault.getAbstractFileByPath(filePath);
-      if (fixture) await app.vault.delete(fixture);
-    },
-    notePath,
-    initial.file ?? null,
-  );
+  try {
+    cdp("Emulation.clearDeviceMetricsOverride", {});
+    evaluate(
+      async (filePath, previousPath) => {
+        const active = app.workspace.activeLeaf.view;
+        if (active.file?.path === filePath) await active.save();
+        const previous =
+          previousPath && app.vault.getAbstractFileByPath(previousPath);
+        if (previous) await app.workspace.getLeaf(false).openFile(previous);
+        else app.workspace.activeLeaf.detach();
+        const fixture = app.vault.getAbstractFileByPath(filePath);
+        if (fixture) await app.vault.trash(fixture, false);
+      },
+      notePath,
+      initial.file ?? null,
+    );
+  } finally {
+    cdp("Emulation.setFocusEmulationEnabled", { enabled: false });
+  }
 }

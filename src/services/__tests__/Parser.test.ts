@@ -23,6 +23,107 @@ function makeLogSink() {
 }
 
 describe("parseList", () => {
+  test("discovers earlier fenced owners without rescanning every preceding block", () => {
+    const lines = [
+      ...Array.from({ length: 500 }, () => [
+        "- ```js",
+        "  before",
+        "",
+        "  after",
+        "  ```",
+      ]).flat(),
+      "- next",
+    ];
+    const cursor = { line: lines.length - 1, ch: 2 };
+    let reads = 0;
+    const root = makeParser().parse({
+      getLine: (line) => {
+        reads++;
+        return lines[line];
+      },
+      lastLine: () => lines.length - 1,
+      getCursor: () => cursor,
+      listSelections: () => [{ anchor: cursor, head: cursor }],
+      getAllFoldedLines: () => [],
+    });
+    expect(root!.print()).toBe(lines.join("\n"));
+    expect(root!.getChildren()).toHaveLength(501);
+    expect(reads).toBeLessThan(lines.length * 20);
+  });
+
+  test.each([2, 3])(
+    "finds the same root from every line after %i fences with blank rows",
+    (blockCount) => {
+      const blocks = Array.from(
+        { length: blockCount },
+        (_, index) =>
+          `- \`\`\`js\n  before ${index}\n\n  after ${index}\n  \`\`\``,
+      );
+      const text = [...blocks, "- next"].join("\n");
+      const parser = makeParser();
+      for (let line = 0; line < blockCount * 5 + 1; line++) {
+        const root = parser.parse(
+          makeEditor({ text, cursor: { line, ch: 0 } }),
+        );
+        expect(root).not.toBeNull();
+        expect(root!.getChildren()).toHaveLength(blockCount + 1);
+        expect(root!.print()).toBe(text);
+      }
+    },
+  );
+
+  test("retains a whitespace-only row shallower than the fenced container", () => {
+    const text = "- ```js\n  before\n \n  after\n  ```\n- next";
+    const parser = makeParser();
+    for (const line of [0, 2, 3, 5]) {
+      const root = parser.parse(makeEditor({ text, cursor: { line, ch: 0 } }));
+      expect(root).not.toBeNull();
+      expect(root!.print()).toBe(text);
+    }
+  });
+
+  test.each([
+    ["", "\t"],
+    ["\t", "\t\t"],
+    ["    ", "\t\t"],
+    ["\t", "      "],
+  ])("preserves raw fenced code indentation %j / %j", (indent, bodyIndent) => {
+    const text = [
+      `${indent}- \`\`\`js`,
+      `${bodyIndent}code`,
+      "",
+      `${indent}  after`,
+      `${bodyIndent}\`\`\``,
+      `${indent}- next`,
+    ].join("\n");
+    const parser = makeParser();
+    for (let line = 0; line < 6; line++) {
+      const root = parser.parse(makeEditor({ text, cursor: { line, ch: 0 } }));
+      expect(root).not.toBeNull();
+      expect(root!.print()).toBe(text);
+      expect(root!.getChildren()[0].getLineCount()).toBe(5);
+    }
+  });
+
+  test.each([2, 3])(
+    "respects range end %i on a physical blank inside a fence",
+    (toLine) => {
+      const text = "- ```js\n  one\n\n\n  two\n  ```\n- later";
+      const parser = makeParser();
+      const roots = parser.parseRange(
+        makeEditor({ text, cursor: { line: 0, ch: 0 } }),
+        0,
+        toLine,
+      );
+
+      expect(roots).toHaveLength(1);
+      expect(roots[0].getContentEnd()).toEqual({ line: toLine, ch: 0 });
+      expect(roots[0].print()).toBe(
+        toLine === 2 ? "- ```js\n  one\n" : "- ```js\n  one\n\n",
+      );
+    },
+  );
+
   test("should parse list with notes and sublists", () => {
     const parser = makeParser();
     const editor = makeEditor({

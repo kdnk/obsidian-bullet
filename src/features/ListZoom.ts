@@ -27,7 +27,7 @@ import { stableFoldScrollSnapshot } from "./FoldScroll";
 import { zoomIndentDecorations } from "./ListZoomIndent";
 import { ListZoomInteraction } from "./ListZoomInteraction";
 
-import { MyEditor } from "../editor";
+import { MyEditor, listItemInsertion } from "../editor";
 import { getObsidianDomWindow } from "../obsidianDom";
 import { List } from "../root";
 import { Parser, Reader } from "../services/Parser";
@@ -164,6 +164,7 @@ export class ListZoomState {
             ? value
             : this.resolve(tr.state, value.from);
         const orderedInsertion = this.orderedInsertionChanges(tr, value);
+        const localInsertion = tr.annotation(listItemInsertion) === true;
         const changes = orderedInsertion ?? effectiveChanges(tr, value.from);
         let mapped = changes.mapPos(value.from, 1, MapMode.TrackDel);
         if (mapped === null) return null;
@@ -216,14 +217,27 @@ export class ListZoomState {
         if (
           removedRootLine ||
           (changedOutside &&
-            !orderedInsertion &&
-            (tr.annotation(Transaction.userEvent) !== undefined ||
+            (!orderedInsertion || !localInsertion) &&
+            (localInsertion ||
+              tr.annotation(Transaction.userEvent) !== undefined ||
               isWholeDocumentReplacement(tr)))
         )
           return null;
         const bodyEdit = changedOutside ? null : this.mapBodyEdits(value, tr);
         if (bodyEdit) return bodyEdit;
         const next = this.resolve(tr.state, mapped);
+        // Plugin and native Enter can split the focused root into a following
+        // sibling. Reveal that sibling instead of redirecting continued typing
+        // to the old root. The edit filter still rejects hidden document edits.
+        const nativeInsertion =
+          tr.isUserEvent("input") && tr.newDoc.lines > tr.startState.doc.lines;
+        if (
+          next &&
+          (localInsertion || nativeInsertion) &&
+          !orderedInsertion &&
+          tr.newSelection.ranges.some((selection) => selection.to > next.to)
+        )
+          return null;
         // Prefix formatting may map the old start into the new indentation.
         // Mapping into body text means the original line merged into another
         // item; it must not silently become that item's focus.
@@ -257,18 +271,27 @@ export class ListZoomState {
           (tr.annotation(Transaction.userEvent) === undefined && whole);
         let outside = false;
         const orderedInsertion = this.orderedInsertionChanges(tr, range);
+        const localInsertion = tr.annotation(listItemInsertion) === true;
         const changes = orderedInsertion ?? effectiveChanges(tr, range.from);
         changes.iterChangedRanges((from, to) => {
           if (from < range.from || to > range.to) outside = true;
         });
-        if (outside && !external && !orderedInsertion) return [];
+        if (outside && !external && !localInsertion) return [];
         const next = tr.state.field(this.field, false);
         if (!next) return tr;
         const low = next.from + next.indent.length;
         const clamp = (pos: number) => Math.max(low, Math.min(next.to, pos));
-        const mappedSelection = !tr.selection
-          ? tr.startState.selection.map(changes)
-          : tr.newSelection;
+        // An empty sibling inserted before the focused body remains hidden.
+        // Follow the original body instead of clamping the operation's empty
+        // sibling selection to the marker of the retained item.
+        const insertedBefore =
+          localInsertion &&
+          next.from > range.from &&
+          tr.newSelection.main.to < low;
+        const mappedSelection =
+          !tr.selection || insertedBefore
+            ? tr.startState.selection.map(changes)
+            : tr.newSelection;
         const ranges = mappedSelection.ranges.map((r) =>
           EditorSelection.range(clamp(r.anchor), clamp(r.head)),
         );

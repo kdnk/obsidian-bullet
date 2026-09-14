@@ -96,10 +96,11 @@ export class CreateNewItem implements Operation {
       newLines = [""];
     }
 
+    const fenceLines = list.getLinesForFenceParsing(oldLines);
     let opening: ReturnType<typeof getFenceOpening> = null;
     for (const line of [
       ...this.documentPrefixBeforeRoot.split("\n"),
-      ...oldLines,
+      ...fenceLines,
     ]) {
       if (opening) {
         if (isFenceClosing(line, opening)) opening = null;
@@ -118,7 +119,7 @@ export class CreateNewItem implements Operation {
     const createSiblingAfterFence =
       lineIndex === lines.length - 1 &&
       cursorAtLineEnd &&
-      endsWithClosedFence(oldLines);
+      endsWithClosedFence(fenceLines);
 
     if (
       lineIndex > 0 &&

@@ -1,3 +1,5 @@
+import { countColumn } from "@codemirror/state";
+
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { IndentList } from "../IndentList";
 import {
@@ -5,8 +7,85 @@ import {
   STOP_ONLY_OUTCOME,
   UPDATED_OUTCOME,
 } from "../Operation";
+import { OutdentList } from "../OutdentList";
 
 describe("IndentList operation", () => {
+  test("preserves code columns when the fence starts in continuation text", () => {
+    const text = "- previous\n- note\n  ```js\n\tcode\n\t```\n- next";
+    const root = makeRoot({
+      editor: makeEditor({ text, cursor: { line: 1, ch: 3 } }),
+    });
+    expect(new IndentList(root, "  ", false).perform()).toEqual(
+      UPDATED_OUTCOME,
+    );
+    expect(root.print()).toBe(
+      "- previous\n  - note\n    ```js\n  \t  code\n  \t  ```\n- next",
+    );
+  });
+
+  test.each([
+    { indentation: "  ", bodyIndent: "\t" },
+    { indentation: "   ", bodyIndent: "\t" },
+    { indentation: "  ", bodyIndent: "  \t" },
+    { indentation: "   ", bodyIndent: "  \t" },
+  ])(
+    "preserves code columns across $indentation with raw prefix $bodyIndent",
+    ({ indentation, bodyIndent }) => {
+      const text = `- previous\n- \`\`\`js\n${bodyIndent}code\n${bodyIndent}\`\`\`\n- next`;
+      const root = makeRoot({
+        editor: makeEditor({ text, cursor: { line: 1, ch: 3 } }),
+      });
+      expect(new IndentList(root, indentation, false).perform()).toEqual(
+        UPDATED_OUTCOME,
+      );
+      const moved = root.print();
+      const codePrefix = moved.split("\n")[2].match(/^[ \t]*/)?.[0] ?? "";
+      expect(
+        countColumn(codePrefix, 4) - countColumn(indentation + "- ", 4),
+      ).toBe(2);
+      const reparsed = makeRoot({
+        editor: makeEditor({ text: moved, cursor: root.getCursor() }),
+      });
+      expect(reparsed.print()).toBe(moved);
+      expect(new OutdentList(reparsed, false).perform()).toEqual(
+        UPDATED_OUTCOME,
+      );
+      const restored = reparsed.print();
+      const restoredPrefix =
+        restored.split("\n")[2].match(/^[ \t]*/)?.[0] ?? "";
+      expect(countColumn(restoredPrefix, 4)).toBe(4);
+      expect(restored.split("\n")[2].trim()).toBe("code");
+    },
+  );
+
+  test("round trips a mixed raw prefix through indent and outdent", () => {
+    const text = "    - previous\n    - ```js\n\t\tcode\n\t\t```\n    - next";
+    const root = makeRoot({
+      editor: makeEditor({ text, cursor: { line: 1, ch: 7 } }),
+    });
+    expect(new IndentList(root, "\t", false).perform()).toEqual(
+      UPDATED_OUTCOME,
+    );
+    expect(new OutdentList(root, false).perform()).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe(text);
+  });
+
+  test("indents a fence's raw tab prefixes together with its owner", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- previous\n- ```js\n\tcode\n\n\t```\n- next",
+        cursor: { line: 1, ch: 3 },
+      }),
+    });
+
+    expect(new IndentList(root, "\t", false).perform()).toEqual(
+      UPDATED_OUTCOME,
+    );
+    expect(root.print()).toBe(
+      "- previous\n\t- ```js\n\t\tcode\n\n\t\t```\n- next",
+    );
+  });
+
   test("should indent a list item under the previous sibling", () => {
     const root = makeRoot({
       editor: makeEditor({

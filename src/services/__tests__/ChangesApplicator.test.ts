@@ -47,6 +47,8 @@ describe("changesApplicator", () => {
         "  - [ ] 4\n  - [ ] ",
         { line: 4, ch: 0 },
         { line: 4, ch: 9 },
+        [{ anchor: { line: 5, ch: 8 }, head: { line: 5, ch: 8 } }],
+        false,
       ],
       [
         "setSelections",
@@ -89,6 +91,8 @@ describe("changesApplicator", () => {
         "- 5\n- 1\n  - 2\n    - 3\n  - [ ] 4",
         { line: 1, ch: 0 },
         { line: 5, ch: 3 },
+        [{ anchor: { line: 1, ch: 3 }, head: { line: 1, ch: 3 } }],
+        false,
       ],
       ["fold", 3],
       [
@@ -109,7 +113,9 @@ function makeArgs(opts: {
   });
   const newRoot = prevRoot.clone();
   opts.changes(newRoot);
+  let selections = prevRoot.getSelections();
   const mockedEditor = {
+    listSelections: () => selections,
     getRange: (...args: Parameters<MyEditor["getRange"]>) => {
       actions.push(["getRange", ...args]);
       return prevRoot.print();
@@ -119,6 +125,7 @@ function makeArgs(opts: {
     },
     replaceRange: (...args: Parameters<MyEditor["replaceRange"]>) => {
       actions.push(["replaceRange", ...args]);
+      selections = args[3] ?? selections;
     },
     setSelections: (...args: Parameters<MyEditor["setSelections"]>) => {
       actions.push(["setSelections", ...args]);

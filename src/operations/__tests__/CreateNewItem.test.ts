@@ -3,6 +3,19 @@ import { CreateNewItem } from "../CreateNewItem";
 import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 describe("CreateNewItem operation", () => {
+  test.each([
+    { cursor: { line: 1, ch: 6 }, outcome: NO_OP_OUTCOME },
+    { cursor: { line: 3, ch: 4 }, outcome: UPDATED_OUTCOME },
+  ])(
+    "uses tab column context for fence-looking code at $cursor",
+    ({ cursor, outcome }) => {
+      const text = "- ```js\n\t  ```\n\tcode\n\t```";
+      const root = makeRoot({ editor: makeEditor({ text, cursor }) });
+      expect(new CreateNewItem(root, "\t", false).perform()).toEqual(outcome);
+      expect(root.print()).toBe(cursor.line === 1 ? text : text + "\n- ");
+    },
+  );
+
   test("should create a new sibling bullet when cursor is at the end of line", () => {
     const root = makeRoot({
       editor: makeEditor({

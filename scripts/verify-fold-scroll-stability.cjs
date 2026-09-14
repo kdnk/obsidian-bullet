@@ -168,6 +168,14 @@ function expectAnchor(actual, before, message) {
 }
 
 try {
+  // Background Electron pages can reflow DOM while animation-frame callbacks
+  // are paused. Geometry assertions require the same visible state as UI use.
+  cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
+  evaluate(() => {
+    window.focus();
+    if (document.visibilityState !== "visible")
+      throw Error("Fold verification requires a visible renderer");
+  });
   evaluate(
     async (note, zoom) => {
       const frontmatter = zoom
@@ -353,34 +361,40 @@ try {
     }
   }
 } finally {
-  console.log(
-    JSON.stringify(
-      {
-        zoom,
-        pane,
-        input: "Obsidian CLI/CDP, synthetic native pointer sequence",
-        results,
+  try {
+    console.log(
+      JSON.stringify(
+        {
+          zoom,
+          pane,
+          input: "Obsidian CLI/CDP, synthetic native pointer sequence",
+          results,
+        },
+        null,
+        2,
+      ),
+    );
+    evaluate(() => {
+      const container = app.workspace.activeLeaf.view.containerEl;
+      container.style.removeProperty("width");
+      container.style.removeProperty("flex");
+    });
+    cdp("Emulation.clearDeviceMetricsOverride", {});
+    evaluate(
+      async (note, previousPath) => {
+        const active = app.workspace.activeLeaf.view;
+        if (active.file?.path === note) await active.save();
+        const previous =
+          previousPath && app.vault.getAbstractFileByPath(previousPath);
+        if (previous) await app.workspace.getLeaf(false).openFile(previous);
+        else app.workspace.activeLeaf.detach();
+        const fixture = app.vault.getAbstractFileByPath(note);
+        if (fixture) await app.vault.trash(fixture, false);
       },
-      null,
-      2,
-    ),
-  );
-  evaluate(() => {
-    const container = app.workspace.activeLeaf.view.containerEl;
-    container.style.removeProperty("width");
-    container.style.removeProperty("flex");
-  });
-  cdp("Emulation.clearDeviceMetricsOverride", {});
-  evaluate(
-    async (note, previousPath) => {
-      const previous =
-        previousPath && app.vault.getAbstractFileByPath(previousPath);
-      if (previous) await app.workspace.getLeaf(false).openFile(previous);
-      else app.workspace.activeLeaf.detach();
-      const fixture = app.vault.getAbstractFileByPath(note);
-      if (fixture) await app.vault.delete(fixture);
-    },
-    note,
-    initial.file ?? null,
-  );
+      note,
+      initial.file ?? null,
+    );
+  } finally {
+    cdp("Emulation.setFocusEmulationEnabled", { enabled: false });
+  }
 }

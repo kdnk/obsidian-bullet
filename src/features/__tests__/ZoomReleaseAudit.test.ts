@@ -79,14 +79,8 @@ function enter(view: ReturnType<typeof editor>["view"], repairCursor = false) {
     getAllFoldedLines: () => [],
     getRange: (from: MyEditorPosition, to: MyEditorPosition) =>
       view.state.doc.sliceString(offset(from), offset(to)),
-    replaceRange: (
-      insert: string,
-      from: MyEditorPosition,
-      to: MyEditorPosition,
-    ) =>
-      view.dispatch({
-        changes: { from: offset(from), to: offset(to), insert },
-      }),
+    replaceRange: (...args: Parameters<MyEditor["replaceRange"]>) =>
+      new MyEditor({ cm: view } as never).replaceRange(...args),
     setSelections: (ranges: MyEditorSelection[]) =>
       view.dispatch({
         selection: EditorSelection.create(
@@ -446,7 +440,7 @@ test.each(["input", "set"])(
   },
 );
 
-test("an ordered split in the middle keeps the first part as the focused item", () => {
+test("an ordered split in the middle reveals the new sibling for continued typing", () => {
   const { view, zoom } = editor(
     "- work\n\t1. project\n\t\t- task\n- personal",
     2,
@@ -457,7 +451,10 @@ test("an ordered split in the middle keeps the first part as the focused item", 
   expect(view.state.doc.toString()).toBe(
     "- work\n\t1. pro\n\t2. ject\n\t\t- task\n- personal",
   );
-  expect(zoom.range(view.state)?.from).toBe(7);
+  expect(zoom.range(view.state)).toBeNull();
+  expect(view.state.selection.main.head).toBe(
+    view.state.doc.toString().indexOf("ject"),
+  );
 });
 
 test.each(["1.", "9.", "99."])(

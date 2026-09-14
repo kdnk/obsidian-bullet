@@ -2,7 +2,12 @@ import { MyEditor } from "../editor";
 import { List, Position, Root, isRangesIntersects } from "../root";
 
 export class ChangesApplicator {
-  apply(editor: MyEditor, prevRoot: Root, newRoot: Root) {
+  apply(
+    editor: MyEditor,
+    prevRoot: Root,
+    newRoot: Root,
+    isListInsertion = false,
+  ) {
     const changes = this.calculateChanges(editor, prevRoot, newRoot);
     if (changes) {
       const { replacement, changeFrom, changeTo } = changes;
@@ -18,14 +23,23 @@ export class ChangesApplicator {
         editor.unfold(line);
       }
 
-      editor.replaceRange(replacement, changeFrom, changeTo);
+      editor.replaceRange(
+        replacement,
+        changeFrom,
+        changeTo,
+        newRoot.getSelections(),
+        isListInsertion,
+      );
 
+      // Preserve any selection corrected by a transaction filter. Recording
+      // that accepted position after the edit also gives Obsidian's bundled
+      // history its redo destination and keeps refolds away from the cursor.
+      const acceptedSelections = editor.listSelections();
       for (const line of fold) {
         editor.fold(line);
       }
-    }
-
-    editor.setSelections(newRoot.getSelections());
+      editor.setSelections(acceptedSelections);
+    } else editor.setSelections(newRoot.getSelections());
   }
 
   private calculateChanges(editor: MyEditor, prevRoot: Root, newRoot: Root) {
