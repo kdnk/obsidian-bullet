@@ -222,7 +222,7 @@ describe("native preview row roles", () => {
     }),
   );
 
-  test("collapses hidden fences and rounds the first and last visible code rows", () => {
+  test("marks native preview fences and rounds the first and last code rows", () => {
     const fixture = makePreviewFixture();
     const [opening, first, last, closing] = fixture.lines;
     fixture.measure();
@@ -251,7 +251,7 @@ describe("native preview row roles", () => {
     }
   });
 
-  test("keeps an empty native opener visible while hiding its closing fence", () => {
+  test("marks only the hidden closing fence for an empty native block", () => {
     const fixture = makePreviewFixture(true);
     const [opening, closing] = fixture.lines;
     fixture.measure();
@@ -267,7 +267,7 @@ describe("native preview row roles", () => {
     fixture.plugin.destroy();
   });
 
-  test("restores lost height roles before the next CodeMirror measurement without observing its own classes", () => {
+  test("restores lost preview roles before the next CodeMirror measurement without observing its own classes", () => {
     const fixture = makePreviewFixture();
     const [opening] = fixture.lines;
     fixture.measure();
@@ -327,7 +327,7 @@ describe("native preview row roles", () => {
     fixture.plugin.destroy();
   });
 
-  test("restores embed height and guide roles after a partial class reset, then reveals a raw fence immediately", () => {
+  test("restores embed and guide roles after a partial class reset, then reveals a raw fence immediately", () => {
     const fixture = makePreviewFixture();
     const [opening, embed] = fixture.lines;
     embed.classList = makeClassList("cm-preview-code-block");
@@ -491,7 +491,7 @@ test("insets a rendered code embed from its owning list marker when the fence te
 });
 
 test.each(["unordered", "ordered", "empty", "empty-no-line-box"])(
-  "keeps %s preview baseline stable after native class redraw",
+  "aligns %s preview below a native-height fence after class redraw",
   (kind) => {
     const state = EditorState.create({ doc: "\t- ```js\n\t  code\n\t  ```" });
     const opening = makeLine(
@@ -585,16 +585,19 @@ test.each(["unordered", "ordered", "empty", "empty-no-line-box"])(
       measure();
       expect(
         opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
-      ).toBe(kind === "empty-no-line-box" ? "0px" : "10px");
+      ).toBe(kind === "empty-no-line-box" ? "26px" : "36px");
       measure();
       expect(
         opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
-      ).toBe(kind === "empty-no-line-box" ? "0px" : "10px");
+      ).toBe(kind === "empty-no-line-box" ? "26px" : "36px");
       opening.classList.remove("bullet-plugin-code-preview-opening");
       measure();
       expect(
         opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
-      ).toBe(kind === "empty-no-line-box" ? "0px" : "10px");
+      ).toBe(kind === "empty-no-line-box" ? "26px" : "36px");
+      expect(
+        opening.style.getPropertyValue("--bullet-code-preview-height"),
+      ).toBe(kind === "empty-no-line-box" ? "50px" : "71px");
       plugin.destroy();
       expect(
         opening.style.getPropertyValue("--bullet-code-preview-height"),

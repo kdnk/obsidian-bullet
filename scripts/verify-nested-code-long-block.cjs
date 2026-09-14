@@ -335,7 +335,9 @@ function position(phase, targetLine, editing = false, insert = false) {
     if (sample.opening) {
       for (const guide of sample.opening.guides)
         check(
-          Math.abs(guide.height - embed.bounds.height) < 1,
+          Math.abs(
+            sample.opening.bounds.top + guide.height - embed.bounds.bottom,
+          ) < 1,
           `${phase}: offscreen opener guide spans whole embed`,
         );
     }

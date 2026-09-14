@@ -108,8 +108,7 @@ body.bullet-plugin-better-lists
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.HyperMD-codeblock.HyperMD-list-line.bullet-plugin-code-preview-hidden-fence {
-  block-size: 0;
-  min-block-size: 0;
+  /* Preserve native line height so Vim can navigate into previewed fences. */
   padding-block: 0;
   overflow: visible;
   z-index: 1;
@@ -161,6 +160,12 @@ body.bullet-plugin-better-lists
     calc(100% - var(--bullet-nested-code-block-end, 100%))
   );
   background-color: var(--code-background);
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-nested-code-block.bullet-plugin-code-preview-embed-opening::before {
+  background-color: transparent;
 }
 
 body.bullet-plugin-better-lists

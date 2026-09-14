@@ -147,7 +147,8 @@ try {
                   bulletCenter: rect(bullet).y + rect(bullet).height / 2,
                   textCenter:
                     rect(nativeContent).y + rect(nativeContent).height / 2,
-                  fenceHeight: rect(start).height + rect(line(body + 1)).height,
+                  openingHeight: rect(start).height,
+                  closingHeight: rect(line(body + 1)).height,
                 }
               : null,
             opening,
@@ -165,7 +166,8 @@ try {
                       "::before",
                     ).height,
                   ),
-                  embedHeight: rect(embed).height,
+                  previewBottom: rect(embed).bottom,
+                  openingTop: rect(start).top,
                   lineNumbers: embed.querySelectorAll(".ln").length,
                 }
               : null,
@@ -233,8 +235,9 @@ try {
           `${label}: native bullet shares first code line`,
         );
         check(
-          entry.nativePreview.fenceHeight === 0,
-          `${label}: hidden native fences leave no guide gaps`,
+          entry.nativePreview.openingHeight > 0 &&
+            entry.nativePreview.closingHeight > 0,
+          `${label}: native fences retain navigable line boxes`,
         );
       }
       if (entry.preview) {
@@ -253,7 +256,7 @@ try {
           `${label}: hover outline fits the code background`,
         );
         check(
-          Math.abs(p.guideHeight - p.embedHeight) < 1,
+          Math.abs(p.openingTop + p.guideHeight - p.previewBottom) < 1,
           `${label}: native guide spans preview in indentation area`,
         );
       }
@@ -379,7 +382,8 @@ try {
           getComputedStyle(opening.querySelector(".cm-indent"), "::before")
             .height,
         ),
-        embedHeight: embedded ? bounds(next).height : null,
+        previewBottom: embedded ? bounds(next).bottom : null,
+        openingTop: bounds(opening).top,
       };
     });
     const plugin = cm.plugins.map((p) => p.value).find((p) => p?.styledLines);
@@ -414,7 +418,7 @@ try {
       );
     if (e.embedded)
       check(
-        Math.abs(e.guideHeight - e.embedHeight) < 1,
+        Math.abs(e.openingTop + e.guideHeight - e.previewBottom) < 1,
         `edge case ${e.opening}: guide spans whole preview`,
       );
   }

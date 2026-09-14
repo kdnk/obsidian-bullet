@@ -1092,15 +1092,15 @@ function measurePreviewOpening(
   const markerOffset =
     firstLine.top +
     firstLine.height / 2 -
-    blockBounds.top -
+    lineBounds.top -
     (markerBounds.top + markerBounds.height / 2 - lineBounds.top) +
     previousOffset;
   if (!Number.isFinite(markerOffset) || blockBounds.height <= 0) return;
 
-  // The embed alone owns the rendered block height. Giving both CodeMirror
-  // children that height would double its height map even with CSS overlap.
+  // Only the native guide spans the opening row and the preview. Keep each
+  // CodeMirror child's own height, including the navigable opening fence.
   return {
-    height: `${blockBounds.height}px`,
+    height: `${blockBounds.top + blockBounds.height - lineBounds.top}px`,
     markerOffset: `${markerOffset}px`,
   };
 }
