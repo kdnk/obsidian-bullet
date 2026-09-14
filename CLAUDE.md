@@ -161,3 +161,5 @@ Rollup bundles to a single CJS `dist/main.js`. `PLUGIN_VERSION` and `CHANGELOG_M
 
 - Formatter compatibility for empty list ancestors
     - Follow AGENTS.md's empty-parent save verification using `scripts/verify-empty-parent-code-save.cjs` and the actual installed formatter. Preserve formatter whitespace, atomic history, and literal code/HTML; verify repeated saves as well as the first save.
+- Zoom editing
+    - When changing zoom editing, run `scripts/verify-zoom-subtree-editing.cjs` against the deployed test build. Preserve leaf child creation, subtree boundaries, descendant fold behavior, and cursor placement across numbered-marker width changes.

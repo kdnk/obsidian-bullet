@@ -1,5 +1,6 @@
 import { Plugin, TFile, editorInfoField } from "obsidian";
 
+import { isolateHistory } from "@codemirror/commands";
 import { foldedRanges, unfoldEffect } from "@codemirror/language";
 import {
   ChangeSet,
@@ -8,9 +9,11 @@ import {
   EditorState,
   Extension,
   MapMode,
+  Prec,
   StateEffect,
   StateField,
   Transaction,
+  TransactionSpec,
 } from "@codemirror/state";
 import {
   Decoration,
@@ -19,6 +22,7 @@ import {
   Panel,
   ViewPlugin,
   ViewUpdate,
+  keymap,
   showPanel,
 } from "@codemirror/view";
 
@@ -29,7 +33,8 @@ import { ListZoomInteraction } from "./ListZoomInteraction";
 
 import { MyEditor, listItemInsertion } from "../editor";
 import { getObsidianDomWindow } from "../obsidianDom";
-import { List } from "../root";
+import { CreateNewItem } from "../operations/CreateNewItem";
+import { List, recalculateNumericBullets } from "../root";
 import { Parser, Reader } from "../services/Parser";
 
 export const setListZoom = StateEffect.define<number | null>();
@@ -113,6 +118,26 @@ function effectiveChanges(tr: Transaction, focusedFrom: number): ChangeSet {
   return ChangeSet.of(changes, tr.startState.doc.length);
 }
 
+function textChange(before: string, after: string, from: number): ChangeSpec {
+  let prefix = 0;
+  while (
+    prefix < Math.min(before.length, after.length) &&
+    before[prefix] === after[prefix]
+  )
+    prefix++;
+  let suffix = 0;
+  while (
+    suffix < Math.min(before.length, after.length) - prefix &&
+    before[before.length - suffix - 1] === after[after.length - suffix - 1]
+  )
+    suffix++;
+  return {
+    from: from + prefix,
+    to: from + before.length - suffix,
+    insert: after.slice(prefix, after.length - suffix),
+  };
+}
+
 function zoomDecorations(
   indents: DecorationSet,
   from: number,
@@ -126,17 +151,30 @@ function zoomDecorations(
   return indents.update({ add: hidden, sort: true });
 }
 
-function reader(state: EditorState): Reader {
-  const pos = {
-    line: state.doc.lineAt(state.selection.main.head).number - 1,
-    ch: 0,
+function reader(state: EditorState, cursor?: number): Reader {
+  const position = (offset: number) => {
+    const line = state.doc.lineAt(offset);
+    return { line: line.number - 1, ch: offset - line.from };
   };
+  const pos = position(cursor ?? state.selection.main.head);
   return {
     getCursor: () => pos,
     getLine: (n) => state.doc.line(n + 1).text,
     lastLine: () => state.doc.lines - 1,
-    listSelections: () => [{ anchor: pos, head: pos }],
-    getAllFoldedLines: () => [],
+    listSelections: () =>
+      cursor === undefined
+        ? state.selection.ranges.map(({ anchor, head }) => ({
+            anchor: position(anchor),
+            head: position(head),
+          }))
+        : [{ anchor: pos, head: pos }],
+    getAllFoldedLines: () => {
+      const lines: number[] = [];
+      foldedRanges(state).between(0, state.doc.length, (from) => {
+        lines.push(state.doc.lineAt(from).number - 1);
+      });
+      return lines;
+    },
   };
 }
 
@@ -276,8 +314,23 @@ export class ListZoomState {
         changes.iterChangedRanges((from, to) => {
           if (from < range.from || to > range.to) outside = true;
         });
-        if (outside && !external && !localInsertion) return [];
+        if (outside && !external) return [];
         const next = tr.state.field(this.field, false);
+        // Local edits must leave the entire edited interval under the same
+        // root. Character-range checks alone allow a child to become a hidden
+        // sibling, or a paste at either boundary to escape the focused tree.
+        if (
+          tr.docChanged &&
+          !external &&
+          (!next ||
+            next.indent !== range.indent ||
+            next.from !== changes.mapPos(range.from, -1) ||
+            (next.to < changes.mapPos(range.to, 1) &&
+              /\S/.test(
+                tr.newDoc.sliceString(next.to, changes.mapPos(range.to, 1)),
+              )))
+        )
+          return [];
         if (!next) return tr;
         const low = next.from + next.indent.length;
         const clamp = (pos: number) => Math.max(low, Math.min(next.to, pos));
@@ -289,7 +342,7 @@ export class ListZoomState {
           next.from > range.from &&
           tr.newSelection.main.to < low;
         const mappedSelection =
-          !tr.selection || insertedBefore
+          (!tr.selection && external) || insertedBefore
             ? tr.startState.selection.map(changes)
             : tr.newSelection;
         const ranges = mappedSelection.ranges.map((r) =>
@@ -321,6 +374,79 @@ export class ListZoomState {
 
   range(state: EditorState) {
     return state.field(this.field, false) ?? null;
+  }
+
+  childInsertion(
+    state: EditorState,
+    from: number,
+    defaultIndentChars: string,
+    atEnd = false,
+    numericBullets = true,
+    overrideDescendants = true,
+  ): TransactionSpec | null {
+    const focused = this.resolve(state, from);
+    if (!focused) return null;
+    if (
+      !atEnd &&
+      state.selection.ranges.some(
+        (selection) =>
+          selection.from < focused.from || selection.to > focused.to,
+      )
+    )
+      return null;
+    const source = reader(state, atEnd ? focused.to : undefined);
+    const root = this.parser.parse(source);
+    const list = root?.getListUnderLine(state.doc.lineAt(from).number - 1);
+    if (!root || !list || (atEnd && !list.isEmpty())) return null;
+    const current = root.getListUnderCursor();
+    if (
+      current !== list &&
+      (!overrideDescendants ||
+        (!numericBullets && /^\d+\.$/.test(current.getBullet())))
+    )
+      return null;
+    if (
+      current.getFirstLineContentStart().line <
+      state.doc.lineAt(from).number - 1
+    )
+      return null;
+    const start = root.getContentStart();
+    const rootFrom = state.doc.line(start.line + 1).from + start.ch;
+    const outcome = new CreateNewItem(
+      root,
+      defaultIndentChars,
+      false,
+      true,
+      state.doc.sliceString(0, rootFrom),
+      list,
+    ).perform();
+    if (!outcome.shouldUpdate) return null;
+    const before = state.doc.sliceString(focused.from, focused.to);
+    const inserted = list.print().slice(0, -1);
+    const insertion = state.changes(textChange(before, inserted, focused.from));
+    const insertedDoc = insertion.apply(state.doc);
+    const cursor = root.getCursor();
+    const cursorOffset = insertedDoc.line(cursor.line + 1).from + cursor.ch;
+
+    // Numbering can touch distant siblings. Keep those marker edits separate
+    // from the insertion so native list/code folds and viewport positions map
+    // through unchanged content without reconstructing their boundaries.
+    recalculateNumericBullets(list, numericBullets);
+    const numberedLines = list.print().slice(0, -1).split("\n");
+    const numbering: ChangeSpec[] = [];
+    let offset = focused.from;
+    inserted.split("\n").forEach((line, index) => {
+      if (line !== numberedLines[index])
+        numbering.push(textChange(line, numberedLines[index], offset));
+      offset += line.length + 1;
+    });
+    const renumbering = ChangeSet.of(numbering, insertedDoc.length);
+    return {
+      changes: insertion.compose(renumbering),
+      selection: { anchor: renumbering.mapPos(cursorOffset, 1) },
+      userEvent: "input",
+      annotations: isolateHistory.of("full"),
+    };
   }
 
   private orderedInsertionChanges(
@@ -539,6 +665,10 @@ export class ListZoom implements Feature {
   constructor(
     private plugin: Plugin,
     parser: Parser,
+    private defaultIndentChars = () => "\t",
+    private imeIsOpened = () => false,
+    private numericBullets = () => true,
+    private overrideDescendants = () => true,
   ) {
     this.zoom = new ListZoomState(parser);
   }
@@ -550,6 +680,30 @@ export class ListZoom implements Feature {
   async load() {
     this.plugin.registerEditorExtension([
       this.zoom.extension,
+      Prec.highest(
+        keymap.of([
+          {
+            key: "Enter",
+            run: (view) => {
+              const range = this.zoom.range(view.state);
+              if (!range || view.composing || this.imeIsOpened()) return false;
+              const insertion = this.zoom.childInsertion(
+                view.state,
+                range.from,
+                this.defaultIndentChars(),
+                false,
+                this.numericBullets(),
+                this.overrideDescendants(),
+              );
+              if (!insertion) return false;
+              view.dispatch(insertion);
+              // Record the accepted destination for Obsidian's native redo.
+              view.dispatch({ selection: view.state.selection });
+              return true;
+            },
+          },
+        ]),
+      ),
       ViewPlugin.define(
         (view) =>
           new ListZoomInteraction(
@@ -609,10 +763,25 @@ export class ListZoom implements Feature {
   private navigate(view: EditorView, from: number | null) {
     const effects: StateEffect<unknown>[] = [setListZoom.of(from)];
     if (from !== null) {
-      if (!this.zoom.range(view.state))
-        this.snapshots.set(view, stableFoldScrollSnapshot(view));
+      const entering = !this.zoom.range(view.state);
+      if (entering) this.snapshots.set(view, stableFoldScrollSnapshot(view));
       const range = this.zoom.resolve(view.state, from);
       if (!range) return;
+      const insertion = this.zoom.childInsertion(
+        view.state,
+        range.from,
+        this.defaultIndentChars(),
+        true,
+        this.numericBullets(),
+      );
+      // The breadcrumb panel does not exist on initial entry, so it cannot
+      // map the return position through the newly created child yet.
+      if (entering && insertion?.changes) {
+        const snapshot = this.snapshots
+          .get(view)
+          ?.map(view.state.changes(insertion.changes));
+        if (snapshot) this.snapshots.set(view, snapshot);
+      }
       // Reveal ancestors as well as a folded focused root before narrowing.
       foldedRanges(view.state).between(0, range.to, (a, b) => {
         if (a <= from && b > from)
@@ -624,11 +793,13 @@ export class ListZoom implements Feature {
         EditorView.scrollIntoView(from + range.indent.length, { y: "start" }),
       );
       view.dispatch({
+        ...insertion,
         effects,
-        selection: {
+        selection: insertion?.selection ?? {
           anchor: Math.min(range.to, from + range.indent.length + 2),
         },
       });
+      if (insertion) view.dispatch({ selection: view.state.selection });
     } else {
       const snapshot = this.snapshots.get(view);
       if (snapshot) effects.push(snapshot);

@@ -7,11 +7,6 @@ import {
 } from "@codemirror/state";
 
 import { makeLogger, makeSettings } from "../../__mocks__";
-import { MyEditor, MyEditorPosition, MyEditorSelection } from "../../editor";
-import { CreateNewItem } from "../../operations/CreateNewItem";
-import { KeepCursorWithinListContent } from "../../operations/KeepCursorWithinListContent";
-import { ChangesApplicator } from "../../services/ChangesApplicator";
-import { OperationPerformer } from "../../services/OperationPerformer";
 import { Parser } from "../../services/Parser";
 import {
   CrossNoteMove,
@@ -33,6 +28,7 @@ jest.mock(
 function editor(doc: string, zoomLine?: number, body?: string) {
   const zoom = new ListZoomState(new Parser(makeLogger(), makeSettings()));
   const view = {
+    zoom,
     state: EditorState.create({
       doc,
       extensions: [
@@ -60,46 +56,13 @@ function editor(doc: string, zoomLine?: number, body?: string) {
   return { view, zoom };
 }
 
-function enter(view: ReturnType<typeof editor>["view"], repairCursor = false) {
-  const position = (offset: number) => {
-    const line = view.state.doc.lineAt(offset);
-    return { line: line.number - 1, ch: offset - line.from };
-  };
-  const offset = ({ line, ch }: MyEditorPosition) =>
-    view.state.doc.line(line + 1).from + ch;
-  const reader = {
-    getCursor: () => position(view.state.selection.main.head),
-    getLine: (line: number) => view.state.doc.line(line + 1).text,
-    lastLine: () => view.state.doc.lines - 1,
-    listSelections: () =>
-      view.state.selection.ranges.map((range) => ({
-        anchor: position(range.anchor),
-        head: position(range.head),
-      })),
-    getAllFoldedLines: () => [],
-    getRange: (from: MyEditorPosition, to: MyEditorPosition) =>
-      view.state.doc.sliceString(offset(from), offset(to)),
-    replaceRange: (...args: Parameters<MyEditor["replaceRange"]>) =>
-      new MyEditor({ cm: view } as never).replaceRange(...args),
-    setSelections: (ranges: MyEditorSelection[]) =>
-      view.dispatch({
-        selection: EditorSelection.create(
-          ranges.map((range) =>
-            EditorSelection.range(offset(range.anchor), offset(range.head)),
-          ),
-        ),
-      }),
-    fold: () => {},
-    unfold: () => {},
-  } as unknown as MyEditor;
-  const performer = new OperationPerformer(
-    new Parser(makeLogger(), makeSettings()),
-    new ChangesApplicator(),
-  );
-  performer.perform((root) => new CreateNewItem(root, "\t", true), reader);
-  // Obsidian's selection coordinator performs this operation after Enter.
-  if (repairCursor)
-    performer.perform((root) => new KeepCursorWithinListContent(root), reader);
+function enter(view: ReturnType<typeof editor>["view"]) {
+  const focused = view.zoom.range(view.state);
+  expect(focused).not.toBeNull();
+  if (!focused) return;
+  const insertion = view.zoom.childInsertion(view.state, focused.from, "\t");
+  expect(insertion).not.toBeNull();
+  if (insertion) view.dispatch(insertion);
 }
 
 const markerCases = [
@@ -120,7 +83,7 @@ describe.each(markerCases)(
     const inserted = `${indent}${marker}new\n`;
 
     test.each(["precise", "whole", "line", "parent-context"])(
-      "keeps the original item editable through %s insertion and native history",
+      "keeps the original item editable through external %s insertion and native history",
       (kind) => {
         const { view, zoom } = editor(original, 2, "project");
         const before = view.state.selection.main.head;
@@ -142,9 +105,14 @@ describe.each(markerCases)(
                     to: 6,
                     insert: "- work\n" + inserted.slice(0, -1),
                   };
+        const local = editor(original, 2, "project");
+        local.view.dispatch({ changes, userEvent: "input" });
+        expect(local.view.state.doc.toString()).toBe(original);
+        expect(local.zoom.range(local.view.state)?.from).toBe(root);
+        expect(local.view.state.selection.main.head).toBe(before);
         view.dispatch({
           changes,
-          userEvent: kind === "whole" ? "set" : "input",
+          userEvent: "set",
           annotations: isolateHistory.of("full"),
         });
         expect(view.state.doc.toString()).toBe(expected);
@@ -178,47 +146,42 @@ describe.each(markerCases)(
 );
 
 test.each(["1.", "9.", "99."])(
-  "Enter before a zoomed ordered %s item keeps typing and history on the original body",
+  "Enter before a zoomed ordered %s body creates children while retaining its root through history",
   (marker) => {
     const original = `- work\n\t${marker} project\n\t\t- task\n- personal`;
     const { view, zoom } = editor(original, 2, "project");
     enter(view);
-    const first = "- work\n\t1. \n\t2. project\n\t\t- task\n- personal";
+    const first = `- work\n\t${marker} \n\t\t- project\n\t\t- task\n- personal`;
     expect(view.state.doc.toString()).toBe(first);
-    expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(3).from);
-    expect(view.state.selection.main.head).toBe(
-      view.state.doc.line(3).from + 4,
-    );
-    // Separate the two Enter commands into native history steps.
-    view.dispatch({ annotations: isolateHistory.of("full") });
+    expect(zoom.range(view.state)?.from).toBe(7);
+    expect(view.state.selection.main.head).toBe(first.indexOf("project"));
     enter(view);
-    const second = "- work\n\t1. \n\t2. \n\t3. project\n\t\t- task\n- personal";
+    const second = `- work\n\t${marker} \n\t\t- \n\t\t- project\n\t\t- task\n- personal`;
     expect(view.state.doc.toString()).toBe(second);
-    expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(4).from);
-    expect(view.state.selection.main.head).toBe(
-      view.state.doc.line(4).from + 4,
-    );
+    expect(zoom.range(view.state)?.from).toBe(7);
+    expect(view.state.selection.main.head).toBe(second.indexOf("project"));
     view.dispatch({
       changes: { from: view.state.selection.main.head, insert: "updated " },
       userEvent: "input",
       annotations: isolateHistory.of("full"),
     });
-    expect(view.state.doc.line(4).text).toBe("\t3. updated project");
+    expect(view.state.doc.line(4).text).toBe("\t\t- updated project");
     undo(view);
     expect(view.state.doc.toString()).toBe(second);
     redo(view);
-    expect(view.state.doc.line(4).text).toBe("\t3. updated project");
+    expect(view.state.doc.line(4).text).toBe("\t\t- updated project");
     undo(view);
     undo(view);
     expect(view.state.doc.toString()).toBe(first);
-    expect(zoom.range(view.state)).toBeNull();
+    expect(zoom.range(view.state)?.from).toBe(7);
     undo(view);
     expect(view.state.doc.toString()).toBe(original);
+    expect(zoom.range(view.state)?.from).toBe(7);
   },
 );
 
 test.each(["[ ]", "[x]"])(
-  "Enter before a zoomed numbered task %s follows its original item",
+  "Enter before a zoomed numbered task %s retains its checked state and creates an unchecked child",
   (checkbox) => {
     const { view, zoom } = editor(
       `- work\n\t1. ${checkbox} project\n\t\t- task\n- personal`,
@@ -226,10 +189,10 @@ test.each(["[ ]", "[x]"])(
       "project",
     );
     enter(view);
-    expect(view.state.doc.toString()).toBe(
-      `- work\n\t1. [ ] \n\t2. ${checkbox} project\n\t\t- task\n- personal`,
-    );
-    expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(3).from);
+    const after = `- work\n\t1. ${checkbox} project\n\t\t- [ ] \n\t\t- task\n- personal`;
+    expect(view.state.doc.toString()).toBe(after);
+    expect(zoom.range(view.state)?.from).toBe(7);
+    expect(view.state.selection.main.head).toBe(after.indexOf("\n\t\t- task"));
   },
 );
 
@@ -237,41 +200,42 @@ describe.each(["", "[ ] ", "[x] "])(
   "ordered siblings with checkbox %j",
   (checkbox) => {
     test.each([false, true])(
-      "Enter renumbers hidden siblings and preserves focus (preceding sibling: %s)",
+      "Enter adds a first child and preserves hidden sibling numbering (preceding sibling: %s)",
       (hasBefore) => {
-        const beforeLine = hasBefore ? `\t1. ${checkbox}before\n` : "";
-        const number = hasBefore ? 2 : 1;
+        const beforeLine = hasBefore ? `\t8. ${checkbox}before\n` : "";
+        const number = hasBefore ? 9 : 7;
         const original = `- work\n${beforeLine}\t${number}. ${checkbox}project\n\t\t- task\n\t${number + 1}. ${checkbox}other\n- personal`;
         const rootLine = hasBefore ? 3 : 2;
         const { view, zoom } = editor(original, rootLine, "project");
-        enter(view, true);
-        const empty = checkbox ? "[ ] " : "";
-        const expected = `- work\n${beforeLine}\t${number}. ${empty}\n\t${number + 1}. ${checkbox}project\n\t\t- task\n\t${number + 2}. ${checkbox}other\n- personal`;
+        const rootFrom = view.state.doc.line(rootLine).from;
+        enter(view);
+        const expected = checkbox
+          ? `- work\n${beforeLine}\t${number}. ${checkbox}project\n\t\t- [ ] \n\t\t- task\n\t${number + 1}. ${checkbox}other\n- personal`
+          : `- work\n${beforeLine}\t${number}. \n\t\t- project\n\t\t- task\n\t${number + 1}. other\n- personal`;
+        const destination = checkbox
+          ? expected.indexOf("\n\t\t- task")
+          : expected.indexOf("project");
         expect(view.state.doc.toString()).toBe(expected);
-        expect(zoom.range(view.state)?.from).toBe(
-          view.state.doc.line(rootLine + 1).from,
-        );
-        expect(view.state.selection.main.head).toBe(
-          expected.indexOf("project"),
-        );
+        expect(zoom.range(view.state)?.from).toBe(rootFrom);
+        expect(view.state.selection.main.head).toBe(destination);
         view.dispatch({
           changes: { from: view.state.selection.main.head, insert: "updated " },
           userEvent: "input",
           annotations: isolateHistory.of("full"),
         });
         expect(view.state.doc.toString()).toBe(
-          expected.replace("project", "updated project"),
+          expected.slice(0, destination) +
+            "updated " +
+            expected.slice(destination),
         );
         undo(view);
         expect(view.state.doc.toString()).toBe(expected);
         undo(view);
         expect(view.state.doc.toString()).toBe(original);
-        expect(zoom.range(view.state)).toBeNull();
+        expect(zoom.range(view.state)?.from).toBe(rootFrom);
         redo(view);
         expect(view.state.doc.toString()).toBe(expected);
-        expect(view.state.selection.main.head).toBe(
-          expected.indexOf("project"),
-        );
+        expect(view.state.selection.main.head).toBe(destination);
       },
     );
   },
@@ -283,26 +247,26 @@ test.each([
     original:
       "- work\n\t1. project\n\t\t- task\n\t2. other\n\t\t9. nested\n- personal",
     expected:
-      "- work\n\t1. \n\t2. project\n\t\t- task\n\t3. other\n\t\t1. nested\n- personal",
+      "- work\n\t1. \n\t\t- project\n\t\t- task\n\t2. other\n\t\t9. nested\n- personal",
   },
   {
     name: "hidden ancestor",
     original: "9. work\n\t1. project\n\t\t- task\n\t2. other\n- personal",
     expected:
-      "1. work\n\t1. \n\t2. project\n\t\t- task\n\t3. other\n- personal",
+      "9. work\n\t1. \n\t\t- project\n\t\t- task\n\t2. other\n- personal",
   },
   {
     name: "hidden bare ordered item",
     original: "- work\n\t1. project\n\t\t- task\n\t2.\n- personal",
-    expected: "- work\n\t1. \n\t2. project\n\t\t- task\n\t3.\n- personal",
+    expected: "- work\n\t1. \n\t\t- project\n\t\t- task\n\t2.\n- personal",
   },
 ])(
-  "Enter preserves recursive normalization of a $name",
+  "Enter never renumbers a $name outside the focused subtree",
   ({ original, expected }) => {
     const { view, zoom } = editor(original, 2, "project");
-    enter(view, true);
+    enter(view);
     expect(view.state.doc.toString()).toBe(expected);
-    expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(3).from);
+    expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(2).from);
     expect(view.state.selection.main.head).toBe(expected.indexOf("project"));
     view.dispatch({
       changes: { from: view.state.selection.main.head, insert: "updated " },
@@ -316,7 +280,7 @@ test.each([
     expect(view.state.doc.toString()).toBe(expected);
     undo(view);
     expect(view.state.doc.toString()).toBe(original);
-    expect(zoom.range(view.state)).toBeNull();
+    expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(2).from);
     redo(view);
     expect(view.state.doc.toString()).toBe(expected);
     expect(view.state.selection.main.head).toBe(expected.indexOf("project"));
@@ -336,7 +300,7 @@ test.each([
     replacement: "\n- another\n\t2. external",
   },
 ])(
-  "does not authorize hidden edits combined with an ordered insertion: $replacement",
+  "does not authorize hidden edits combined with a first-child insertion: $replacement",
   ({ original: hidden, replacement }) => {
     const original = `- work\n\t1. project\n\t\t- task\n${hidden}\n- personal`;
     const { view, zoom } = editor(original, 2, "project");
@@ -344,7 +308,7 @@ test.each([
       changes: {
         from: 7,
         to: original.length - "\n- personal".length,
-        insert: `\t1. \n\t2. project\n\t\t- task\n${replacement}`,
+        insert: `\t1. \n\t\t- project\n\t\t- task\n${replacement}`,
       },
     });
     expect(view.state.doc.toString()).toBe(original);
@@ -366,7 +330,7 @@ test("does not authorize a hidden sibling renumber without an ordered insertion"
 });
 
 test.each(["set", "undo", "redo"])(
-  "reveals hidden sibling renumbering delivered as %s even when it matches local Enter",
+  "reveals hidden sibling renumbering delivered as external %s",
   (userEvent) => {
     const original = "- work\n\t1. project\n\t\t- task\n\t2. other\n- personal";
     const next =
@@ -396,7 +360,7 @@ test("does not authorize hidden renumbering after a malformed empty task marker"
   expect(zoom.range(view.state)?.from).toBe(7);
 });
 
-test("ordered insertion preserves an explicit visible caller selection", () => {
+test("external ordered insertion preserves an explicit visible caller selection", () => {
   const original = "- work\n\t1. project\n\t\t- task\n- personal";
   const next = "- work\n\t1. \n\t2. project\n\t\t- task\n- personal";
   const { view, zoom } = editor(original, 2, "project");
@@ -440,7 +404,7 @@ test.each(["input", "set"])(
   },
 );
 
-test("an ordered split in the middle reveals the new sibling for continued typing", () => {
+test("an ordered split in the middle creates a child while retaining zoom", () => {
   const { view, zoom } = editor(
     "- work\n\t1. project\n\t\t- task\n- personal",
     2,
@@ -449,16 +413,16 @@ test("an ordered split in the middle reveals the new sibling for continued typin
   view.dispatch({ selection: { anchor: view.state.selection.main.head + 3 } });
   enter(view);
   expect(view.state.doc.toString()).toBe(
-    "- work\n\t1. pro\n\t2. ject\n\t\t- task\n- personal",
+    "- work\n\t1. pro\n\t\t- ject\n\t\t- task\n- personal",
   );
-  expect(zoom.range(view.state)).toBeNull();
+  expect(zoom.range(view.state)?.from).toBe(7);
   expect(view.state.selection.main.head).toBe(
     view.state.doc.toString().indexOf("ject"),
   );
 });
 
 test.each(["1.", "9.", "99."])(
-  "Enter before an unindented zoomed %s item follows its original body",
+  "Enter before an unindented zoomed %s item puts its body into a child",
   (marker) => {
     const { view, zoom } = editor(
       `${marker} project\n\t- task\n- personal`,
@@ -467,15 +431,17 @@ test.each(["1.", "9.", "99."])(
     );
     enter(view);
     expect(view.state.doc.toString()).toBe(
-      "1. \n2. project\n\t- task\n- personal",
+      `${marker} \n\t- project\n\t- task\n- personal`,
     );
-    expect(zoom.range(view.state)?.from).toBe(4);
-    expect(view.state.selection.main.head).toBe(7);
+    expect(zoom.range(view.state)?.from).toBe(0);
+    expect(view.state.selection.main.head).toBe(
+      view.state.doc.line(2).from + 3,
+    );
     view.dispatch({
       changes: { from: view.state.selection.main.head, insert: "updated " },
       userEvent: "input",
     });
-    expect(view.state.doc.line(2).text).toBe("2. updated project");
+    expect(view.state.doc.line(2).text).toBe("\t- updated project");
   },
 );
 

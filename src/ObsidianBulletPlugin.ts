@@ -57,7 +57,16 @@ export default class ObsidianBulletPlugin extends Plugin {
     this.imeDetector = new IMEDetector();
     await this.imeDetector.load();
 
-    const listZoom = new ListZoom(this, this.parser);
+    const listZoom = new ListZoom(
+      this,
+      this.parser,
+      () => this.obsidianSettings.getDefaultIndentChars(),
+      () => this.imeDetector.isOpened(),
+      () => this.obsidianSettings.isSmartIndentListEnabled(),
+      () =>
+        this.settings.overrideEnterBehaviour ||
+        this.settings.keepBodyTextInBullets,
+    );
 
     this.features = [
       // service features

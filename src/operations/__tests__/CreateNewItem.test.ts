@@ -3,6 +3,207 @@ import { CreateNewItem } from "../CreateNewItem";
 import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 describe("CreateNewItem operation", () => {
+  describe("forced child insertion", () => {
+    test.each([
+      {
+        name: "the beginning of a plain root body",
+        text: "- project\n\t- task\n- other",
+        cursor: { line: 0, ch: 2 },
+        want: "- \n\t- project\n\t- task\n- other",
+        wantCursor: { line: 1, ch: 3 },
+      },
+      {
+        name: "the middle of a root with existing children",
+        text: "- project\n\t- task\n- other",
+        cursor: { line: 0, ch: 5 },
+        want: "- pro\n\t- ject\n\t- task\n- other",
+        wantCursor: { line: 1, ch: 3 },
+      },
+      {
+        name: "a folded root",
+        text: "- project\n\t- task\n- other",
+        cursor: { line: 0, ch: 9 },
+        folded: [0],
+        want: "- project\n\t- \n\t- task\n- other",
+        wantCursor: { line: 1, ch: 3 },
+      },
+      {
+        name: "an empty root",
+        text: "- \n- other",
+        cursor: { line: 0, ch: 2 },
+        want: "- \n\t- \n- other",
+        wantCursor: { line: 1, ch: 3 },
+      },
+      {
+        name: "a bare marker at EOF",
+        text: "-",
+        cursor: { line: 0, ch: 1 },
+        want: "-\n\t- ",
+        wantCursor: { line: 1, ch: 3 },
+      },
+      {
+        name: "an empty checkbox root",
+        text: "- [ ] \n- other",
+        cursor: { line: 0, ch: 6 },
+        want: "- [ ] \n\t- [ ] \n- other",
+        wantCursor: { line: 1, ch: 7 },
+      },
+      {
+        name: "the beginning of a checked task body",
+        text: "- [x] project\n\t- task\n- other",
+        cursor: { line: 0, ch: 6 },
+        want: "- [x] project\n\t- [ ] \n\t- task\n- other",
+        wantCursor: { line: 1, ch: 7 },
+      },
+      {
+        name: "a root body with continuation lines",
+        text: "- project\n  continuation\n\t- task\n- other",
+        cursor: { line: 0, ch: 5 },
+        want: "- pro\n\t- ject\n\t  continuation\n\t- task\n- other",
+        wantCursor: { line: 1, ch: 3 },
+      },
+      {
+        name: "the middle of a continuation line",
+        text: "- project\n  note text\n  more\n- other",
+        cursor: { line: 1, ch: 7 },
+        want: "- project\n  note \n\t- text\n\t  more\n- other",
+        wantCursor: { line: 2, ch: 3 },
+      },
+    ])(
+      "creates a first child at $name",
+      ({ text, cursor, folded, want, wantCursor }) => {
+        const root = makeRoot({
+          editor: makeEditor({
+            text,
+            cursor,
+            getAllFoldedLines: () => folded ?? [],
+          }),
+        });
+
+        const op = new CreateNewItem(
+          root,
+          "\t",
+          true,
+          true,
+          "",
+          root.getListUnderCursor(),
+        );
+
+        expect(op.perform()).toEqual(UPDATED_OUTCOME);
+        expect(root.print()).toBe(want);
+        expect(root.getCursor()).toEqual(wantCursor);
+      },
+    );
+
+    test("renumbers only children of the current root", () => {
+      const root = makeRoot({
+        editor: makeEditor({
+          text: "9. work\n\t8. project\n\t\t7. task\n\t9. other\n\t\t6. hidden\n10. personal",
+          cursor: { line: 1, ch: 7 },
+        }),
+      });
+
+      expect(
+        new CreateNewItem(
+          root,
+          "\t",
+          true,
+          true,
+          "",
+          root.getListUnderCursor(),
+        ).perform(),
+      ).toEqual(UPDATED_OUTCOME);
+      expect(root.print()).toBe(
+        "9. work\n\t8. pro\n\t\t1. ject\n\t\t2. task\n\t9. other\n\t\t6. hidden\n10. personal",
+      );
+      expect(root.getCursor()).toEqual({ line: 2, ch: 5 });
+    });
+
+    test("does not split a fenced-code body into a child", () => {
+      const text = "- ```js\n  code\n  ```\n- other";
+      const root = makeRoot({
+        editor: makeEditor({ text, cursor: { line: 1, ch: 4 } }),
+      });
+
+      expect(
+        new CreateNewItem(
+          root,
+          "\t",
+          true,
+          true,
+          "",
+          root.getListUnderCursor(),
+        ).perform(),
+      ).toEqual(NO_OP_OUTCOME);
+      expect(root.print()).toBe(text);
+    });
+
+    test("preserves literal code indentation when transferring a continuation fence", () => {
+      const root = makeRoot({
+        editor: makeEditor({
+          text: "- project\n  ```js\n\t  literal\n\n  ```\n- other",
+          cursor: { line: 0, ch: 5 },
+        }),
+      });
+
+      expect(
+        new CreateNewItem(
+          root,
+          "\t",
+          true,
+          true,
+          "",
+          root.getListUnderCursor(),
+        ).perform(),
+      ).toEqual(UPDATED_OUTCOME);
+      const child = root.getChildren()[0].getChildren()[0];
+      expect(child.getLinesForFenceParsing()).toEqual([
+        "ject",
+        "```js",
+        "    literal",
+        "",
+        "```",
+      ]);
+    });
+  });
+
+  describe("descendant insertion within an editing root", () => {
+    test("places the cursor after a newly widened tenth marker without renumbering hidden items", () => {
+      const text =
+        "9. work\n\t8. focus\n\t\t1. one\n\t\t2. two\n\t\t3. three\n\t\t4. four\n\t\t5. five\n\t\t6. six\n\t\t7. seven\n\t\t8. eight\n\t\t9. nine\n\t9. other\n10. personal";
+      const root = makeRoot({
+        editor: makeEditor({ text, cursor: { line: 10, ch: 9 } }),
+      });
+      const focused = root.getListUnderLine(1)!;
+
+      expect(
+        new CreateNewItem(root, "\t", true, true, "", focused).perform(),
+      ).toEqual(UPDATED_OUTCOME);
+      expect(root.print()).toBe(
+        "9. work\n\t8. focus\n\t\t1. one\n\t\t2. two\n\t\t3. three\n\t\t4. four\n\t\t5. five\n\t\t6. six\n\t\t7. seven\n\t\t8. eight\n\t\t9. nine\n\t\t10. \n\t9. other\n10. personal",
+      );
+      expect(root.getCursor()).toEqual({ line: 11, ch: 6 });
+    });
+
+    test("places the cursor after a narrowed marker when splitting an ordered descendant", () => {
+      const root = makeRoot({
+        editor: makeEditor({
+          text: "9. work\n\t8. focus\n\t\t10. child\n\t9. other\n10. personal",
+          cursor: { line: 2, ch: 8 },
+        }),
+      });
+      const focused = root.getListUnderLine(1)!;
+
+      expect(
+        new CreateNewItem(root, "\t", true, true, "", focused).perform(),
+      ).toEqual(UPDATED_OUTCOME);
+      expect(root.print()).toBe(
+        "9. work\n\t8. focus\n\t\t1. ch\n\t\t2. ild\n\t9. other\n10. personal",
+      );
+      expect(root.getCursor()).toEqual({ line: 3, ch: 5 });
+    });
+  });
+
   test.each([
     { cursor: { line: 1, ch: 6 }, outcome: NO_OP_OUTCOME },
     { cursor: { line: 3, ch: 4 }, outcome: UPDATED_OUTCOME },

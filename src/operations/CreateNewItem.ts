@@ -21,6 +21,7 @@ export class CreateNewItem implements Operation {
     private numericBulletsEnabled: boolean,
     private after: boolean = true,
     private documentPrefixBeforeRoot: string = "",
+    private editingRoot?: List,
   ) {}
 
   perform() {
@@ -36,9 +37,14 @@ export class CreateNewItem implements Operation {
     }
 
     const list = root.getListUnderCursor();
+    const asChild = list === this.editingRoot;
     const lines = list.getLinesInfo();
 
-    if (lines.length === 1 && isEmptyLineOrEmptyCheckbox(lines[0].text)) {
+    if (
+      !asChild &&
+      lines.length === 1 &&
+      isEmptyLineOrEmptyCheckbox(lines[0].text)
+    ) {
       return NO_OP_OUTCOME;
     }
 
@@ -122,6 +128,7 @@ export class CreateNewItem implements Operation {
       endsWithClosedFence(fenceLines);
 
     if (
+      !asChild &&
       lineIndex > 0 &&
       list.isEmpty() &&
       !hasCheckbox &&
@@ -157,7 +164,7 @@ export class CreateNewItem implements Operation {
       this.after && !shouldInsertUncheckedSiblingBeforeCurrentItem;
 
     const onChildLevel =
-      insertAfter && hasChildren && !childIsFolded && endOfLine;
+      asChild || (insertAfter && hasChildren && !childIsFolded && endOfLine);
 
     const firstChild = list.getChildren()[0] ?? null;
     const indent = onChildLevel
@@ -166,13 +173,15 @@ export class CreateNewItem implements Operation {
         : list.getFirstLineIndent() + this.defaultIndentChars
       : list.getFirstLineIndent();
 
-    const bullet =
+    let bullet =
       onChildLevel && firstChild ? firstChild.getBullet() : list.getBullet();
+    if (asChild && /^\d+\.$/.test(bullet)) bullet = "1.";
 
-    const spaceAfterBullet =
+    let spaceAfterBullet =
       onChildLevel && firstChild
         ? firstChild.getSpaceAfterBullet()
         : list.getSpaceAfterBullet();
+    if (asChild && spaceAfterBullet.length === 0) spaceAfterBullet = " ";
 
     const prefix = hasCheckbox ? "[ ] " : "";
 
@@ -188,8 +197,18 @@ export class CreateNewItem implements Operation {
     );
 
     if (newLines.length > 0) {
-      newList.setNotesIndent(list.getNotesIndentOrThrow());
-      for (const line of newLines) {
+      const notesIndent = list.getNotesIndentOrThrow();
+      newList.setNotesIndent(
+        asChild
+          ? indent + notesIndent.slice(list.getFirstLineIndent().length)
+          : notesIndent,
+      );
+      // A source tab may straddle the old continuation boundary. Materialize
+      // its code-side columns before moving the note under a deeper marker.
+      const continuedLines = asChild
+        ? list.getLinesForFenceParsing().slice(lineIndex + 1)
+        : newLines;
+      for (const line of continuedLines) {
         newList.addLine(line);
       }
     }
@@ -213,7 +232,10 @@ export class CreateNewItem implements Operation {
     }
 
     list.replaceLines(oldLines);
-    recalculateNumericBullets(root, this.numericBulletsEnabled);
+    recalculateNumericBullets(
+      this.editingRoot ?? root,
+      this.numericBulletsEnabled,
+    );
 
     const newListStart = newList.getFirstLineContentStart();
     root.replaceCursor({

@@ -1,8 +1,13 @@
-// Compare native Enter with zoomed Enter, including the next input and history.
+// Verify ordinary Enter and the intentional zoom subtree contract, including
+// the next input and native Undo/Redo. Deploy build-with-tests first.
 const fs = require("node:fs");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { cdp, evaluate } = require("./obsidian-scroll-driver.cjs");
+if (!process.argv[2])
+  throw Error(
+    "Usage: node scripts/verify-zoom-enter-splits.cjs <fresh-output-dir>",
+  );
 const output = path.resolve(process.argv[2]);
 fs.mkdirSync(output, { recursive: false });
 const note = `zoom-enter-split-${randomUUID()}.md`;
@@ -59,6 +64,9 @@ const cases = [
     line: 1,
     ch: 7,
     native: true,
+    expected:
+      "- work\n\t1. pro\n\t\t- ject\n\t\t- task\n\t2. other\n- personal",
+    cursor: { line: 2, ch: 4 },
   },
   {
     name: "checked task start without cursor guard",
@@ -66,31 +74,43 @@ const cases = [
     line: 1,
     ch: 8,
     noCursorGuard: true,
+    expected: "- work\n\t1. [x] project\n\t\t- [ ] \n\t\t- task\n- personal",
+    cursor: { line: 2, ch: 8 },
   },
   {
     name: "ordered root middle with hidden sibling",
     text: "- work\n\t1. project\n\t\t- task\n\t2. other\n- personal",
     line: 1,
     ch: 7,
+    expected:
+      "- work\n\t1. pro\n\t\t- ject\n\t\t- task\n\t2. other\n- personal",
+    cursor: { line: 2, ch: 4 },
   },
   {
     name: "ordered root end with hidden sibling",
     text: "- work\n\t1. project\n\t\t- task\n\t2. other\n- personal",
     line: 1,
     ch: 11,
+    expected:
+      "- work\n\t1. project\n\t\t- \n\t\t- task\n\t2. other\n- personal",
+    cursor: { line: 2, ch: 4 },
   },
   {
     name: "unordered root middle",
     text: "- work\n\t- project\n\t\t- task\n\t- other\n- personal",
     line: 1,
     ch: 6,
+    expected: "- work\n\t- pro\n\t\t- ject\n\t\t- task\n\t- other\n- personal",
+    cursor: { line: 2, ch: 4 },
   },
   {
-    name: "child Enter normalizes hidden ancestor",
+    name: "child Enter preserves hidden ancestor numbering",
     text: "9. work\n\t- project\n\t\t- task\n- personal",
     line: 2,
     ch: 8,
     zoomLine: 1,
+    expected: "9. work\n\t- project\n\t\t- task\n\t\t- \n- personal",
+    cursor: { line: 3, ch: 4 },
   },
   {
     name: "folded root end",
@@ -98,6 +118,8 @@ const cases = [
     line: 1,
     ch: 10,
     fold: true,
+    expected: "- work\n\t- project\n\t\t- \n\t\t- task\n- personal",
+    cursor: { line: 2, ch: 4 },
   },
 ];
 try {
@@ -115,20 +137,20 @@ try {
         async (fixture, zoom, originalEnterSettings) => {
           app.commands.executeCommandById("bullet:zoom-reset");
           const settings = app.plugins.plugins.bullet.settings;
-          settings.overrideEnterBehaviour = fixture.native
-            ? false
-            : originalEnterSettings.betterEnter;
-          settings.keepBodyTextInBullets = fixture.native
-            ? false
-            : originalEnterSettings.keepBody;
+          settings.overrideEnterBehaviour = fixture.native ? false : true;
+          settings.keepBodyTextInBullets = fixture.native ? false : true;
           settings.keepCursorWithinContent = fixture.noCursorGuard
             ? "never"
-            : originalEnterSettings.stickCursor;
+            : "bullet-and-checkbox";
           const editor = app.workspace.activeLeaf.view.editor;
           editor.setValue(fixture.text);
           app.commands.executeCommandById("editor:unfold-all");
           await new Promise((resolve) => setTimeout(resolve, 350));
-          editor.setCursor({ line: fixture.zoomLine ?? fixture.line, ch: 4 });
+          const zoomLine = fixture.zoomLine ?? fixture.line;
+          editor.setCursor({
+            line: zoomLine,
+            ch: editor.getLine(zoomLine).length,
+          });
           if (zoom) app.commands.executeCommandById("bullet:zoom-in");
           editor.setCursor({ line: fixture.line, ch: fixture.ch });
           if (fixture.fold) app.commands.executeCommandById("editor:fold-more");
@@ -146,22 +168,35 @@ try {
       focus();
       cdp("Input.insertText", { text: "NEXT" });
       const typed = sample();
-      if (fixture.noCursorGuard) {
-        const expected =
-          "- work\n\t1. [ ] \n\t2. [x] project\n\t\t- task\n- personal";
-        const expectedTyped = zoom
-          ? "- work\n\t1. [ ] \n\t2. [x] NEXTproject\n\t\t- task\n- personal"
-          : "- work\n\t1. [ ] NEXT\n\t2. [x] project\n\t\t- task\n- personal";
-        if (
-          entered.doc !== expected ||
-          entered.cursor.line !== (zoom ? 2 : 1) ||
-          entered.cursor.ch !== 8 ||
-          typed.doc !== expectedTyped
-        )
-          failures.push(
-            `${fixture.name} / zoom ${zoom}: task input misses its intended body`,
-          );
-      }
+      const expectedEntered = zoom ? fixture.expected : entered.doc;
+      const expectedCursor = zoom ? fixture.cursor : entered.cursor;
+      const lines = expectedEntered.split("\n");
+      lines[expectedCursor.line] =
+        lines[expectedCursor.line].slice(0, expectedCursor.ch) +
+        "NEXT" +
+        lines[expectedCursor.line].slice(expectedCursor.ch);
+      const expectedTyped =
+        fixture.native && !zoom
+          ? "- work\n\t1. pro\n\t2. NEXTject\n\t\t- task\n\t3. other\n- personal"
+          : lines.join("\n");
+      if (
+        entered.doc !== expectedEntered ||
+        entered.cursor.line !== expectedCursor.line ||
+        entered.cursor.ch !== expectedCursor.ch ||
+        typed.doc !== expectedTyped ||
+        typed.cursor.line !== expectedCursor.line ||
+        typed.cursor.ch !== expectedCursor.ch + 4
+      )
+        failures.push(
+          `${fixture.name} / zoom ${zoom}: document or input cursor mismatch`,
+        );
+      if (
+        fixture.noCursorGuard &&
+        !zoom &&
+        entered.doc !==
+          "- work\n\t1. [ ] \n\t2. [x] project\n\t\t- task\n- personal"
+      )
+        failures.push(`${fixture.name}: ordinary task Enter changed`);
       key("z", "KeyZ", 90, 4);
       const undoTyping = sample();
       key("z", "KeyZ", 90, 4);
@@ -172,6 +207,10 @@ try {
       const redoTyping = sample();
       if (entered.doc === fixture.text)
         failures.push(`${fixture.name} / zoom ${zoom}: Enter was rejected`);
+      if (undoTyping.doc !== entered.doc)
+        failures.push(
+          `${fixture.name} / zoom ${zoom}: Undo typing did not restore Enter`,
+        );
       if (undoEnter.doc !== fixture.text)
         failures.push(
           `${fixture.name} / zoom ${zoom}: Undo did not restore input`,
@@ -198,27 +237,9 @@ try {
         redoTyping,
       });
     }
-    const [plain, zoomed] = modes;
-    for (const phase of [
-      "entered",
-      "typed",
-      "undoTyping",
-      "undoEnter",
-      "redoEnter",
-      "redoTyping",
-    ]) {
-      // At a task body's start, zoom intentionally follows the original body;
-      // ordinary Enter keeps the newly created empty sibling selected.
-      if (fixture.noCursorGuard) continue;
-      if (plain[phase].doc !== zoomed[phase].doc)
-        failures.push(`${fixture.name}: ${phase} document differs`);
-      if (
-        phase !== "redoEnter" &&
-        JSON.stringify(plain[phase].cursor) !==
-          JSON.stringify(zoomed[phase].cursor)
-      )
-        failures.push(`${fixture.name}: ${phase} cursor differs`);
-    }
+    // Root Enter intentionally creates a child in zoom; ordinary Enter may
+    // create a sibling. Each mode has its own document and history assertions.
+    const zoomed = modes[1];
     if (!zoomed.entered.visibleCursor || !zoomed.typed.visibleCursor)
       failures.push(`${fixture.name}: cursor is hidden`);
     results.push({ name: fixture.name, modes });
@@ -228,33 +249,36 @@ try {
     );
   }
 } finally {
-  evaluate(
-    async (original, note, originalEnterSettings) => {
-      const settings = app.plugins.plugins.bullet.settings;
-      settings.overrideEnterBehaviour = originalEnterSettings.betterEnter;
-      settings.keepBodyTextInBullets = originalEnterSettings.keepBody;
-      settings.keepCursorWithinContent = originalEnterSettings.stickCursor;
-      app.commands.executeCommandById("bullet:zoom-reset");
-      if (window.__zoomEnterSplitsLeaf?.view.save)
-        await window.__zoomEnterSplitsLeaf.view.save();
-      window.__zoomEnterSplitsLeaf?.detach();
-      delete window.__zoomEnterSplitsLeaf;
-      const leaf = app.workspace.getLeafById(original);
-      if (leaf) app.workspace.setActiveLeaf(leaf);
-      const file = app.vault.getAbstractFileByPath(note);
-      if (file) await app.vault.trash(file, false);
-    },
-    original,
-    note,
-    originalEnterSettings,
-  );
-  cdp("Emulation.setFocusEmulationEnabled", { enabled: false });
-  fs.writeFileSync(
-    path.join(output, "results.json"),
-    JSON.stringify({ results, failures }, null, 2),
-  );
-  console.log(
-    JSON.stringify({ output, cases: results.length, failures }, null, 2),
-  );
+  try {
+    evaluate(
+      async (original, note, originalEnterSettings) => {
+        const settings = app.plugins.plugins.bullet.settings;
+        settings.overrideEnterBehaviour = originalEnterSettings.betterEnter;
+        settings.keepBodyTextInBullets = originalEnterSettings.keepBody;
+        settings.keepCursorWithinContent = originalEnterSettings.stickCursor;
+        app.commands.executeCommandById("bullet:zoom-reset");
+        if (window.__zoomEnterSplitsLeaf?.view.save)
+          await window.__zoomEnterSplitsLeaf.view.save();
+        window.__zoomEnterSplitsLeaf?.detach();
+        delete window.__zoomEnterSplitsLeaf;
+        const leaf = app.workspace.getLeafById(original);
+        if (leaf) app.workspace.setActiveLeaf(leaf);
+        const file = app.vault.getAbstractFileByPath(note);
+        if (file) await app.vault.trash(file, false);
+      },
+      original,
+      note,
+      originalEnterSettings,
+    );
+  } finally {
+    cdp("Emulation.setFocusEmulationEnabled", { enabled: false });
+    fs.writeFileSync(
+      path.join(output, "results.json"),
+      JSON.stringify({ results, failures }, null, 2),
+    );
+    console.log(
+      JSON.stringify({ output, cases: results.length, failures }, null, 2),
+    );
+  }
 }
 if (failures.length) process.exitCode = 1;

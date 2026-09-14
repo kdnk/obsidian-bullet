@@ -14,7 +14,15 @@ if (!output)
 fs.mkdirSync(output);
 const note = `zoom-insertions-${randomUUID()}.md`;
 const before = "- work\n\t- project\n\t\t- task\n\t- other\n- personal";
-const initial = evaluate(() => app.workspace.activeLeaf.id);
+const initial = evaluate(() => {
+  const settings = app.plugins.plugins.bullet.settings;
+  return {
+    leaf: app.workspace.activeLeaf.id,
+    betterEnter: settings.overrideEnterBehaviour,
+    keepBody: settings.keepBodyTextInBullets,
+    stickCursor: settings.keepCursorWithinContent,
+  };
+});
 const results = [];
 
 function sample() {
@@ -79,7 +87,17 @@ function assertProject(state, expected) {
   assert.ok(!state.visible.includes("inserted"));
 }
 
+function focus() {
+  evaluate(() => {
+    window.focus();
+    const { first } = window.__zoomInsertionsCheck;
+    app.workspace.setActiveLeaf(first, { focus: true });
+    first.view.editor.focus();
+  });
+}
+
 function enter() {
+  focus();
   cdp("Input.dispatchKeyEvent", {
     type: "keyDown",
     key: "Enter",
@@ -88,6 +106,7 @@ function enter() {
     nativeVirtualKeyCode: 13,
     text: "\r",
   });
+  focus();
   cdp("Input.dispatchKeyEvent", {
     type: "keyUp",
     key: "Enter",
@@ -105,6 +124,10 @@ try {
   evaluate(
     async (note, before) => {
       if (window.__zoomInsertionsCheck) throw Error("Check already running");
+      const settings = app.plugins.plugins.bullet.settings;
+      settings.overrideEnterBehaviour = true;
+      settings.keepBodyTextInBullets = true;
+      settings.keepCursorWithinContent = "bullet-and-checkbox";
       const file = await app.vault.create(note, before);
       const first = app.workspace.getLeaf("tab");
       window.__zoomInsertionsCheck = { first, file, second: null };
@@ -120,23 +143,31 @@ try {
   reset();
   enter();
   const entered = capture("enter-at-start");
-  assertProject(entered, before.replace("\t- project", "\t- \n\t- project"));
-  assert.deepEqual(entered.cursor, { line: 2, ch: 3 });
+  assert.equal(
+    entered.doc,
+    "- work\n\t- \n\t\t- project\n\t\t- task\n\t- other\n- personal",
+  );
+  assert.equal(entered.target, "Empty item");
+  assert.deepEqual(entered.cursor, { line: 2, ch: 4 });
   enter();
   const repeated = capture("repeated-enter-at-start");
-  assertProject(
-    repeated,
-    before.replace("\t- project", "\t- \n\t- \n\t- project"),
+  assert.equal(
+    repeated.doc,
+    "- work\n\t- \n\t\t- \n\t\t- project\n\t\t- task\n\t- other\n- personal",
   );
-  assert.deepEqual(repeated.cursor, { line: 3, ch: 3 });
+  assert.equal(repeated.target, "Empty item");
+  assert.deepEqual(repeated.cursor, { line: 3, ch: 4 });
+  focus();
   cdp("Input.insertText", { text: "visible " });
   const typed = capture("typing-after-enter");
   assert.equal(
     typed.doc,
-    repeated.doc.replace("\t- project", "\t- visible project"),
+    "- work\n\t- \n\t\t- \n\t\t- visible project\n\t\t- task\n\t- other\n- personal",
   );
-  assert.equal(typed.cursorLine, "\t- visible project");
-  assert.equal(typed.target, "visible project");
+  assert.equal(typed.cursorLine, "\t\t- visible project");
+  assert.equal(typed.target, "Empty item");
+  assert.ok(!typed.visible.includes("other"));
+  assert.ok(!typed.visible.includes("personal"));
 
   for (const kind of ["precise-before", "whole-before", "farther-above"]) {
     reset();
@@ -171,6 +202,7 @@ try {
         app.workspace.setActiveLeaf(first, { focus: true });
         first.view.editor.focus();
       });
+      focus();
       cdp("Input.insertText", { text: "visible " });
       const typed = capture(`${kind}-typing`);
       assert.equal(
@@ -186,6 +218,10 @@ try {
   try {
     evaluate(
       async (initial, note) => {
+        const settings = app.plugins.plugins.bullet.settings;
+        settings.overrideEnterBehaviour = initial.betterEnter;
+        settings.keepBodyTextInBullets = initial.keepBody;
+        settings.keepCursorWithinContent = initial.stickCursor;
         const check = window.__zoomInsertionsCheck;
         if (check) {
           if (check.second) {
@@ -197,7 +233,7 @@ try {
         }
         const file = app.vault.getAbstractFileByPath(note);
         if (file) await app.vault.trash(file, true);
-        const leaf = app.workspace.getLeafById(initial);
+        const leaf = app.workspace.getLeafById(initial.leaf);
         if (leaf) app.workspace.setActiveLeaf(leaf, { focus: true });
         delete window.__zoomInsertionsCheck;
       },

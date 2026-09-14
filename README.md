@@ -89,6 +89,8 @@ Zoom applies only to the current editor pane, so another pane can show the whole
 
 Selections and direct edits stay within the visible branch. If Undo, Redo, or synchronization from another pane changes hidden content, Bullet reveals the whole note so you can see the change.
 
+When you zoom into an item without children, Bullet adds an empty child and places the caret there. Enter in the focused item's body creates its first child; Enter within descendants continues editing that subtree. The focused item stays at the same level, and outdenting or pasting cannot create its siblings. Return to the parent or the full note to edit those siblings.
+
 ### Drag and drop across files
 
 On desktop, drag a bullet, fold indicator, or checkbox to move its complete branch, including nested children and continuation lines. **Drag-and-Drop** is enabled by default under **Settings → Bullet**.

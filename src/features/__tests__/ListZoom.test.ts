@@ -195,14 +195,14 @@ test.each([true, false])(
   },
 );
 
-test("outdenting a child still recomputes the visible subtree", () => {
+test("rejects outdenting a direct child into a sibling of the focused root", () => {
   const { zoom, state } = setup();
   const focused = state.update({ effects: setListZoom.of(7) }).state;
   const edited = focused.update({
     changes: { from: 18, to: 20, insert: "\t" },
   }).state;
-  expect(zoom.range(edited)).toMatchObject({ from: 7, to: 17 });
-  expect(edited.doc.sliceString(7, zoom.range(edited)!.to)).toBe("\t- project");
+  expect(zoom.range(edited)).toMatchObject({ from: 7, to: 26 });
+  expect(edited.doc.toString()).toBe(doc);
 });
 
 test("rejects edits that cross into hidden content", () => {
@@ -239,6 +239,12 @@ test.each(["precise", "whole-set", "line-set", "parent-context"])(
               : { from: 0, to: 6, insert: "- work\n\t- new" },
       userEvent: kind.endsWith("set") ? "set" : "input",
     }).state;
+    if (!kind.endsWith("set")) {
+      expect(next.doc.toString()).toBe(doc);
+      expect(zoom.range(next)).toMatchObject({ from: 7, to: 26 });
+      expect(next.selection.main.head).toBe(10);
+      return;
+    }
     expect(next.doc.toString()).toBe(text);
     expect(zoom.range(next)).toMatchObject({ from: 14, to: 33 });
     expect(zoom.range(next)?.ancestors.map(({ label }) => label)).toEqual([
@@ -310,7 +316,7 @@ test("does not retarget zoom when a formatter batch also replaces the separator 
   expect(zoom.range(next)).toBeNull();
 });
 
-test("Enter at the focused body's start inserts an empty sibling and keeps the original item editable", () => {
+test("rejects a legacy sibling insertion and keeps the focused body editable", () => {
   const parser = new Parser(makeLogger(), makeSettings());
   const zoom = new ListZoomState(parser);
   let state = EditorState.create({ doc, extensions: zoom.extension }).update({
@@ -362,35 +368,23 @@ test("Enter at the focused body's start inserts an empty sibling and keeps the o
     (root) => new CreateNewItem(root, "\t", true),
     editor,
   );
-  expect(state.doc.toString()).toBe(
-    "- work\n\t- \n\t- project\n\t\t- task\n\t- other\n- personal",
-  );
-  expect(zoom.range(state)).toMatchObject({ from: 11, to: 30 });
+  expect(state.doc.toString()).toBe(doc);
+  expect(zoom.range(state)).toMatchObject({ from: 7, to: 26 });
   expect(zoom.range(state)?.ancestors.map(({ label }) => label)).toEqual([
     "work",
     "project",
   ]);
-  expect(state.selection.main.head).toBe(14);
+  expect(state.selection.main.head).toBe(10);
   state = state.update({
     changes: { from: state.selection.main.head, insert: "new " },
     userEvent: "input",
   }).state;
-  expect(state.doc.line(3).text).toBe("\t- new project");
-  state = state.update({
-    selection: { anchor: state.doc.line(3).from + 3 },
-  }).state;
-  new OperationPerformer(parser, new ChangesApplicator()).perform(
-    (root) => new CreateNewItem(root, "\t", true),
-    editor,
-  );
-  expect(state.doc.toString()).toBe(
-    "- work\n\t- \n\t- \n\t- new project\n\t\t- task\n\t- other\n- personal",
-  );
+  expect(state.doc.line(2).text).toBe("\t- new project");
   expect(zoom.range(state)?.ancestors.map(({ label }) => label)).toEqual([
     "work",
     "new project",
   ]);
-  expect(state.selection.main.head).toBe(18);
+  expect(state.selection.main.head).toBe(10);
 });
 
 test("limits select-all to visible content", () => {
@@ -406,7 +400,7 @@ test("limits select-all to visible content", () => {
   expect(selected.selection.main.to).toBe(26);
 });
 
-test("exits zoom when the focused root is removed", () => {
+test("keeps the focused root when a local deletion would remove it", () => {
   const { zoom, state } = setup();
   const focused = state.update({
     effects: setListZoom.of(7),
@@ -415,7 +409,8 @@ test("exits zoom when the focused root is removed", () => {
   const deleted = focused.update({
     changes: { from: 7, to: 26, insert: "" },
   }).state;
-  expect(zoom.range(deleted)).toBeNull();
+  expect(zoom.range(deleted)).toMatchObject({ from: 7, to: 26 });
+  expect(deleted.doc.toString()).toBe(doc);
 });
 
 test("returning to the note leaves content unchanged", () => {
@@ -487,8 +482,11 @@ test("the zoom command accepts an empty bare marker at EOF", async () => {
   expect(
     command.editorCheckCallback!(false, { cm: view } as never, {} as never),
   ).toBe(true);
-  expect(view.state.selection.main.head).toBe(1);
-  expect(view.state.doc.toString()).toBe("-");
+  expect(view.state.selection.main.head).toBe(5);
+  expect(view.state.doc.toString()).toBe("-\n\t- ");
+  view.state = view.state.update({ selection: { anchor: 1 } }).state;
+  command.editorCheckCallback!(false, { cm: view } as never, {} as never);
+  expect(view.state.doc.toString()).toBe("-\n\t- ");
 });
 
 test("restores the original viewport anchor after folding a zoomed branch below Properties", async () => {
@@ -575,6 +573,48 @@ test("restores the original viewport anchor after folding a zoomed branch below 
   });
   expect(remainingFolds).toEqual([branch]);
   expect(restored.state.doc.toString()).toBe(text);
+});
+
+test("maps the return viewport through the child created on initial zoom", async () => {
+  const commands: Command[] = [];
+  const extensions: Extension[] = [];
+  const feature = new ListZoom(
+    {
+      addCommand: (command: Command) => commands.push(command),
+      registerEditorExtension: (extension: Extension) =>
+        extensions.push(extension),
+    } as never,
+    new Parser(makeLogger(), makeSettings()),
+  );
+  await feature.load();
+  const snapshot = StateEffect.define<number>({
+    map: (value, changes) => changes.mapPos(value),
+  });
+  const transactions: Transaction[] = [];
+  const view = {
+    state: EditorState.create({ doc: "- root\n- after", extensions }),
+    scrollSnapshot: () => snapshot.of(7),
+    focus: () => undefined,
+    dispatch: (spec: TransactionSpec) => {
+      const tr = view.state.update(spec);
+      view.state = tr.state;
+      transactions.push(tr);
+    },
+  };
+  const run = (id: string) =>
+    commands.find((command) => command.id === id)!.editorCheckCallback!(
+      false,
+      { cm: view } as never,
+      {} as never,
+    );
+  run("zoom-in");
+  expect(view.state.doc.toString()).toBe("- root\n\t- \n- after");
+  run("zoom-reset");
+  expect(
+    transactions[transactions.length - 1]?.effects.find((effect) =>
+      effect.is(snapshot),
+    )?.value,
+  ).toBe(11);
 });
 
 test("accepts Obsidian set transactions from another pane and leaves zoom", () => {

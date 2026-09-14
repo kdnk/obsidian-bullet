@@ -42,6 +42,7 @@ function editor(
   settings.keepCursorWithinContent = keepCursor;
   const zoom = new ListZoomState(new Parser(makeLogger(), settings));
   const view = {
+    zoom,
     state: EditorState.create({
       doc,
       extensions: [
@@ -76,6 +77,19 @@ function enter(
   numericBullets = true,
   keepCursor: "never" | "bullet-and-checkbox" = "bullet-and-checkbox",
 ) {
+  const focused = view.zoom.range(view.state);
+  if (focused) {
+    const insertion = view.zoom.childInsertion(
+      view.state,
+      focused.from,
+      "\t",
+      false,
+      numericBullets,
+    );
+    expect(insertion).not.toBeNull();
+    if (insertion) view.dispatch(insertion);
+    return;
+  }
   const position = (offset: number) => {
     const line = view.state.doc.lineAt(offset);
     return { line: line.number - 1, ch: offset - line.from };
@@ -147,13 +161,13 @@ function enter(
     performer.perform((root) => new KeepCursorWithinListContent(root), reader);
 }
 
-test("release audit: Enter splitting ordered root with hidden ordered sibling inserts text", () => {
+test("release audit: Enter splitting an ordered root adds a child without renumbering its hidden sibling", () => {
   const original = "- work\n\t1. project\n\t\t- task\n\t2. other\n- personal";
   const { view } = editor(original, 2, "project");
   view.dispatch({ selection: { anchor: view.state.selection.main.head + 3 } });
   enter(view, true);
   expect(view.state.doc.toString()).toBe(
-    "- work\n\t1. pro\n\t2. ject\n\t\t- task\n\t3. other\n- personal",
+    "- work\n\t1. pro\n\t\t- ject\n\t\t- task\n\t2. other\n- personal",
   );
 });
 
@@ -163,7 +177,7 @@ test("release audit: Enter after visible leaf under unnormalized hidden ordered 
   view.dispatch({ selection: { anchor: view.state.doc.line(3).to } });
   enter(view, true);
   expect(view.state.doc.toString()).toBe(
-    "1. work\n\t- project\n\t\t- task\n\t\t- \n\t- other\n- personal",
+    "9. work\n\t- project\n\t\t- task\n\t\t- \n\t- other\n- personal",
   );
 });
 
@@ -178,11 +192,11 @@ test.each(["-", "1."])(
     enter(view, true);
     const after =
       marker === "-"
-        ? "- work\n\t- pro\n\t- ject\n\t\t- task\n- personal"
-        : "- work\n\t1. pro\n\t2. ject\n\t\t- task\n- personal";
+        ? "- work\n\t- pro\n\t\t- ject\n\t\t- task\n- personal"
+        : "- work\n\t1. pro\n\t\t- ject\n\t\t- task\n- personal";
     expect(view.state.doc.toString()).toBe(after);
     expect(view.state.selection.main.head).toBe(after.indexOf("ject"));
-    expect(zoom.range(view.state)).toBeNull();
+    expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(2).from);
     view.dispatch({
       changes: { from: view.state.selection.main.head, insert: "new " },
       annotations: isolateHistory.of("full"),
@@ -205,29 +219,30 @@ test.each([
     original:
       "- work\n\t1. [ ] project\n\t\t- task\n\t2. [ ] other\n- personal",
     after:
-      "- work\n\t1. [ ] pro\n\t2. [ ] ject\n\t\t- task\n\t3. [ ] other\n- personal",
+      "- work\n\t1. [ ] pro\n\t\t- [ ] ject\n\t\t- task\n\t2. [ ] other\n- personal",
     cursor: "ject",
   },
   {
     name: "checked task with spaces",
     original: "- work\n    - [x] project\n        - task\n- personal",
-    after: "- work\n    - [x] pro\n    - [ ] ject\n        - task\n- personal",
+    after:
+      "- work\n    - [x] pro\n        - [ ] ject\n        - task\n- personal",
     cursor: "ject",
   },
   {
     name: "leaf root end before hidden text",
     original: "- work\n\t- project\n- personal",
-    after: "- work\n\t- project\n\t- \n- personal",
+    after: "- work\n\t- project\n\t\t- \n- personal",
     cursor: "\n- personal",
   },
   {
     name: "leaf root end at EOF",
     original: "- work\n\t- project",
-    after: "- work\n\t- project\n\t- ",
+    after: "- work\n\t- project\n\t\t- ",
     cursor: "",
   },
 ])(
-  "Enter reveals and edits the new sibling: $name",
+  "Enter creates an editable first child and retains the focused root: $name",
   ({ original, after, cursor }) => {
     const { view, zoom } = editor(original, 2, "project");
     view.dispatch({
@@ -239,7 +254,7 @@ test.each([
     const destination = cursor ? after.indexOf(cursor) : after.length;
     expect(view.state.doc.toString()).toBe(after);
     expect(view.state.selection.main.head).toBe(destination);
-    expect(zoom.range(view.state)).toBeNull();
+    expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(2).from);
     view.dispatch({
       changes: { from: view.state.selection.main.head, insert: "NEXT" },
       annotations: isolateHistory.of("full"),
@@ -275,7 +290,7 @@ test.each([
       changes: {
         from: 7,
         to: original.indexOf("\n- personal"),
-        insert: `\t1. pro\n\t2. ject\n\t\t- task\n\t${after}`,
+        insert: `\t1. pro\n\t\t- ject\n\t\t- task\n\t${after}`,
       },
     });
     expect(view.state.doc.toString()).toBe(original);
@@ -284,14 +299,14 @@ test.each([
   },
 );
 
-test("a matching Enter result from another cursor cannot authorize hidden renumbering", () => {
+test("a child insertion cannot authorize hidden renumbering", () => {
   const original = "- work\n\t1. project\n\t\t- task\n\t2. other\n- personal";
   const { view, zoom } = editor(original, 2, "project");
   view.dispatch({
     changes: {
       from: 7,
       to: original.indexOf("\n- personal"),
-      insert: "\t1. pro\n\t2. ject\n\t\t- task\n\t3. other",
+      insert: "\t1. pro\n\t\t- ject\n\t\t- task\n\t3. other",
     },
   });
   expect(view.state.doc.toString()).toBe(original);
@@ -324,10 +339,10 @@ test("an unordered split remains editable when automatic numbering is disabled",
   const { view, zoom } = editor(original, 2, "project");
   view.dispatch({ selection: { anchor: view.state.selection.main.head + 3 } });
   enter(view, true, false);
-  const after = "9. work\n\t- pro\n\t- ject\n\t\t- task\n- personal";
+  const after = "9. work\n\t- pro\n\t\t- ject\n\t\t- task\n- personal";
   expect(view.state.doc.toString()).toBe(after);
   expect(view.state.selection.main.head).toBe(after.indexOf("ject"));
-  expect(zoom.range(view.state)).toBeNull();
+  expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(2).from);
   view.dispatch({
     changes: { from: view.state.selection.main.head, insert: "NEXT" },
     userEvent: "input",
@@ -336,7 +351,7 @@ test("an unordered split remains editable when automatic numbering is disabled",
 });
 
 test.each([false, true])(
-  "replacing a selected body range reveals its split destination (reverse: %s)",
+  "replacing a selected body range moves the remainder into a visible child (reverse: %s)",
   (reverse) => {
     const original = "- work\n\t1. project\n\t\t- task\n\t2. other\n- personal";
     const { view, zoom } = editor(original, 2, "project");
@@ -349,11 +364,11 @@ test.each([false, true])(
     });
     enter(view, true);
     const after =
-      "- work\n\t1. pro\n\t2. t\n\t\t- task\n\t3. other\n- personal";
-    const destination = after.indexOf("2. t") + 3;
+      "- work\n\t1. pro\n\t\t- t\n\t\t- task\n\t2. other\n- personal";
+    const destination = after.indexOf("- t") + 2;
     expect(view.state.doc.toString()).toBe(after);
     expect(view.state.selection.main.head).toBe(destination);
-    expect(zoom.range(view.state)).toBeNull();
+    expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(2).from);
     undo(view);
     expect(view.state.doc.toString()).toBe(original);
     expect(view.state.selection.main.from).toBe(from);
@@ -365,11 +380,11 @@ test.each([false, true])(
       changes: { from: view.state.selection.main.head, insert: "NEXT" },
       userEvent: "input",
     });
-    expect(view.state.doc.toString()).toBe(after.replace("2. t", "2. NEXTt"));
+    expect(view.state.doc.toString()).toBe(after.replace("- t", "- NEXTt"));
   },
 );
 
-test("Enter after a folded focused root keeps its children attached and reveals the new sibling", () => {
+test("Enter after a folded focused root opens an editable first child", () => {
   const original = "- work\n\t- project\n\t\t- task\n- personal";
   const { view, zoom } = editor(original, 2, "project");
   view.dispatch({
@@ -380,18 +395,18 @@ test("Enter after a folded focused root keeps its children attached and reveals 
     selection: { anchor: view.state.doc.line(2).to },
   });
   enter(view, true);
-  const after = "- work\n\t- project\n\t\t- task\n\t- \n- personal";
-  const destination = after.indexOf("\n- personal");
+  const after = "- work\n\t- project\n\t\t- \n\t\t- task\n- personal";
+  const destination = after.indexOf("\n\t\t- task");
   expect(view.state.doc.toString()).toBe(after);
   expect(view.state.selection.main.head).toBe(destination);
-  expect(zoom.range(view.state)).toBeNull();
+  expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(2).from);
   view.dispatch({
     changes: { from: view.state.selection.main.head, insert: "NEXT" },
     userEvent: "input",
     annotations: isolateHistory.of("full"),
   });
   expect(view.state.doc.toString()).toBe(
-    after.replace("\n- personal", "NEXT\n- personal"),
+    after.replace("\n\t\t- task", "NEXT\n\t\t- task"),
   );
   undo(view);
   undo(view);
@@ -402,7 +417,7 @@ test("Enter after a folded focused root keeps its children attached and reveals 
 });
 
 test.each([undefined, "input"])(
-  "empty sibling insertion cannot smuggle arbitrary hidden numbering (%s)",
+  "empty child insertion cannot smuggle arbitrary hidden numbering (%s)",
   (userEvent) => {
     const original = "- work\n\t1. project\n\t\t- task\n\t2. other\n- personal";
     const { view, zoom } = editor(original, 2, "project");
@@ -410,7 +425,7 @@ test.each([undefined, "input"])(
       changes: {
         from: 7,
         to: original.indexOf("\n- personal"),
-        insert: "\t1. \n\t2. project\n\t\t- task\n\t999999. other",
+        insert: "\t1. project\n\t\t- \n\t\t- task\n\t999999. other",
       },
       userEvent,
     });
@@ -431,21 +446,23 @@ test.each([false, true])(
     );
     view.dispatch({ selection: { anchor: original.indexOf("project") } });
     enter(view, false, true, "never");
-    const after = "- work\n\t1. [ ] \n\t2. [x] project\n\t\t- task\n- personal";
+    const after = useZoom
+      ? "- work\n\t1. [x] project\n\t\t- [ ] \n\t\t- task\n- personal"
+      : "- work\n\t1. [ ] \n\t2. [x] project\n\t\t- task\n- personal";
     const destination = useZoom
-      ? after.indexOf("project")
+      ? after.indexOf("\n\t\t- task")
       : after.indexOf("\n\t2.");
     expect(view.state.doc.toString()).toBe(after);
     expect(view.state.selection.main.head).toBe(destination);
     if (useZoom)
-      expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(3).from);
+      expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(2).from);
     view.dispatch({
       changes: { from: view.state.selection.main.head, insert: "NEXT" },
       userEvent: "input",
       annotations: isolateHistory.of("full"),
     });
     const typed = useZoom
-      ? "- work\n\t1. [ ] \n\t2. [x] NEXTproject\n\t\t- task\n- personal"
+      ? "- work\n\t1. [x] project\n\t\t- [ ] NEXT\n\t\t- task\n- personal"
       : "- work\n\t1. [ ] NEXT\n\t2. [x] project\n\t\t- task\n- personal";
     expect(view.state.doc.toString()).toBe(typed);
     undo(view);
@@ -459,49 +476,42 @@ test.each([false, true])(
 );
 
 test.each([false, true])(
-  "native Enter exposes its new sibling before continued input and native renumbering (explicit selection: %s)",
+  "rejects a native root split into a sibling and preserves continued root typing (explicit selection: %s)",
   (explicitSelection) => {
     const original = "- work\n\t1. project\n\t\t- task\n\t2. other\n- personal";
     const { view, zoom } = editor(original, 2, "project");
     const split = original.indexOf("project") + 3;
     view.dispatch({ selection: { anchor: split } });
     view.dispatch({
-      // Obsidian's list Enter replaces the preceding character and maps the
-      // selection implicitly; other input commands provide it explicitly.
+      // Native Enter may replace the preceding character and map selection.
       changes: { from: split - 1, to: split, insert: "o\n\t2. " },
       selection: explicitSelection ? { anchor: split + 5 } : undefined,
       userEvent: "input.type",
       annotations: isolateHistory.of("full"),
     });
-    const after =
-      "- work\n\t1. pro\n\t2. ject\n\t\t- task\n\t2. other\n- personal";
-    expect(view.state.doc.toString()).toBe(after);
-    expect(zoom.range(view.state)).toBeNull();
-    expect(view.state.selection.main.head).toBe(after.indexOf("ject"));
-    const hiddenNumber = after.indexOf("2. other");
+    expect(view.state.doc.toString()).toBe(original);
+    expect(zoom.range(view.state)?.from).toBe(7);
+    expect(view.state.selection.main.head).toBe(split);
     view.dispatch({
-      changes: [
-        { from: view.state.selection.main.head, insert: "NEXT" },
-        { from: hiddenNumber, to: hiddenNumber + 1, insert: "3" },
-      ],
+      changes: { from: view.state.selection.main.head, insert: "NEXT" },
       userEvent: "input",
       annotations: isolateHistory.of("full"),
     });
     expect(view.state.doc.toString()).toBe(
-      "- work\n\t1. pro\n\t2. NEXTject\n\t\t- task\n\t3. other\n- personal",
+      original.replace("project", "proNEXTject"),
     );
     undo(view);
-    expect(view.state.doc.toString()).toBe(after);
-    undo(view);
     expect(view.state.doc.toString()).toBe(original);
+    expect(zoom.range(view.state)?.from).toBe(7);
     redo(view);
-    expect(view.state.doc.toString()).toBe(after);
-    expect(view.state.selection.main.head).toBe(after.indexOf("ject"));
+    expect(view.state.doc.toString()).toBe(
+      original.replace("project", "proNEXTject"),
+    );
   },
 );
 
 test.each([false, true])(
-  "native Enter before the focused body keeps the retained body editable (explicit selection: %s)",
+  "rejects a native sibling before the focused body without moving the cursor (explicit selection: %s)",
   (explicitSelection) => {
     const original = "- work\n\t1. project\n\t\t- task\n- personal";
     const { view, zoom } = editor(original, 2, "project");
@@ -511,31 +521,30 @@ test.each([false, true])(
       selection: explicitSelection ? { anchor: from + 5 } : undefined,
       userEvent: "input.type",
     });
-    const after = "- work\n\t1. \n\t2. project\n\t\t- task\n- personal";
-    expect(view.state.doc.toString()).toBe(after);
-    expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(3).from);
-    expect(view.state.selection.main.head).toBe(after.indexOf("project"));
+    expect(view.state.doc.toString()).toBe(original);
+    expect(zoom.range(view.state)?.from).toBe(7);
+    expect(view.state.selection.main.head).toBe(from);
     view.dispatch({
       changes: { from: view.state.selection.main.head, insert: "NEXT" },
       userEvent: "input",
     });
     expect(view.state.doc.toString()).toBe(
-      after.replace("project", "NEXTproject"),
+      original.replace("project", "NEXTproject"),
     );
   },
 );
 
-test("native Enter cannot accompany a hidden document edit", () => {
+test("a native child split cannot accompany a hidden document edit", () => {
   const original = "- work\n\t1. project\n\t\t- task\n\t2. other\n- personal";
   const { view, zoom } = editor(original, 2, "project");
   const split = original.indexOf("project") + 3;
   view.dispatch({ selection: { anchor: split } });
   view.dispatch({
     changes: [
-      { from: split, insert: "\n\t2. " },
+      { from: split, insert: "\n\t\t- " },
       { from: original.indexOf("other"), insert: "changed " },
     ],
-    selection: { anchor: split + 5 },
+    selection: { anchor: split + 6 },
     userEvent: "input",
   });
   expect(view.state.doc.toString()).toBe(original);
@@ -543,7 +552,7 @@ test("native Enter cannot accompany a hidden document edit", () => {
   expect(zoom.range(view.state)?.from).toBe(7);
 });
 
-test("refolding a checked task preserves its accepted body cursor without a repair handler", () => {
+test("a folded checked root reveals its new child without a repair handler", () => {
   const original = "- work\n\t1. [x] project\n\t\t- task\n- personal";
   const { view, zoom } = editor(original, 2, "project", "never");
   view.dispatch({
@@ -553,22 +562,20 @@ test("refolding a checked task preserves its accepted body cursor without a repa
     }),
   });
   enter(view, false, true, "never");
-  const after = "- work\n\t1. [ ] \n\t2. [x] project\n\t\t- task\n- personal";
+  const after = "- work\n\t1. [x] project\n\t\t- [ ] \n\t\t- task\n- personal";
   expect(view.state.doc.toString()).toBe(after);
-  expect(view.state.selection.main.head).toBe(after.indexOf("project"));
-  expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(3).from);
+  expect(view.state.selection.main.head).toBe(after.indexOf("\n\t\t- task"));
+  expect(zoom.range(view.state)?.from).toBe(view.state.doc.line(2).from);
   const folds: [number, number][] = [];
   foldedRanges(view.state).between(0, view.state.doc.length, (from, to) => {
     folds.push([from, to]);
   });
-  expect(folds).toEqual([
-    [view.state.doc.line(3).to, view.state.doc.line(4).to],
-  ]);
+  expect(folds).toEqual([]);
   view.dispatch({
     changes: { from: view.state.selection.main.head, insert: "NEXT" },
     userEvent: "input",
   });
   expect(view.state.doc.toString()).toBe(
-    after.replace("project", "NEXTproject"),
+    after.replace("\n\t\t- task", "NEXT\n\t\t- task"),
   );
 });
