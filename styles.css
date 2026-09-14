@@ -67,6 +67,11 @@ body.bullet-plugin-better-lists
   margin-right: 0.3em;
 }
 
+/* Isolate the task marker from the completed line's text decoration. */
+.bullet-plugin-better-lists .bullet-plugin-task-bullet {
+  display: inline-block;
+}
+
 .bullet-plugin-better-lists .list-bullet {
   position: relative;
 }

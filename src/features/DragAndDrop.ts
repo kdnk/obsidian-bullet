@@ -904,9 +904,13 @@ function isClickOnBullet(e: MouseEvent) {
 
   while (el) {
     if (
+      el.classList.contains("task-list-item-checkbox") ||
+      el.classList.contains("task-list-label")
+    )
+      return false;
+    if (
       el.classList.contains("cm-formatting-list") ||
-      el.classList.contains("cm-fold-indicator") ||
-      el.classList.contains("task-list-item-checkbox")
+      el.classList.contains("cm-fold-indicator")
     ) {
       return true;
     }

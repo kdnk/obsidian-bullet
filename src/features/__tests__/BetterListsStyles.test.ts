@@ -3,6 +3,10 @@ import { join } from "node:path";
 
 import { BetterListsStyles } from "../BetterListsStyles";
 
+jest.mock("obsidian", () => ({ editorLivePreviewField: {} }), {
+  virtual: true,
+});
+
 function makeClassList() {
   const values = new Set<string>();
 

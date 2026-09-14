@@ -97,6 +97,8 @@ CodeMirror extensions and editor utilities. Registers keymaps, handles checkbox 
 
 ## Tests
 
+- For task bullet changes, follow the widget placement and desktop/mobile verification procedure in `AGENTS.md` (Task bullets).
+
 - For mixed-indent zoom or whole-document replacement changes, follow the native-guide, unzoomed-baseline, and next-input checks in `AGENTS.md` (zoom and multi-pane synchronization).
 
 - For zoom/save changes, follow the Linter diff and cross-pane verification procedure in `AGENTS.md` (zoom and multi-pane synchronization).

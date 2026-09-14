@@ -55,7 +55,11 @@ export class ListZoomInteraction {
 
   private bullet(event: Event) {
     const element = event.target as HTMLElement | null;
-    if (element?.closest?.(".task-list-item-checkbox, .collapse-indicator"))
+    if (
+      element?.closest?.(
+        ".task-list-item-checkbox, .task-list-label, .collapse-indicator",
+      )
+    )
       return null;
     const bullet = element?.closest?.(".cm-formatting-list, .list-bullet");
     return bullet && this.view.contentDOM.contains(bullet) ? bullet : null;

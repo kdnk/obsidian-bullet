@@ -97,3 +97,23 @@ test("zoom visibility is scoped to its pane and removed on teardown", () => {
   expect(a.navigated).toEqual([]);
   b.interaction.destroy();
 });
+
+test.each([
+  ".task-list-item-checkbox",
+  ".task-list-label",
+  ".collapse-indicator",
+])("%s inside a marker retains its native click", (excluded) => {
+  const s = setup();
+  const target = {
+    closest: (selector: string) =>
+      selector.includes(excluded) ||
+      selector === ".cm-formatting-list, .list-bullet"
+        ? target
+        : null,
+  };
+  s.event("pointerdown", 0, target);
+  const click = s.event("click", 0, target);
+  expect(s.navigated).toEqual([]);
+  expect(click.defaultPrevented).toBe(false);
+  s.interaction.destroy();
+});

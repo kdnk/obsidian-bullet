@@ -83,6 +83,8 @@ Focus on one part of a long outline while editing the original note:
 
 Zoom is available on desktop and mobile. The zoom commands have no default shortcuts; assign your own under **Settings → Hotkeys**, or add them to the mobile toolbar. A bullet click zooms; dragging it on desktop moves the branch. Checkboxes and fold arrows keep their usual click actions.
 
+With **List styling** enabled, unordered tasks in Live Preview keep a bullet before the checkbox. Click the bullet to zoom or drag it to move the task and its children; click the checkbox to toggle completion. Task text stays in standard `- [ ]` / `- [x]` Markdown.
+
 Zoom applies only to the current editor pane, so another pane can show the whole note at the same time. Properties are hidden in the zoomed pane and return when you show the whole note. Zoom resets when you switch files or reload; no block IDs or additional notes are created.
 
 Selections and direct edits stay within the visible branch. If Undo, Redo, or synchronization from another pane changes hidden content, Bullet reveals the whole note so you can see the change.

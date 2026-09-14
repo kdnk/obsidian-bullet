@@ -4,7 +4,7 @@ import {
   StateField,
   TransactionSpec,
 } from "@codemirror/state";
-import { DecorationSet } from "@codemirror/view";
+import { DecorationSet, EditorView } from "@codemirror/view";
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -763,3 +763,42 @@ test("uses Logseq-style cursors for drag handles and active drags", () => {
   );
   expect(styles).not.toMatch(/cursor:\s*(?:grab|grabbing)\s*;/);
 });
+
+test.each(["task-list-item-checkbox", "task-list-label"])(
+  "%s never becomes a drag handle even inside a list marker",
+  (targetClass) => {
+    const feature = new DragAndDrop(
+      {} as never,
+      { dragAndDrop: true } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const marker = {
+      classList: {
+        contains: (name: string): boolean => name === "cm-formatting-list",
+      },
+      parentElement: null,
+    };
+    const target = {
+      classList: { contains: (name: string) => name === targetClass },
+      parentElement: marker,
+    };
+    // Reaching view lookup means the checkbox was misclassified as a handle.
+    const lookup = jest
+      .spyOn(EditorView, "findFromDOM")
+      .mockImplementation(() => {
+        throw Error("checkbox reached drag view lookup");
+      });
+    marker.classList.contains = (name: string) =>
+      ["cm-formatting-list", "cm-editor"].includes(name);
+    const e = { target, preventDefault: jest.fn(), stopPropagation: jest.fn() };
+    expect(() =>
+      (
+        feature as unknown as { handleMouseDown: (event: MouseEvent) => void }
+      ).handleMouseDown(e as never),
+    ).not.toThrow();
+    expect(e.preventDefault).not.toHaveBeenCalled();
+    lookup.mockRestore();
+  },
+);
