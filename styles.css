@@ -722,7 +722,6 @@ html
   gap: 4px;
   padding: 8px 12px;
   overflow-x: auto;
-  border-bottom: 1px solid var(--background-modifier-border);
   background: var(--background-primary);
 }
 /* Phone headers float over the editor, including the top panel. Reserve the
@@ -757,4 +756,23 @@ html
 .markdown-source-view.mod-cm6.bullet-zoom-active.is-live-preview.show-properties
   .metadata-container {
   display: none;
+}
+
+/* Breadcrumbs replace the note heading while zoomed. Keep the document close
+   to the scroll viewport so native anchoring tracks its first visible row when
+   a code block switches between source and preview. */
+.markdown-source-view.mod-cm6.bullet-zoom-active {
+  --view-top-spacing-markdown: 8px;
+}
+.view-content
+  > .markdown-source-view.mod-cm6.bullet-zoom-active
+  > .cm-editor
+  > .cm-scroller {
+  padding-top: 8px;
+}
+.markdown-source-view.mod-cm6.bullet-zoom-active .inline-title {
+  display: none;
+}
+.markdown-source-view.mod-cm6.bullet-zoom-active .cm-panels-top {
+  border-bottom: 0;
 }
