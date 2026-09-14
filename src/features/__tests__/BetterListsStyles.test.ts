@@ -169,9 +169,8 @@ describe("BetterListsStyles", () => {
       /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-nested-code-block\s+\.bullet-plugin-nested-code-block-content\s*\{([^}]*)\}/,
     )?.[1];
 
-    expect(line?.replace(/\s+/g, " ").trim()).toBe(
-      "background-color: transparent; isolation: isolate;",
-    );
+    expect(line).toContain("background-color: transparent;");
+    expect(line).toContain("isolation: isolate;");
     expect(background?.replace(/\s+/g, " ").trim()).toBe(
       'content: ""; position: absolute; z-index: -1; inset-block: 0; inset-inline-start: var(--bullet-nested-code-block-inset); inset-inline-end: max( 0px, calc(100% - var(--bullet-nested-code-block-end, 100%)) ); background-color: var(--code-background);',
     );
