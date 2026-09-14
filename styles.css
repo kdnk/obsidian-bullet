@@ -725,6 +725,14 @@ html
   border-bottom: 1px solid var(--background-modifier-border);
   background: var(--background-primary);
 }
+/* Phone headers float over the editor, including the top panel. Reserve the
+   native header and safe-area space even while navigation is auto-hidden. */
+.is-phone.is-floating-nav .bullet-zoom-breadcrumbs,
+.is-phone.auto-full-screen .bullet-zoom-breadcrumbs {
+  padding-top: calc(
+    8px + var(--view-header-height) + var(--view-header-top-offset)
+  );
+}
 .bullet-zoom-breadcrumbs button {
   flex-shrink: 0;
   max-width: 220px;
