@@ -529,12 +529,15 @@ test.each(["unordered", "ordered", "empty", "empty-no-line-box"])(
     const embed = makeLine(["cm-preview-code-block"], { position: 3 });
     Object.assign(opening, { nextElementSibling: embed });
     Object.assign(embed, { previousElementSibling: opening });
-    embed.querySelector = (() => ({
-      getBoundingClientRect: () => ({
-        top: 126,
-        height: kind === "empty-no-line-box" ? 24 : 16,
-      }),
-    })) as never;
+    embed.querySelector = ((selector: string) =>
+      selector === ".ec-line .code" || selector === "code"
+        ? {
+            getBoundingClientRect: () => ({
+              top: 126,
+              height: kind === "empty-no-line-box" ? 24 : 16,
+            }),
+          }
+        : null) as never;
     embed.ownerDocument.defaultView.getComputedStyle = (() => ({
       lineHeight: "16px",
       paddingTop: kind === "empty-no-line-box" ? "12px" : "14px",

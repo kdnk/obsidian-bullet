@@ -51,6 +51,7 @@
 - エディタごとの非同期処理について
     - `getEditorFromState()`は呼び出すたびに新しい`MyEditor`ラッパーを返します。エディタごとの予約処理を置換・取り消すキーには、`getCodeMirrorView()`が返す同一の`EditorView`を使ってください。プラグイン終了時は、すべてのエディタの予約処理を取り消してください。
 - リスト内のコードブロックについて
+    - When changing processor previews, run `n exec 22.23.1 node scripts/verify-nested-code-preview-indent.cjs <fresh-output-directory>` with Shiki installed in the test vault. Compare rendered code and decoded copy payload against code-only indentation, including partial tabs and wrapping; aligned backgrounds alone do not detect duplicated list indentation. Preserve literal code indentation and the original Markdown.
     - `styles.css`を変更するときは、表示検証の前に`SKIP_OBSIDIAN=1 n exec 22.23.1 npx jest src/__tests__/reviewSourcePolicies.test.ts --runInBand`も実行してください。既存のsource policyはrelational selectorとimportant宣言を禁止しています。DOMの関係に応じたstyleは、既存の測定処理で付与・除去するmarker classで表現し、このpolicy testを緩めないでください。
     - ズームとページ間DnDを変更した場合は、Shiki有効・無効の両方で`n exec 22.23.1 node scripts/verify-nested-code-interactions.cjs <fresh-output-directory>`を通常実行と`--zoomed-drag`付きで実行してください。移動先の表示座標はズームで隠したindent columnを差し引き、Markdownへ書くraw indentは維持します。非表示のblock replacementでも`coordsAtPos()`は境界座標を返すため、ズーム範囲外の候補は座標測定前に除外してください。
     - 縦位置の変更は、Shikiの行番号あり・なしとShiki無効の3条件で検証してください。次項のrenderer scriptは空ブロック・番号付きの複数行ブロック・言語指定なしも検証します。CodeMirrorの高さ計測は各直下要素のheightを加算するため、previewの高さは本文行またはembedが持ち、非表示の開始・終了フェンスへ重複して与えないでください。本文行がない標準の空ブロックでは1行の高さを残してください。embed横のガイドは開始行にある既存のnative segmentの高さだけを延ばし、インデント領域内に保ちます。

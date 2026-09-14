@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
+For processor preview changes, follow the code text and copy payload verification rule under “リスト内のコードブロックについて” in [AGENTS.md](AGENTS.md).
+
 Obsidian Bullet is an Obsidian plugin that provides outliner functionality (like Workflowy or RoamResearch) with bullet/list operations, drag-and-drop, and more.
 
 ## Commands

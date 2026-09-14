@@ -7,6 +7,8 @@ import {
   ViewUpdate,
 } from "@codemirror/view";
 
+import { NestedCodeBlockPreviews } from "./NestedCodeBlockPreview";
+
 import { getObsidianDomWindow } from "../obsidianDom";
 
 const CODE_BLOCK_CLASS = "bullet-plugin-nested-code-block";
@@ -187,6 +189,7 @@ export class NestedCodeBlockLayoutPluginValue {
   private destroyed = false;
   private syntaxContext: SyntaxContext;
   private previewObserver: MutationObserver | null = null;
+  private previews = new NestedCodeBlockPreviews();
   private markerMeasureContainer: HTMLElement | null = null;
   private markerMeasurements = new Map<
     number,
@@ -306,6 +309,7 @@ export class NestedCodeBlockLayoutPluginValue {
       this.animationFrame = null;
     }
     this.clearStyles();
+    this.previews.destroy();
     this.markerMeasureContainer?.remove();
     this.markerMeasureContainer = null;
     this.markerMeasurements.clear();
@@ -553,6 +557,7 @@ export class NestedCodeBlockLayoutPluginValue {
       if (!current.has(element)) this.clearElementStyles(element);
     }
 
+    let previewChanged = false;
     for (const { element, inset, preview } of lines) {
       setStyleProperty(element, CODE_BLOCK_INSET, inset);
       if (preview) {
@@ -562,9 +567,47 @@ export class NestedCodeBlockLayoutPluginValue {
         element.style.removeProperty(PREVIEW_HEIGHT);
         element.style.removeProperty(PREVIEW_MARKER_OFFSET);
       }
+      if (element.classList.contains("cm-preview-code-block")) {
+        previewChanged = this.correctPreviewContent(element) || previewChanged;
+      }
     }
     this.styledLines = current;
     this.applyLineRoles();
+    // Removing container whitespace can unwrap code rows. Let the next native
+    // measurement update the embed height and the opening marker together.
+    if (previewChanged) this.scheduleMeasure();
+  }
+
+  private correctPreviewContent(element: HTMLElement): boolean {
+    if (!element.querySelector(".expressive-code")) {
+      this.previews.clear(element);
+      return false;
+    }
+    const line = documentLineForElement(this.view, element);
+    const opening = line && this.syntaxContext.fenceOpenings.at(line.number);
+    if (!opening) return false;
+    const source: string[] = [];
+    for (
+      let n = opening.openingLineNumber + 1;
+      n <= this.view.state.doc.lines;
+      n++
+    ) {
+      const name = this.syntaxContext.lineNameAt(n);
+      if (name && hasClassName(name, "HyperMD-codeblock-end")) {
+        return this.previews.synchronize(
+          element,
+          source,
+          opening.contentColumn,
+          this.view.state.tabSize,
+          this.view.state.doc.line(opening.openingLineNumber).text,
+        );
+      }
+      const text = this.view.state.doc.line(n).text;
+      if (text.trim() !== "" && (!name || !isNestedCodeBlockName(name))) break;
+      source.push(text);
+    }
+    this.previews.clear(element);
+    return false;
   }
 
   private applyLineRoles(): boolean {
@@ -629,6 +672,7 @@ export class NestedCodeBlockLayoutPluginValue {
   }
 
   private clearElementStyles(element: HTMLElement) {
+    this.previews.clear(element);
     element.classList.remove(CODE_BLOCK_CLASS);
     element.classList.remove(PREVIEW_OPENING_CLASS);
     element.classList.remove(PREVIEW_EMBED_CLASS);
