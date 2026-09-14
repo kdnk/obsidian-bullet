@@ -10,6 +10,8 @@ For processor preview changes, follow the code text and copy payload verificatio
 
 For fenced-code editing guard changes, follow the typing and deletion verification rule under “リスト内のコードブロックについて” in [AGENTS.md](AGENTS.md).
 
+For Vim newline changes, follow the real-key verification rule under “リスト内のコードブロックについて” in [AGENTS.md](AGENTS.md).
+
 Obsidian Bullet is an Obsidian plugin that provides outliner functionality (like Workflowy or RoamResearch) with bullet/list operations, drag-and-drop, and more.
 
 ## Commands

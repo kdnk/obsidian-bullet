@@ -25,6 +25,14 @@ jest.mock(
       constructor(editor: unknown) {
         this.editor = editor;
       }
+
+      getCodeMirrorView() {
+        const { EditorState } =
+          jest.requireActual<typeof import("@codemirror/state")>(
+            "@codemirror/state",
+          );
+        return { state: EditorState.create({ doc: "plain" }) };
+      }
     },
   }),
   { virtual: true },

@@ -9,6 +9,9 @@ import { insertPlainLine } from "src/utils/insertPlainLine";
 
 import { Feature } from "./Feature";
 
+import { MarkdownLineClassifier } from "../services/MarkdownLineClassifier";
+import { getFenceContent, getFenceOpening } from "../utils/fencedCode";
+
 declare global {
   type CM = object;
 
@@ -37,6 +40,7 @@ declare global {
 
 export class VimOBehaviourOverride implements Feature {
   private inited = false;
+  private classifier = new MarkdownLineClassifier();
 
   constructor(
     private plugin: Plugin,
@@ -90,20 +94,71 @@ export class VimOBehaviourOverride implements Feature {
         }
 
         const editor = new MyEditor(view.editor);
+        const state = editor.getCodeMirrorView().state;
+        const line = state.doc.lineAt(state.selection.main.head);
+        let useNativeLineInsertion =
+          this.classifier.classify(state, line.number) === "structure";
+        let codeIndent: string | null = null;
 
-        const res = operationPerformer.perform(
-          (root) =>
-            new CreateNewItem(
-              root,
-              obsidianSettings.getDefaultIndentChars(),
-              obsidianSettings.isSmartIndentListEnabled(),
-              operatorArgs.after,
-            ),
-          editor,
-        );
+        const res = operationPerformer.perform((root) => {
+          const list = root.getListUnderCursor();
+          const listStart = list.getFirstLineContentStart().line + 1;
+          const firstLine = this.classifier.inspect(state, listStart);
+          const listItem = firstLine.listItem;
+          // Replacing marker characters keeps separator tabs at their original stops.
+          const attachedFenceIndent =
+            listItem &&
+            getFenceOpening(firstLine.text.slice(listItem.contentStart))
+              ? listItem.prefix.replace(/\S/g, " ")
+              : null;
+          if (useNativeLineInsertion) {
+            const notesIndent = attachedFenceIndent ?? list.getNotesIndent();
+            const ownsFence = listItem !== null;
+            // Blank code rows can omit their container whitespace in source.
+            // Restore it on the new row so the next input stays inside code.
+            if (
+              ownsFence &&
+              notesIndent !== null &&
+              line.text.trim().length === 0 &&
+              !getFenceContent(line.text, notesIndent)
+            ) {
+              codeIndent = notesIndent;
+              return null;
+            }
+            // O before a closing fence is still code. Only o on a real list's
+            // fence boundary may create a sibling; list-looking code is literal.
+            const mayCreateSiblingAfterFence =
+              operatorArgs.after &&
+              getFenceOpening(line.text.trimStart()) !== null &&
+              ownsFence;
+            if (!mayCreateSiblingAfterFence) return null;
+          }
+
+          if (attachedFenceIndent !== null) {
+            useNativeLineInsertion = true;
+            // Native Vim copies only the opening row's whitespace, omitting
+            // the marker's width from its fenced-code continuation indent.
+            if (operatorArgs.after && line.number === listStart) {
+              codeIndent = attachedFenceIndent;
+              return null;
+            }
+          }
+          return new CreateNewItem(
+            root,
+            obsidianSettings.getDefaultIndentChars(),
+            obsidianSettings.isSmartIndentListEnabled(),
+            operatorArgs.after,
+          );
+        }, editor);
 
         if (!res.shouldStopPropagation) {
-          insertPlainLine(editor, operatorArgs.after);
+          if (codeIndent !== null) {
+            insertPlainLine(editor, operatorArgs.after, codeIndent);
+          } else if (useNativeLineInsertion) {
+            vim.handleEx(cm, operatorArgs.after ? "normal! o" : "normal! O");
+          } else {
+            insertPlainLine(editor, operatorArgs.after);
+          }
         }
 
         // Ensure the editor is always left in insert mode

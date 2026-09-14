@@ -5,7 +5,11 @@ type PlainLineEditor = Pick<
   "getCursor" | "getLine" | "replaceRange" | "setSelections"
 >;
 
-export function insertPlainLine(editor: PlainLineEditor, after: boolean) {
+export function insertPlainLine(
+  editor: PlainLineEditor,
+  after: boolean,
+  indent = "",
+) {
   const cursor = editor.getCursor();
 
   if (after) {
@@ -13,9 +17,9 @@ export function insertPlainLine(editor: PlainLineEditor, after: boolean) {
       line: cursor.line,
       ch: editor.getLine(cursor.line).length,
     };
-    const nextLineStart = { line: cursor.line + 1, ch: 0 };
+    const nextLineStart = { line: cursor.line + 1, ch: indent.length };
 
-    editor.replaceRange("\n", lineEnd, lineEnd);
+    editor.replaceRange("\n" + indent, lineEnd, lineEnd);
     editor.setSelections([
       {
         anchor: nextLineStart,
@@ -28,11 +32,12 @@ export function insertPlainLine(editor: PlainLineEditor, after: boolean) {
 
   const lineStart = { line: cursor.line, ch: 0 };
 
-  editor.replaceRange("\n", lineStart, lineStart);
+  editor.replaceRange(indent + "\n", lineStart, lineStart);
+  const cursorPosition = { line: cursor.line, ch: indent.length };
   editor.setSelections([
     {
-      anchor: lineStart,
-      head: lineStart,
+      anchor: cursorPosition,
+      head: cursorPosition,
     },
   ]);
 }
