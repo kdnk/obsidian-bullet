@@ -749,15 +749,16 @@ html
   font-weight: var(--font-semibold);
 }
 .bullet-zoom-breadcrumbs button:hover,
-.bullet-zoom-breadcrumbs button:active {
+.bullet-zoom-breadcrumbs button:active,
+.bullet-zoom-breadcrumbs button:focus-visible {
   background: transparent;
   box-shadow: none;
   color: var(--text-normal);
   text-decoration-line: underline;
 }
 .bullet-zoom-breadcrumbs button:focus-visible {
-  outline: 2px solid var(--background-modifier-border-focus);
-  outline-offset: 2px;
+  outline: none;
+  text-decoration-thickness: 2px;
 }
 .bullet-zoom-separator {
   color: var(--text-faint);
