@@ -97,9 +97,9 @@ export class PrettierCodeBlockCompatibility implements Feature {
     // formatter version. Unknown versions retain their original behavior.
     if (!isSupportedFormatter(candidate)) return;
     const original = candidate.format;
-    const feature = this;
+    const format = this.format.bind(this);
     const wrapper: Formatter["format"] = function (this: Formatter, ...args) {
-      return feature.format(this, original, args);
+      return format(this, original, args);
     };
     this.patch = { formatter: candidate, original, wrapper };
     candidate.format = wrapper;

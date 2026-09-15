@@ -18,6 +18,8 @@ For code-preview fence layout changes, follow the native fence height and Vim na
 
 For code-row spacing changes, follow the preview/editing geometry verification rule under “リスト内のコードブロックについて” in [AGENTS.md](AGENTS.md).
 
+For release publication or community review failures, follow the Community directory review rules in [AGENTS.md](AGENTS.md), including branch scans and browser-compatible source checks.
+
 Obsidian Bullet is an Obsidian plugin that provides outliner functionality (like Workflowy or RoamResearch) with bullet/list operations, drag-and-drop, and more.
 
 ## Commands

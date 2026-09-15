@@ -256,7 +256,7 @@ function copyCode(lines: readonly string[], filterTerminalComments: boolean) {
   // Match EC's terminal copy option only when the existing payload proves it
   // is enabled; displaying a terminal frame alone does not imply filtering.
   if (filterTerminalComments)
-    code = code.replace(/(?<=^|\n)\s*#.*($|\n+)/g, "").trim();
+    code = code.replace(/(^|\n)(?:\s*#.*(?:$|\n+))+/g, "$1").trim();
   return code.replace(/\n/g, "\u007f");
 }
 

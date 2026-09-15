@@ -23,6 +23,9 @@
     - GitButlerはtagを管理しないため、land後のdefault branch commitを指すannotated tagを`gh api`で作成してください。localの`git tag`や`git push`は使わないでください。
     - tag pushで起動したrelease workflowが成功し、同じversionのGitHub releaseが公開されたことを`gh` CLIで確認してください。
     - 中断したreleaseを再開するとき、default branchの`manifest.json`が示すversionに対応するtagまたはGitHub releaseだけが欠けている場合は、`npm version`を再実行して次versionへ進めないでください。現在のdefault branch commitで全テストを再実行し、そのcommitへ既存versionのannotated tagを`gh api`で作成してrelease workflowを完了させてください。
+- Community directory review
+    - GitHub Release publication and Obsidian community review are separate outcomes. Inspect the matching version and commit in `https://community.obsidian.md/account/plugins/bullet` before reporting directory acceptance; use its Review branch flow to validate fixes for a failed review before publishing another version.
+    - Keep `obsidianmd/regex-lookbehind` enabled for mobile compatibility. Declare the ES libraries used by production source explicitly in `tsconfig.json`; local Node.js typings can otherwise hide missing browser API declarations from the community scanner.
 - Task bullets
     - When changing task marker rendering, place the bullet widget at the checkbox opening boundary, after the native hidden list marker, outer guide, and chevron. Adding it at the line start shifts native folding controls. Preserve the native checkbox and isolate the marker from completed-line text decoration. Run `scripts/verify-task-bullets.cjs <fresh-output-directory>` normally and with `--mobile`; verify native checkbox taps, bullet zoom/drag, wrapping, Source mode, and reloads. Before a pointer action, wait for transient reload notices to stop covering its target and assert the target with `elementFromPoint()`.
 - テストについて

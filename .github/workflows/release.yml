@@ -88,6 +88,7 @@ jobs:
 
           gh release create "$tag" \
             --verify-tag \
+            --generate-notes \
             --title="$tag" \
             dist/main.js#main.js \
             manifest.json \

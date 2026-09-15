@@ -11,7 +11,7 @@
     "strictPropertyInitialization": true,
     "moduleResolution": "node",
     "importHelpers": true,
-    "lib": ["dom", "es5", "scripthost", "es2015"],
+    "lib": ["dom", "scripthost", "es2019"],
     "outDir": "dist",
   },
   "include": ["jest/**/*.ts", "src/**/*.ts"],

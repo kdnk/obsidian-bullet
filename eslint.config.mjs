@@ -41,6 +41,7 @@ export default tseslint.config(
       ],
       "@eslint-community/eslint-comments/require-description": "error",
       "obsidianmd/no-static-styles-assignment": "error",
+      "obsidianmd/regex-lookbehind": "error",
       "obsidianmd/no-global-this": "warn",
       "obsidianmd/prefer-active-doc": "warn",
       "obsidianmd/prefer-create-el": "warn",

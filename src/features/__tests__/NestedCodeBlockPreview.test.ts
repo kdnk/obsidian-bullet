@@ -208,6 +208,41 @@ test("keeps comments when terminal copy filtering is disabled", () => {
   );
 });
 
+test.each([
+  [
+    ["  echo one", "  # first", "  # second", "", "  echo two"],
+    "echo one\u007f  echo two",
+    "echo one\u007fecho two",
+  ],
+  [
+    ["  # first", "", "  # second", "  echo # inline", "  # last"],
+    "echo # inline",
+    "echo # inline",
+  ],
+  [
+    ["  echo one", "", "  # comment", "", "  echo two", "", "  echo three"],
+    "echo one\u007f  echo two\u007f\u007f  echo three",
+    "echo one\u007fecho two\u007f\u007fecho three",
+  ],
+  [["  # first", "  # second"], "", ""],
+])(
+  "preserves terminal copy filtering across comment boundaries: %j",
+  (raw, before, after) => {
+    const preview = fixture(raw);
+    preview.frame.setAttribute("class", "frame is-terminal");
+    preview.button.setAttribute("data-code", before);
+    const owner = new NestedCodeBlockPreviews();
+    expect(owner.synchronize(preview.embed, raw, 2, 4, "bash")).toBe(true);
+    expect(preview.button.getAttribute("data-code")).toBe(after);
+    expect(owner.synchronize(preview.embed, raw, 2, 4, "bash")).toBe(false);
+    owner.destroy();
+    expect(preview.button.getAttribute("data-code")).toBe(before);
+    expect(preview.contents.map((content) => content.textContent)).toEqual(
+      raw.map((line) => line || "\n"),
+    );
+  },
+);
+
 test("does not match terminal copy content owned by another frame", () => {
   const raw = ["  # Setup", "  echo one", "  echo two"];
   const preview = fixture(raw);
