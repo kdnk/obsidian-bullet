@@ -741,8 +741,7 @@ html
   box-shadow: none;
   background: transparent;
   color: var(--text-muted);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+  text-decoration: none;
 }
 .bullet-zoom-breadcrumbs button[aria-current] {
   color: var(--text-normal);
@@ -754,11 +753,11 @@ html
   background: transparent;
   box-shadow: none;
   color: var(--text-normal);
-  text-decoration-line: underline;
+  text-decoration: none;
 }
 .bullet-zoom-breadcrumbs button:focus-visible {
   outline: none;
-  text-decoration-thickness: 2px;
+  color: var(--text-accent);
 }
 .bullet-zoom-separator {
   color: var(--text-faint);
