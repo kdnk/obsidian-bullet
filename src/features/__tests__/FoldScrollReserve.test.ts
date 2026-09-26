@@ -7,21 +7,43 @@ import {
   FoldScrollReserve,
   FoldScrollReservePluginValue,
 } from "../FoldScrollReserve";
+import { ensureFoldScrollReserve } from "../FoldScroll";
 
 jest.mock("obsidian", () => ({ Platform: { isMobile: false } }), {
   virtual: true,
 });
 
-function makeView() {
+function makeView(autoHeightTableCell = false) {
   const properties = new Map<string, string>();
   const classes = new Set<string>();
   const measurements: Array<{ read(): number; write(value: number): void }> =
     [];
+  const contentStyle = { paddingBottom: "" };
+  let baseHeight = 544;
+  const effectiveReserve = () =>
+    Math.max(
+      classes.has("bullet-plugin-fold-scroll-reserve")
+        ? Number.parseFloat(
+            properties.get("--bullet-fold-scroll-reserve") ?? "0",
+          )
+        : 0,
+      Number.parseFloat(contentStyle.paddingBottom) || 0,
+    );
   const view = {
-    scrollDOM: { clientHeight: 544 },
+    scrollDOM: {
+      get clientHeight() {
+        return baseHeight + (autoHeightTableCell ? effectiveReserve() : 0);
+      },
+      set clientHeight(value: number) {
+        baseHeight = value;
+      },
+    },
+    contentDOM: { style: contentStyle },
     defaultLineHeight: 24,
     documentPadding: { top: 0 },
     dom: {
+      closest: (selector: string) =>
+        autoHeightTableCell && selector === ".table-cell-wrapper" ? {} : null,
       style: {
         setProperty: (key: string, value: string) => properties.set(key, value),
         removeProperty: (key: string) => properties.delete(key),
@@ -69,6 +91,30 @@ describe("fold scroll reserve", () => {
     flush();
     expect(properties.size).toBe(0);
     expect(classes.size).toBe(0);
+  });
+
+  test("keeps an auto-height table cell stable without either reserve path", () => {
+    const { view, properties, classes, flush } = makeView(true);
+    const plugin = new FoldScrollReservePluginValue(view as never);
+    const heightSamples: number[] = [];
+
+    flush();
+    heightSamples.push(view.scrollDOM.clientHeight);
+    plugin.update({ geometryChanged: true } as never);
+    flush();
+    heightSamples.push(view.scrollDOM.clientHeight);
+    plugin.update({ geometryChanged: true } as never);
+    flush();
+    heightSamples.push(view.scrollDOM.clientHeight);
+    ensureFoldScrollReserve(view as never);
+    heightSamples.push(view.scrollDOM.clientHeight);
+    ensureFoldScrollReserve(view as never);
+    heightSamples.push(view.scrollDOM.clientHeight);
+
+    expect(heightSamples).toEqual([544, 544, 544, 544, 544]);
+    expect(classes.has("bullet-plugin-fold-scroll-reserve")).toBe(false);
+    expect(properties.has("--bullet-fold-scroll-reserve")).toBe(false);
+    expect(view.contentDOM.style.paddingBottom).toBe("");
   });
 });
 
