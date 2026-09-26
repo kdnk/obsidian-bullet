@@ -3,11 +3,11 @@ import { Platform } from "obsidian";
 import { Extension } from "@codemirror/state";
 
 import { Settings } from "../../services/Settings";
+import { ensureFoldScrollReserve } from "../FoldScroll";
 import {
   FoldScrollReserve,
   FoldScrollReservePluginValue,
 } from "../FoldScrollReserve";
-import { ensureFoldScrollReserve } from "../FoldScroll";
 
 jest.mock("obsidian", () => ({ Platform: { isMobile: false } }), {
   virtual: true,
@@ -38,7 +38,13 @@ function makeView(autoHeightTableCell = false) {
         baseHeight = value;
       },
     },
-    contentDOM: { style: contentStyle },
+    contentDOM: {
+      style: contentStyle,
+      classList: {
+        add: (key: string) => classes.add(key),
+        remove: (key: string) => classes.delete(key),
+      },
+    },
     defaultLineHeight: 24,
     documentPadding: { top: 0 },
     dom: {
@@ -47,10 +53,6 @@ function makeView(autoHeightTableCell = false) {
       style: {
         setProperty: (key: string, value: string) => properties.set(key, value),
         removeProperty: (key: string) => properties.delete(key),
-      },
-      classList: {
-        add: (key: string) => classes.add(key),
-        remove: (key: string) => classes.delete(key),
       },
     },
     requestMeasure: (request: (typeof measurements)[number]) =>

@@ -42,6 +42,7 @@ function makeView(state: EditorState, document = makeDocument()) {
     defaultLineHeight: 24,
     documentPadding: { top: 0 },
     dom: {
+      closest: () => null,
       ownerDocument: { ...document, defaultView: { setTimeout: jest.fn() } },
     },
     listeners,

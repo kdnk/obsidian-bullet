@@ -1399,6 +1399,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       documentPadding: { top: 0, bottom: 0 },
       documentTop: 0,
       dom: {
+        closest: () => null,
         ownerDocument: { defaultView: { devicePixelRatio: 1 } },
       },
       scaleY: 1,
@@ -1500,6 +1501,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       documentPadding: { top: 0, bottom: 0 },
       documentTop: 0,
       dom: {
+        closest: () => null,
         ownerDocument: {
           defaultView: {
             devicePixelRatio: options.devicePixelRatio ?? 1,

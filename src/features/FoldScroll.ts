@@ -1,6 +1,10 @@
 import { EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
+export function supportsFoldScrollReserve(view: EditorView): boolean {
+  return view.dom.closest(".table-cell-wrapper") === null;
+}
+
 export function foldScrollReserveHeight(view: EditorView): number {
   return (
     view.scrollDOM.clientHeight -
@@ -11,6 +15,7 @@ export function foldScrollReserveHeight(view: EditorView): number {
 }
 
 export function ensureFoldScrollReserve(view: EditorView): void {
+  if (!supportsFoldScrollReserve(view)) return;
   const expected = foldScrollReserveHeight(view);
   const current = Number.parseFloat(view.contentDOM.style.paddingBottom);
   if (
