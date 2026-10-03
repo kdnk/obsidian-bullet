@@ -208,6 +208,48 @@ try {
             label,
             "long code is not horizontally reachable",
           );
+          const end = run(async () => {
+            const editor = app.workspace.activeLeaf.view.editor;
+            const cm = editor.cm;
+            editor.scrollTo(cm.scrollDOM.scrollWidth, cm.scrollDOM.scrollTop);
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            const line = cm.state.doc.line(4);
+            const glyph = cm.coordsAtPos(line.to);
+            const viewport = cm.scrollDOM.getBoundingClientRect();
+            const element = [
+              ...cm.contentDOM.querySelectorAll(".cm-line"),
+            ].find(
+              (element) =>
+                cm.state.doc.lineAt(cm.posAtDOM(element)).number === 4,
+            );
+            const bounds = element?.getBoundingClientRect();
+            const css = element && getComputedStyle(element, "::before");
+            const backgroundEnd =
+              bounds && css
+                ? bounds.left + parseFloat(css.left) + parseFloat(css.width)
+                : null;
+            return {
+              scrollLeft: cm.scrollDOM.scrollLeft,
+              glyph: glyph && { left: glyph.left, right: glyph.right },
+              viewport: { left: viewport.left, right: viewport.right },
+              backgroundEnd,
+            };
+          });
+          sample.horizontalEnd = end;
+          check(
+            end.scrollLeft > 100 &&
+              end.glyph &&
+              end.glyph.left >= end.viewport.left &&
+              end.glyph.right <= end.viewport.right,
+            label,
+            "horizontal scroll cannot reveal the final code token",
+          );
+          check(
+            end.glyph && end.backgroundEnd >= end.glyph.right - 1,
+            label,
+            "background does not cover the horizontally scrolled code",
+          );
+          run(() => app.workspace.activeLeaf.view.editor.scrollTo(0, 0));
         }
         results.push({ label, ...sample });
         fs.writeFileSync(

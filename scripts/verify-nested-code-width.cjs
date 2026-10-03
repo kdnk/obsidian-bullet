@@ -220,6 +220,7 @@ function sample(
               text: line.text,
               body,
               bounds,
+              lineHeight: parseFloat(getComputedStyle(element).lineHeight),
               visible: visible(bounds),
               styled: element.classList.contains(
                 "bullet-plugin-nested-code-block",
@@ -355,11 +356,12 @@ function sample(
     label,
     "invalid background bounds",
   );
-  check(
-    background && background.right <= sample.content.right + 1,
-    label,
-    "background exceeds editor content width",
-  );
+  if (sample.embed)
+    check(
+      background && background.right <= sample.content.right + 1,
+      label,
+      "processor background exceeds editor content width",
+    );
   if (background)
     check(
       glyphs.every((rect) => rect.right <= background.right + 1),
@@ -367,11 +369,26 @@ function sample(
       "rendered code extends beyond its background",
     );
   if (fixture.name === "wrapped")
-    check(
-      background && background.right >= sample.content.right - 24,
-      label,
-      "long code does not use the available pane width",
-    );
+    if (sample.embed)
+      check(
+        background && background.right >= sample.content.right - 24,
+        label,
+        "long processor code does not use the available pane width",
+      );
+    else {
+      check(
+        background && background.right > sample.content.right + 100,
+        label,
+        "long native background does not extend through the unwrapped code",
+      );
+      check(
+        sample.rows
+          .filter((row) => row.body)
+          .every((row) => row.bounds.height <= row.lineHeight + 1),
+        label,
+        "long native code wraps",
+      );
+    }
   if (compact && glyphs.length && background) {
     const end = Math.max(...glyphs.map((r) => r.right));
     const gap = background.right - end;
@@ -403,6 +420,11 @@ function sample(
   }
   if (!sample.embed && !editing && sample.opening?.flair && background) {
     const flair = sample.opening.flair;
+    check(
+      flair.right <= sample.content.right + 1,
+      label,
+      "native copy control is outside the visible pane",
+    );
     check(
       flair.left >= background.left - 1 && flair.right <= background.right + 1,
       label,
