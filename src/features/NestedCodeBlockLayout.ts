@@ -1,5 +1,12 @@
 import { syntaxTree } from "@codemirror/language";
-import { ChangeSet, EditorState, countColumn } from "@codemirror/state";
+import {
+  ChangeSet,
+  EditorState,
+  MapMode,
+  StateEffect,
+  Transaction,
+  countColumn,
+} from "@codemirror/state";
 import {
   Decoration,
   DecorationSet,
@@ -46,6 +53,74 @@ interface MeasuredLine {
   previewEmbed?: boolean;
   plainPreview?: boolean;
   previewAppearance?: { background: string; end: string; radius: string };
+}
+
+interface SourceRow {
+  from: number;
+  openingFrom: number;
+  openingText: string;
+  prefix: string;
+  kind: "opening" | "body" | "closing";
+}
+
+type NativePresentation =
+  | { kind: "source" }
+  | { kind: "native-opening"; alignment: MeasuredLine["preview"] }
+  | { kind: "native-body"; first: boolean; last: boolean }
+  | { kind: "native-closing" }
+  | { kind: "empty-opening" }
+  | {
+      kind: "processor-opening";
+      alignment: NonNullable<MeasuredLine["preview"]>;
+      appearance: MeasuredLine["previewAppearance"];
+    };
+
+interface NativeRowLayout {
+  source: SourceRow;
+  inset: string;
+  end: string | undefined;
+  contentPadding: string | undefined;
+  presentation: NativePresentation;
+}
+
+interface NativeSnapshot {
+  doc: EditorState["doc"];
+  epoch: number;
+  rows: ReadonlyMap<number, NativeRowLayout>;
+}
+
+interface ProcessorLayout {
+  element: HTMLElement;
+  openingFrom: number;
+  inset: string;
+  previewEmbed: boolean;
+  plainPreview: boolean;
+}
+
+interface MeasuredFrame {
+  native: NativeSnapshot;
+  processors: ProcessorLayout[];
+}
+
+const NATIVE_CLASSES = [
+  CODE_BLOCK_CLASS,
+  PREVIEW_OPENING_CLASS,
+  PREVIEW_EMBED_OPENING_CLASS,
+  PLAIN_PREVIEW_CLASS,
+  HIDDEN_FENCE_CLASS,
+  PREVIEW_FIRST_CLASS,
+  PREVIEW_LAST_CLASS,
+];
+
+function withoutLayoutClasses(value: string): string {
+  return value
+    .split(/\s+/)
+    .filter(
+      (name) =>
+        name && !NATIVE_CLASSES.includes(name) && name !== PREVIEW_EMBED_CLASS,
+    )
+    .sort()
+    .join(" ");
 }
 
 interface FenceOpening {
@@ -206,8 +281,15 @@ class FenceOpeningIndex {
 
 export class NestedCodeBlockLayoutPluginValue {
   decorations: DecorationSet;
-  private styledLines = new Map<HTMLElement, MeasuredLine>();
-  private animationFrame: number | null = null;
+  private nativeRows: ReadonlyMap<number, NativeRowLayout> = new Map();
+  private styledProcessors = new Map<HTMLElement, ProcessorLayout>();
+  private layoutReady = StateEffect.define<NativeSnapshot>({
+    map: (snapshot, changes) => (changes.empty ? snapshot : undefined),
+  });
+  private pendingNative: NativeSnapshot | null = null;
+  private publicationQueued = false;
+  private epoch = 0;
+  private presentationSignature = "";
   private destroyed = false;
   private syntaxContext: SyntaxContext;
   private previewObserver: MutationObserver | null = null;
@@ -240,8 +322,8 @@ export class NestedCodeBlockLayoutPluginValue {
   >();
 
   private measurement = {
-    read: () => this.measureLines(),
-    write: (lines: MeasuredLine[]) => this.applyMeasurements(lines),
+    read: () => this.measureLayout(),
+    write: (frame: MeasuredFrame) => this.acceptMeasurement(frame),
   };
 
   constructor(
@@ -250,12 +332,8 @@ export class NestedCodeBlockLayoutPluginValue {
     private zoomRange?: (state: EditorState) => { indent: string } | null,
   ) {
     this.syntaxContext = makeSyntaxContext(view.state, this.lineNameAtOverride);
-    this.decorations = codeBlockContentDecorations(
-      view.state,
-      view.visibleRanges,
-      this.syntaxContext.lineNameAt,
-      this.syntaxContext.fenceOpenings.at,
-    );
+    this.decorations = this.buildDecorations();
+    this.presentationSignature = this.readPresentationSignature();
     this.syntaxContext.fenceOpenings.retainVisible(
       view.state,
       view.visibleRanges,
@@ -264,45 +342,41 @@ export class NestedCodeBlockLayoutPluginValue {
     if (Observer) {
       this.previewObserver = new Observer((records) => {
         if (this.destroyed) return;
-        let childChanged = false;
-        let rolesMayHaveChanged = false;
-        for (const { target, type } of records) {
+        let changed = false;
+        let nativeChildrenChanged = false;
+        for (const { target, type, oldValue } of records) {
           if (target === view.dom.ownerDocument.body) {
-            // Shiki theme changes can repaint a card without resizing it.
-            childChanged = true;
+            changed = true;
             continue;
           }
           const element =
             target.nodeType === 1 ? (target as HTMLElement) : null;
-          const line =
-            element &&
-            (this.styledLines.has(element)
-              ? element
-              : element.closest<HTMLElement>(
-                  ".cm-line, .cm-preview-code-block",
-                ));
           if (type === "attributes") {
-            if (line && this.styledLines.has(line)) rolesMayHaveChanged = true;
-          } else if (target === view.contentDOM || line) {
-            childChanged = true;
-            rolesMayHaveChanged = true;
+            if (
+              element &&
+              withoutLayoutClasses(oldValue ?? "") !==
+                withoutLayoutClasses(Array.from(element.classList).join(" "))
+            )
+              changed = true;
+          } else if (element?.closest(".cm-preview-code-block")) {
+            changed = true;
+          } else {
+            nativeChildrenChanged = true;
           }
         }
-        // Native redraws replace line classes. Restore height ownership in the
-        // same mutation turn, before another CodeMirror height-map read. This
-        // only inspects current native markup; geometry stays in requestMeasure.
-        const rolesChanged = rolesMayHaveChanged && this.applyLineRoles();
-        if (childChanged || rolesChanged) {
-          // A processor can replace placeholder content without changing the
-          // widget's height, so geometryChanged alone misses its first line.
-          this.scheduleMeasure();
+        if (nativeChildrenChanged) {
+          const signature = this.readPresentationSignature();
+          changed ||= signature !== this.presentationSignature;
+          this.presentationSignature = signature;
         }
+        if (changed) this.invalidateMeasurement();
       });
       this.previewObserver.observe(view.contentDOM, {
         childList: true,
         subtree: true,
         attributes: true,
         attributeFilter: ["class"],
+        attributeOldValue: true,
       });
       if (view.dom.ownerDocument.body)
         this.previewObserver.observe(view.dom.ownerDocument.body, {
@@ -315,6 +389,21 @@ export class NestedCodeBlockLayoutPluginValue {
 
   update(update: ViewUpdate) {
     const treeChanged = this.syntaxContext.tree !== syntaxTree(update.state);
+    const selectionChanged = !update.startState.selection.eq(
+      update.state.selection,
+    );
+    const configurationChanged =
+      update.startState.tabSize !== update.state.tabSize ||
+      this.zoomRange?.(update.startState)?.indent !==
+        this.zoomRange?.(update.state)?.indent;
+    const inputsChanged =
+      update.docChanged ||
+      update.viewportChanged ||
+      update.geometryChanged ||
+      selectionChanged ||
+      configurationChanged ||
+      treeChanged;
+    if (inputsChanged) this.epoch++;
     if (update.docChanged || treeChanged) {
       const nextContext = makeSyntaxContext(
         update.state,
@@ -328,40 +417,79 @@ export class NestedCodeBlockLayoutPluginValue {
         );
       }
       this.syntaxContext = nextContext;
-    }
-    if (update.docChanged || update.viewportChanged || treeChanged) {
-      this.decorations = codeBlockContentDecorations(
-        update.state,
-        update.view.visibleRanges,
-        this.syntaxContext.lineNameAt,
-        this.syntaxContext.fenceOpenings.at,
+      this.nativeRows = retainNativeRows(
+        update,
+        this.syntaxContext,
+        this.nativeRows,
       );
+    }
+    let presentationChanged = false;
+    if (selectionChanged) {
+      const previousSelection = update.startState.selection.map(update.changes);
+      const changedBlocks = new Set<number>();
+      for (const openingFrom of new Set(
+        Array.from(this.nativeRows.values(), (row) => row.source.openingFrom),
+      )) {
+        if (
+          selectionInBlock(
+            update.state,
+            this.syntaxContext,
+            previousSelection,
+            openingFrom,
+          ) !==
+          selectionInBlock(
+            update.state,
+            this.syntaxContext,
+            update.state.selection,
+            openingFrom,
+          )
+        )
+          changedBlocks.add(openingFrom);
+      }
+      if (changedBlocks.size) {
+        this.nativeRows = new Map(
+          Array.from(this.nativeRows, ([from, row]) => [
+            from,
+            changedBlocks.has(row.source.openingFrom)
+              ? { ...row, presentation: { kind: "source" } }
+              : row,
+          ]),
+        );
+        presentationChanged = true;
+      }
+    }
+    let published = false;
+    for (const transaction of update.transactions) {
+      for (const effect of transaction.effects) {
+        if (effect.is(this.layoutReady) && this.isCurrent(effect.value)) {
+          this.nativeRows = effect.value.rows;
+          published = true;
+        }
+      }
+    }
+    if (
+      update.docChanged ||
+      update.viewportChanged ||
+      treeChanged ||
+      published ||
+      presentationChanged
+    ) {
+      this.decorations = this.buildDecorations();
       this.syntaxContext.fenceOpenings.retainVisible(
         update.state,
         update.view.visibleRanges,
       );
     }
-    if (
-      update.docChanged ||
-      update.viewportChanged ||
-      update.geometryChanged ||
-      update.selectionSet ||
-      treeChanged
-    ) {
-      this.scheduleMeasure();
-    }
+    if (inputsChanged) this.scheduleMeasure();
   }
 
   destroy() {
     this.destroyed = true;
+    this.pendingNative = null;
     this.previewObserver?.disconnect();
-    if (this.animationFrame !== null) {
-      this.view.dom.ownerDocument.defaultView?.cancelAnimationFrame(
-        this.animationFrame,
-      );
-      this.animationFrame = null;
-    }
-    this.clearStyles();
+    for (const element of this.styledProcessors.keys())
+      this.clearProcessor(element);
+    this.styledProcessors.clear();
     this.previews.destroy();
     this.markerMeasureContainer?.remove();
     this.markerMeasureContainer = null;
@@ -369,20 +497,65 @@ export class NestedCodeBlockLayoutPluginValue {
     this.codeMeasurements.clear();
   }
 
+  private buildDecorations(): DecorationSet {
+    const { state, visibleRanges } = this.view;
+    const marks = codeBlockContentDecorations(
+      state,
+      visibleRanges,
+      this.syntaxContext.lineNameAt,
+      this.syntaxContext.fenceOpenings.at,
+    );
+    const positions = new Set(this.nativeRows.keys());
+    for (const range of visibleRanges) {
+      const last = state.doc.lineAt(range.to).number;
+      for (let n = state.doc.lineAt(range.from).number; n <= last; n++) {
+        const from = state.doc.line(n).from;
+        if (sourceRowAt(state, this.syntaxContext, from)) positions.add(from);
+      }
+    }
+    return marks.update({
+      add: Array.from(positions, (from) =>
+        Decoration.line(nativeAttributes(this.nativeRows.get(from))).range(
+          from,
+        ),
+      ),
+      sort: true,
+    });
+  }
+
+  private readPresentationSignature(): string {
+    return Array.from(
+      this.view.contentDOM.querySelectorAll<HTMLElement>(
+        ".cm-line, .cm-preview-code-block",
+      ),
+    )
+      .flatMap((element) => {
+        const line = documentLineForElement(this.view, element);
+        if (!line) return [];
+        if (element.classList.contains("cm-preview-code-block"))
+          return [`${line.from}:processor`];
+        if (element.classList.contains("HyperMD-codeblock-begin"))
+          return [
+            `${line.from}:opening:${!!element.querySelector(".cm-hmd-codeblock")}:${!!element.querySelector(".code-block-flair")}`,
+          ];
+        if (element.classList.contains("HyperMD-codeblock-end"))
+          return [
+            `${line.from}:closing:${!!element.querySelector(".cm-hmd-codeblock")}`,
+          ];
+        return [];
+      })
+      .join("|");
+  }
+
+  private invalidateMeasurement() {
+    this.epoch++;
+    this.scheduleMeasure();
+  }
+
   private scheduleMeasure() {
     if (this.destroyed) return;
     this.prepareMarkerMeasurements();
-    if (this.animationFrame !== null) return;
-    const win = this.view.dom.ownerDocument.defaultView;
-    if (!win) {
-      this.view.requestMeasure(this.measurement);
-      return;
-    }
-    this.animationFrame = win.requestAnimationFrame(() => {
-      this.animationFrame = null;
-      if (this.destroyed) return;
-      this.view.requestMeasure(this.measurement);
-    });
+    this.view.requestMeasure(this.measurement);
   }
 
   private prepareMarkerMeasurements() {
@@ -831,57 +1004,120 @@ export class NestedCodeBlockLayoutPluginValue {
     return measured;
   }
 
-  private applyMeasurements(lines: MeasuredLine[]) {
-    if (this.destroyed) return;
-    const current = new Map(lines.map((line) => [line.element, line]));
-    for (const element of this.styledLines.keys()) {
-      if (!current.has(element)) this.clearElementStyles(element);
-    }
-
-    let previewChanged = false;
-    for (const {
-      element,
-      inset,
-      end,
-      contentPadding,
-      preview,
-      previewAppearance,
-    } of lines) {
-      setStyleProperty(element, CODE_BLOCK_INSET, inset);
-      if (end) setStyleProperty(element, CODE_BLOCK_END, end);
-      else element.style.removeProperty(CODE_BLOCK_END);
-      if (contentPadding)
-        setStyleProperty(element, CODE_CONTENT_PADDING, contentPadding);
-      else element.style.removeProperty(CODE_CONTENT_PADDING);
-      if (previewAppearance) {
-        setStyleProperty(
-          element,
-          PREVIEW_BACKGROUND,
-          previewAppearance.background,
-        );
-        setStyleProperty(element, PREVIEW_END, previewAppearance.end);
-        setStyleProperty(element, PREVIEW_RADIUS, previewAppearance.radius);
-      } else {
-        element.style.removeProperty(PREVIEW_BACKGROUND);
-        element.style.removeProperty(PREVIEW_END);
-        element.style.removeProperty(PREVIEW_RADIUS);
-      }
-      if (preview) {
-        setStyleProperty(element, PREVIEW_HEIGHT, preview.height);
-        setStyleProperty(element, PREVIEW_MARKER_OFFSET, preview.markerOffset);
-      } else {
-        element.style.removeProperty(PREVIEW_HEIGHT);
-        element.style.removeProperty(PREVIEW_MARKER_OFFSET);
-      }
+  private measureLayout(): MeasuredFrame {
+    const native: NativeSnapshot = {
+      doc: this.view.state.doc,
+      epoch: this.epoch,
+      rows: new Map(),
+    };
+    const rows = new Map<number, NativeRowLayout>();
+    const processors: ProcessorLayout[] = [];
+    for (const measurement of this.measureLines()) {
+      const { element, inset, end, contentPadding } = measurement;
+      const line = documentLineForElement(this.view, element);
+      if (!line) continue;
       if (element.classList.contains("cm-preview-code-block")) {
-        previewChanged = this.correctPreviewContent(element) || previewChanged;
+        const opening = this.syntaxContext.fenceOpenings.at(line.number);
+        if (opening)
+          processors.push({
+            element,
+            openingFrom: this.view.state.doc.line(opening.openingLineNumber)
+              .from,
+            inset,
+            previewEmbed: !!measurement.previewEmbed,
+            plainPreview: !!measurement.plainPreview,
+          });
+        continue;
       }
+      if (this.view.posAtDOM(element) !== line.from) continue;
+      const source = sourceRowAt(
+        this.view.state,
+        this.syntaxContext,
+        line.from,
+      );
+      if (source)
+        rows.set(source.from, {
+          source,
+          inset,
+          end,
+          contentPadding,
+          presentation: nativePresentation(measurement),
+        });
     }
-    this.styledLines = current;
-    this.applyLineRoles();
-    // Removing container whitespace can unwrap code rows. Let the next native
-    // measurement update the embed height and the opening marker together.
-    if (previewChanged) this.scheduleMeasure();
+    return { native: { ...native, rows }, processors };
+  }
+
+  private isCurrent(snapshot: NativeSnapshot): boolean {
+    return (
+      !this.destroyed &&
+      snapshot.doc === this.view.state.doc &&
+      snapshot.epoch === this.epoch
+    );
+  }
+
+  private acceptMeasurement(frame: MeasuredFrame) {
+    if (!this.isCurrent(frame.native)) {
+      this.scheduleMeasure();
+      return;
+    }
+    const current = new Map<HTMLElement, ProcessorLayout>();
+    let previewChanged = false;
+    for (const processor of frame.processors) {
+      const { element, openingFrom, inset, previewEmbed, plainPreview } =
+        processor;
+      const line = documentLineForElement(this.view, element);
+      if (
+        !element.classList.contains("cm-preview-code-block") ||
+        !this.view.contentDOM.contains(element) ||
+        line?.from !== openingFrom
+      )
+        continue;
+      setStyleProperty(element, CODE_BLOCK_INSET, inset);
+      setClass(element, CODE_BLOCK_CLASS, true);
+      setClass(element, PREVIEW_EMBED_CLASS, previewEmbed);
+      setClass(element, PLAIN_PREVIEW_CLASS, plainPreview);
+      previewChanged = this.correctPreviewContent(element) || previewChanged;
+      current.set(element, processor);
+    }
+    for (const element of this.styledProcessors.keys()) {
+      if (!current.has(element)) this.clearProcessor(element);
+    }
+    this.styledProcessors = current;
+    if (previewChanged) {
+      this.invalidateMeasurement();
+      return;
+    }
+    this.pendingNative = frame.native;
+    if (this.publicationQueued) return;
+    this.publicationQueued = true;
+    // CodeMirror remains in its measuring update until every write returns.
+    queueMicrotask(() => this.publishPending());
+  }
+
+  private publishPending() {
+    this.publicationQueued = false;
+    const snapshot = this.pendingNative;
+    this.pendingNative = null;
+    if (!snapshot || this.destroyed) return;
+    if (!this.isCurrent(snapshot)) {
+      this.scheduleMeasure();
+      return;
+    }
+    const rows = new Map(this.nativeRows);
+    const ends = new Map<number, string | undefined>();
+    for (const [from, row] of snapshot.rows) {
+      rows.set(from, row);
+      ends.set(row.source.openingFrom, row.end);
+    }
+    for (const [from, row] of rows) {
+      if (ends.has(row.source.openingFrom))
+        rows.set(from, { ...row, end: ends.get(row.source.openingFrom) });
+    }
+    if (sameNativeRows(this.nativeRows, rows)) return;
+    this.view.dispatch({
+      effects: this.layoutReady.of({ ...snapshot, rows }),
+      annotations: Transaction.addToHistory.of(false),
+    });
   }
 
   private correctPreviewContent(element: HTMLElement): boolean {
@@ -916,92 +1152,219 @@ export class NestedCodeBlockLayoutPluginValue {
     return false;
   }
 
-  private applyLineRoles(): boolean {
-    let changed = false;
-    for (const {
-      element,
-      preview,
-      previewBlock,
-      previewEmbed,
-      plainPreview,
-      previewAppearance,
-      emptyBody,
-    } of this.styledLines.values()) {
-      const nested =
-        isNestedCodeBlockElement(element) ||
-        (!!emptyBody &&
-          element.classList.contains("HyperMD-codeblock") &&
-          documentLineForElement(this.view, element)?.text.trim() === "");
-      const embed = element.classList.contains("cm-preview-code-block");
-      if (!nested && !embed) {
-        this.clearElementStyles(element);
-        this.styledLines.delete(element);
-        changed = true;
-        continue;
-      }
-      const next = element.nextElementSibling;
-      const previous = element.previousElementSibling;
-      const nativeOpening = isNativePreviewOpening(element) && isCodeBody(next);
-      const embedOpening =
-        !!preview &&
-        previewBlock === next &&
-        element.classList.contains("HyperMD-codeblock-begin") &&
-        !element.querySelector(".cm-hmd-codeblock") &&
-        !!next?.classList.contains("cm-preview-code-block");
-      const roles: Array<[string, boolean]> = [
-        [CODE_BLOCK_CLASS, true],
-        [
-          PREVIEW_OPENING_CLASS,
-          !!preview && previewBlock === next && (nativeOpening || embedOpening),
-        ],
-        [PREVIEW_EMBED_CLASS, embed && !!previewEmbed],
-        [PREVIEW_EMBED_OPENING_CLASS, embedOpening],
-        [
-          PLAIN_PREVIEW_CLASS,
-          (embedOpening && !!previewAppearance) || (embed && !!plainPreview),
-        ],
-        [
-          HIDDEN_FENCE_CLASS,
-          nativeOpening || embedOpening || isHiddenClosingFence(element),
-        ],
-        [
-          PREVIEW_FIRST_CLASS,
-          isCodeBody(element) && isNativePreviewOpening(previous),
-        ],
-        [PREVIEW_LAST_CLASS, nested && isHiddenClosingFence(next)],
-      ];
-      for (const [name, enabled] of roles) {
-        changed = setClass(element, name, enabled) || changed;
-      }
-    }
-    return changed;
-  }
-
-  private clearStyles() {
-    for (const element of this.styledLines.keys())
-      this.clearElementStyles(element);
-    this.styledLines.clear();
-  }
-
-  private clearElementStyles(element: HTMLElement) {
+  private clearProcessor(element: HTMLElement) {
+    if (!element.classList.contains("cm-preview-code-block")) return;
     this.previews.clear(element);
     element.classList.remove(CODE_BLOCK_CLASS);
-    element.classList.remove(PREVIEW_OPENING_CLASS);
     element.classList.remove(PREVIEW_EMBED_CLASS);
-    element.classList.remove(PREVIEW_EMBED_OPENING_CLASS);
     element.classList.remove(PLAIN_PREVIEW_CLASS);
-    element.classList.remove(HIDDEN_FENCE_CLASS);
-    element.classList.remove(PREVIEW_FIRST_CLASS);
-    element.classList.remove(PREVIEW_LAST_CLASS);
     element.style.removeProperty(CODE_BLOCK_INSET);
-    element.style.removeProperty(CODE_BLOCK_END);
-    element.style.removeProperty(CODE_CONTENT_PADDING);
-    element.style.removeProperty(PREVIEW_HEIGHT);
-    element.style.removeProperty(PREVIEW_MARKER_OFFSET);
-    element.style.removeProperty(PREVIEW_BACKGROUND);
-    element.style.removeProperty(PREVIEW_END);
-    element.style.removeProperty(PREVIEW_RADIUS);
   }
+}
+
+function selectionInBlock(
+  state: EditorState,
+  context: SyntaxContext,
+  selection: EditorState["selection"],
+  openingFrom: number,
+): boolean {
+  return selection.ranges.some((range) => {
+    if (range.from <= openingFrom && range.to >= openingFrom) return true;
+    return [range.from, range.to].some((position) => {
+      const opening = context.fenceOpenings.at(
+        state.doc.lineAt(position).number,
+      );
+      return (
+        opening !== null &&
+        state.doc.line(opening.openingLineNumber).from === openingFrom
+      );
+    });
+  });
+}
+
+function sourceRowAt(
+  state: EditorState,
+  context: SyntaxContext,
+  from: number,
+): SourceRow | null {
+  if (from < 0 || from > state.doc.length) return null;
+  const line = state.doc.lineAt(from);
+  if (line.from !== from) return null;
+  const opening = context.fenceOpenings.at(line.number);
+  if (!opening) return null;
+  const openingLine = state.doc.line(opening.openingLineNumber);
+  const kind =
+    line.number === opening.openingLineNumber
+      ? "opening"
+      : hasClassName(
+            context.lineNameAt(line.number) ?? "",
+            "HyperMD-codeblock-end",
+          )
+        ? "closing"
+        : "body";
+  const offset =
+    kind === "opening"
+      ? opening.sourceOffset
+      : offsetAtColumn(line.text, opening.contentColumn, state.tabSize);
+  return {
+    from,
+    openingFrom: openingLine.from,
+    openingText: openingLine.text,
+    prefix: line.text.slice(0, offset ?? line.text.length),
+    kind,
+  };
+}
+
+function retainNativeRows(
+  update: ViewUpdate,
+  context: SyntaxContext,
+  previous: ReadonlyMap<number, NativeRowLayout>,
+): ReadonlyMap<number, NativeRowLayout> {
+  const rows = new Map<number, NativeRowLayout>();
+  const collisions = new Set<number>();
+  for (const row of previous.values()) {
+    const from = update.changes.mapPos(row.source.from, 1, MapMode.TrackAfter);
+    const openingFrom = update.changes.mapPos(
+      row.source.openingFrom,
+      1,
+      MapMode.TrackAfter,
+    );
+    if (from === null || openingFrom === null || collisions.has(from)) continue;
+    const source = sourceRowAt(update.state, context, from);
+    if (
+      !source ||
+      source.openingFrom !== openingFrom ||
+      source.openingText !== row.source.openingText ||
+      source.prefix !== row.source.prefix ||
+      source.kind !== row.source.kind
+    )
+      continue;
+    if (rows.has(from)) {
+      rows.delete(from);
+      collisions.add(from);
+    } else {
+      rows.set(from, { ...row, source });
+    }
+  }
+  return rows;
+}
+
+function nativePresentation(measurement: MeasuredLine): NativePresentation {
+  const { element, preview, previewBlock, previewAppearance } = measurement;
+  const next = element.nextElementSibling;
+  if (
+    preview &&
+    previewBlock === next &&
+    element.classList.contains("HyperMD-codeblock-begin") &&
+    !element.querySelector(".cm-hmd-codeblock") &&
+    next?.classList.contains("cm-preview-code-block")
+  )
+    return {
+      kind: "processor-opening",
+      alignment: preview,
+      appearance: previewAppearance,
+    };
+  if (isNativePreviewOpening(element)) {
+    if (isCodeBody(next)) return { kind: "native-opening", alignment: preview };
+    if (isHiddenClosingFence(next)) return { kind: "empty-opening" };
+  }
+  if (isHiddenClosingFence(element)) return { kind: "native-closing" };
+  if (isCodeBody(element))
+    return {
+      kind: "native-body",
+      first: isNativePreviewOpening(element.previousElementSibling),
+      last: isHiddenClosingFence(next),
+    };
+  return { kind: "source" };
+}
+
+function nativeAttributes(row: NativeRowLayout | undefined): {
+  class: string;
+  attributes: { style: string };
+} {
+  const classes = [CODE_BLOCK_CLASS];
+  const properties: Array<[string, string | undefined]> = [];
+  if (row) {
+    properties.push(
+      [CODE_BLOCK_INSET, row.inset],
+      [CODE_BLOCK_END, row.end],
+      [CODE_CONTENT_PADDING, row.contentPadding],
+    );
+    const presentation = row.presentation;
+    switch (presentation.kind) {
+      case "native-opening":
+      case "processor-opening": {
+        const { alignment } = presentation;
+        if (alignment) {
+          classes.push(PREVIEW_OPENING_CLASS);
+          properties.push(
+            [PREVIEW_HEIGHT, alignment.height],
+            [PREVIEW_MARKER_OFFSET, alignment.markerOffset],
+          );
+        }
+        if (presentation.kind === "processor-opening") {
+          classes.push(PREVIEW_EMBED_OPENING_CLASS);
+          if (presentation.appearance) {
+            classes.push(PLAIN_PREVIEW_CLASS);
+            properties.push(
+              [PREVIEW_BACKGROUND, presentation.appearance.background],
+              [PREVIEW_END, presentation.appearance.end],
+              [PREVIEW_RADIUS, presentation.appearance.radius],
+            );
+          }
+        }
+        classes.push(HIDDEN_FENCE_CLASS);
+        break;
+      }
+      case "native-body":
+        if (presentation.first) classes.push(PREVIEW_FIRST_CLASS);
+        if (presentation.last) classes.push(PREVIEW_LAST_CLASS);
+        break;
+      case "native-closing":
+        classes.push(HIDDEN_FENCE_CLASS);
+        break;
+      case "empty-opening":
+        classes.push(PREVIEW_LAST_CLASS);
+        break;
+      case "source":
+        break;
+      default: {
+        const exhaustive: never = presentation;
+        return exhaustive;
+      }
+    }
+  }
+  return {
+    class: classes.join(" "),
+    attributes: {
+      style: properties
+        .filter(([, value]) => value !== undefined)
+        .map(
+          ([name, value]) =>
+            `${name}: ${value?.replace(/-?\d+(?:\.\d+)?px\b/g, (pixels) => `${Math.round(Number.parseFloat(pixels) * 100) / 100}px`)};`,
+        )
+        .join(" "),
+    },
+  };
+}
+
+function sameNativeRows(
+  previous: ReadonlyMap<number, NativeRowLayout>,
+  next: ReadonlyMap<number, NativeRowLayout>,
+): boolean {
+  if (previous.size !== next.size) return false;
+  for (const [from, row] of next) {
+    const old = previous.get(from);
+    if (!old) return false;
+    const before = nativeAttributes(old);
+    const after = nativeAttributes(row);
+    if (
+      before.class !== after.class ||
+      before.attributes.style !== after.attributes.style
+    )
+      return false;
+  }
+  return true;
 }
 
 function measurePreviewAppearance(
@@ -1232,7 +1595,7 @@ function measurePreviewOpening(
     if (firstLine?.height) break;
   }
   const blockBounds = embed.getBoundingClientRect();
-  const hasTextLine = !!firstLine;
+  const hasLineBox = !!firstLine || isCodeBody(embed);
   if (!firstLine) {
     const style = doc.defaultView?.getComputedStyle(code);
     const height = Number.parseFloat(style?.lineHeight ?? "0");
@@ -1260,7 +1623,7 @@ function measurePreviewOpening(
         : "0",
     ) || 0;
   const firstLineCenter = firstLine.top + firstLine.height / 2;
-  const markerCenter = hasTextLine
+  const markerCenter = hasLineBox
     ? firstLineCenter
     : Math.max(
         lineBounds.top + markerBounds.height / 2,

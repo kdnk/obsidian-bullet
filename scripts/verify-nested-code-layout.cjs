@@ -386,7 +386,9 @@ try {
         openingTop: bounds(opening).top,
       };
     });
-    const plugin = cm.plugins.map((p) => p.value).find((p) => p?.styledLines);
+    const plugin = cm.plugins
+      .map((p) => p.value)
+      .find((p) => typeof p?.measureLines === "function");
     const original = plugin.measureLines;
     let idleMeasures = 0;
     plugin.measureLines = function (...args) {

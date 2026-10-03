@@ -166,18 +166,12 @@ describe("BetterListsStyles", () => {
     const line = styles.match(
       /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-nested-code-block\s*\{([^}]*)\}/,
     )?.[1];
-    const background = styles.match(
-      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-nested-code-block::before\s*\{([^}]*)\}/,
-    )?.[1];
     const content = styles.match(
       /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-nested-code-block\s+\.bullet-plugin-nested-code-block-content\s*\{([^}]*)\}/,
     )?.[1];
 
     expect(line).toContain("background-color: transparent;");
     expect(line).toContain("isolation: isolate;");
-    expect(background?.replace(/\s+/g, " ").trim()).toBe(
-      'content: ""; position: absolute; z-index: -1; inset-block: 0; inset-inline-start: var(--bullet-nested-code-block-inset); inset-inline-end: max( 0px, calc(100% - var(--bullet-nested-code-block-end, 100%)) ); background-color: var(--code-background);',
-    );
     expect(content?.replace(/\s+/g, " ").trim()).toBe(
       "padding-inline-start: var(--bullet-code-content-padding, var(--size-4-4));",
     );

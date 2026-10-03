@@ -100,14 +100,23 @@ try {
       const nativeFrames = frames.filter(
         (frame) => frame.visible && frame.hostCode,
       );
+      const firstNativeFrame = frames.findIndex(
+        (frame) => frame.visible && frame.hostCode,
+      );
       const span = (name) =>
         Math.max(...nativeFrames.map((frame) => frame[name])) -
         Math.min(...nativeFrames.map((frame) => frame[name]));
       return {
         neverVisible,
         frames,
-        preHostParse: frames.filter((frame) => frame.visible && !frame.hostCode)
-          .length,
+        preHostParse: frames
+          .slice(0, firstNativeFrame)
+          .filter((frame) => frame.visible).length,
+        nativeClassificationPreserved:
+          firstNativeFrame >= 0 &&
+          frames
+            .slice(firstNativeFrame)
+            .every((frame) => frame.visible && frame.hostCode),
         nativeFrames: nativeFrames.length,
         missingPaint: nativeFrames.filter((frame) => !frame.painted).length,
         complete: nativeFrames.every(
@@ -140,6 +149,11 @@ try {
     "Native role belongs to Obsidian",
   );
   assert.ok(result.nativeFrames > 20, "Observe native code frames");
+  assert.equal(
+    result.nativeClassificationPreserved,
+    true,
+    "Visible native classification remains present after its first frame",
+  );
   assert.equal(
     result.complete,
     true,

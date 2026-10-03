@@ -1,4 +1,5 @@
-import { EditorState } from "@codemirror/state";
+import { EditorState, TransactionSpec } from "@codemirror/state";
+import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
 
 import {
   NestedCodeBlockLayoutPluginValue,
@@ -13,6 +14,157 @@ type Measurement = {
   read: () => unknown;
   write: (value: unknown) => void;
 };
+
+const publications: VoidFunction[] = [];
+const nodeFilter = globalThis.NodeFilter;
+const drivers = new WeakMap<
+  NestedCodeBlockLayoutPluginValue,
+  {
+    render: () => void;
+    dispatch: jest.Mock<void, TransactionSpec[]>;
+  }
+>();
+
+beforeEach(() => {
+  Object.defineProperty(globalThis, "NodeFilter", {
+    value: { SHOW_TEXT: 4 },
+    configurable: true,
+  });
+  jest
+    .spyOn(globalThis, "queueMicrotask")
+    .mockImplementation((callback) => publications.push(callback));
+});
+
+afterEach(() => {
+  Object.defineProperty(globalThis, "NodeFilter", {
+    value: nodeFilter,
+    configurable: true,
+  });
+  publications.length = 0;
+  jest.restoreAllMocks();
+});
+
+function flushPublications() {
+  for (const callback of publications.splice(0)) callback();
+}
+
+function runMeasurement(measurement: Measurement) {
+  measurement.write(measurement.read());
+  flushPublications();
+}
+
+function decorationAttributes(decoration: Decoration) {
+  const spec: unknown = decoration.spec;
+  if (
+    typeof spec !== "object" ||
+    !spec ||
+    !("class" in spec) ||
+    typeof spec.class !== "string" ||
+    !("attributes" in spec)
+  )
+    throw new Error("Expected native line attributes");
+  const attributes = spec.attributes;
+  if (
+    typeof attributes !== "object" ||
+    !attributes ||
+    !("style" in attributes) ||
+    typeof attributes.style !== "string"
+  )
+    throw new Error("Expected native line style");
+  return { class: spec.class, style: attributes.style };
+}
+
+function mountLayout(
+  view: EditorView,
+  lineNameAt?: (n: number) => string | null,
+  zoomRange?: (state: EditorState) => { indent: string } | null,
+) {
+  const contentDOM = view.contentDOM ?? { querySelectorAll: () => [] };
+  Object.assign(view, { contentDOM });
+  Object.assign(contentDOM, {
+    contains: (element: HTMLElement) =>
+      Array.from(
+        contentDOM.querySelectorAll(".cm-line, .cm-preview-code-block"),
+      ).includes(element),
+  });
+  const plugin = new NestedCodeBlockLayoutPluginValue(
+    view,
+    lineNameAt,
+    zoomRange,
+  );
+  const applied = new Map<
+    HTMLElement,
+    { classes: string[]; properties: string[] }
+  >();
+  const render = (decorations: DecorationSet = plugin.decorations) => {
+    for (const [element, attrs] of applied) {
+      for (const name of attrs.classes) element.classList.remove(name);
+      for (const property of attrs.properties)
+        element.style.removeProperty(property);
+    }
+    applied.clear();
+    const lines = Array.from(
+      contentDOM.querySelectorAll<HTMLElement>(
+        ".cm-line, .cm-preview-code-block",
+      ),
+    ).filter((element) => !element.classList.contains("cm-preview-code-block"));
+    decorations.between(0, view.state.doc.length, (from, to, decoration) => {
+      if (from !== to) return;
+      const attrs = decorationAttributes(decoration);
+      for (const element of lines.filter(
+        (line) => view.posAtDOM(line) === from,
+      )) {
+        const classes = attrs.class.split(" ").filter(Boolean);
+        for (const name of classes) element.classList.add(name);
+        const properties = attrs.style.split(";").flatMap((declaration) => {
+          const separator = declaration.indexOf(":");
+          if (separator < 0) return [];
+          const name = declaration.slice(0, separator).trim();
+          element.style.setProperty(
+            name,
+            declaration.slice(separator + 1).trim(),
+          );
+          return [name];
+        });
+        applied.set(element, { classes, properties });
+      }
+    });
+  };
+  const dispatch = jest.fn((...specs: TransactionSpec[]) => {
+    const transaction = view.state.update(...specs);
+    Object.assign(view, {
+      state: transaction.state,
+      visibleRanges: view.visibleRanges.map(({ from, to }) => ({
+        from: transaction.changes.mapPos(from, -1),
+        to: transaction.changes.mapPos(to, 1),
+      })),
+    });
+    plugin.update({
+      view,
+      startState: transaction.startState,
+      state: transaction.state,
+      changes: transaction.changes,
+      transactions: [transaction],
+      docChanged: transaction.docChanged,
+      viewportChanged: false,
+      geometryChanged: false,
+      viewportMoved: false,
+      heightChanged: false,
+      focusChanged: false,
+      selectionSet: transaction.selection !== undefined,
+    });
+    render();
+  });
+  Object.assign(view, { dispatch });
+  const destroy = plugin.destroy.bind(plugin);
+  plugin.destroy = () => {
+    destroy();
+    render(Decoration.none);
+  };
+  drivers.set(plugin, { render, dispatch });
+  render();
+  return plugin;
+}
 
 function makeAnimationWindow(frames: FrameRequestCallback[]) {
   return {
@@ -34,8 +186,8 @@ function makeClassList(...initial: string[]) {
   };
 }
 
-function makeStyle() {
-  const values = new Map<string, string>();
+function makeStyle(initial: Array<[string, string]> = []) {
+  const values = new Map(initial);
   return {
     setProperty: (name: string, value: string) => values.set(name, value),
     removeProperty: (name: string) => values.delete(name),
@@ -81,6 +233,9 @@ function makeLine(
       : null;
   return {
     position: options.position,
+    get className() {
+      return [...this.classList].join(" ");
+    },
     ownerDocument: {
       defaultView: {
         getComputedStyle: () => ({
@@ -104,18 +259,23 @@ function names(...values: Array<string | null>) {
   return (lineNumber: number) => values[lineNumber - 1] ?? null;
 }
 
-function makePreviewFixture(empty = false) {
+function makePreviewFixture(empty = false, outside = false) {
   const state = EditorState.create({
     doc: [
       "\t- ```js",
       ...(empty ? [] : ["\t  one", "\t  two"]),
       "\t  ```",
+      ...(outside ? ["- outside"] : []),
     ].join("\n"),
   });
   const lines = Array.from({ length: state.doc.lines }, (_, index) => {
-    const classes = ["HyperMD-codeblock", "HyperMD-list-line"];
+    const classes =
+      outside && index === state.doc.lines - 1
+        ? []
+        : ["HyperMD-codeblock", "HyperMD-list-line"];
     if (index === 0) classes.push("HyperMD-codeblock-begin");
-    if (index === state.doc.lines - 1) classes.push("HyperMD-codeblock-end");
+    if (index === state.doc.lines - (outside ? 2 : 1))
+      classes.push("HyperMD-codeblock-end");
     const line = makeLine(classes, {
       position: state.doc.line(index + 1).from,
       markerEnd: 164,
@@ -148,7 +308,12 @@ function makePreviewFixture(empty = false) {
     })) as never;
     return Object.assign(line, {
       nodeType: 1,
-      closest: () => line,
+      closest: (selector: string) =>
+        selector === ".cm-preview-code-block"
+          ? line.classList.contains("cm-preview-code-block")
+            ? line
+            : null
+          : line,
       setRaw: (value: boolean) => {
         rawFence = value;
       },
@@ -156,7 +321,7 @@ function makePreviewFixture(empty = false) {
       nextElementSibling: null as unknown,
     });
   });
-  const frames: FrameRequestCallback[] = [];
+
   const measurements: Measurement[] = [];
   let notify: (records: unknown[]) => void = () => {};
   const body = { nodeType: 1 };
@@ -181,7 +346,6 @@ function makePreviewFixture(empty = false) {
       ownerDocument: {
         body,
         defaultView: {
-          ...makeAnimationWindow(frames),
           MutationObserver: class {
             constructor(callback: typeof notify) {
               notify = callback;
@@ -195,22 +359,40 @@ function makePreviewFixture(empty = false) {
     requestMeasure: (measurement: Measurement) =>
       measurements.push(measurement),
   };
-  const plugin = new NestedCodeBlockLayoutPluginValue(
+  const plugin = mountLayout(
     view as never,
-    names(BEGIN, ...(empty ? [] : [CONTENT, CONTENT]), END),
+    names(
+      BEGIN,
+      ...(empty ? [] : [CONTENT, CONTENT]),
+      END,
+      ...(outside ? [null] : []),
+    ),
   );
-  frames[0](0);
-  const measure = () => measurements[0].write(measurements[0].read());
+
+  const measure = () => runMeasurement(measurements[0]);
   return {
     lines,
-    frames,
+    view,
+    measurements,
     measure,
     plugin,
     show,
     body,
     observe,
     disconnect,
-    notify: (target: unknown, type = "childList") => notify([{ target, type }]),
+    notify: (target: unknown, type = "childList", previousClass?: string) =>
+      notify([
+        {
+          target,
+          type,
+          oldValue:
+            previousClass ??
+            (typeof target === "object" && target && "className" in target
+              ? target.className
+              : null),
+        },
+      ]),
+    redraw: () => drivers.get(plugin)!.render(),
   };
 }
 
@@ -274,13 +456,47 @@ describe("native preview row roles", () => {
     fixture.plugin.destroy();
   });
 
-  test("restores lost preview roles before the next CodeMirror measurement without observing its own classes", () => {
+  test("centers a 24px marker on a physical blank native row's 21px line box", () => {
+    const fixture = makePreviewFixture();
+    const source = fixture.view.state.doc.line(2);
+    drivers.get(fixture.plugin)!.dispatch({
+      changes: { from: source.from, to: source.to, insert: "" },
+    });
+    fixture.lines.forEach((line, index) => {
+      line.position = fixture.view.state.doc.line(index + 1).from;
+    });
+    const [opening, blank] = fixture.lines;
+    blank.classList = makeClassList("cm-line", "HyperMD-codeblock");
+    blank.getBoundingClientRect = () =>
+      ({ left: 100, right: 300, top: 124, height: 21 }) as never;
+    blank.ownerDocument.defaultView.getComputedStyle = () => ({
+      direction: "ltr",
+      marginInlineEnd: "0px",
+      lineHeight: "21px",
+      paddingTop: "0px",
+      paddingBottom: "0px",
+    });
+
+    fixture.measure();
+    expect(fixture.view.state.doc.line(2).text).toBe("");
+    expect(
+      opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
+    ).toBe("22.5px");
+    expect(opening.style.getPropertyValue("--bullet-code-preview-height")).toBe(
+      "45px",
+    );
+    expect(opening.style.getPropertyValue("height")).toBe("");
+    fixture.plugin.destroy();
+  });
+
+  test("retains complete preview roles in decorations across a native redraw", () => {
     const fixture = makePreviewFixture();
     const [opening] = fixture.lines;
     fixture.measure();
     for (const name of [...opening.classList]) {
       if (name.startsWith("bullet-plugin-")) opening.classList.remove(name);
     }
+    fixture.redraw();
     fixture.notify(opening, "attributes");
     expect(
       opening.classList.contains("bullet-plugin-code-preview-hidden-fence"),
@@ -288,21 +504,21 @@ describe("native preview row roles", () => {
     expect(
       opening.classList.contains("bullet-plugin-code-preview-opening"),
     ).toBe(true);
-    const pending = fixture.frames.length;
-    fixture.frames[pending - 1](0);
+    const pending = fixture.measurements.length;
     fixture.measure();
     fixture.notify(opening, "attributes");
-    expect(fixture.frames).toHaveLength(pending);
+    expect(fixture.measurements).toHaveLength(pending);
     fixture.plugin.destroy();
   });
 
-  test("reveals source fences and removes adjacent preview edges as soon as their children change", () => {
+  test("publishes source fences and adjacent preview edges after their presentation changes", () => {
     const fixture = makePreviewFixture();
     const [opening, first, last, closing] = fixture.lines;
     fixture.measure();
     opening.setRaw(true);
     closing.setRaw(true);
     fixture.notify(opening);
+    fixture.measure();
     expect(
       opening.classList.contains("bullet-plugin-code-preview-hidden-fence"),
     ).toBe(false);
@@ -321,6 +537,7 @@ describe("native preview row roles", () => {
     opening.setRaw(false);
     closing.setRaw(false);
     fixture.notify(closing);
+    fixture.measure();
     expect(
       opening.classList.contains("bullet-plugin-code-preview-hidden-fence"),
     ).toBe(true);
@@ -334,7 +551,7 @@ describe("native preview row roles", () => {
     fixture.plugin.destroy();
   });
 
-  test("restores embed and guide roles after a partial class reset, then reveals a raw fence immediately", () => {
+  test("retains decorated guide roles through redraw and publishes a raw fence independently of its embed", () => {
     const fixture = makePreviewFixture();
     const [opening, embed] = fixture.lines;
     embed.classList = makeClassList("cm-preview-code-block");
@@ -355,18 +572,19 @@ describe("native preview row roles", () => {
       true,
     );
     for (const name of openingRoles) opening.classList.remove(name);
+    fixture.redraw();
     fixture.notify(opening, "attributes");
     for (const name of openingRoles)
       expect(opening.classList.contains(name)).toBe(true);
-    const pending = fixture.frames.length;
-    fixture.frames[pending - 1](0);
+    const pending = fixture.measurements.length;
     fixture.measure();
     fixture.notify(opening, "attributes");
-    expect(fixture.frames).toHaveLength(pending);
+    expect(fixture.measurements).toHaveLength(pending);
 
     // Native children can switch to source before the processor widget leaves.
     opening.setRaw(true);
     fixture.notify(opening);
+    fixture.measure();
     for (const name of openingRoles)
       expect(opening.classList.contains(name)).toBe(false);
     fixture.show([opening]);
@@ -377,6 +595,487 @@ describe("native preview row roles", () => {
     expect(opening.style.getPropertyValue("--bullet-code-preview-height")).toBe(
       "",
     );
+    fixture.plugin.destroy();
+  });
+});
+
+function lineAttributes(
+  plugin: NestedCodeBlockLayoutPluginValue,
+  position: number,
+) {
+  let result = { class: "", style: "" };
+  plugin.decorations.between(position, position, (from, to, decoration) => {
+    if (from === position && to === position)
+      result = decorationAttributes(decoration);
+  });
+  return result;
+}
+
+function makeSourceFixture() {
+  let state = EditorState.create({
+    doc: "- before\n- ```js\n  one\n\n  two\n  ```\n- after",
+  });
+  const lineNameAt = (n: number) => {
+    const text = state.doc.line(n).text;
+    if (text.startsWith("- ```")) return BEGIN;
+    if (text === "  ```") return END;
+    return text.startsWith("  ") || text.startsWith("\t") ? CONTENT : null;
+  };
+  const nativeLines = () =>
+    Array.from({ length: state.doc.lines }, (_, index) => {
+      const name = lineNameAt(index + 1);
+      return makeLine(
+        (
+          name ??
+          (state.doc.line(index + 1).text === "" ? "HyperMD-codeblock" : "")
+        ).split("_"),
+        {
+          position: state.doc.line(index + 1).from,
+          ...(name === BEGIN ? { markerEnd: 160 } : {}),
+        },
+      );
+    });
+  let lines = nativeLines();
+  let visible: number[] | null = null;
+
+  const measurements: Measurement[] = [];
+  const view = {
+    get state() {
+      return state;
+    },
+    set state(value: EditorState) {
+      state = value;
+      lines = nativeLines();
+    },
+    visibleRanges: [{ from: 0, to: state.doc.length }],
+    contentDOM: {
+      querySelectorAll: () =>
+        lines.filter((_, index) => !visible || visible.includes(index + 1)),
+    },
+    posAtDOM: (element: { position: number }) => element.position,
+    coordsAtPos: () => ({ left: 160, right: 160 }),
+    dom: { ownerDocument: { defaultView: {} } },
+    requestMeasure: (measurement: Measurement) =>
+      measurements.push(measurement),
+  };
+  const plugin = mountLayout(view as never, lineNameAt);
+
+  return {
+    plugin,
+    view,
+    get lines() {
+      return lines;
+    },
+    measurements,
+    measure: () => runMeasurement(measurements[0]),
+    dispatch: drivers.get(plugin)!.dispatch,
+    show: (numbers: number[]) => {
+      visible = numbers;
+      view.visibleRanges = numbers.map((n) => ({
+        from: state.doc.line(n).from,
+        to: state.doc.line(n).to,
+      }));
+      plugin.update({
+        view,
+        state,
+        startState: state,
+        changes: state.update({}).changes,
+        transactions: [],
+        docChanged: false,
+        viewportChanged: true,
+        geometryChanged: false,
+      } as never);
+      drivers.get(plugin)!.render();
+    },
+  };
+}
+
+describe("retained source geometry", () => {
+  test("covers physical blank rows before measurement and restores cached rows on remount", () => {
+    const fixture = makeSourceFixture();
+    const blankFrom = fixture.view.state.doc.line(4).from;
+    expect(lineAttributes(fixture.plugin, blankFrom)).toEqual({
+      class: "bullet-plugin-nested-code-block",
+      style: "",
+    });
+    fixture.measure();
+    expect(lineAttributes(fixture.plugin, blankFrom).style).toBe(
+      "--bullet-nested-code-block-inset: 60px;",
+    );
+    fixture.show([5]);
+    expect(lineAttributes(fixture.plugin, blankFrom).style).toBe(
+      "--bullet-nested-code-block-inset: 60px;",
+    );
+    fixture.show([3, 4]);
+    expect(
+      fixture.lines[3].style.getPropertyValue(
+        "--bullet-nested-code-block-inset",
+      ),
+    ).toBe("60px");
+    fixture.plugin.destroy();
+  });
+
+  test("maps native geometry across ordinary body edits and insertion before its fence", () => {
+    const fixture = makeSourceFixture();
+    fixture.measure();
+    const body = fixture.view.state.doc.line(3);
+    fixture.dispatch({ changes: { from: body.to, insert: "!" } });
+    expect(lineAttributes(fixture.plugin, body.from).style).toBe(
+      "--bullet-nested-code-block-inset: 60px;",
+    );
+    fixture.dispatch({ changes: { from: 0, insert: "heading\n" } });
+    const next = fixture.view.state.doc.line(4);
+    expect(next.text).toBe("  one!");
+    expect(lineAttributes(fixture.plugin, next.from).style).toBe(
+      "--bullet-nested-code-block-inset: 60px;",
+    );
+    expect(lineAttributes(fixture.plugin, 0)).toEqual({ class: "", style: "" });
+    fixture.plugin.destroy();
+  });
+
+  test.each(["row replacement", "prefix replacement", "opening replacement"])(
+    "drops stale geometry after a %s even when the new row is still code",
+    (change) => {
+      const fixture = makeSourceFixture();
+      fixture.measure();
+      const { doc } = fixture.view.state;
+      expect(lineAttributes(fixture.plugin, doc.line(3).from).style).toBe(
+        "--bullet-nested-code-block-inset: 60px;",
+      );
+      const changes =
+        change === "row replacement"
+          ? {
+              from: doc.line(3).from,
+              to: doc.line(4).from,
+              insert: "  replacement\n",
+            }
+          : change === "prefix replacement"
+            ? { from: doc.line(3).from, to: doc.line(3).from + 2, insert: "\t" }
+            : {
+                from: doc.line(2).from,
+                to: doc.line(2).to,
+                insert: doc.line(2).text,
+              };
+      fixture.dispatch({ changes });
+      const body = fixture.view.state.doc.line(3);
+      expect(lineAttributes(fixture.plugin, body.from)).toEqual({
+        class: "bullet-plugin-nested-code-block",
+        style: "",
+      });
+      fixture.plugin.destroy();
+    },
+  );
+
+  test("never transfers a measured source row's attributes to a recycled native element", () => {
+    const fixture = makeSourceFixture();
+    fixture.measure();
+    const line = fixture.lines[2];
+    expect(
+      line.style.getPropertyValue("--bullet-nested-code-block-inset"),
+    ).toBe("60px");
+    const measurement = fixture.measurements[0];
+    measurement.write(measurement.read());
+    line.position = fixture.view.state.doc.line(7).from;
+    drivers.get(fixture.plugin)!.render();
+    flushPublications();
+    expect(
+      line.style.getPropertyValue("--bullet-nested-code-block-inset"),
+    ).toBe("");
+    expect(line.classList.contains("bullet-plugin-nested-code-block")).toBe(
+      false,
+    );
+    fixture.plugin.destroy();
+  });
+
+  test("removes cached native attributes when a fence is deleted", () => {
+    const fixture = makeSourceFixture();
+    fixture.measure();
+    expect(
+      lineAttributes(fixture.plugin, fixture.view.state.doc.line(3).from).style,
+    ).toContain("60px");
+    const opening = fixture.view.state.doc.line(2);
+    fixture.dispatch({
+      changes: { from: opening.from, to: opening.to, insert: "- prose" },
+    });
+    expect(
+      lineAttributes(fixture.plugin, fixture.view.state.doc.line(3).from),
+    ).toEqual({ class: "", style: "" });
+    fixture.plugin.destroy();
+  });
+});
+
+describe("native measurement publication", () => {
+  test.each([false, true])(
+    "publishes complete native attributes in the first measurement frame (geometry changes: %s)",
+    (geometryChanges) => {
+      const state = EditorState.create({ doc: "- ```\n  code\n  ```" });
+      const opening = makeLine(BEGIN.split("_"), {
+        position: 0,
+        markerEnd: 164,
+      });
+      const body = makeLine(CONTENT.split("_"), {
+        position: state.doc.line(2).from,
+      });
+      body.querySelector = ((selector: string) =>
+        selector === ".bullet-plugin-nested-code-block-content"
+          ? { getBoundingClientRect: () => ({ left: 132, right: 164 }) }
+          : null) as never;
+      const frames: FrameRequestCallback[] = [];
+      const win = makeAnimationWindow(frames);
+      const pending = new Set<Measurement>();
+      let measuring = false;
+      let scheduled = false;
+      let afterRead: VoidFunction | undefined;
+      const view = {
+        state,
+        visibleRanges: [{ from: 0, to: state.doc.length }],
+        contentDOM: { querySelectorAll: () => [opening, body] },
+        posAtDOM: (element: { position: number }) => element.position,
+        dom: { ownerDocument: { defaultView: win } },
+        requestMeasure: (request: Measurement) => {
+          pending.add(request);
+          if (measuring || scheduled) return;
+          scheduled = true;
+          win.requestAnimationFrame(() => {
+            scheduled = false;
+            measuring = true;
+            for (let cycle = 0; pending.size; cycle++) {
+              if (cycle > 5) throw Error("Measurement did not settle");
+              const requests = [...pending];
+              pending.clear();
+              const values = requests.map((measurement) => measurement.read());
+              afterRead?.();
+              requests.forEach((measurement, index) =>
+                measurement.write(values[index]),
+              );
+            }
+            measuring = false;
+          });
+        },
+      };
+      const plugin = mountLayout(view as never, names(BEGIN, CONTENT, END));
+      const dispatch = drivers.get(plugin)!.dispatch;
+      Object.assign(view, {
+        dispatch: (...specs: TransactionSpec[]) => {
+          expect(measuring).toBe(false);
+          dispatch(...specs);
+        },
+      });
+      if (geometryChanges)
+        afterRead = () => {
+          afterRead = undefined;
+          opening.getBoundingClientRect = () => ({ left: 80, right: 300 });
+          plugin.update({
+            view,
+            startState: state,
+            state,
+            transactions: [],
+            geometryChanged: true,
+          } as never);
+        };
+      for (const callback of frames.splice(0)) {
+        callback(0);
+        flushPublications();
+      }
+      expect(lineAttributes(plugin, body.position)).toEqual({
+        class: "bullet-plugin-nested-code-block",
+        style: geometryChanges
+          ? "--bullet-nested-code-block-inset: 84px; --bullet-code-content-padding: calc(84px - 32px + 0ch + var(--size-4-4));"
+          : "--bullet-nested-code-block-inset: 64px; --bullet-code-content-padding: calc(64px - 32px + 0ch + var(--size-4-4));",
+      });
+      expect(dispatch).toHaveBeenCalledTimes(1);
+      expect(frames).toHaveLength(0);
+      expect(pending.size).toBe(0);
+      plugin.destroy();
+    },
+  );
+
+  test("handles SVG class mutations through the element's class tokens", () => {
+    const fixture = makePreviewFixture();
+    fixture.measure();
+    const element = fixture.lines[0];
+    const previousClass = element.className;
+    Object.defineProperty(element, "className", {
+      value: { baseVal: previousClass },
+      configurable: true,
+    });
+    element.classList.add("native-state-changed");
+    fixture.notify(element, "attributes", previousClass);
+    fixture.measure();
+    expect(lineAttributes(fixture.plugin, 0).style).toContain(
+      "--bullet-nested-code-block-inset: 64px;",
+    );
+    expect(fixture.measurements).toHaveLength(2);
+    fixture.plugin.destroy();
+  });
+
+  test("does not write or clean processor attributes after its element becomes a native row", () => {
+    const fixture = makePreviewFixture();
+    const [opening, embed] = fixture.lines;
+    embed.classList = makeClassList("cm-preview-code-block");
+    embed.position = 3;
+    embed.querySelector = (() => null) as never;
+    fixture.show([opening, embed]);
+    fixture.measure();
+    expect(
+      embed.style.getPropertyValue("--bullet-nested-code-block-inset"),
+    ).toBe("64px");
+    const measurement = fixture.measurements[0];
+    const frame = measurement.read();
+    embed.classList = makeClassList("cm-line", "HyperMD-list-line");
+    embed.style = makeStyle([["--bullet-nested-code-block-inset", "123px"]]);
+    measurement.write(frame);
+    expect(
+      embed.style.getPropertyValue("--bullet-nested-code-block-inset"),
+    ).toBe("123px");
+    fixture.plugin.destroy();
+    expect(
+      embed.style.getPropertyValue("--bullet-nested-code-block-inset"),
+    ).toBe("123px");
+  });
+
+  test("publishes complete row attributes after measure returns and coalesces the newest frame", () => {
+    const fixture = makePreviewFixture();
+    const { plugin, measurements, lines } = fixture;
+    const measurement = measurements[0];
+    const dispatch = drivers.get(plugin)!.dispatch;
+    const nativeWrite = jest.spyOn(lines[0].style, "setProperty");
+    const nativeClass = jest.spyOn(lines[0].classList, "add");
+    const first = measurement.read();
+    measurement.write(first);
+    const before = lineAttributes(plugin, 0);
+    expect(before).toEqual({
+      class: "bullet-plugin-nested-code-block",
+      style: "",
+    });
+    expect(nativeWrite).not.toHaveBeenCalled();
+    expect(nativeClass).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+    lines[0].getBoundingClientRect = () =>
+      ({ left: 90, right: 300, top: 100, height: 24 }) as never;
+    measurement.write(measurement.read());
+    expect(publications).toHaveLength(1);
+    flushPublications();
+    expect(lineAttributes(plugin, 0)).toEqual({
+      class:
+        "bullet-plugin-nested-code-block bullet-plugin-code-preview-opening bullet-plugin-code-preview-hidden-fence",
+      style:
+        "--bullet-nested-code-block-inset: 74px; --bullet-code-preview-height: 24px; --bullet-code-preview-marker-offset: 0px;",
+    });
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(fixture.measurements).toHaveLength(1);
+    fixture.measure();
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(fixture.measurements).toHaveLength(1);
+    plugin.destroy();
+  });
+
+  test("keeps measured geometry and preview roles for an unchanged explicit selection", () => {
+    const fixture = makePreviewFixture();
+    fixture.measure();
+    const dispatch = drivers.get(fixture.plugin)!.dispatch;
+    const before = lineAttributes(fixture.plugin, 0);
+    dispatch({ selection: fixture.view.state.selection });
+    expect(lineAttributes(fixture.plugin, 0)).toEqual(before);
+    expect(before.style).toContain("--bullet-nested-code-block-inset: 64px;");
+    expect(before.class).toContain("bullet-plugin-code-preview-opening");
+    expect(fixture.measurements).toHaveLength(1);
+    fixture.plugin.destroy();
+  });
+
+  test("drops an offscreen opener's preview alignment when editing enters its source block", () => {
+    const fixture = makePreviewFixture(false, true);
+    const dispatch = drivers.get(fixture.plugin)!.dispatch;
+    dispatch({ selection: { anchor: fixture.view.state.doc.length } });
+    fixture.measure();
+    expect(lineAttributes(fixture.plugin, 0).class).toContain(
+      "bullet-plugin-code-preview-opening",
+    );
+    fixture.show([fixture.lines[1]]);
+    dispatch({
+      selection: { anchor: fixture.view.state.doc.line(2).from + 3 },
+    });
+    expect(lineAttributes(fixture.plugin, 0)).toEqual({
+      class: "bullet-plugin-nested-code-block",
+      style: "--bullet-nested-code-block-inset: 64px;",
+    });
+    fixture.plugin.destroy();
+  });
+
+  test.each(["document", "selection", "presentation", "theme", "destroy"])(
+    "discards a pending frame after a %s change",
+    (change) => {
+      const fixture = makePreviewFixture();
+      const { plugin, view, measurements } = fixture;
+      const dispatch = drivers.get(plugin)!.dispatch;
+      fixture.measure();
+      const before = lineAttributes(plugin, 0);
+      fixture.lines[0].getBoundingClientRect = () =>
+        ({ left: 80, right: 300, top: 100, height: 24 }) as never;
+      measurements[0].write(measurements[0].read());
+      const published = dispatch.mock.calls.length;
+      if (change === "document")
+        dispatch({ changes: { from: view.state.doc.line(2).to, insert: "x" } });
+      else if (change === "selection")
+        dispatch({ selection: { anchor: view.state.doc.line(2).from + 3 } });
+      else if (change === "presentation") {
+        fixture.lines[0].setRaw(true);
+        fixture.notify(fixture.lines[0]);
+      } else if (change === "theme") fixture.notify(fixture.body, "attributes");
+      else plugin.destroy();
+      flushPublications();
+      expect(dispatch.mock.calls.length).toBe(
+        published + (change === "document" || change === "selection" ? 1 : 0),
+      );
+      expect(lineAttributes(plugin, 0)).toEqual(before);
+      if (change !== "destroy") {
+        fixture.measure();
+        expect(lineAttributes(plugin, 0).style).toContain(
+          "--bullet-nested-code-block-inset: 84px;",
+        );
+        plugin.destroy();
+      }
+    },
+  );
+
+  test("keeps a private publication effect from affecting another editor", () => {
+    const first = makePreviewFixture();
+    const second = makePreviewFixture();
+    first.measure();
+    const firstDispatch = drivers.get(first.plugin)!.dispatch;
+    const secondDispatch = drivers.get(second.plugin)!.dispatch;
+    secondDispatch(firstDispatch.mock.calls[0][0]);
+    expect(lineAttributes(second.plugin, 0)).toEqual({
+      class: "bullet-plugin-nested-code-block",
+      style: "",
+    });
+    second.measure();
+    expect(lineAttributes(second.plugin, 0).style).toContain(
+      "--bullet-nested-code-block-inset: 64px;",
+    );
+    first.plugin.destroy();
+    second.plugin.destroy();
+  });
+
+  test("rejects a measurement effect combined with a document edit", () => {
+    const fixture = makePreviewFixture();
+    fixture.measure();
+    const dispatch = drivers.get(fixture.plugin)!.dispatch;
+    const published: TransactionSpec = dispatch.mock.calls[0][0];
+    const effect = fixture.view.state.update(published).effects[0];
+    expect(effect.map(fixture.view.state.update({}).changes)).toBe(effect);
+    expect(
+      effect.map(
+        fixture.view.state.update({ changes: { from: 0, insert: "prefix" } })
+          .changes,
+      ),
+    ).toBeUndefined();
+    dispatch({
+      ...published,
+      changes: { from: 0, to: fixture.view.state.doc.length, insert: "plain" },
+    });
+    expect(lineAttributes(fixture.plugin, 0)).toEqual({ class: "", style: "" });
+    expect(fixture.view.state.doc.toString()).toBe("plain");
     fixture.plugin.destroy();
   });
 });
@@ -472,6 +1171,24 @@ describe("plain Shiki preview appearance", () => {
     }
   });
 
+  test("publishes the complete processor-opening attributes and removes every preview-only value in source", () => {
+    const fixture = setup();
+    expect(lineAttributes(fixture.plugin, 0)).toEqual({
+      class:
+        "bullet-plugin-nested-code-block bullet-plugin-code-preview-opening bullet-plugin-code-preview-embed-opening bullet-plugin-code-preview-plain bullet-plugin-code-preview-hidden-fence",
+      style:
+        "--bullet-nested-code-block-inset: 64px; --bullet-code-preview-height: 24px; --bullet-code-preview-marker-offset: 0px; --bullet-code-preview-background: rgb(31, 31, 40); --bullet-code-preview-end: 248px; --bullet-code-preview-radius: 6px;",
+    });
+    fixture.opening.setRaw(true);
+    fixture.notify(fixture.opening);
+    fixture.measure();
+    expect(lineAttributes(fixture.plugin, 0)).toEqual({
+      class: "bullet-plugin-nested-code-block",
+      style: "--bullet-nested-code-block-inset: 64px;",
+    });
+    fixture.plugin.destroy();
+  });
+
   test.each(["has-title", "is-terminal"])(
     "leaves a visible %s header under the processor's own layout",
     (kind) => {
@@ -512,22 +1229,22 @@ describe("plain Shiki preview appearance", () => {
     }
   });
 
-  test("restores plain roles after redraw, then removes their paint when the source fence returns", () => {
+  test("retains plain opening paint through redraw and removes it when the source fence returns", () => {
     const fixture = setup();
     try {
       fixture.opening.classList.remove(plainClass);
-      fixture.embed.classList.remove(plainClass);
+      fixture.redraw();
       fixture.notify(fixture.opening, "attributes");
       expect(fixture.opening.classList.contains(plainClass)).toBe(true);
       expect(fixture.embed.classList.contains(plainClass)).toBe(true);
-      const pending = fixture.frames.length;
-      fixture.frames[pending - 1](0);
+      const pending = fixture.measurements.length;
       fixture.measure();
       fixture.notify(fixture.opening, "attributes");
-      expect(fixture.frames).toHaveLength(pending);
+      expect(fixture.measurements).toHaveLength(pending);
 
       fixture.opening.setRaw(true);
       fixture.notify(fixture.opening);
+      fixture.measure();
       expect(fixture.opening.classList.contains(plainClass)).toBe(false);
       fixture.show([fixture.opening]);
       fixture.measure();
@@ -548,16 +1265,16 @@ describe("plain Shiki preview appearance", () => {
         attributes: true,
         attributeFilter: ["class"],
       });
-      const pending = fixture.frames.length;
+      const pending = fixture.measurements.length;
       fixture.appearance.background = "rgb(242, 236, 188)";
       fixture.notify(fixture.body, "attributes");
-      expect(fixture.frames).toHaveLength(pending + 1);
+      expect(fixture.measurements).toHaveLength(pending + 1);
       expect(
         fixture.opening.style.getPropertyValue(
           "--bullet-code-preview-background",
         ),
       ).toBe("rgb(31, 31, 40)");
-      fixture.frames[pending](0);
+
       fixture.measure();
       expect(
         fixture.opening.style.getPropertyValue(
@@ -571,9 +1288,9 @@ describe("plain Shiki preview appearance", () => {
       fixture.plugin.destroy();
     }
     expect(fixture.disconnect).toHaveBeenCalledTimes(1);
-    const stopped = fixture.frames.length;
+    const stopped = fixture.measurements.length;
     fixture.notify(fixture.body, "attributes");
-    expect(fixture.frames).toHaveLength(stopped);
+    expect(fixture.measurements).toHaveLength(stopped);
   });
 });
 
@@ -597,7 +1314,7 @@ test("aligns every visible line to the measured list content edge", () => {
     { position: state.doc.line(4).from },
   );
   const measurements: Measurement[] = [];
-  const frames: FrameRequestCallback[] = [];
+
   const view = {
     state,
     visibleRanges: [{ from: 0, to: state.doc.length }],
@@ -606,18 +1323,18 @@ test("aligns every visible line to the measured list content edge", () => {
     },
     posAtDOM: (element: { position: number }) => element.position,
     coordsAtPos: () => ({ left: 130, right: 130 }),
-    dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+    dom: { ownerDocument: { defaultView: {} } },
     requestMeasure: (measurement: Measurement) =>
       measurements.push(measurement),
   };
 
-  const plugin = new NestedCodeBlockLayoutPluginValue(
+  const plugin = mountLayout(
     view as never,
     names(BEGIN, CONTENT, END, "HyperMD-codeblock"),
   );
-  frames[0](0);
+
   const measurement = measurements[0];
-  measurement.write(measurement.read());
+  runMeasurement(measurement);
 
   for (const line of [opening, content, closing]) {
     expect(line.classList.contains("bullet-plugin-nested-code-block")).toBe(
@@ -655,7 +1372,7 @@ test("insets a rendered code embed from its owning list marker when the fence te
     position: state.doc.line(5).from,
   });
   const measurements: Measurement[] = [];
-  const frames: FrameRequestCallback[] = [];
+
   const view = {
     state,
     visibleRanges: [{ from: 0, to: state.doc.length }],
@@ -663,16 +1380,16 @@ test("insets a rendered code embed from its owning list marker when the fence te
     posAtDOM: (element: { position: number }) => element.position,
     // Hidden source coordinates point to the full-width embed, not the marker.
     coordsAtPos: () => ({ left: 100, right: 100 }),
-    dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+    dom: { ownerDocument: { defaultView: {} } },
     requestMeasure: (measurement: Measurement) =>
       measurements.push(measurement),
   };
-  const plugin = new NestedCodeBlockLayoutPluginValue(
+  const plugin = mountLayout(
     view as never,
     names(BEGIN, CONTENT, END, null, "HyperMD-codeblock"),
   );
-  frames[0](0);
-  measurements[0].write(measurements[0].read());
+
+  runMeasurement(measurements[0]);
   for (const element of [opening, embed]) {
     expect(
       element.style.getPropertyValue("--bullet-nested-code-block-inset"),
@@ -772,13 +1489,13 @@ test.each([
       }),
     });
     const measurements: Measurement[] = [];
-    const frames: FrameRequestCallback[] = [];
+
     const view = {
       state,
       visibleRanges: [{ from: 0, to: state.doc.length }],
       contentDOM: { querySelectorAll: () => [opening, embed] },
       posAtDOM: (element: { position: number }) => element.position,
-      dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+      dom: { ownerDocument: { defaultView: {} } },
       requestMeasure: (measurement: Measurement) =>
         measurements.push(measurement),
     };
@@ -788,12 +1505,9 @@ test.each([
       configurable: true,
     });
     try {
-      const plugin = new NestedCodeBlockLayoutPluginValue(
-        view as never,
-        names(BEGIN, CONTENT, END),
-      );
-      frames[0](0);
-      const measure = () => measurements[0].write(measurements[0].read());
+      const plugin = mountLayout(view as never, names(BEGIN, CONTENT, END));
+
+      const measure = () => runMeasurement(measurements[0]);
       measure();
       expect(
         opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
@@ -803,6 +1517,7 @@ test.each([
         opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
       ).toBe(expectedOffset);
       opening.classList.remove("bullet-plugin-code-preview-opening");
+      drivers.get(plugin)!.render();
       measure();
       expect(
         opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
@@ -827,7 +1542,7 @@ test.each([
   },
 );
 
-test("remeasures async previews and native class resets without observing its own style writes", () => {
+test("remeasures processor changes while ignoring decoration-only native class mutations", () => {
   const state = EditorState.create({ doc: "\t- ```js" });
   const line = Object.assign(
     makeLine(
@@ -836,7 +1551,7 @@ test("remeasures async previews and native class resets without observing its ow
     ),
     { nodeType: 1, closest: () => null },
   );
-  const frames: FrameRequestCallback[] = [];
+
   const measurements: Measurement[] = [];
   const disconnect = jest.fn();
   let notify: (records: unknown[]) => void = () => {};
@@ -849,7 +1564,6 @@ test("remeasures async previews and native class resets without observing its ow
     dom: {
       ownerDocument: {
         defaultView: {
-          ...makeAnimationWindow(frames),
           MutationObserver: class {
             constructor(callback: typeof notify) {
               notify = callback;
@@ -863,21 +1577,26 @@ test("remeasures async previews and native class resets without observing its ow
     requestMeasure: (measurement: Measurement) =>
       measurements.push(measurement),
   };
-  const plugin = new NestedCodeBlockLayoutPluginValue(
-    view as never,
-    names(BEGIN),
-  );
-  frames[0](0);
-  measurements[0].write(measurements[0].read());
-  notify([{ target: line, type: "attributes" }]);
-  expect(frames).toHaveLength(1);
+  const plugin = mountLayout(view as never, names(BEGIN));
+
+  runMeasurement(measurements[0]);
+  notify([{ target: line, type: "attributes", oldValue: line.className }]);
+  expect(measurements).toHaveLength(1);
+  const oldValue = line.className;
   line.classList.remove("bullet-plugin-nested-code-block");
-  notify([{ target: line, type: "attributes" }]);
-  expect(frames).toHaveLength(2);
-  frames[1](0);
-  measurements[1].write(measurements[1].read());
+  notify([{ target: line, type: "attributes", oldValue }]);
+  expect(measurements).toHaveLength(1);
+  drivers.get(plugin)!.render();
+  expect(line.style.getPropertyValue("--bullet-nested-code-block-inset")).toBe(
+    "64px",
+  );
+  line.classList.add("HyperMD-codeblock-extra");
+  notify([{ target: line, type: "attributes", oldValue }]);
+  expect(measurements).toHaveLength(2);
+
+  runMeasurement(measurements[1]);
   notify([{ target: { nodeType: 1, closest: () => ({}) }, type: "childList" }]);
-  expect(frames).toHaveLength(3);
+  expect(measurements).toHaveLength(3);
   expect(observe).toHaveBeenCalledWith(
     view.contentDOM,
     expect.objectContaining({
@@ -889,7 +1608,7 @@ test("remeasures async previews and native class resets without observing its ow
   plugin.destroy();
   expect(disconnect).toHaveBeenCalledTimes(1);
   notify([{ target: view.contentDOM, type: "childList" }]);
-  expect(frames).toHaveLength(3);
+  expect(measurements).toHaveLength(3);
 });
 
 test("derives an offscreen opening from the rendered continuation indentation", () => {
@@ -898,7 +1617,7 @@ test("derives an offscreen opening from the rendered continuation indentation", 
     position: state.doc.line(2).from,
   });
   const measurements: Measurement[] = [];
-  const frames: FrameRequestCallback[] = [];
+
   const view = {
     state,
     visibleRanges: [{ from: state.doc.line(2).from, to: state.doc.length }],
@@ -908,15 +1627,15 @@ test("derives an offscreen opening from the rendered continuation indentation", 
       expect(position).toBe(state.doc.line(2).from + 6);
       return { left: 148.5, right: 148.5 };
     },
-    dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+    dom: { ownerDocument: { defaultView: {} } },
     requestMeasure: (measurement: Measurement) =>
       measurements.push(measurement),
   };
 
-  new NestedCodeBlockLayoutPluginValue(view as never, names(BEGIN, CONTENT));
-  frames[0](0);
+  mountLayout(view as never, names(BEGIN, CONTENT));
+
   const measurement = measurements[0];
-  measurement.write(measurement.read());
+  runMeasurement(measurement);
 
   expect(
     content.style.getPropertyValue("--bullet-nested-code-block-inset"),
@@ -937,21 +1656,21 @@ test("measures inline-start from the right edge in RTL", () => {
     },
   );
   const measurements: Measurement[] = [];
-  const frames: FrameRequestCallback[] = [];
+
   const view = {
     state,
     visibleRanges: [{ from: 0, to: state.doc.length }],
     contentDOM: { querySelectorAll: () => [opening] },
     posAtDOM: () => 0,
-    dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+    dom: { ownerDocument: { defaultView: {} } },
     requestMeasure: (measurement: Measurement) =>
       measurements.push(measurement),
   };
 
-  new NestedCodeBlockLayoutPluginValue(view as never, names(BEGIN));
-  frames[0](0);
+  mountLayout(view as never, names(BEGIN));
+
   const measurement = measurements[0];
-  measurement.write(measurement.read());
+  runMeasurement(measurement);
 
   expect(
     opening.style.getPropertyValue("--bullet-nested-code-block-inset"),
@@ -965,7 +1684,7 @@ test("falls back to the document position when the opening marker DOM is transie
     { position: 0 },
   );
   const measurements: Measurement[] = [];
-  const frames: FrameRequestCallback[] = [];
+
   const view = {
     state,
     visibleRanges: [{ from: 0, to: state.doc.length }],
@@ -975,15 +1694,15 @@ test("falls back to the document position when the opening marker DOM is transie
       expect(position).toBe(2);
       return { left: 140, right: 140 };
     },
-    dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+    dom: { ownerDocument: { defaultView: {} } },
     requestMeasure: (measurement: Measurement) =>
       measurements.push(measurement),
   };
 
-  new NestedCodeBlockLayoutPluginValue(view as never, names(BEGIN));
-  frames[0](0);
+  mountLayout(view as never, names(BEGIN));
+
   const measurement = measurements[0];
-  measurement.write(measurement.read());
+  runMeasurement(measurement);
 
   expect(
     opening.style.getPropertyValue("--bullet-nested-code-block-inset"),
@@ -997,22 +1716,19 @@ test("does not reapply a queued measurement after destruction", () => {
     { position: 0, openingContentLeft: 160 },
   );
   const measurements: Measurement[] = [];
-  const frames: FrameRequestCallback[] = [];
+
   const view = {
     state,
     visibleRanges: [{ from: 0, to: state.doc.length }],
     contentDOM: { querySelectorAll: () => [opening] },
     posAtDOM: () => 0,
-    dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+    dom: { ownerDocument: { defaultView: {} } },
     requestMeasure: (measurement: Measurement) =>
       measurements.push(measurement),
   };
 
-  const plugin = new NestedCodeBlockLayoutPluginValue(
-    view as never,
-    names(BEGIN),
-  );
-  frames[0](0);
+  const plugin = mountLayout(view as never, names(BEGIN));
+
   const measurement = measurements[0];
   const measured = measurement.read();
   plugin.destroy();
@@ -1036,7 +1752,7 @@ test("maps a known long-block opening across ordinary content edits", () => {
   const content = makeLine(["HyperMD-codeblock", "HyperMD-list-line"], {
     position: lastLine.from,
   });
-  const frames: FrameRequestCallback[] = [];
+
   const lineNameAt = jest.fn((lineNumber: number) =>
     lineNumber === 1 ? BEGIN : CONTENT,
   );
@@ -1046,14 +1762,10 @@ test("maps a known long-block opening across ordinary content edits", () => {
     contentDOM: { querySelectorAll: () => [content] },
     posAtDOM: (element: { position: number }) => element.position,
     coordsAtPos: () => ({ left: 130, right: 130 }),
-    dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+    dom: { ownerDocument: { defaultView: {} } },
     requestMeasure: jest.fn(),
   };
-  const plugin = new NestedCodeBlockLayoutPluginValue(
-    view as never,
-    lineNameAt,
-  );
-  frames[0](0);
+  const plugin = mountLayout(view as never, lineNameAt);
 
   const emptyChanges = state.update({}).changes;
   for (let lineNumber = 10; lineNumber < 500; lineNumber += 10) {
@@ -1061,6 +1773,7 @@ test("maps a known long-block opening across ordinary content edits", () => {
     view.visibleRanges = [{ from: viewportLine.from, to: viewportLine.to }];
     plugin.update({
       startState: state,
+      transactions: [],
       state,
       view,
       changes: emptyChanges,
@@ -1072,6 +1785,7 @@ test("maps a known long-block opening across ordinary content edits", () => {
   view.visibleRanges = [{ from: lastLine.from, to: lastLine.to }];
   plugin.update({
     startState: state,
+    transactions: [],
     state,
     view,
     changes: emptyChanges,
@@ -1089,6 +1803,7 @@ test("maps a known long-block opening across ordinary content edits", () => {
   view.visibleRanges = [{ from: nextLastLine.from, to: nextLastLine.to }];
   plugin.update({
     startState: state,
+    transactions: [transaction],
     state: transaction.state,
     view,
     changes: transaction.changes,
@@ -1175,7 +1890,7 @@ test("uses a visible continuation to inset preceding empty code rows when the op
   const content = makeLine(["HyperMD-codeblock", "HyperMD-list-line"], {
     position: state.doc.line(4).from,
   });
-  const frames: FrameRequestCallback[] = [];
+
   const measurements: Measurement[] = [];
   const view = {
     state,
@@ -1183,16 +1898,16 @@ test("uses a visible continuation to inset preceding empty code rows when the op
     contentDOM: { querySelectorAll: () => [blank, content] },
     posAtDOM: (element: { position: number }) => element.position,
     coordsAtPos: () => ({ left: 148.5, right: 148.5 }),
-    dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+    dom: { ownerDocument: { defaultView: {} } },
     requestMeasure: (measurement: Measurement) =>
       measurements.push(measurement),
   };
-  const plugin = new NestedCodeBlockLayoutPluginValue(
+  const plugin = mountLayout(
     view as never,
     names(BEGIN, CONTENT, "HyperMD-codeblock", CONTENT, END),
   );
-  frames[0](0);
-  measurements[0].write(measurements[0].read());
+
+  runMeasurement(measurements[0]);
 
   for (const element of [blank, content]) {
     expect(element.classList.contains("bullet-plugin-nested-code-block")).toBe(
@@ -1251,8 +1966,8 @@ test.each(["-", "123."])(
       return element;
     };
     Object.assign(doc, { win: { createDiv: create, createSpan: create } });
-    const frames: FrameRequestCallback[] = [];
-    Object.assign(doc.defaultView, makeAnimationWindow(frames));
+
+    Object.assign(doc.defaultView, {});
     const measurements: Measurement[] = [];
     const view = {
       state,
@@ -1277,12 +1992,9 @@ test.each(["-", "123."])(
       contains: (node: unknown) => node === prefixTextNode,
     };
     Object.assign(content, { querySelectorAll: () => [indent] });
-    const plugin = new NestedCodeBlockLayoutPluginValue(
-      view as never,
-      names(BEGIN, CONTENT),
-    );
-    frames[0](0);
-    const measure = () => measurements[0].write(measurements[0].read());
+    const plugin = mountLayout(view as never, names(BEGIN, CONTENT));
+
+    const measure = () => runMeasurement(measurements[0]);
     measure();
     expect(
       content.style.getPropertyValue("--bullet-nested-code-block-inset"),
@@ -1307,7 +2019,7 @@ test.each(["", "\t", " "])(
       position: state.doc.line(3).from,
     });
     Object.assign(blank, { querySelectorAll: () => [] });
-    const frames: FrameRequestCallback[] = [];
+
     const measurements: Measurement[] = [];
     const created: Array<{
       className: string;
@@ -1317,7 +2029,6 @@ test.each(["", "\t", " "])(
     let indentWidth = zoomIndent ? 36 : 72;
     const doc = {
       defaultView: {
-        ...makeAnimationWindow(frames),
         getComputedStyle: () => ({ marginInlineEnd: "4.8px" }),
       },
       createTextNode: (text: string) => ({ textContent: text }),
@@ -1356,13 +2067,13 @@ test.each(["", "\t", " "])(
       requestMeasure: (measurement: Measurement) =>
         measurements.push(measurement),
     };
-    const plugin = new NestedCodeBlockLayoutPluginValue(
+    const plugin = mountLayout(
       view as never,
       names(BEGIN, null, null, END),
       () => (zoomIndent ? { indent: zoomIndent } : null),
     );
-    frames[0](0);
-    const measure = () => measurements[0].write(measurements[0].read());
+
+    const measure = () => runMeasurement(measurements[0]);
     measure();
     expect(
       blank.style.getPropertyValue("--bullet-nested-code-block-inset"),
@@ -1420,9 +2131,9 @@ test("preserves unchanged code width probes when one source character changes", 
     created.push(element);
     return element;
   };
-  const frames: FrameRequestCallback[] = [];
+
   const doc = {
-    defaultView: makeAnimationWindow(frames),
+    defaultView: {},
     win: { createDiv: create, createSpan: create },
     createTextNode: (text: string) =>
       Object.assign(create(), { textContent: text }),
@@ -1435,8 +2146,9 @@ test("preserves unchanged code width probes when one source character changes", 
     state,
     visibleRanges: [{ from: 0, to: state.doc.length }],
     dom: { ownerDocument: doc, appendChild: host.appendChild },
+    requestMeasure: jest.fn(),
   };
-  const plugin = new NestedCodeBlockLayoutPluginValue(
+  const plugin = mountLayout(
     view as never,
     names(BEGIN, CONTENT, CONTENT, CONTENT, END),
   );
@@ -1453,6 +2165,8 @@ test("preserves unchanged code width probes when one source character changes", 
     view.state = transaction.state;
     view.visibleRanges = [{ from: 0, to: transaction.state.doc.length }];
     plugin.update({
+      startState: transaction.startState,
+      transactions: [transaction],
       state: transaction.state,
       docChanged: true,
       changes: transaction.changes,
@@ -1502,7 +2216,7 @@ test.each([
       selector === ".bullet-plugin-nested-code-block-content"
         ? { getBoundingClientRect: () => ({ left: 164.406, right: 190 }) }
         : query(selector)) as never;
-    const frames: FrameRequestCallback[] = [];
+
     const measurements: Measurement[] = [];
     const view = {
       state,
@@ -1512,22 +2226,19 @@ test.each([
       coordsAtPos: () => {
         throw Error("Padded cursor coordinates must not move the background");
       },
-      dom: { ownerDocument: { defaultView: makeAnimationWindow(frames) } },
+      dom: { ownerDocument: { defaultView: {} } },
       requestMeasure: (measurement: Measurement) =>
         measurements.push(measurement),
     };
-    const plugin = new NestedCodeBlockLayoutPluginValue(
-      view as never,
-      names(BEGIN, CONTENT),
-    );
-    frames[0](0);
-    const measure = () => measurements[0].write(measurements[0].read());
+    const plugin = mountLayout(view as never, names(BEGIN, CONTENT));
+
+    const measure = () => runMeasurement(measurements[0]);
     measure();
     const padding = body.style.getPropertyValue(
       "--bullet-code-content-padding",
     );
     expect(padding).toBe(
-      `calc(100.22200000000001px - 88.406px + ${residual}ch + var(--size-4-4))`,
+      `calc(100.22px - 88.41px + ${residual}ch + var(--size-4-4))`,
     );
     measure();
     expect(body.style.getPropertyValue("--bullet-code-content-padding")).toBe(
@@ -1535,7 +2246,7 @@ test.each([
     );
     expect(
       body.style.getPropertyValue("--bullet-nested-code-block-inset"),
-    ).toBe("100.22200000000001px");
+    ).toBe("100.22px");
     plugin.destroy();
     expect(body.style.getPropertyValue("--bullet-code-content-padding")).toBe(
       "",
@@ -1570,10 +2281,9 @@ function makeWidthFixture(
       width: number;
     };
   };
-  const frames: FrameRequestCallback[] = [];
+
   const doc = {
     defaultView: {
-      ...makeAnimationWindow(frames),
       getComputedStyle: () => ({ marginInlineEnd: "0px" }),
     },
     createRange: () => {
@@ -1722,19 +2432,23 @@ function makeWidthFixture(
     requestMeasure: (measurement: Measurement) =>
       measurements.push(measurement),
   };
-  const plugin = new NestedCodeBlockLayoutPluginValue(
+  const plugin = mountLayout(
     view as never,
     names(BEGIN, CONTENT, CONTENT, END, null),
     () => (hidden ? { indent: hidden } : null),
   );
-  frames[0](0);
+
   const measure = () => {
-    measurements[0].write(measurements[0].read());
+    runMeasurement(measurements[0]);
     return first.style.getPropertyValue("--bullet-nested-code-block-end");
   };
   return {
     plugin,
     measure,
+    view,
+    opening,
+    first,
+    second,
     updateOpening: (next: string) => {
       const transaction = view.state.update({
         changes: { from: 0, to: view.state.doc.line(1).to, insert: next },
@@ -1744,6 +2458,8 @@ function makeWidthFixture(
       first.position = view.state.doc.line(2).from;
       second.position = view.state.doc.line(3).from;
       plugin.update({
+        startState: transaction.startState,
+        transactions: [transaction],
         state: view.state,
         docChanged: true,
         changes: transaction.changes,
@@ -1752,6 +2468,28 @@ function makeWidthFixture(
     },
   };
 }
+
+test("retains full-source width and updates offscreen cached rows when visible code grows", () => {
+  const fixture = makeWidthFixture("- ```js", "  hi", "  abcdefghij");
+  expect(fixture.measure()).toContain("calc(104px + 2 * var(--size-4-4))");
+  Object.assign(fixture.view.contentDOM, {
+    querySelectorAll: () => [fixture.opening, fixture.first],
+  });
+  expect(fixture.measure()).toContain("calc(104px + 2 * var(--size-4-4))");
+  const from = fixture.view.state.doc.line(2).to;
+  drivers
+    .get(fixture.plugin)!
+    .dispatch({ changes: { from, insert: "abcdefghijklmnop" } });
+  const second = fixture.view.state.doc.line(3);
+  expect(lineAttributes(fixture.plugin, second.from).style).toContain(
+    "calc(104px + 2 * var(--size-4-4))",
+  );
+  expect(fixture.measure()).toContain("calc(168px + 2 * var(--size-4-4))");
+  expect(lineAttributes(fixture.plugin, second.from).style).toContain(
+    "calc(168px + 2 * var(--size-4-4))",
+  );
+  fixture.plugin.destroy();
+});
 
 test.each([
   ["- ```js", "  hello", "    nested", ""],

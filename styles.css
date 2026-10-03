@@ -1,6 +1,8 @@
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line:where(.HyperMD-codeblock.HyperMD-list-line):not(.bullet-plugin-nested-code-block) {
+  .cm-line:where(.HyperMD-codeblock.HyperMD-list-line):not(
+    .bullet-plugin-nested-code-block
+  ) {
   padding-block: 0;
 }
 
@@ -169,6 +171,9 @@ body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-nested-code-block {
   padding-block: 0;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
   background-color: transparent;
   isolation: isolate;
 }
@@ -181,10 +186,7 @@ body.bullet-plugin-better-lists
   z-index: -1;
   inset-block: 0;
   inset-inline-start: var(--bullet-nested-code-block-inset);
-  inset-inline-end: max(
-    0px,
-    calc(100% - var(--bullet-nested-code-block-end, 100%))
-  );
+  inset-inline-end: calc(100% - var(--bullet-nested-code-block-end, 100%));
   background-color: var(--code-background);
 }
 
