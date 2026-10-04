@@ -1,10 +1,17 @@
+import { history, redo, undo } from "@codemirror/commands";
 import {
   foldEffect,
   foldable,
   foldedRanges,
   unfoldEffect,
 } from "@codemirror/language";
-import { EditorSelection, Text } from "@codemirror/state";
+import {
+  EditorSelection,
+  EditorState,
+  Text,
+  Transaction,
+  TransactionSpec,
+} from "@codemirror/state";
 import { Decoration, DecorationSet } from "@codemirror/view";
 
 import { readFileSync } from "node:fs";
@@ -532,6 +539,8 @@ describe("GuideFoldingPluginValue hover measurement", () => {
 });
 
 describe("GuideFoldingPluginValue decorations", () => {
+  const readers = new WeakMap<EditorState, Reader>();
+
   function positions(decorations: ReturnType<typeof Decoration.set>) {
     const result: number[] = [];
     for (let cursor = decorations.iter(); cursor.value; cursor.next()) {
@@ -562,14 +571,29 @@ describe("GuideFoldingPluginValue decorations", () => {
       querySelectorAll: jest.fn().mockReturnValue([]),
     };
     const view = {
-      state: { doc: Text.of(text.split("\n")) },
+      state: EditorState.create({ doc: text, extensions: history() }),
       contentDOM,
       dispatch: jest.fn(),
       requestMeasure: jest.fn(),
     };
     const parser = new Parser(makeLogger(), makeSettings());
-    let editor = makeEditor({ text, cursor: { line: 0, ch: 0 } });
-    mockGetEditorFromState.mockImplementation(() => editor);
+    let lineReads = 0;
+    const editor: Reader = {
+      getCursor: () => ({ line: 0, ch: 0 }),
+      getLine: (line) => {
+        lineReads++;
+        return view.state.doc.line(line + 1).text;
+      },
+      lastLine: () => view.state.doc.lines - 1,
+      listSelections: () => [
+        { anchor: { line: 0, ch: 0 }, head: { line: 0, ch: 0 } },
+      ],
+      getAllFoldedLines: () => [],
+    };
+    readers.set(view.state, editor);
+    mockGetEditorFromState.mockImplementation((state) =>
+      state instanceof EditorState ? readers.get(state) : null,
+    );
     const PluginValueWithView = GuideFoldingPluginValue as unknown as new (
       settings: unknown,
       parser: unknown,
@@ -580,15 +604,44 @@ describe("GuideFoldingPluginValue decorations", () => {
       update(update: unknown): void;
     };
     const pluginValue = new PluginValueWithView(settings, parser, view);
+    const dispatch = (
+      transaction: Transaction,
+      ...following: Transaction[]
+    ) => {
+      view.state = following.length
+        ? following[following.length - 1].state
+        : transaction.state;
+      readers.set(view.state, editor);
+      const changes = following.reduce(
+        (composed, next) => composed.compose(next.changes),
+        transaction.changes,
+      );
+      pluginValue.update({
+        view,
+        state: view.state,
+        startState: transaction.startState,
+        changes,
+        transactions: [transaction, ...following],
+        docChanged: !changes.empty,
+      });
+      return transaction;
+    };
 
     return {
       pluginValue,
       settings,
       settingsCallback: settingsCallbacks[0],
       view,
+      dispatch,
+      edit: (...specs: TransactionSpec[]) =>
+        dispatch(view.state.update(...specs)),
+      getLineReads: () => lineReads,
       replaceText(nextText: string) {
-        editor = makeEditor({ text: nextText, cursor: { line: 0, ch: 0 } });
-        view.state.doc = Text.of(nextText.split("\n"));
+        dispatch(
+          view.state.update({
+            changes: { from: 0, to: view.state.doc.length, insert: nextText },
+          }),
+        );
       },
     };
   }
@@ -816,11 +869,398 @@ describe("GuideFoldingPluginValue decorations", () => {
     const fixture = makeFixture("- parent\n    - child");
     fixture.replaceText("# Heading\n- parent\n    - child");
 
-    fixture.pluginValue.update({ docChanged: true });
-
     expect(positions(fixture.pluginValue.decorations)).toEqual([10, 19]);
     fixture.pluginValue.destroy();
   });
+
+  function snapshot(fixture: ReturnType<typeof makeFixture>) {
+    const offsets = positions(fixture.pluginValue.decorations);
+    return renderOuterSegments(fixture.pluginValue.decorations).map(
+      ({ dataset }, index) => ({
+        from: offsets[index],
+        chunk: dataset.chunkId,
+        actionable: dataset.actionable,
+      }),
+    );
+  }
+
+  function expectFreshReconstruction(fixture: ReturnType<typeof makeFixture>) {
+    const fresh = makeFixture(fixture.view.state.doc.toString());
+    expect(snapshot(fixture)).toEqual(snapshot(fresh));
+    fresh.pluginValue.destroy();
+  }
+
+  test.each([100, 10000])(
+    "maps an ordinary edit without rereading a %i-row list",
+    (rows) => {
+      const fixture = makeFixture(Array(rows).fill("- item").join("\n"));
+      const beforeReads = fixture.getLineReads();
+
+      fixture.edit({ changes: { from: 6, insert: "X" } });
+
+      expect(positions(fixture.pluginValue.decorations).slice(0, 3)).toEqual([
+        0, 8, 15,
+      ]);
+      expect(fixture.pluginValue.decorations.size).toBe(rows);
+      expect(fixture.view.state.doc.line(1).text).toBe("- itemX");
+      expect(fixture.getLineReads() - beforeReads).toBeLessThan(20);
+      fixture.pluginValue.destroy();
+    },
+  );
+
+  test("maps every guide while preserving chunk metadata and undo or redo", () => {
+    const fixture = makeFixture("- a\n\t- b\n- c");
+    const original = [
+      { from: 0, chunk: "0:2", actionable: "true" },
+      { from: 4, chunk: "0:2", actionable: "true" },
+      { from: 9, chunk: "0:2", actionable: "true" },
+    ];
+    const edited = [
+      { from: 0, chunk: "0:2", actionable: "true" },
+      { from: 5, chunk: "0:2", actionable: "true" },
+      { from: 10, chunk: "0:2", actionable: "true" },
+    ];
+
+    fixture.edit({ changes: { from: 3, insert: "X" } });
+    expect(snapshot(fixture)).toEqual(edited);
+    expectFreshReconstruction(fixture);
+
+    expect(
+      undo({ state: fixture.view.state, dispatch: fixture.dispatch }),
+    ).toBe(true);
+    expect(fixture.view.state.doc.toString()).toBe("- a\n\t- b\n- c");
+    expect(snapshot(fixture)).toEqual(original);
+    expectFreshReconstruction(fixture);
+
+    expect(
+      redo({ state: fixture.view.state, dispatch: fixture.dispatch }),
+    ).toBe(true);
+    expect(fixture.view.state.doc.toString()).toBe("- aX\n\t- b\n- c");
+    expect(snapshot(fixture)).toEqual(edited);
+    expectFreshReconstruction(fixture);
+    fixture.pluginValue.destroy();
+  });
+
+  test.each([
+    ["task", "- [ ] a\n\t- b", 7, "X", "- [ ] aX\n\t- b", [0, 9]],
+    ["numbered", "10. a\n\t11. b", 5, "X", "10. aX\n\t11. b", [0, 7]],
+    ["tab separator", "-\ta\n\t- b", 3, "X", "-\taX\n\t- b", [0, 5]],
+    ["empty leaf", "- \n- b", 2, "a", "- a\n- b", [0, 4]],
+    ["bare marker", "-\n- b", 1, " a", "- a\n- b", [0, 4]],
+    ["thematic-looking payload", "- \n- b", 2, "- -", "- - -\n- b", [0, 6]],
+    [
+      "list-looking code row",
+      "- ```\n  - code\n  ```\n- b",
+      14,
+      "X",
+      "- ```\n  - codeX\n  ```\n- b",
+      [0, 6, 16, 22],
+    ],
+  ] as const)(
+    "preserves guides when typing in a %s",
+    (_name, before, from, insert, after, expectedPositions) => {
+      const fixture = makeFixture(before);
+      fixture.edit({ changes: { from, insert } });
+      expect(fixture.view.state.doc.toString()).toBe(after);
+      expect(positions(fixture.pluginValue.decorations)).toEqual(
+        expectedPositions,
+      );
+      expectFreshReconstruction(fixture);
+      fixture.pluginValue.destroy();
+    },
+  );
+
+  test("maps multiple payload edits in one transaction", () => {
+    const fixture = makeFixture("- a\n\t- b\n- c");
+    fixture.edit({
+      changes: [
+        { from: 3, insert: "XX" },
+        { from: 8, insert: "Y" },
+      ],
+    });
+    expect(fixture.view.state.doc.toString()).toBe("- aXX\n\t- bY\n- c");
+    expect(snapshot(fixture)).toEqual([
+      { from: 0, chunk: "0:2", actionable: "true" },
+      { from: 6, chunk: "0:2", actionable: "true" },
+      { from: 12, chunk: "0:2", actionable: "true" },
+    ]);
+    expectFreshReconstruction(fixture);
+    fixture.pluginValue.destroy();
+  });
+
+  test.each([
+    [0, 3, "- alpha", "- alpha\n\t- b\n- c", [0, 8, 13]],
+    [4, 8, "\t- beta", "- a\n\t- beta\n- c", [0, 4, 12]],
+  ] as const)(
+    "preserves a guide at the start of a coarse line replacement at %i",
+    (from, to, insert, expectedText, expectedPositions) => {
+      const fixture = makeFixture("- a\n\t- b\n- c");
+      fixture.edit({ changes: { from, to, insert } });
+      expect(fixture.view.state.doc.toString()).toBe(expectedText);
+      expect(positions(fixture.pluginValue.decorations)).toEqual(
+        expectedPositions,
+      );
+      expectFreshReconstruction(fixture);
+      fixture.pluginValue.destroy();
+    },
+  );
+
+  test.each([
+    [
+      "newline insertion",
+      "- a\n- b",
+      3,
+      3,
+      "\n\t- x",
+      "- a\n\t- x\n- b",
+      [0, 4, 9],
+    ],
+    ["newline deletion", "- a\n- b", 3, 4, "", "- a- b", [0]],
+    ["indentation", "- a\n\t- b", 4, 5, "", "- a\n- b", [0, 4]],
+    ["number width", "9. a\n\t- b", 0, 1, "10", "10. a\n\t- b", [0, 6]],
+    ["heading", "- a\n- b", 0, 1, "#", "# a\n- b", [4]],
+    ["separator", "- a\n\n- b", 4, 4, "- x", "- a\n- x\n- b", [0, 4, 8]],
+    [
+      "attached fence",
+      "- abc\n  - b\n  ```\n- c",
+      2,
+      5,
+      "```",
+      "- ```\n  - b\n  ```\n- c",
+      [0, 6, 12, 18],
+    ],
+    [
+      "continuation fence",
+      "- a\n  abc\n  - b\n  ```\n- c",
+      6,
+      9,
+      "```",
+      "- a\n  ```\n  - b\n  ```\n- c",
+      [0, 4, 10, 16, 22],
+    ],
+    [
+      "fence removal",
+      "- ```\n  text\n  ```",
+      2,
+      5,
+      "abc",
+      "- abc\n  text\n  ```",
+      [0, 6, 13],
+    ],
+    [
+      "continuation gap",
+      "- a\n  first\n  \n  second\n- b",
+      12,
+      14,
+      "",
+      "- a\n  first\n\n  second\n- b",
+      [0, 4, 22],
+    ],
+  ] as const)(
+    "reconstructs the right chunks after %s",
+    (_name, before, from, to, insert, after, expectedPositions) => {
+      const fixture = makeFixture(before);
+      fixture.edit({ changes: { from, to, insert } });
+      expect(fixture.view.state.doc.toString()).toBe(after);
+      expect(positions(fixture.pluginValue.decorations)).toEqual(
+        expectedPositions,
+      );
+      expectFreshReconstruction(fixture);
+      fixture.pluginValue.destroy();
+    },
+  );
+
+  test("rebuilds boundaries when inserted and removed newlines cancel", () => {
+    const fixture = makeFixture("- a\n- b\n- c");
+    fixture.edit({
+      changes: [
+        { from: 2, insert: "x\n- " },
+        { from: 7, to: 8, insert: "" },
+      ],
+    });
+    expect(fixture.view.state.doc.toString()).toBe("- x\n- a\n- b- c");
+    expect(snapshot(fixture)).toEqual([
+      { from: 0, chunk: "0:2", actionable: "false" },
+      { from: 4, chunk: "0:2", actionable: "false" },
+      { from: 8, chunk: "0:2", actionable: "false" },
+    ]);
+    expectFreshReconstruction(fixture);
+    fixture.pluginValue.destroy();
+  });
+
+  test("composes changes from sequential transactions before mapping guides", () => {
+    const fixture = makeFixture("- a\n\t- b\n- c");
+    const first = fixture.view.state.update({
+      changes: { from: 3, insert: "XX" },
+    });
+    const second = first.state.update({
+      changes: { from: first.newDoc.length, insert: "Y" },
+    });
+    fixture.dispatch(first, second);
+
+    expect(fixture.view.state.doc.toString()).toBe("- aXX\n\t- b\n- cY");
+    expect(snapshot(fixture)).toEqual([
+      { from: 0, chunk: "0:2", actionable: "true" },
+      { from: 6, chunk: "0:2", actionable: "true" },
+      { from: 11, chunk: "0:2", actionable: "true" },
+    ]);
+    expectFreshReconstruction(fixture);
+    fixture.pluginValue.destroy();
+  });
+
+  test("builds guides after editor information becomes available", () => {
+    mockGetEditorFromState.mockReturnValueOnce(null);
+    const fixture = makeFixture("- a\n\t- b");
+    expect(positions(fixture.pluginValue.decorations)).toEqual([]);
+
+    fixture.edit({ changes: { from: 3, insert: "X" } });
+
+    expect(snapshot(fixture)).toEqual([
+      { from: 0, chunk: "0:1", actionable: "true" },
+      { from: 5, chunk: "0:1", actionable: "true" },
+    ]);
+    expectFreshReconstruction(fixture);
+    fixture.pluginValue.destroy();
+  });
+
+  test("matches fresh chunks through alternating payload and structural edits", () => {
+    const fixture = makeFixture("- a\n\t- b\n- c");
+    const steps = [
+      {
+        from: 3,
+        to: 3,
+        insert: "X",
+        text: "- aX\n\t- b\n- c",
+        guides: [
+          [0, "0:2", "true"],
+          [5, "0:2", "true"],
+          [10, "0:2", "true"],
+        ],
+      },
+      {
+        from: 10,
+        to: 10,
+        insert: "\n",
+        text: "- aX\n\t- b\n\n- c",
+        guides: [
+          [0, "0:1", "true"],
+          [5, "0:1", "true"],
+          [11, "3:3", "false"],
+        ],
+      },
+      {
+        from: 14,
+        to: 14,
+        insert: "Y",
+        text: "- aX\n\t- b\n\n- cY",
+        guides: [
+          [0, "0:1", "true"],
+          [5, "0:1", "true"],
+          [11, "3:3", "false"],
+        ],
+      },
+      {
+        from: 5,
+        to: 6,
+        insert: "",
+        text: "- aX\n- b\n\n- cY",
+        guides: [
+          [0, "0:1", "false"],
+          [5, "0:1", "false"],
+          [10, "3:3", "false"],
+        ],
+      },
+      {
+        from: 9,
+        to: 9,
+        insert: "# h",
+        text: "- aX\n- b\n# h\n- cY",
+        guides: [
+          [0, "0:1", "false"],
+          [5, "0:1", "false"],
+          [13, "3:3", "false"],
+        ],
+      },
+      {
+        from: 9,
+        to: 13,
+        insert: "",
+        text: "- aX\n- b\n- cY",
+        guides: [
+          [0, "0:2", "false"],
+          [5, "0:2", "false"],
+          [9, "0:2", "false"],
+        ],
+      },
+      {
+        from: 9,
+        to: 10,
+        insert: "10.",
+        text: "- aX\n- b\n10. cY",
+        guides: [
+          [0, "0:2", "false"],
+          [5, "0:2", "false"],
+          [9, "0:2", "false"],
+        ],
+      },
+    ];
+    for (const { from, to, insert, text, guides } of steps) {
+      fixture.edit({ changes: { from, to, insert } });
+      expect(fixture.view.state.doc.toString()).toBe(text);
+      expect(
+        snapshot(fixture).map(({ from, chunk, actionable }) => [
+          from,
+          chunk,
+          actionable,
+        ]),
+      ).toEqual(guides);
+      expectFreshReconstruction(fixture);
+    }
+    fixture.pluginValue.destroy();
+  });
+
+  test.each([7, 12345, 9001])(
+    "matches fresh reconstruction through seeded edits with seed %i",
+    (initialSeed) => {
+      const initial = "- alpha\n\t- beta\n- gamma";
+      const fixture = makeFixture(initial);
+      expect(snapshot(fixture)).toEqual([
+        { from: 0, chunk: "0:2", actionable: "true" },
+        { from: 8, chunk: "0:2", actionable: "true" },
+        { from: 16, chunk: "0:2", actionable: "true" },
+      ]);
+      let seed = initialSeed;
+      const next = () => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return seed;
+      };
+      const inserted = [
+        "x",
+        " ",
+        "\t",
+        "- ",
+        "\n",
+        "# ",
+        "```",
+        "~~~",
+        "[ ] ",
+        "10.",
+      ];
+      for (let index = 0; index < 80; index++) {
+        if (index % 8 === 0) fixture.replaceText(initial);
+        const before = fixture.view.state.doc.toString();
+        const from = next() % (before.length + 1);
+        const to = Math.min(before.length, from + (next() % 4));
+        const insert = inserted[next() % inserted.length];
+        fixture.edit({ changes: { from, to, insert } });
+        expect(fixture.view.state.doc.toString()).toBe(
+          before.slice(0, from) + insert + before.slice(to),
+        );
+        expectFreshReconstruction(fixture);
+      }
+      fixture.pluginValue.destroy();
+    },
+  );
 
   test("refreshes decorations only when an outer visibility setting changes", () => {
     const fixture = makeFixture("- parent\n    - child");
@@ -2325,17 +2765,13 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const requests: Measurement[] = [];
     const view = {
       contentDOM,
-      state: {
-        doc: {
-          lineAt: jest.fn((offset: number) => ({ number: offset + 1 })),
-        },
-      },
-      posAtDOM: jest.fn((element: unknown) => {
+      state: EditorState.create({ doc: outerRoot.print() }),
+      posAtDOM: jest.fn((element: unknown): number => {
         const line = lineByElement.get(element);
         if (line === undefined) {
           throw new Error("Expected a mapped line element");
         }
-        return line;
+        return view.state.doc.line(line + 1).from;
       }),
       requestMeasure: jest.fn((request: Measurement) => {
         requests.push(request);
@@ -2428,6 +2864,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     currentEditor = innerEditor;
     const innerRoot = makeRoot({ editor: innerEditor });
     currentRoot = innerRoot;
+    view.state = EditorState.create({ doc: innerRoot.print() });
     const branchAlpha = makeGuideLine(["    ", "    "]);
     const leafAlpha = makeGuideLine(["    ", "    ", "    "]);
     const branchBeta = makeGuideLine(["    ", "    "]);
@@ -2632,7 +3069,23 @@ describe("GuideFoldingPluginValue guide interactions", () => {
 
     clickListener?.(makeEvent(replacedLeafAlpha.guides[1]).event);
     executeLatestMeasurement();
-    pluginValue.update({ docChanged: true });
+    const edit = view.state.update({
+      changes: { from: view.state.doc.length, insert: "X" },
+    });
+    view.state = edit.state;
+    currentEditor = makeEditor({
+      text: edit.newDoc.toString(),
+      cursor: { line: 0, ch: 0 },
+    });
+    currentRoot = makeRoot({ editor: currentEditor });
+    pluginValue.update({
+      docChanged: edit.docChanged,
+      startState: edit.startState,
+      state: edit.state,
+      changes: edit.changes,
+      transactions: [edit],
+      view,
+    });
     executeLatestMeasurement();
     expect(
       replacementSegments.some((guide) =>
@@ -2787,14 +3240,14 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       querySelectorAll,
     };
     const requests: Measurement[] = [];
-    const sourceEditor = makeEditor({
+    let sourceEditor = makeEditor({
       text: "- parent\n    - child\n- leaf",
       cursor: { line: 0, ch: 0 },
     });
     mockGetEditorFromState.mockReturnValue(sourceEditor);
     const view = {
       contentDOM,
-      state: { doc: Text.of(["- parent", "    - child", "- leaf"]) },
+      state: EditorState.create({ doc: "- parent\n    - child\n- leaf" }),
       dispatch: jest.fn(),
       requestMeasure: jest.fn((request: Measurement) => requests.push(request)),
     };
@@ -2982,7 +3435,23 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       ),
     ).toBe(true);
 
-    pluginValue.update({ docChanged: true });
+    const edit = view.state.update({
+      changes: { from: view.state.doc.line(1).to, insert: "X" },
+    });
+    view.state = edit.state;
+    sourceEditor = makeEditor({
+      text: edit.newDoc.toString(),
+      cursor: { line: 0, ch: 0 },
+    });
+    mockGetEditorFromState.mockReturnValue(sourceEditor);
+    pluginValue.update({
+      docChanged: edit.docChanged,
+      startState: edit.startState,
+      state: edit.state,
+      changes: edit.changes,
+      transactions: [edit],
+      view,
+    });
     executeLatestMeasurement();
     expect(
       outerGuides.some((guide) =>

@@ -73,6 +73,7 @@ const SELECTED_OUTER_LIST_GUIDE_END_CLASS =
   "bullet-plugin-selected-outer-list-guide-end";
 const SELECTED_OUTER_LIST_GUIDE_END_SELECTOR = `.${SELECTED_OUTER_LIST_GUIDE_END_CLASS}`;
 const CHUNK_LINE_ATTRIBUTE_RE = /^(0|[1-9]\d*)$/;
+const LIST_PREFIX_RE = /^[ \t]*(?:[-*+]|\d+\.)(?:[ \t]+|$)/;
 
 type GuideMeasurement = {
   indentGuides: Element[];
@@ -90,7 +91,6 @@ type SelectedGuide =
   | { kind: "outer"; chunkId: string };
 
 interface OuterListChunk {
-  root: Root;
   startLine: number;
   endLine: number;
   id: string;
@@ -103,12 +103,7 @@ interface GuideFoldTarget {
 }
 
 class OuterListGuideWidget extends WidgetType {
-  constructor(
-    private chunk: Pick<
-      OuterListChunk,
-      "id" | "startLine" | "endLine" | "actionable"
-    >,
-  ) {
+  constructor(private chunk: OuterListChunk) {
     super();
   }
 
@@ -217,6 +212,25 @@ function buildOuterListGuideDecorations(
   return Decoration.set(ranges, true);
 }
 
+function preservesOuterGuideStructure(update: ViewUpdate): boolean {
+  let preserved = true;
+  update.changes.iterChanges((fromA, toA, fromB, toB, inserted) => {
+    if (!preserved) return;
+    const before = update.startState.doc.lineAt(fromA);
+    const after = update.state.doc.lineAt(fromB);
+    const prefix = LIST_PREFIX_RE.exec(before.text)?.[0];
+    preserved =
+      inserted.lines === 1 &&
+      before.number === update.startState.doc.lineAt(toA).number &&
+      after.number === update.state.doc.lineAt(toB).number &&
+      prefix !== undefined &&
+      prefix === LIST_PREFIX_RE.exec(after.text)?.[0] &&
+      !/[`~]/.test(before.text) &&
+      !/[`~]/.test(after.text);
+  }, true);
+  return preserved;
+}
+
 function collectOuterListChunks(
   parser: Parser,
   editor: Reader,
@@ -259,7 +273,6 @@ function collectOuterListChunks(
     const startLine = root.getContentStart().line;
     const endLine = root.getContentEnd().line;
     return {
-      root,
       startLine,
       endLine,
       id: `${startLine}:${endLine}`,
@@ -550,8 +563,12 @@ export class GuideFoldingPluginValue implements PluginValue {
   update(update: ViewUpdate) {
     if (update.docChanged) {
       this.selectedGuide = null;
-      this.outerListChunks = null;
-      this.decorations = this.buildOuterDecorations();
+      if (this.outerListChunks && preservesOuterGuideStructure(update)) {
+        this.decorations = this.decorations.map(update.changes);
+      } else {
+        this.outerListChunks = null;
+        this.decorations = this.buildOuterDecorations();
+      }
     }
     this.scheduleGuideSynchronization();
   }
