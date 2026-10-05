@@ -1,10 +1,11 @@
 import { Plugin, editorInfoField } from "obsidian";
 
-import { history, redo, undo } from "@codemirror/commands";
+import { history, historyField, redo, undo } from "@codemirror/commands";
 import {
   EditorSelection,
   EditorState,
   Extension,
+  StateEffect,
   StateField,
   Transaction,
   TransactionSpec,
@@ -22,6 +23,7 @@ import {
   crossNoteHistory,
 } from "../CrossNoteMove";
 import { EditorSelectionsBehaviourOverride } from "../EditorSelectionsBehaviourOverride";
+import { selectionLayout } from "../selectionLayout";
 
 jest.mock(
   "obsidian",
@@ -169,6 +171,69 @@ describe("cursor correction across editors", () => {
     expect(source.state.selection.main.head).toBe(4);
     expect(feature.hasPendingSelectionAdjustment()).toBe(false);
     schedule.mockRestore();
+  });
+
+  test("selection layout refresh leaves an already scheduled cursor repair intact", async () => {
+    const { editor, feature } = await setup();
+    const source = editor("- Alpha");
+    const schedule = jest.spyOn(window, "setTimeout");
+    const cancel = jest.spyOn(window, "clearTimeout");
+    source.dispatch({ selection: { anchor: 0 } });
+    expect(schedule).toHaveBeenCalledTimes(1);
+    source.dispatch({
+      selection: source.state.selection,
+      filter: false,
+      annotations: [
+        selectionLayout.of(true),
+        Transaction.addToHistory.of(false),
+      ],
+    });
+    expect(schedule).toHaveBeenCalledTimes(1);
+    expect(cancel).not.toHaveBeenCalled();
+    expect(feature.hasPendingSelectionAdjustment()).toBe(true);
+    jest.runAllTimers();
+    expect(source.state.selection.main.head).toBe(2);
+    expect(feature.hasPendingSelectionAdjustment()).toBe(false);
+    schedule.mockRestore();
+    cancel.mockRestore();
+  });
+
+  test("selection layout refresh bypasses selection filters and leaves history unchanged", async () => {
+    const { editor, feature } = await setup();
+    const source = editor("- Alpha");
+    source.dispatch({
+      ...source.state.replaceSelection("X"),
+      userEvent: "input.type",
+    });
+    jest.runAllTimers();
+    const filter = jest.fn((transaction: Transaction) => transaction);
+    source.dispatch({
+      effects: StateEffect.appendConfig.of(
+        EditorState.transactionFilter.of(filter),
+      ),
+    });
+    filter.mockClear();
+    const before = source.state.field(historyField);
+    const selection = source.state.selection;
+    source.dispatch({
+      selection,
+      filter: false,
+      annotations: [
+        selectionLayout.of(true),
+        Transaction.addToHistory.of(false),
+      ],
+    });
+    expect(filter).not.toHaveBeenCalled();
+    expect(source.state.selection).toBe(selection);
+    expect(source.state.field(historyField)).toBe(before);
+    expect(feature.hasPendingSelectionAdjustment()).toBe(false);
+    expect(jest.getTimerCount()).toBe(0);
+    expect(undo(source)).toBe(true);
+    jest.runAllTimers();
+    expect(source.state.doc.toString()).toBe("- Alpha");
+    expect(redo(source)).toBe(true);
+    jest.runAllTimers();
+    expect(source.state.doc.toString()).toBe("- XAlpha");
   });
 
   test("keeps typing in the restored item's body after source Undo", async () => {

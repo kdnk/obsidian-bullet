@@ -6,12 +6,15 @@ import {
   ViewUpdate,
 } from "@codemirror/view";
 
-import { stableFoldScrollSnapshot } from "./FoldScroll";
+import {
+  captureFoldScrollCheckpoint,
+  restoreFoldScrollCheckpoint,
+} from "./FoldScroll";
 
 type Checkpoint = {
   doc: Text;
   width: number;
-  snapshot: ReturnType<EditorView["scrollSnapshot"]>;
+  snapshot: ReturnType<typeof captureFoldScrollCheckpoint>;
 };
 
 export class FoldScrollResizePluginValue implements PluginValue {
@@ -86,7 +89,9 @@ export class FoldScrollResizePluginValue implements PluginValue {
         width !== checkpoint.width
       ) {
         this.checkpoint = undefined;
-        this.view.dispatch({ effects: checkpoint.snapshot });
+        this.view.dispatch({
+          effects: restoreFoldScrollCheckpoint(this.view, checkpoint.snapshot),
+        });
         // Finish that queued snapshot in this layout turn, before repainting.
         this.view.lineBlockAtHeight(0);
         this.pendingIntent = false;
@@ -111,7 +116,7 @@ export class FoldScrollResizePluginValue implements PluginValue {
     return {
       doc: this.view.state.doc,
       width,
-      snapshot: stableFoldScrollSnapshot(this.view),
+      snapshot: captureFoldScrollCheckpoint(this.view),
     };
   }
 

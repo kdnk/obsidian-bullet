@@ -1821,6 +1821,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
         querySelector: jest.fn().mockReturnValue(null),
         querySelectorAll: jest.fn().mockReturnValue([]),
         style: { paddingBottom },
+        getBoundingClientRect: () => ({ top: 0, left: 0 }),
       },
       listeners,
     };
@@ -1835,6 +1836,8 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const { contentDOM, listeners } = makeListenerCapturingContentDOM("1000px");
     return {
       contentDOM,
+      plugin: () => null,
+      posAtCoords: () => null,
       defaultLineHeight: 24,
       documentPadding: { top: 0, bottom: 0 },
       documentTop: 0,
@@ -1854,6 +1857,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
           line: jest.fn((number: number) => lines[number - 1]),
           lineAt: jest.fn().mockReturnValue({ number: lineNumber + 1 }),
         },
+        facet: () => [],
         selection: { main: { head: -1 } },
       },
       lineBlockAt: jest.fn((from: number) => lines[from / 10]),
@@ -1937,6 +1941,8 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       makeListenerCapturingContentDOM("1138.5px");
     const view = {
       contentDOM,
+      plugin: () => null,
+      posAtCoords: () => null,
       defaultLineHeight: 24,
       documentPadding: { top: 0, bottom: 0 },
       documentTop: 0,
@@ -1959,6 +1965,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
           lines: 2,
           line: jest.fn((number: number) => lines[number - 1]),
         },
+        facet: () => [],
         selection: { main: { head: selectionHead } },
       },
       lineBlockAt: jest.fn((from: number) =>
@@ -2161,7 +2168,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       expect(view.dispatch).toHaveBeenCalledTimes(1);
     });
 
-    test("restores the standard scroll reserve before folding", () => {
+    test("leaves native editable padding unchanged when folding", () => {
       mockedFoldable.mockReturnValue({ from: 8, to: 20 });
       mockedFoldEffectOf.mockReturnValue("fold-8" as never);
       const { interaction, pluginValue, view } = makeTransactionFixture(5);
@@ -2169,7 +2176,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
 
       pluginValue.click(interaction.event, view);
 
-      expect(view.contentDOM.style.paddingBottom).toBe("1138.5px");
+      expect(view.contentDOM.style.paddingBottom).toBe("100px");
       expect(view.dispatch).toHaveBeenCalledTimes(1);
     });
 
@@ -3989,6 +3996,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       querySelector: jest.fn().mockReturnValue(null),
       querySelectorAll: jest.fn().mockReturnValue([]),
       style: { paddingBottom: "1000px" },
+      getBoundingClientRect: () => ({ top: 0, left: 0 }),
     };
     const PluginValueWithView = GuideFoldingPluginValue as unknown as new (
       settings: unknown,

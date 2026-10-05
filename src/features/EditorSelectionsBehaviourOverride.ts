@@ -4,6 +4,7 @@ import { EditorState, Transaction } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
 import { Feature } from "./Feature";
+import { selectionLayout } from "./selectionLayout";
 
 import {
   MyEditor,
@@ -111,6 +112,7 @@ export class EditorSelectionsBehaviourOverride implements Feature {
 
   private transactionExtender = (tr: Transaction): null => {
     if (
+      tr.annotation(selectionLayout) ||
       this.suppressSelectionAdjustments > 0 ||
       this.settings.keepCursorWithinContent === "never" ||
       !tr.selection

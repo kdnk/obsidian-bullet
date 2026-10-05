@@ -343,6 +343,7 @@ test("rejects a legacy sibling insertion and keeps the focused body editable", (
       state.doc.sliceString(offset(from), offset(to)),
     replaceRange: (...args: Parameters<MyEditor["replaceRange"]>) => {
       const view = {
+        plugin: () => null,
         get state() {
           return state;
         },
@@ -471,6 +472,7 @@ test("the zoom command accepts an empty bare marker at EOF", async () => {
   );
   await feature.load();
   const view = {
+    plugin: () => null,
     state: EditorState.create({ doc: "-", extensions }),
     scrollSnapshot: () => StateEffect.define<void>().of(),
     dispatch: (spec: Parameters<EditorState["update"]>[0]) => {
@@ -513,10 +515,19 @@ test("restores the original viewport anchor after folding a zoomed branch below 
     "- after",
   ].join("\n");
   const transactions: Transaction[] = [];
+  const reserve = {
+    offset: -0.375,
+    prime: jest.fn(),
+    currentOffset: () => reserve.offset,
+    restoreOffset: jest.fn((offset: number) => {
+      reserve.offset = offset;
+    }),
+  };
   // Browser layout: 192px of Properties followed by 48px document lines.
   // At scrollTop=240 the viewport starts on before 2, but a raw snapshot
   // mistakes scrollTop for a document height and anchors inside leaf 1.
   const view = {
+    plugin: () => reserve,
     state: EditorState.create({ doc: text, extensions }),
     dom: { ownerDocument: { defaultView: { devicePixelRatio: 2 } } },
     scaleY: 1,
@@ -557,8 +568,11 @@ test("restores the original viewport anchor after folding a zoomed branch below 
     to: view.state.doc.line(7).to,
   };
   view.dispatch({ effects: foldEffect.of(branch) });
+  reserve.offset = 0.25;
 
   expect(run("zoom-reset")).toBe(true);
+  expect(reserve.restoreOffset).toHaveBeenCalledWith(-0.375);
+  expect(reserve.offset).toBe(-0.375);
 
   const restored = transactions[transactions.length - 1];
   const snapshot = restored.effects.find((effect) => !effect.is(setListZoom));
@@ -591,7 +605,16 @@ test("maps the return viewport through the child created on initial zoom", async
     map: (value, changes) => changes.mapPos(value),
   });
   const transactions: Transaction[] = [];
+  const reserve = {
+    offset: -0.25,
+    prime: jest.fn(),
+    currentOffset: () => reserve.offset,
+    restoreOffset: jest.fn((offset: number) => {
+      reserve.offset = offset;
+    }),
+  };
   const view = {
+    plugin: () => reserve,
     state: EditorState.create({ doc: "- root\n- after", extensions }),
     scrollSnapshot: () => snapshot.of(7),
     focus: () => undefined,
@@ -609,7 +632,9 @@ test("maps the return viewport through the child created on initial zoom", async
     );
   run("zoom-in");
   expect(view.state.doc.toString()).toBe("- root\n\t- \n- after");
+  reserve.offset = 0.125;
   run("zoom-reset");
+  expect(reserve.restoreOffset).toHaveBeenCalledWith(-0.25);
   expect(
     transactions[transactions.length - 1]?.effects.find((effect) =>
       effect.is(snapshot),
@@ -1064,6 +1089,7 @@ test("the breadcrumb panel tolerates the zoom field disappearing during plugin r
     effects: setListZoom.of(7),
   }).state;
   const view = {
+    plugin: () => null,
     state: focused,
     dom: { ownerDocument: { win: { createDiv: () => panelDom } } },
   };
@@ -1128,6 +1154,7 @@ test("unchanged breadcrumbs retain their buttons while edited labels refresh", a
   };
   const info = { file: { path: "folder/Daily.md", basename: "Daily" } };
   const view = {
+    plugin: () => null,
     state: EditorState.create({
       doc,
       extensions: [extensions, editorInfoField.init(() => info as never)],

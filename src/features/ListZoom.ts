@@ -27,7 +27,11 @@ import {
 } from "@codemirror/view";
 
 import { Feature } from "./Feature";
-import { stableFoldScrollSnapshot } from "./FoldScroll";
+import {
+  captureFoldScrollCheckpoint,
+  primeTailReserve,
+  restoreFoldScrollCheckpoint,
+} from "./FoldScroll";
 import { zoomIndentDecorations } from "./ListZoomIndent";
 import { ListZoomInteraction } from "./ListZoomInteraction";
 
@@ -660,7 +664,10 @@ export class ListZoomState {
 
 export class ListZoom implements Feature {
   private zoom: ListZoomState;
-  private snapshots = new WeakMap<EditorView, StateEffect<unknown>>();
+  private snapshots = new WeakMap<
+    EditorView,
+    ReturnType<typeof captureFoldScrollCheckpoint>
+  >();
 
   constructor(
     private plugin: Plugin,
@@ -764,7 +771,7 @@ export class ListZoom implements Feature {
     const effects: StateEffect<unknown>[] = [setListZoom.of(from)];
     if (from !== null) {
       const entering = !this.zoom.range(view.state);
-      if (entering) this.snapshots.set(view, stableFoldScrollSnapshot(view));
+      if (entering) this.snapshots.set(view, captureFoldScrollCheckpoint(view));
       const range = this.zoom.resolve(view.state, from);
       if (!range) return;
       const insertion = this.zoom.childInsertion(
@@ -777,10 +784,12 @@ export class ListZoom implements Feature {
       // The breadcrumb panel does not exist on initial entry, so it cannot
       // map the return position through the newly created child yet.
       if (entering && insertion?.changes) {
-        const snapshot = this.snapshots
-          .get(view)
-          ?.map(view.state.changes(insertion.changes));
-        if (snapshot) this.snapshots.set(view, snapshot);
+        const snapshot = this.snapshots.get(view);
+        const effect = snapshot?.effect.map(
+          view.state.changes(insertion.changes),
+        );
+        if (snapshot && effect)
+          this.snapshots.set(view, { ...snapshot, effect });
       }
       // Reveal ancestors as well as a folded focused root before narrowing.
       foldedRanges(view.state).between(0, range.to, (a, b) => {
@@ -792,6 +801,7 @@ export class ListZoom implements Feature {
       effects.push(
         EditorView.scrollIntoView(from + range.indent.length, { y: "start" }),
       );
+      primeTailReserve(view);
       view.dispatch({
         ...insertion,
         effects,
@@ -802,7 +812,8 @@ export class ListZoom implements Feature {
       if (insertion) view.dispatch({ selection: view.state.selection });
     } else {
       const snapshot = this.snapshots.get(view);
-      if (snapshot) effects.push(snapshot);
+      if (snapshot) effects.push(restoreFoldScrollCheckpoint(view, snapshot));
+      else primeTailReserve(view);
       this.snapshots.delete(view);
       view.dispatch({ effects });
     }
@@ -845,8 +856,8 @@ export class ListZoom implements Feature {
       update: (update: ViewUpdate) => {
         const snapshot = this.snapshots.get(view);
         if (snapshot && update.docChanged) {
-          const mapped = snapshot.map(update.changes);
-          if (mapped) this.snapshots.set(view, mapped);
+          const effect = snapshot.effect.map(update.changes);
+          if (effect) this.snapshots.set(view, { ...snapshot, effect });
         }
         const before = this.zoom.range(update.startState)?.ancestors ?? [];
         const after = this.zoom.range(update.state)?.ancestors ?? [];

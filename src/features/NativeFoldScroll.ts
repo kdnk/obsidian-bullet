@@ -6,8 +6,9 @@ import { EditorView, PluginValue, ViewPlugin } from "@codemirror/view";
 
 import { Feature } from "./Feature";
 import {
-  ensureFoldScrollReserve,
-  stableFoldScrollSnapshot,
+  foldScrollLinePosition,
+  prepareFoldScroll,
+  primeTailReserve,
 } from "./FoldScroll";
 
 const MOBILE_RIGHT_FOLD_CONTROLS_BODY_CLASS =
@@ -35,8 +36,11 @@ function isNativeFoldScrollEnabled(document: Document): boolean {
   );
 }
 
-type FoldScrollSnapshot = ReturnType<EditorView["scrollSnapshot"]>;
-type FoldScrollSnapshotFactory = (view: EditorView) => FoldScrollSnapshot;
+type FoldScrollSnapshot = ReturnType<typeof EditorView.scrollIntoView>;
+type FoldScrollSnapshotFactory = (
+  view: EditorView,
+  position?: number,
+) => FoldScrollSnapshot;
 
 interface PendingFoldScrollSnapshot {
   active: boolean;
@@ -60,7 +64,7 @@ export class NativeFoldScrollState {
       this.pendingSnapshots.delete(transaction.startState);
       // The snapshot belongs to the document at click time. An edit can also
       // move folded ranges without toggling them, so invalidate before comparing.
-      if (transaction.docChanged) {
+      if (transaction.docChanged || transaction.scrollIntoView) {
         pending.active = false;
         return null;
       }
@@ -84,13 +88,13 @@ export class NativeFoldScrollState {
   );
 
   constructor(
-    private createSnapshot: FoldScrollSnapshotFactory = stableFoldScrollSnapshot,
+    private createSnapshot: FoldScrollSnapshotFactory = prepareFoldScroll,
   ) {}
 
-  prepare(view: EditorView): void {
+  prepare(view: EditorView, position?: number): void {
     const pending: PendingFoldScrollSnapshot = {
       active: true,
-      snapshot: this.createSnapshot(view),
+      snapshot: this.createSnapshot(view, position),
       state: view.state,
     };
     this.pendingSnapshots.set(pending.state, pending);
@@ -98,6 +102,11 @@ export class NativeFoldScrollState {
       () => this.expire(pending),
       0,
     );
+  }
+
+  cancel(view: EditorView): void {
+    const pending = this.pendingSnapshots.get(view.state);
+    if (pending) this.expire(pending);
   }
 
   private expire(pending: PendingFoldScrollSnapshot): void {
@@ -126,6 +135,7 @@ export class NativeFoldScrollPluginValue implements PluginValue {
   }
 
   destroy() {
+    this.nativeFoldScroll.cancel(this.view);
     this.view.contentDOM.removeEventListener(
       "pointerdown",
       this.prepareNativeFoldScroll,
@@ -147,12 +157,15 @@ export class NativeFoldScrollPluginValue implements PluginValue {
       return;
     }
 
-    ensureFoldScrollReserve(this.view);
-    // Commit the restored reserve to layout before Obsidian's native handler
-    // changes document height, otherwise bottom anchoring can move the row.
-    void this.view.scrollDOM.scrollHeight;
-    if (event.type === "click") {
-      this.nativeFoldScroll.prepare(this.view);
+    if (event.type === "pointerdown") {
+      primeTailReserve(this.view);
+    } else if (event.type === "click") {
+      const line = event.target.closest(".cm-line");
+      if (line)
+        this.nativeFoldScroll.prepare(
+          this.view,
+          foldScrollLinePosition(this.view, line),
+        );
     }
   };
 }

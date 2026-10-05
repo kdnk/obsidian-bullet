@@ -14,10 +14,7 @@ import {
   WidgetType,
 } from "@codemirror/view";
 
-import {
-  ensureFoldScrollReserve,
-  stableFoldScrollSnapshot,
-} from "./FoldScroll";
+import { foldScrollViewportPosition, prepareFoldScroll } from "./FoldScroll";
 
 import { MyEditorPosition, getEditorFromState } from "../editor";
 import { getObsidianDomWindow } from "../obsidianDom";
@@ -321,9 +318,12 @@ function setGuideTargetsFolded(
     return false;
   }
 
-  ensureFoldScrollReserve(view);
+  const anchor = foldScrollViewportPosition(
+    view,
+    folded ? resolved.map(({ range }) => range) : [],
+  );
   const effects = [
-    stableFoldScrollSnapshot(view),
+    prepareFoldScroll(view, anchor),
     ...resolved.map(({ range }) =>
       (folded ? foldEffect : unfoldEffect).of(range),
     ),

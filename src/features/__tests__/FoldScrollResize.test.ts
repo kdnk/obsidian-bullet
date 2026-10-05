@@ -43,9 +43,18 @@ function setup(
   window = makeWindow(),
   doc = "- a\n- b\n- c\n- d\n- e\n- f\n- g\n- h\n- i\n- j",
 ) {
+  const resizeExtensions = foldScrollResize();
   const transactions: Transaction[] = [];
   const appliedTargets: ScrollTarget[] = [];
   const layout = { lineHeight: 48 };
+  const reserve = {
+    offset: 0,
+    prime: jest.fn(),
+    currentOffset: () => reserve.offset,
+    restoreOffset: jest.fn((offset: number) => {
+      reserve.offset = offset;
+    }),
+  };
   const blockAtHeight = (height: number) => {
     const index = Math.min(
       view.state.doc.lines - 1,
@@ -59,7 +68,7 @@ function setup(
   const view = {
     state: EditorState.create({
       doc,
-      extensions: foldScrollResize(),
+      extensions: resizeExtensions,
     }),
     dom: { ownerDocument: { defaultView: window } },
     win: window,
@@ -119,7 +128,8 @@ function setup(
     requestMeasure: (request?: Parameters<EditorView["requestMeasure"]>[0]) => {
       EditorView.prototype.requestMeasure.call(view as never, request);
     },
-    plugin: () => plugin,
+    plugin: (extension: unknown) =>
+      extension === resizeExtensions[0] ? plugin : reserve,
     // Run native transaction/scroll-target handling while leaving DOM rendering
     // to the controlled geometry and measurement queue above.
     destroyed: false,
@@ -189,6 +199,7 @@ function setup(
     window,
     plugin,
     layout,
+    reserve,
     transactions,
     appliedTargets,
     beginMeasurement,
@@ -216,6 +227,19 @@ test("ordinary scrolling refreshes the next resize anchor without dispatching", 
     yMargin: -192,
     isSnapshot: true,
   });
+  context.plugin.destroy();
+});
+
+test("restores the native container offset captured with the resize snapshot", () => {
+  const context = setup();
+  context.reserve.offset = -0.375;
+  context.flushMeasurements();
+  context.reserve.offset = 0.25;
+  context.view.scrollDOM.clientWidth = 500;
+  context.resize();
+  expect(context.reserve.restoreOffset).toHaveBeenCalledWith(-0.375);
+  expect(context.reserve.offset).toBe(-0.375);
+  expect(context.transactions).toHaveLength(1);
   context.plugin.destroy();
 });
 

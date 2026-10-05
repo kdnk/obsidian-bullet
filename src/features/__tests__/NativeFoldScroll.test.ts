@@ -23,6 +23,20 @@ function makeDocument(classNames: string[] = []) {
   return { body: { classList: makeClassList(classNames) } };
 }
 
+const originalNodeFilter = globalThis.NodeFilter;
+beforeAll(() =>
+  Object.defineProperty(globalThis, "NodeFilter", {
+    configurable: true,
+    value: { SHOW_TEXT: 4 },
+  }),
+);
+afterAll(() =>
+  Object.defineProperty(globalThis, "NodeFilter", {
+    configurable: true,
+    value: originalNodeFilter,
+  }),
+);
+
 function makeView(state: EditorState, document = makeDocument()) {
   const listeners = new Map<string, (event: Event) => void>();
   const readScrollHeight = jest.fn(() => 2000);
@@ -37,8 +51,12 @@ function makeView(state: EditorState, document = makeDocument()) {
     removeEventListener: jest.fn(),
     style: { paddingBottom: "100px" },
   };
+  const reserve = { prime: jest.fn() };
   return {
     contentDOM,
+    reserve,
+    plugin: () => reserve,
+    posAtDOM: jest.fn(() => 2),
     defaultLineHeight: 24,
     documentPadding: { top: 0 },
     dom: {
@@ -61,7 +79,13 @@ function makeScrollSnapshot(position: number) {
 
 const nativeControl = (matchingSelector: string) => ({
   closest: jest.fn((selector: string) =>
-    selector.includes(matchingSelector) ? {} : null,
+    selector === ".cm-line"
+      ? {
+          ownerDocument: { createTreeWalker: () => ({ nextNode: () => null }) },
+        }
+      : selector.includes(matchingSelector)
+        ? {}
+        : null,
   ),
 });
 
@@ -92,14 +116,14 @@ describe("NativeFoldScroll", () => {
         target,
         type: "pointerdown",
       } as unknown as Event);
-      expect(view.contentDOM.style.paddingBottom).toBe("1138.5px");
-      expect(view.readScrollHeight).toHaveBeenCalledTimes(1);
+      expect(view.contentDOM.style.paddingBottom).toBe("100px");
+      expect(view.reserve.prime).toHaveBeenCalledTimes(1);
 
       view.listeners.get("click")?.({
         target,
         type: "click",
       } as unknown as Event);
-      expect(view.readScrollHeight).toHaveBeenCalledTimes(2);
+      expect(view.reserve.prime).toHaveBeenCalledTimes(1);
       const transaction = state.update({
         effects: foldEffect.of({ from: 0, to: 1 }),
       });
@@ -147,7 +171,7 @@ describe("NativeFoldScroll", () => {
       effects: foldEffect.of({ from: 0, to: 1 }),
     });
 
-    expect(view.readScrollHeight).toHaveBeenCalledTimes(enabled ? 2 : 0);
+    expect(view.reserve.prime).toHaveBeenCalledTimes(enabled ? 1 : 0);
     expect(transaction.effects.includes(snapshot)).toBe(enabled);
     pluginValue.destroy();
   });
@@ -253,6 +277,29 @@ describe("NativeFoldScroll", () => {
     expect(selectionTransaction.effects).not.toContain(snapshot);
     expect(nativeTransaction.effects).toContain(snapshot);
     expect(laterTransaction.effects).not.toContain(snapshot);
+  });
+
+  test("cancels a pending snapshot when selection explicitly requests navigation", () => {
+    const snapshot = makeScrollSnapshot(18);
+    const foldScroll = new NativeFoldScrollState(() => snapshot);
+    const state = EditorState.create({
+      doc: "- parent\n\t- child",
+      extensions: [codeFolding(), foldScroll.extension],
+    });
+    const view = makeView(state);
+
+    foldScroll.prepare(view as never);
+    const navigation = state.update({
+      selection: { anchor: 2 },
+      scrollIntoView: true,
+    });
+    const fold = navigation.state.update({
+      effects: foldEffect.of({ from: 8, to: 17 }),
+    });
+
+    expect(navigation.effects).not.toContain(snapshot);
+    expect(fold.effects).not.toContain(snapshot);
+    expect(foldedRanges(fold.state).size).toBe(1);
   });
 
   test.each([false, true])(

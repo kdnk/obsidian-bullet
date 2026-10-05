@@ -1,68 +1,15 @@
 import { Platform, Plugin } from "obsidian";
 
 import { Extension } from "@codemirror/state";
-import {
-  EditorView,
-  PluginValue,
-  ViewPlugin,
-  ViewUpdate,
-} from "@codemirror/view";
 
 import { Feature } from "./Feature";
-import {
-  foldScrollReserveHeight,
-  supportsFoldScrollReserve,
-} from "./FoldScroll";
+import { foldScrollReserveExtension } from "./FoldScroll";
 import { foldScrollResize } from "./FoldScrollResize";
 
 import { Settings } from "../services/Settings";
 
-const RESERVE_CLASS = "bullet-plugin-fold-scroll-reserve";
-const RESERVE_PROPERTY = "--bullet-fold-scroll-reserve";
-
-export class FoldScrollReservePluginValue implements PluginValue {
-  private destroyed = false;
-  private readonly supportsReserve: boolean;
-
-  private measure = {
-    read: () => foldScrollReserveHeight(this.view),
-    write: (height: number) => {
-      if (this.destroyed || !Number.isFinite(height) || height < 0) return;
-      this.view.dom.style.setProperty(RESERVE_PROPERTY, `${height}px`);
-      this.view.contentDOM.classList.add(RESERVE_CLASS);
-    },
-  };
-
-  constructor(private view: EditorView) {
-    this.supportsReserve = supportsFoldScrollReserve(view);
-    if (this.supportsReserve) view.requestMeasure(this.measure);
-  }
-
-  update(update: ViewUpdate) {
-    if (update.geometryChanged && this.supportsReserve) {
-      this.view.requestMeasure(this.measure);
-    }
-  }
-
-  destroy() {
-    this.destroyed = true;
-    this.view.contentDOM.classList.remove(RESERVE_CLASS);
-    this.view.dom.style.removeProperty(RESERVE_PROPERTY);
-  }
-}
-
 export function foldScrollReserve() {
-  return [
-    foldScrollResize(),
-    ViewPlugin.fromClass(FoldScrollReservePluginValue),
-    EditorView.baseTheme({
-      // Obsidian writes an inline 100px padding on resize. Keep the standard
-      // reserve in CSS so that write cannot clamp the scroll position first.
-      [`& .cm-content.${RESERVE_CLASS}`]: {
-        paddingBottom: `var(${RESERVE_PROPERTY}) !important`,
-      },
-    }),
-  ];
+  return [foldScrollResize(), foldScrollReserveExtension()];
 }
 
 const FOLD_SCROLL_RESERVE_EXTENSION = foldScrollReserve();
