@@ -31,13 +31,14 @@ function evaluate(fn, ...args) {
 
 if (!process.argv[2])
   throw Error(
-    "Usage: verify-fold-parent-position.cjs <fresh-output-directory> [--full] [--mobile] [--new-pane] [--collapsed-properties] [--kind=unordered|ordered|task|nested|empty|heading|wrapped] [--selection=range|multiple|vim]",
+    "Usage: verify-fold-parent-position.cjs <fresh-output-directory> [--full] [--mobile] [--new-pane] [--collapsed-properties] [--screenshots] [--kind=unordered|ordered|task|nested|empty|heading|wrapped] [--selection=range|multiple|vim]",
   );
 const output = path.resolve(process.argv[2]);
 fs.mkdirSync(output, { recursive: true });
 const full = process.argv.includes("--full");
 const collapsedProperties = process.argv.includes("--collapsed-properties");
 const newPane = process.argv.includes("--new-pane");
+const screenshots = process.argv.includes("--screenshots");
 assert.ok(!newPane || !mobile, "New pane verification requires desktop mode");
 const selection = process.argv
   .find((arg) => arg.startsWith("--selection="))
@@ -69,6 +70,19 @@ const initial = evaluate(() => ({
     app.plugins.plugins.bullet.settings.mobileRightFoldControls,
 }));
 const results = [];
+
+function screenshot(name) {
+  if (!screenshots) return;
+  const directory = path.join(output, "screenshots");
+  fs.mkdirSync(directory, { recursive: true });
+  const result = cdp("Page.captureScreenshot", {
+    format: "png",
+    captureBeyondViewport: false,
+  });
+  const file = path.join(directory, `${name}.png`);
+  fs.writeFileSync(file, Buffer.from(result.data, "base64"));
+  return path.relative(output, file);
+}
 
 function mobileMode(enabled) {
   evaluate(
@@ -536,8 +550,14 @@ try {
         "Expanded note must not retain added tail space",
       );
       const turns = [];
+      const images = [];
+      const imagePrefix = `zoom-${steps}-font-${font}-y-${y}`;
       for (let i = 0; i < (full || mobile ? 6 : 4); i++) {
+        const beforeImage = screenshot(`${imagePrefix}-turn-${i + 1}-before`);
         turns.push(click());
+        const afterImage = screenshot(`${imagePrefix}-turn-${i + 1}-after`);
+        if (screenshots)
+          images.push({ before: beforeImage, after: afterImage });
         fs.writeFileSync(
           path.join(output, "current.json"),
           JSON.stringify({ before, turns }, null, 2),
@@ -563,6 +583,7 @@ try {
         before,
         turns,
         delta,
+        ...(screenshots ? { screenshots: images } : {}),
       };
       results.push(result);
       fs.writeFileSync(
