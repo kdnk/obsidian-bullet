@@ -29,6 +29,7 @@
 - Task bullets
     - When changing task marker rendering, place the bullet widget at the checkbox opening boundary, after the native hidden list marker, outer guide, and chevron. Adding it at the line start shifts native folding controls. Preserve the native checkbox and isolate the marker from completed-line text decoration. Run `scripts/verify-task-bullets.cjs <fresh-output-directory>` normally and with `--mobile`; verify native checkbox taps, bullet zoom/drag, wrapping, Source mode, and reloads. Before a pointer action, wait for transient reload notices to stop covering its target and assert the target with `elementFromPoint()`.
 - テストについて
+    - Native inputの描画フレームをObsidian CLI/CDP経由で記録するときは、rendererが実際に受け取った`click`などの対象eventを起点にしてください。CLIはCDPの返答後に終了が遅れることがあるため、command送信前からの固定時間の記録だけでは操作後の描画を検証できません。操作後のframeが記録されたこともassertしてください。
     - CIのObsidian版を更新するときは、`gh api`で公式repoの`desktop-releases.json`の`latestVersion`と該当releaseのDMG assetを確認してください。GitHubのLatest releaseはAndroid専用の場合があるため、desktopの最新版とは限りません。
     - Obsidianの内部APIを起動時に使う場合は、CIが固定しているObsidian版でも存在を確認し、未対応環境では任意の連携機能を安全に無効化してください。1.12.7の`app.plugins`には`on`/`offref`がなく、無条件呼び出しはplugin起動を中断してCIではrelay接続timeoutになります。最新版だけの実機検証やAPIを常に持つmockでは検出できません。
     - ネストしたコード表示を変更するときは、短いblockが多数ある長文と、開始fenceが画面外へ出る単一の長いblockを別々に検証してください。`scripts/verify-nested-code-long-block.cjs`を通常実行・`--blank-viewport`・`--blank-viewport --zoom-parent`・`--blank-viewport --partial-zoom`で実行し、空行を挟む場合と画面内が空行だけの場合のnative表示・Shiki編集中表示を確認し、`scripts/verify-nested-code-matrix.cjs`で同じnoteを開いたままのShiki・行番号切替を確認してください。

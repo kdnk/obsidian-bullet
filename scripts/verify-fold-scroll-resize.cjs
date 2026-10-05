@@ -1,10 +1,8 @@
-// Run with the current test build deployed to the repository's running vault.
-// Requires obsidian-cli; run separately from full tests or other UI checks.
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
 
 const { cdp, evaluate } = require("./obsidian-scroll-driver.cjs");
-const notePath = `bullet-resize-verification-${randomUUID()}.md`;
+const notePath = `pages/Fold resize verification ${randomUUID()}.md`;
 const withFrontmatter = process.argv.includes("--frontmatter");
 
 function sample() {
@@ -28,6 +26,13 @@ function sample() {
       scrollTop: view.scrollDOM.scrollTop,
       inlinePadding: view.contentDOM.style.paddingBottom,
       effectivePadding: getComputedStyle(view.contentDOM).paddingBottom,
+      reserve:
+        view.scrollDOM
+          .querySelector(".bullet-plugin-fold-scroll-reserve")
+          ?.getBoundingClientRect().height ?? 0,
+      reserveOutsideContent: !view.contentDOM.contains(
+        view.scrollDOM.querySelector(".bullet-plugin-fold-scroll-reserve"),
+      ),
       parentFolded: !!parent?.querySelector(".cm-fold-indicator.is-collapsed"),
       metadataHeight: metadata?.getBoundingClientRect().height ?? 0,
       visibleProperties: metadata
@@ -69,8 +74,6 @@ function resize(width) {
 }
 
 try {
-  // Background Electron pages can reflow DOM while animation-frame callbacks
-  // are paused. Geometry assertions require the same visible state as UI use.
   cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
   evaluate(() => {
     window.focus();
@@ -107,7 +110,6 @@ try {
   resize(900);
   evaluate(async () => {
     const view = app.workspace.activeLeaf.view.editor.cm;
-    // Use the same position with or without the protected end reserve.
     view.scrollDOM.scrollTop =
       view.scrollDOM.scrollHeight -
       view.scrollDOM.clientHeight -
@@ -155,8 +157,8 @@ try {
     "The native pointer sequence must fold the parent",
   );
   assert.ok(
-    Number.parseFloat(before.effectivePadding) > 100,
-    "The fold must have an end reserve larger than Obsidian's reset",
+    before.reserve > 0 && before.reserveOutsideContent,
+    "The fold must reserve missing height outside editable content",
   );
   if (withFrontmatter)
     assert.ok(
