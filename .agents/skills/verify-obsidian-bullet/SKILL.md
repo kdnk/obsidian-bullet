@@ -21,6 +21,7 @@ are missing, run `n exec 22.23.1 npm ci` first. Keep `vault/.obsidian/app.json` 
 
 ```sh
 export PROOF_DIR="/tmp/obsidian-bullet-verify-$(uuidgen)"
+mkdir -p vault/pages
 n exec 22.23.1 node .agents/skills/verify-obsidian-bullet/scripts/control.cjs start "$PROOF_DIR"
 ```
 
@@ -32,6 +33,12 @@ it, and opens `test.md` with `obsidian-cli vault=vault`. The readiness assertion
 requires the exact vault path, desktop Live Preview, an editable CodeMirror
 view, matching runtime version, and the deployed build hashes. Build output is
 in `build.log`; `session.json` records ownership and restoration state.
+
+Obsidian must already be running with its Command line interface option enabled
+before `start`; the helper checks `obsidian-cli --help` before opening the test
+vault. Wait for the application to finish launching before that check.
+The native fold verifier creates scratch notes under `vault/pages`; create that
+folder before running its recipe.
 
 Obsidian is shared. The helper acquires
 `vault/.obsidian/bullet-verification-lock`; one lifecycle owns this test window
@@ -93,6 +100,12 @@ noneditable reserve outside `.cm-content`, unchanged editable padding, and zero
 reserve after unfolding. Its `finally` restores the original pane/settings and
 trashes its own note. This covers the native-arrow entry point only; use the
 map for guide clicks, commands, zoom/font matrices, and mobile taps.
+
+For command-based childless zoom navigation, run
+`n exec 22.23.1 node .agents/skills/verify-obsidian-bullet/scripts/verify-zoom-childless.cjs "$PROOF_DIR/zoom-childless"`.
+It records the empty child created by zoom, ancestor navigation, reset, and
+saved Markdown. See the [zoom map](features/branch-zoom.md) for complementary
+native breadcrumb input and exploratory case selection.
 
 For a new manual case, reuse `scripts/obsidian-scroll-driver.cjs` from a Node
 script launched with `n exec 22.23.1 node`. Its `evaluate(fn, ...args)` guards the

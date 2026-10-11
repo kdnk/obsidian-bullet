@@ -23,12 +23,12 @@ Use this index with the [parent skill](../SKILL.md). The map records supported u
 
 ## Features
 
-| Map                                                               | Scope                                                                                                           |
-| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| [Structural editing and navigation](structural-editing.md)        | Enter, continuation lines, indentation, movement, selection, marker protection, Vim, and command entry points.  |
-| [Branch zoom](branch-zoom.md)                                     | Bullet clicks, commands, breadcrumbs, subtree editing, pane-local focus, Properties, and restoration.           |
-| [Guides and folding](guides-and-folding.md)                       | Guide groups, native arrows, mobile controls, fold commands, clicked-parent position, and resize restoration.   |
-| [Desktop drag and drop](desktop-drag-and-drop.md)                 | Same-note and cross-note branch movement, destination types, zoomed panes, and paired history.                  |
-| [List, task, and code rendering](list-task-and-code-rendering.md) | Styled markers, independent task controls, nested code preview/editing, wrapping, code copy, and Vim code rows. |
+| Map                                                               | Scope                                                                                                                               |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| [Structural editing and navigation](structural-editing.md)        | Enter, continuation lines, indentation, movement, selection, marker protection, Vim, and command entry points.                      |
+| [Branch zoom](branch-zoom.md)                                     | Bullet clicks, commands, breadcrumbs, subtree editing, pane-local focus, Properties, and restoration.                               |
+| [Guides and folding](guides-and-folding.md)                       | Guide groups, native arrows, mobile controls, fold commands, clicked-parent position, and resize restoration.                       |
+| [Desktop drag and drop](desktop-drag-and-drop.md)                 | Same-note and cross-note branch movement, destination types, zoomed panes, and paired history.                                      |
+| [List, task, and code rendering](list-task-and-code-rendering.md) | Styled markers, optional threading, independent task controls, nested code preview/editing, wrapping, code copy, and Vim code rows. |
 
 The entry-point inventory comes from `README.md`, production command registrations and `SettingsTab.ts`. Recipes come from `scripts/verify-*.cjs`; complementary behavior cases live in `specs/features/`. This map does not certify unrun cases.

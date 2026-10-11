@@ -9,7 +9,7 @@ Bullet edits an item together with its descendants while keeping Markdown and th
 - `edit-indent-move`: indent, outdent, or move a branch with children and continuation lines; preserve cursor position and ordered numbering.
 - `edit-select`: cycle through item content, subtree, and enclosing list scope.
 - `edit-guards`: keep directly typed body text in lists; protect marker positions during navigation/clicks, with an Alt/Option bypass.
-- `edit-delete`: Backspace/Delete join or remove items without losing descendants; an empty child returns the cursor to its parent.
+- `edit-delete`: Backspace/Delete join or remove items without losing descendants; removing an empty leaf moves the cursor to the previous visible item, including its parent when directly preceding.
 - `edit-vim`: normal-mode `o`/`O` creates list items inside a list and ordinary lines outside one.
 
 ## How to get to it (user POV)

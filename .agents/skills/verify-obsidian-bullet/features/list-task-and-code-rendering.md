@@ -5,6 +5,7 @@ List styling keeps bullets, checkboxes, native guides, and nested code aligned w
 ## Sub-features
 
 - `render-lists`: styled unordered/ordered markers, nesting, wrapping, and theme-derived appearance.
+- `render-threading`: optional colored connections from the current item to its ancestors, with independent paths in each editor and no threading extension while disabled.
 - `render-tasks`: an independent task bullet for zoom/drag beside the native checkbox; checked styling must not strike through the bullet.
 - `render-code`: nested code in native preview, editing, and Shiki preview, with stable background bounds, spacing, guide alignment, and horizontal reach.
 - `render-code-shapes`: empty/blank-first blocks, alternate fences, language labels, deep nesting, wrapping, and blocks whose opening fence is offscreen.
@@ -13,15 +14,17 @@ List styling keeps bullets, checkboxes, native guides, and nested code aligned w
 ## How to get to it (user POV)
 
 - Enable **Settings → Bullet → Appearance → Style list bullets**. Open nested unordered/ordered/task lists in Live Preview; toggle the setting, switch to Source mode, and reload Bullet.
+- Enable **Bullet threading** in Appearance and choose **Thread color**. Click list text to follow a different branch. Threading is off by default.
 - Click or tap `.task-list-item-checkbox` to complete a task, the separate `.bullet-plugin-task-bullet` to zoom, or its bullet to drag on desktop. Use a task's native `.collapse-indicator` independently.
 - Put a fenced block inside an item or a list continuation. Move the cursor into/out of code to switch between editing and preview; scroll through short repeated blocks or one long block.
 - With the installed Shiki Highlighter plugin, test disabled, enabled without line numbers, and enabled with line numbers. Use the native code copy control; enable Vim and use `j`, `k`, `o`, and `O` for keyboard paths.
 
 ## Driving it with Obsidian CLI/CDP
 
-Preconditions: use the parent lifecycle and index guards, list styling enabled, and an installed Shiki fixture for scripts that toggle it. Each output directory must be fresh. Geometry scripts generally place cursors and change settings through APIs; that setup does not prove clicks or typing.
+Preconditions: use the parent lifecycle and index guards. Enable list styling for task-bullet and code-layout recipes; threading is independent of list styling. Scripts that toggle Shiki require an installed Shiki fixture. Each output directory must be fresh. Geometry scripts generally place cursors and change settings through APIs; that setup does not prove clicks or typing.
 
 - **Native task actions:** `n exec 22.23.1 node scripts/verify-task-bullets.cjs "$PROOF_DIR/task-bullets"` and separately `n exec 22.23.1 node scripts/verify-task-bullets.cjs "$PROOF_DIR/task-bullets-mobile" --mobile`. These hit-test and send real mouse/touch input. Require separate bullet/checkbox hit boxes, checkbox `[ ]`/`[x]` changes without zoom, bullet zoom without Markdown changes, wrapped alignment, native Undo/Redo, folded-task controls, and desktop-only task dragging. Source/style/reload transitions use APIs. Mobile mode is actually toggled.
+- **Bullet threading:** `n exec 22.23.1 node scripts/verify-bullet-threading.cjs "$PROOF_DIR/threading"`. This uses native mouse input for the settings toggle, item selection, checkboxes, and fold controls, plus native typing while disabled. Require exact ancestor endpoints, wrapped-parent alignment, a clipped path when a compatible parent marker is above the rendered viewport, independent panes, operation with list styling disabled, and no layer while disabled. Offscreen continuation requires matching raw markers and task shape; incompatible shapes omit the continuation. Color, list styling, Source mode, zoom, and reload use APIs. Inspect saved screenshots. This desktop recipe does not certify mobile or native color-dialog interaction.
 - **Preview/editing geometry:** `n exec 22.23.1 node scripts/verify-nested-code-layout.cjs "$PROOF_DIR/code-layout" --long`. Repeat in native, Shiki, and numbered Shiki states using fresh paths. It moves the cursor and edits through editor APIs; require native marker/guide alignment, correct `.cm-preview-code-block` bounds, expected Markdown, and stable top/bottom viewport cases. It is not native typing proof.
 - **Spacing and adjacent-block parity:** `n exec 22.23.1 npm run test:code-parity -- "$PROOF_DIR/code-parity"` and `n exec 22.23.1 node scripts/verify-nested-code-spacing.cjs "$PROOF_DIR/code-spacing"`. Both compare native, Shiki, and numbered modes; require preview/editing glyph positions and painted bounds to agree, not just total height.
 - **Blank, alternate-marker, and live-setting shapes:** begin with Shiki installed but disabled, then run `n exec 22.23.1 node scripts/verify-nested-code-matrix.cjs "$PROOF_DIR/code-matrix"`. It toggles processors/settings on the same open note. Require unchanged Markdown and correctly aligned blank-first, ordered, tilde/four-backtick, deep, framed, and wrapped blocks.
