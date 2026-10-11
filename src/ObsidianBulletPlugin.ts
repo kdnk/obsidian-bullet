@@ -3,6 +3,7 @@ import { Plugin } from "obsidian";
 import { ArrowLeftAndCtrlArrowLeftBehaviourOverride } from "./features/ArrowLeftAndCtrlArrowLeftBehaviourOverride";
 import { BackspaceBehaviourOverride } from "./features/BackspaceBehaviourOverride";
 import { BetterListsStyles } from "./features/BetterListsStyles";
+import { BulletThreading } from "./features/BulletThreading";
 import { BulletTypingGuard } from "./features/BulletTypingGuard";
 import { CtrlAAndCmdABehaviourOverride } from "./features/CtrlAAndCmdABehaviourOverride";
 import { DeleteBehaviourOverride } from "./features/DeleteBehaviourOverride";
@@ -173,6 +174,9 @@ export default class ObsidianBulletPlugin extends Plugin {
 
       // vertical-line folding and outer list guides
       new VerticalLines(this, this.settings, this.parser),
+      new BulletThreading(this, this.settings, this.parser, (state) =>
+        listZoom.range(state),
+      ),
 
       // features based on settings.dragAndDrop
       new DragAndDrop(

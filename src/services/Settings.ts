@@ -7,6 +7,8 @@ export type KeepCursorWithinContent =
 export interface SettingsObject {
   styleLists: boolean;
   enhanceVerticalLineHover: boolean;
+  bulletThreading: boolean;
+  bulletThreadingColor: string;
   debug: boolean;
   stickCursor: KeepCursorWithinContent | boolean;
   keepBodyTextInBullets: boolean;
@@ -29,6 +31,8 @@ export interface SettingsChange {
 const DEFAULT_SETTINGS: SettingsObject = {
   styleLists: true,
   enhanceVerticalLineHover: true,
+  bulletThreading: false,
+  bulletThreadingColor: "#8b5cf6",
   debug: false,
   stickCursor: "bullet-and-checkbox",
   keepBodyTextInBullets: true,
@@ -52,6 +56,10 @@ export interface Storage {
 }
 
 type Callback = (change: SettingsChange) => void;
+
+export function isBulletThreadingColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+}
 
 interface Subscription {
   readonly keys: ReadonlySet<SettingsKey>;
@@ -139,6 +147,22 @@ export class Settings {
     this.update({ enhanceVerticalLineHover: value });
   }
 
+  get bulletThreading() {
+    return this.values.bulletThreading;
+  }
+
+  set bulletThreading(value: boolean) {
+    this.update({ bulletThreading: value });
+  }
+
+  get bulletThreadingColor() {
+    return this.values.bulletThreadingColor;
+  }
+
+  set bulletThreadingColor(value: string) {
+    this.update({ bulletThreadingColor: value });
+  }
+
   get outerVerticalLines() {
     return this.values.outerListLines;
   }
@@ -197,6 +221,12 @@ export class Settings {
   async load() {
     const { listLines, ...saved } = (await this.storage.loadData()) ?? {};
     this.values = Object.assign({}, DEFAULT_SETTINGS, saved);
+    if (typeof this.values.bulletThreading !== "boolean") {
+      this.values.bulletThreading = DEFAULT_SETTINGS.bulletThreading;
+    }
+    if (!isBulletThreadingColor(this.values.bulletThreadingColor)) {
+      this.values.bulletThreadingColor = DEFAULT_SETTINGS.bulletThreadingColor;
+    }
     if (listLines === false) {
       this.values.outerListLines = false;
       this.values.listLineAction = "none";

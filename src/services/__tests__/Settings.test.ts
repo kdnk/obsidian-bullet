@@ -1,5 +1,111 @@
 import { Settings, SettingsChange, SettingsObject } from "../Settings";
 
+describe("bullet threading", () => {
+  test.each([null, {}])(
+    "defaults to off when saved data is %p",
+    async (saved) => {
+      const settings = new Settings({
+        loadData: async () => saved,
+        saveData: async () => undefined,
+      });
+
+      await settings.load();
+
+      expect(settings.bulletThreading).toBe(false);
+      expect(settings.bulletThreadingColor).toBe("#8b5cf6");
+    },
+  );
+
+  test.each([true, false])(
+    "persists threading %p and its selected color across reloads",
+    async (enabled) => {
+      let saved: SettingsObject | null = null;
+      const storage = {
+        loadData: async () => saved,
+        saveData: async (values: SettingsObject) => {
+          saved = { ...values };
+        },
+      };
+      const settings = new Settings(storage);
+      settings.bulletThreading = enabled;
+      settings.bulletThreadingColor = "#12ABef";
+      await settings.save();
+      const reloaded = new Settings(storage);
+
+      await reloaded.load();
+
+      expect(reloaded.bulletThreading).toBe(enabled);
+      expect(reloaded.bulletThreadingColor).toBe("#12ABef");
+    },
+  );
+
+  test.each(["true", "false", 1, null])(
+    "keeps threading off for invalid saved toggle %p",
+    async (enabled) => {
+      const settings = new Settings({
+        loadData: async () => ({ bulletThreading: enabled }) as never,
+        saveData: async () => undefined,
+      });
+
+      await settings.load();
+
+      expect(settings.bulletThreading).toBe(false);
+    },
+  );
+
+  test.each(["red", "#abc", "#12345678", "#12345g", "", null, 42])(
+    "replaces invalid saved color %p with the default",
+    async (color) => {
+      const settings = new Settings({
+        loadData: async () => ({ bulletThreadingColor: color }) as never,
+        saveData: async () => undefined,
+      });
+
+      await settings.load();
+
+      expect(settings.bulletThreadingColor).toBe("#8b5cf6");
+    },
+  );
+
+  test("resets the toggle and color together and reports their changes", () => {
+    const settings = new Settings({
+      loadData: async () => null,
+      saveData: async () => undefined,
+    });
+    settings.bulletThreading = true;
+    settings.bulletThreadingColor = "#123456";
+    const callback = jest.fn<void, [SettingsChange]>();
+    settings.onChange(["bulletThreading", "bulletThreadingColor"], callback);
+
+    settings.reset();
+
+    expect(settings.bulletThreading).toBe(false);
+    expect(settings.bulletThreadingColor).toBe("#8b5cf6");
+    expect(callback.mock.calls.map(([change]) => [...change.keys])).toEqual([
+      ["bulletThreading", "bulletThreadingColor"],
+    ]);
+  });
+
+  test("updates threading through the generic API with scoped notifications", () => {
+    const settings = new Settings({
+      loadData: async () => null,
+      saveData: async () => undefined,
+    });
+    const callback = jest.fn<void, [SettingsChange]>();
+    settings.onChange(["bulletThreading", "bulletThreadingColor"], callback);
+
+    settings.setValue("bulletThreading", true);
+    settings.setValue("bulletThreadingColor", "#123456");
+
+    expect(settings.bulletThreading).toBe(true);
+    expect(settings.bulletThreadingColor).toBe("#123456");
+    expect(callback.mock.calls.map(([change]) => [...change.keys])).toEqual([
+      ["bulletThreading"],
+      ["bulletThreadingColor"],
+    ]);
+  });
+});
+
 test("enables body text enforcement for saved data predating the setting", async () => {
   const settings = new Settings({
     loadData: jest.fn(async () => ({}) as SettingsObject),

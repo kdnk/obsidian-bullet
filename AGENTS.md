@@ -137,6 +137,10 @@
 - List marker spacing
     - When changing deletion guards, allow surplus spaces or tabs after a list marker to be deleted while preserving its indentation, marker, and at least one separator. Verify the resulting document and cursor through `BulletTypingGuard` transactions; classifier prefixes include editable spacing as well as required syntax.
 
+- Bullet threading
+    - Keep the registered threading extension array empty while disabled. Do not add threading work to always-installed guide or editor update handlers. Run `scripts/verify-bullet-threading.cjs <fresh-output-directory>` through the managed Obsidian verification lifecycle after changing threading; check native settings toggles, exact ancestor endpoints, wrapping, clipped parents, folding, independent panes, color persistence, and extension removal. CodeMirror layers already apply inverse editor scaling, so keep marker coordinates in the same space as native `RectangleMarker`.
+    - Obsidian 1.14 opens Settings in a separate document by default. Native settings checks must target the Settings window and its owner document, or temporarily set the test vault's `settingsPopoutWindow` to false and restore the original value afterward. Main-renderer DOM queries and CDP input do not target the popout automatically.
+
 - Structural editing regression checks
     - When changing zoom heading spacing or panel styling, run `n exec 22.23.1 node scripts/verify-zoom-code-scroll.cjs <fresh-output-directory>`. Verify painted code bounds below the breadcrumbs through repeated source/preview transitions with Shiki off, on, and numbered, and confirm that the note heading and top spacing return after leaving zoom.
     - When changing zoom editing, run `scripts/verify-zoom-subtree-editing.cjs` against the deployed test build. Preserve leaf child creation, subtree boundaries, descendant fold behavior, and cursor placement across numbered-marker width changes.

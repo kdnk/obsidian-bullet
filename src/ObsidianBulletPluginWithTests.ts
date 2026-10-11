@@ -4,7 +4,7 @@ import ObsidianBulletPlugin from "./ObsidianBulletPlugin";
 import { MyEditor, MyEditorPosition, MyEditorSelection } from "./editor";
 import { EditorSelectionsBehaviourOverride } from "./features/EditorSelectionsBehaviourOverride";
 import { KeepCursorWithinListContent } from "./operations/KeepCursorWithinListContent";
-import { SettingsObject } from "./services/Settings";
+import { SettingsObject, isBulletThreadingColor } from "./services/Settings";
 import {
   getTestPlatformEnvironment,
   getTestPlatformWsUrl,
@@ -101,6 +101,16 @@ const settingCommandDecoders = {
     k: "enhanceVerticalLineHover",
     v: decodeBooleanSetting("enhanceVerticalLineHover", value),
   }),
+  bulletThreading: (value) => ({
+    k: "bulletThreading",
+    v: decodeBooleanSetting("bulletThreading", value),
+  }),
+  bulletThreadingColor: (value) => {
+    if (!isBulletThreadingColor(value)) {
+      throw new TypeError("Expected bulletThreadingColor to be a hex color");
+    }
+    return { k: "bulletThreadingColor", v: value };
+  },
   debug: (value) => ({
     k: "debug",
     v: decodeBooleanSetting("debug", value),

@@ -147,6 +147,12 @@ Bullet preserves the viewport position when folding from a guide or a native fol
 
 The separate **Fold the list** and **Unfold the list** commands operate on the item at the caret. These commands do not have default shortcuts, so you can assign your own under **Settings → Hotkeys**.
 
+### Follow the current branch
+
+Enable **Bullet threading** under **Settings → Bullet → Appearance** to connect the current list item to its parent and ancestors in Live Preview. Choose a color with **Thread color**. Each editor pane follows its own cursor.
+
+Bullet threading is off by default. While off, Bullet removes the threading editor extension, so typing and scrolling do not run threading calculations or measurements.
+
 ### Use Vim and mobile controls
 
 When Obsidian's Vim mode is enabled, `o` and `O` create list items while the caret is inside a list and fall back to ordinary lines outside one.
@@ -194,6 +200,8 @@ All settings are under **Settings → Bullet**.
 | -------------------------- | :-----: | --------------------------------------------------------------------------------------------- |
 | **Style list bullets**     |   On    | Use Bullet's marker spacing, larger dots, and parent hover feedback with active theme colors. |
 | **Enhance vertical lines** |   On    | Strengthen indentation guides and use a continuous rounded hover.                             |
+| **Bullet threading**       |   Off   | Connect the current list item to its parent and ancestors in Live Preview.                    |
+| **Thread color**           | Purple  | Choose the color of the thread.                                                               |
 
 ### Folding
 

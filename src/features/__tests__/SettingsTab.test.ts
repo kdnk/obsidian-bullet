@@ -17,6 +17,7 @@ jest.mock(
       desc = "";
       heading = false;
       dropdown?: FakeDropdownRecord;
+      color?: FakeColorRecord;
       toggle?: FakeToggleRecord;
 
       constructor() {
@@ -82,6 +83,26 @@ jest.mock(
         this.toggle = record;
         return this;
       }
+
+      addColorPicker(configure: (color: FakeColor) => void) {
+        const record: FakeColorRecord = {
+          value: "",
+          callbacks: [],
+        };
+        const color: FakeColor = {
+          setValue(value) {
+            record.value = value;
+            return this;
+          },
+          onChange(callback) {
+            record.callbacks.push(callback);
+            return this;
+          },
+        };
+        configure(color);
+        this.color = record;
+        return this;
+      }
     },
   }),
   { virtual: true },
@@ -92,6 +113,7 @@ interface FakeSetting {
   desc: string;
   heading: boolean;
   dropdown?: FakeDropdownRecord;
+  color?: FakeColorRecord;
   toggle?: FakeToggleRecord;
 }
 
@@ -117,6 +139,16 @@ interface FakeToggle {
   onChange(callback: (value: boolean) => Promise<void>): FakeToggle;
 }
 
+interface FakeColorRecord {
+  value: string;
+  callbacks: Array<(value: string) => Promise<void>>;
+}
+
+interface FakeColor {
+  setValue(value: string): FakeColor;
+  onChange(callback: (value: string) => Promise<void>): FakeColor;
+}
+
 type FakeControl =
   | {
       type: "dropdown";
@@ -124,7 +156,7 @@ type FakeControl =
       options: Record<string, string>;
     }
   | {
-      type: "toggle";
+      type: "toggle" | "color";
       key: string;
     };
 
@@ -157,6 +189,8 @@ function makeSettings() {
     overrideSelectAllBehaviour: true,
     betterListsStyles: true,
     enhancedVerticalLineHover: true,
+    bulletThreading: false,
+    bulletThreadingColor: "#8b5cf6",
     outerVerticalLines: true,
     verticalLinesAction: "toggle-folding",
     mobileRightFoldControls: true,
@@ -210,7 +244,12 @@ describe("SettingsTab", () => {
         "Enhance the Ctrl+A or Cmd+A behavior",
         "Drag-and-Drop",
       ],
-      ["Style list bullets", "Enhance vertical lines"],
+      [
+        "Style list bullets",
+        "Enhance vertical lines",
+        "Bullet threading",
+        "Thread color",
+      ],
       [
         "Draw outer list lines",
         "Fold lists from vertical indentation lines",
@@ -257,6 +296,14 @@ describe("SettingsTab", () => {
         key: "enhancedVerticalLineHover",
       },
     });
+    expect(groups[1]?.items[2]?.control).toEqual({
+      type: "toggle",
+      key: "bulletThreading",
+    });
+    expect(groups[1]?.items[3]?.control).toEqual({
+      type: "color",
+      key: "bulletThreadingColor",
+    });
   });
 
   test("reads and persists declarative control values through Settings", async () => {
@@ -269,17 +316,23 @@ describe("SettingsTab", () => {
     );
     expect(tab.getControlValue("keepBodyTextInBullets")).toBe(false);
     expect(tab.getControlValue("enhancedVerticalLineHover")).toBe(true);
+    expect(tab.getControlValue("bulletThreading")).toBe(false);
+    expect(tab.getControlValue("bulletThreadingColor")).toBe("#8b5cf6");
 
     await tab.setControlValue("verticalLinesActionEnabled", false);
     await tab.setControlValue("keepCursorWithinContent", "bullet-only");
     await tab.setControlValue("keepBodyTextInBullets", true);
     await tab.setControlValue("enhancedVerticalLineHover", false);
+    await tab.setControlValue("bulletThreading", true);
+    await tab.setControlValue("bulletThreadingColor", "#123456");
 
     expect(settings.verticalLinesAction).toBe("none");
     expect(settings.keepCursorWithinContent).toBe("bullet-only");
     expect(settings.keepBodyTextInBullets).toBe(true);
     expect(settings.enhancedVerticalLineHover).toBe(false);
-    expect(settings.save).toHaveBeenCalledTimes(4);
+    expect(settings.bulletThreading).toBe(true);
+    expect(settings.bulletThreadingColor).toBe("#123456");
+    expect(settings.save).toHaveBeenCalledTimes(6);
   });
 
   test("rejects invalid declarative control values", async () => {
@@ -289,6 +342,14 @@ describe("SettingsTab", () => {
       tab.setControlValue("keepCursorWithinContent", "invalid"),
     ).rejects.toThrow("keepCursorWithinContent");
     await expect(tab.setControlValue("debug", "true")).rejects.toThrow("debug");
+    await expect(
+      tab.setControlValue("bulletThreading", "true"),
+    ).rejects.toThrow("bulletThreading");
+    for (const color of ["red", "#abc", "#12345678", "#12345g", 42, null]) {
+      await expect(
+        tab.setControlValue("bulletThreadingColor", color),
+      ).rejects.toThrow("bulletThreadingColor");
+    }
   });
 
   test("keeps the imperative display fallback for pre-1.13 Obsidian", async () => {
@@ -314,6 +375,8 @@ describe("SettingsTab", () => {
       "heading:Appearance",
       "setting:Style list bullets",
       "setting:Enhance vertical lines",
+      "setting:Bullet threading",
+      "setting:Thread color",
       "heading:Folding",
       "setting:Draw outer list lines",
       "setting:Fold lists from vertical indentation lines",
@@ -327,12 +390,16 @@ describe("SettingsTab", () => {
     );
     const cursorSetting = settingRecords[1];
     const hoverSetting = settingRecords[8];
-    const outerSetting = settingRecords[9];
-    const actionSetting = settingRecords[10];
-    const mobileSetting = settingRecords[11];
+    const threadingSetting = settingRecords[9];
+    const colorSetting = settingRecords[10];
+    const outerSetting = settingRecords[11];
+    const actionSetting = settingRecords[12];
+    const mobileSetting = settingRecords[13];
 
     expect(cursorSetting?.dropdown?.value).toBe("bullet-and-checkbox");
     expect(hoverSetting?.toggle?.value).toBe(true);
+    expect(threadingSetting?.toggle?.value).toBe(false);
+    expect(colorSetting?.color?.value).toBe("#8b5cf6");
     expect(outerSetting?.toggle?.value).toBe(true);
     expect(actionSetting?.toggle?.value).toBe(true);
     expect(mobileSetting?.toggle?.value).toBe(true);
@@ -341,7 +408,9 @@ describe("SettingsTab", () => {
       !hoverSetting.toggle ||
       !outerSetting.toggle ||
       !actionSetting.toggle ||
-      !mobileSetting.toggle
+      !mobileSetting.toggle ||
+      !threadingSetting.toggle ||
+      !colorSetting.color
     ) {
       throw new Error("Expected legacy toggle controls");
     }
@@ -349,11 +418,15 @@ describe("SettingsTab", () => {
     await outerSetting.toggle.callbacks[0](false);
     await actionSetting.toggle.callbacks[0](false);
     await mobileSetting.toggle.callbacks[0](false);
+    await threadingSetting.toggle.callbacks[0](true);
+    await colorSetting.color.callbacks[0]("#abcdef");
 
     expect(settings.enhancedVerticalLineHover).toBe(false);
     expect(settings.outerVerticalLines).toBe(false);
     expect(settings.verticalLinesAction).toBe("none");
     expect(settings.mobileRightFoldControls).toBe(false);
-    expect(settings.save).toHaveBeenCalledTimes(4);
+    expect(settings.bulletThreading).toBe(true);
+    expect(settings.bulletThreadingColor).toBe("#abcdef");
+    expect(settings.save).toHaveBeenCalledTimes(6);
   });
 });

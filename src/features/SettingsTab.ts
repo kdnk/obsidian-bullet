@@ -10,7 +10,11 @@ import {
 
 import { Feature } from "./Feature";
 
-import { KeepCursorWithinContent, Settings } from "../services/Settings";
+import {
+  KeepCursorWithinContent,
+  Settings,
+  isBulletThreadingColor,
+} from "../services/Settings";
 
 type SettingsControlKey =
   | "keepCursorWithinContent"
@@ -21,6 +25,8 @@ type SettingsControlKey =
   | "overrideSelectAllBehaviour"
   | "betterListsStyles"
   | "enhancedVerticalLineHover"
+  | "bulletThreading"
+  | "bulletThreadingColor"
   | "outerVerticalLines"
   | "verticalLinesActionEnabled"
   | "mobileRightFoldControls"
@@ -126,6 +132,22 @@ const SETTING_GROUPS = [
           key: "enhancedVerticalLineHover",
         },
       },
+      {
+        name: "Bullet threading",
+        desc: "Connect the current list item to its ancestors with a colored thread.",
+        control: {
+          type: "toggle",
+          key: "bulletThreading",
+        },
+      },
+      {
+        name: "Thread color",
+        desc: "Choose the color used for bullet threading.",
+        control: {
+          type: "color",
+          key: "bulletThreadingColor",
+        },
+      },
     ],
   },
   {
@@ -225,6 +247,10 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
         return this.settings.betterListsStyles;
       case "enhancedVerticalLineHover":
         return this.settings.enhancedVerticalLineHover;
+      case "bulletThreading":
+        return this.settings.bulletThreading;
+      case "bulletThreadingColor":
+        return this.settings.bulletThreadingColor;
       case "outerVerticalLines":
         return this.settings.outerVerticalLines;
       case "verticalLinesActionEnabled":
@@ -272,6 +298,17 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
           key,
           value,
         );
+        break;
+      case "bulletThreading":
+        this.settings.bulletThreading = decodeBooleanControl(key, value);
+        break;
+      case "bulletThreadingColor":
+        if (!isBulletThreadingColor(value)) {
+          throw new TypeError(
+            "Expected bulletThreadingColor to be a #RRGGBB color",
+          );
+        }
+        this.settings.bulletThreadingColor = value;
         break;
       case "outerVerticalLines":
         this.settings.outerVerticalLines = decodeBooleanControl(key, value);
@@ -329,6 +366,18 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
           .onChange(async (value) => {
             await this.setControlValue(control.key, value);
           });
+      });
+      return;
+    }
+
+    if (control.type === "color") {
+      if (typeof currentValue !== "string") {
+        throw new TypeError(`Expected ${control.key} to resolve to a string`);
+      }
+      setting.addColorPicker((color) => {
+        color.setValue(currentValue).onChange(async (value) => {
+          await this.setControlValue(control.key, value);
+        });
       });
       return;
     }

@@ -793,3 +793,28 @@ html
 .markdown-source-view.mod-cm6.bullet-zoom-active .cm-panels-top {
   border-bottom: 0;
 }
+
+.bullet-plugin-threading-layer {
+  pointer-events: none;
+}
+
+.bullet-plugin-thread-edge {
+  opacity: 0.75;
+  position: absolute;
+  left: var(--bullet-thread-left);
+  top: var(--bullet-thread-top);
+  width: var(--bullet-thread-width);
+  height: var(--bullet-thread-height);
+  border-left: 2px solid var(--bullet-thread-color);
+  border-bottom: 2px solid var(--bullet-thread-color);
+  border-bottom-left-radius: 6px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.bullet-plugin-thread-edge-rtl {
+  border-left: 0;
+  border-right: 2px solid var(--bullet-thread-color);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 6px;
+}
