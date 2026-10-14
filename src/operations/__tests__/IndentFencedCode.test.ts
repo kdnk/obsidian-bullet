@@ -83,6 +83,20 @@ describe("fenced code indentation", () => {
     },
   );
 
+  test("keeps an endpoint before removed code indentation in place", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- owner\n  ```\n        code\n  ```",
+        cursor: { line: 2, ch: 3 },
+      }),
+    });
+    expect(new OutdentList(root, false, "\t").perform()).toEqual(
+      UPDATED_OUTCOME,
+    );
+    expect(root.print()).toBe("- owner\n  ```\n    code\n  ```");
+    expect(root.getCursor()).toEqual({ line: 2, ch: 3 });
+  });
+
   test("does not indent the closing fence at the end-exclusive selection boundary", () => {
     const text = "- ```js\n  one\n  ```";
     const root = makeRoot({

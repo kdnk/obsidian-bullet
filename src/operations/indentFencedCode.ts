@@ -64,7 +64,15 @@ export function indentFencedCode(
   const containerWidth = countColumn(container, 4);
   const unitWidth = countColumn(indentChars, 4);
   const rawLines = list.print().split("\n");
-  const changes = new Map<number, { before: number; after: number }>();
+  const changes = new Map<
+    number,
+    {
+      from: number;
+      before: number;
+      after: number;
+      minimum: number;
+    }
+  >();
   for (let index = first; index <= last; index++) {
     const raw = rawLines[index];
     const prefix = raw.match(/^[ \t]*/)?.[0] ?? "";
@@ -89,19 +97,40 @@ export function indentFencedCode(
       adjusted.slice(content.offset),
       adjusted.slice(0, content.offset),
     );
+    let from = 0;
+    while (
+      from < Math.min(prefix.length, nextPrefix.length) &&
+      prefix[from] === nextPrefix[from]
+    )
+      from++;
+    let before = prefix.length;
+    let after = nextPrefix.length;
+    while (
+      before > from &&
+      after > from &&
+      prefix[before - 1] === nextPrefix[after - 1]
+    ) {
+      before--;
+      after--;
+    }
     changes.set(startLine + index, {
-      before: prefix.length,
-      after: nextPrefix.length,
+      from,
+      before,
+      after,
+      minimum: content.offset,
     });
   }
   if (changes.size === 0) return STOP_ONLY_OUTCOME;
   const mapPosition = (position: Position): Position => {
     const change = changes.get(position.line);
     if (!change) return position;
-    return {
-      ...position,
-      ch: Math.max(0, position.ch + change.after - change.before),
-    };
+    const ch =
+      position.ch < change.from
+        ? position.ch
+        : position.ch >= change.before
+          ? position.ch + change.after - change.before
+          : change.after;
+    return { ...position, ch: Math.max(change.minimum, ch) };
   };
   root.replaceSelections([
     {

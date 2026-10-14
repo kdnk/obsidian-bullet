@@ -47,6 +47,8 @@ export class OutdentList implements Operation {
     }
 
     const listStartLineBefore = root.getContentLinesRangeOf(list)[0];
+    const selectedLineIndex = selection.head.line - listStartLineBefore;
+    const contentStartBefore = list.getLinesInfo()[selectedLineIndex].from.ch;
     const indentRmFrom = parent.getFirstLineIndent().length;
     const indentRmTill = list.getFirstLineIndent().length;
 
@@ -54,24 +56,25 @@ export class OutdentList implements Operation {
     grandParent.addAfter(parent, list);
     list.unindentContent(indentRmFrom, indentRmTill);
 
+    recalculateNumericBullets(root, this.numericBulletsEnabled);
+    const contentStartAfter = list.getLinesInfo()[selectedLineIndex].from.ch;
+    const chDiff = contentStartAfter - contentStartBefore;
     const listStartLineAfter = root.getContentLinesRangeOf(list)[0];
     const lineDiff = listStartLineAfter - listStartLineBefore;
-    const chDiff = indentRmTill - indentRmFrom;
 
     root.replaceSelections([
       {
         anchor: {
           line: selection.anchor.line + lineDiff,
-          ch: Math.max(0, selection.anchor.ch - chDiff),
+          ch: Math.max(0, selection.anchor.ch + chDiff),
         },
         head: {
           line: selection.head.line + lineDiff,
-          ch: Math.max(0, selection.head.ch - chDiff),
+          ch: Math.max(0, selection.head.ch + chDiff),
         },
       },
     ]);
 
-    recalculateNumericBullets(root, this.numericBulletsEnabled);
     return UPDATED_OUTCOME;
   }
 }

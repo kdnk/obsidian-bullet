@@ -73,6 +73,8 @@ export class IndentList implements Operation {
     }
 
     const listStartLineBefore = root.getContentLinesRangeOf(list)[0];
+    const selectedLineIndex = selection.head.line - listStartLineBefore;
+    const contentStartBefore = list.getLinesInfo()[selectedLineIndex].from.ch;
 
     const indentPos = list.getFirstLineIndent().length;
     let indentChars = "";
@@ -115,6 +117,9 @@ export class IndentList implements Operation {
     prev.addAfterAll(list);
     list.indentContent(indentPos, indentChars);
 
+    recalculateNumericBullets(root, this.numericBulletsEnabled);
+    const contentStartAfter = list.getLinesInfo()[selectedLineIndex].from.ch;
+    const chDiff = contentStartAfter - contentStartBefore;
     const listStartLineAfter = root.getContentLinesRangeOf(list)[0];
     const lineDiff = listStartLineAfter - listStartLineBefore;
 
@@ -122,16 +127,15 @@ export class IndentList implements Operation {
       {
         anchor: {
           line: selection.anchor.line + lineDiff,
-          ch: selection.anchor.ch + indentChars.length,
+          ch: Math.max(0, selection.anchor.ch + chDiff),
         },
         head: {
           line: selection.head.line + lineDiff,
-          ch: selection.head.ch + indentChars.length,
+          ch: Math.max(0, selection.head.ch + chDiff),
         },
       },
     ]);
 
-    recalculateNumericBullets(root, this.numericBulletsEnabled);
     return UPDATED_OUTCOME;
   }
 }
