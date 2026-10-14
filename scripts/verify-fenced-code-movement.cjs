@@ -51,6 +51,43 @@ const cases = [
       "    ```",
     ].join("\n"),
   },
+  ...[9, 99].flatMap((lower) => {
+    const upper = lower + 1;
+    const before = Array.from(
+      { length: lower - 1 },
+      (_, i) => `${i + 1}.\tbefore`,
+    );
+    const lowerDocument = [
+      ...before,
+      `${lower}.\t\`\`\`js`,
+      "\t  code",
+      "\t```",
+      `${upper}.\tnext`,
+    ].join("\n");
+    const upperDocument = [
+      ...before,
+      `${lower}.\tnext`,
+      `${upper}.\t\`\`\`js`,
+      lower === 99 ? "\t      code" : "\t  code",
+      lower === 99 ? "\t    ```" : "\t```",
+    ].join("\n");
+    return [
+      {
+        name: `tab separator ${lower} to ${upper}`,
+        text: lowerDocument,
+        line: lower - 1,
+        command: "bullet:move-list-item-down",
+        expected: upperDocument,
+      },
+      {
+        name: `tab separator ${upper} to ${lower}`,
+        text: upperDocument,
+        line: lower,
+        command: "bullet:move-list-item-up",
+        expected: lowerDocument,
+      },
+    ];
+  }),
 ];
 function sample() {
   return evaluate(async () => {

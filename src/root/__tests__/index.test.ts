@@ -67,6 +67,64 @@ describe("recalculateNumericBullets", () => {
 });
 
 describe("Root", () => {
+  describe("renumbering a fenced-code item with a tab separator", () => {
+    test.each([
+      {
+        before: "9.\t```js\n\t  code\n\t```\n11. next",
+        bullet: "10.",
+        after: "10.\t```js\n\t  code\n\t```\n11. next",
+      },
+      {
+        before: "10.\t```js\n\t  code\n\t```\n11. next",
+        bullet: "9.",
+        after: "9.\t```js\n\t  code\n\t```\n11. next",
+      },
+      {
+        before: "99.\t```js\n\t  code\n\t```\n101. next",
+        bullet: "100.",
+        after: "100.\t```js\n\t      code\n\t    ```\n101. next",
+      },
+      {
+        before: "100.\t```js\n\t      code\n\t    ```\n101. next",
+        bullet: "99.",
+        after: "99.\t```js\n\t  code\n\t```\n101. next",
+      },
+      {
+        before: " 9.\t```js\n\t  code\n\t```\n 11. next",
+        bullet: "10.",
+        after: " 10.\t```js\n\t      code\n\t    ```\n 11. next",
+      },
+    ])(
+      "preserves code indentation when replacing the marker with $bullet",
+      ({ before, bullet, after }) => {
+        const root = makeRoot({
+          editor: makeEditor({ text: before, cursor: { line: 0, ch: 0 } }),
+        });
+        const list = root.getChildren()[0];
+
+        list.replateBullet(bullet);
+
+        expect(root.print()).toBe(after);
+        expect(list.getLinesForFenceParsing()).toEqual([
+          "```js",
+          "  code",
+          "```",
+        ]);
+        const reparsed = makeRoot({
+          editor: makeEditor({
+            text: root.print(),
+            cursor: { line: 0, ch: 0 },
+          }),
+        });
+        expect(reparsed.getChildren()[0].getLinesForFenceParsing()).toEqual([
+          "```js",
+          "  code",
+          "```",
+        ]);
+      },
+    );
+  });
+
   describe("getListUnderLine", () => {
     test("should return list under line", () => {
       const root = makeRoot({
