@@ -48,7 +48,7 @@ export class CreateNewItem implements Operation {
       return NO_OP_OUTCOME;
     }
 
-    const cursor = root.getCursor();
+    const cursor = { line: selection.head.line, ch: selection.from };
     const lineUnderCursor = lines.find((l) => l.from.line === cursor.line);
     const lineIndex = lines.findIndex((l) => l.from.line === cursor.line);
     if (!lineUnderCursor || lineIndex < 0) {
