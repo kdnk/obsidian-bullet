@@ -104,7 +104,7 @@ const SETTING_GROUPS = [
       },
       {
         name: "Drag-and-Drop",
-        desc: "Move list items on desktop by dragging a bullet, fold indicator, or checkbox.",
+        desc: "Move list items on desktop by dragging a bullet or fold indicator.",
         control: {
           type: "toggle",
           key: "dragAndDrop",
