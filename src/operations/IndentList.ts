@@ -43,7 +43,12 @@ export class IndentList implements Operation {
   perform() {
     const { root } = this;
 
-    if (!root.hasSingleCursor()) {
+    if (!root.hasSingleSelection()) {
+      return NO_OP_OUTCOME;
+    }
+
+    const selection = root.getSelection();
+    if (selection.anchor.line !== selection.head.line) {
       return NO_OP_OUTCOME;
     }
 
@@ -105,11 +110,18 @@ export class IndentList implements Operation {
     const listStartLineAfter = root.getContentLinesRangeOf(list)[0];
     const lineDiff = listStartLineAfter - listStartLineBefore;
 
-    const cursor = root.getCursor();
-    root.replaceCursor({
-      line: cursor.line + lineDiff,
-      ch: cursor.ch + indentChars.length,
-    });
+    root.replaceSelections([
+      {
+        anchor: {
+          line: selection.anchor.line + lineDiff,
+          ch: selection.anchor.ch + indentChars.length,
+        },
+        head: {
+          line: selection.head.line + lineDiff,
+          ch: selection.head.ch + indentChars.length,
+        },
+      },
+    ]);
 
     recalculateNumericBullets(root, this.numericBulletsEnabled);
     return UPDATED_OUTCOME;

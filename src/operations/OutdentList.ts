@@ -16,7 +16,12 @@ export class OutdentList implements Operation {
   perform() {
     const { root } = this;
 
-    if (!root.hasSingleCursor()) {
+    if (!root.hasSingleSelection()) {
+      return NO_OP_OUTCOME;
+    }
+
+    const selection = root.getSelection();
+    if (selection.anchor.line !== selection.head.line) {
       return NO_OP_OUTCOME;
     }
 
@@ -44,11 +49,18 @@ export class OutdentList implements Operation {
     const lineDiff = listStartLineAfter - listStartLineBefore;
     const chDiff = indentRmTill - indentRmFrom;
 
-    const cursor = root.getCursor();
-    root.replaceCursor({
-      line: cursor.line + lineDiff,
-      ch: cursor.ch - chDiff,
-    });
+    root.replaceSelections([
+      {
+        anchor: {
+          line: selection.anchor.line + lineDiff,
+          ch: Math.max(0, selection.anchor.ch - chDiff),
+        },
+        head: {
+          line: selection.head.line + lineDiff,
+          ch: Math.max(0, selection.head.ch - chDiff),
+        },
+      },
+    ]);
 
     recalculateNumericBullets(root, this.numericBulletsEnabled);
     return UPDATED_OUTCOME;
