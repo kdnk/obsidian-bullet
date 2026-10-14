@@ -228,8 +228,48 @@ function layout(name, side, openingText, siblingText) {
           }
         }
       }
-      const bullet = opening.querySelector(".list-bullet") ?? marker;
+      const bullet =
+        opening.querySelector(".list-bullet,.list-number") ?? marker;
       const bulletBounds = bounds(bullet);
+      let bulletPoint = {
+        x: bulletBounds.left + bulletBounds.width / 2,
+        y: bulletBounds.top + bulletBounds.height / 2,
+      };
+      if (bullet.matches(".list-bullet")) {
+        const css = getComputedStyle(bullet, "::after");
+        const width = parseFloat(css.width),
+          height = parseFloat(css.height);
+        const length = (value, size) =>
+          value.endsWith("%")
+            ? (parseFloat(value) * size) / 100
+            : parseFloat(value);
+        const [dx = "0px", dy = "0px"] =
+          css.translate === "none" ? [] : css.translate.split(/\s+/);
+        const transform =
+          css.transform === "none"
+            ? new DOMMatrix()
+            : new DOMMatrix(css.transform);
+        bulletPoint = {
+          x:
+            bulletBounds.left +
+            (css.left === "auto"
+              ? bulletBounds.width / 2
+              : length(css.left, bulletBounds.width) + width / 2) +
+            length(dx, width) +
+            transform.e,
+          y:
+            bulletBounds.top +
+            (css.top === "auto"
+              ? bulletBounds.height / 2
+              : length(css.top, bulletBounds.height) + height / 2) +
+            length(dy, height) +
+            transform.f,
+        };
+        if (
+          ![bulletPoint.x, bulletPoint.y, width, height].every(Number.isFinite)
+        )
+          throw Error("Unmeasurable native bullet paint");
+      }
       return {
         markerLeft: bounds(marker).left,
         siblingMarkerLeft: bounds(otherMarker).left,
@@ -241,8 +281,11 @@ function layout(name, side, openingText, siblingText) {
         embedGuideCount:
           embed?.querySelectorAll(".cm-indent,.bullet-plugin-outer-list-guide")
             .length ?? 0,
-        bulletCenter: bulletBounds.top + bulletBounds.height / 2,
+        bulletPoint,
+        bulletCenter: bulletPoint.y,
         textCenter: textRect ? textRect.top + textRect.height / 2 : null,
+        openingTop: bounds(opening).top,
+        openingHeight: bounds(opening).height,
         guideHeight:
           embed && opening.querySelector(".cm-indent")
             ? parseFloat(
@@ -252,7 +295,7 @@ function layout(name, side, openingText, siblingText) {
                 ).height,
               )
             : null,
-        embedHeight: embed ? bounds(embed).height : null,
+        embedBottom: embed ? bounds(embed).bottom : null,
       };
     },
     key,
@@ -289,9 +332,13 @@ function layout(name, side, openingText, siblingText) {
       Math.abs(sample.bulletCenter - sample.textCenter) < 1,
     `${name}: marker shares first code line`,
   );
+  check(
+    sample.openingHeight > 0,
+    `${name}: opening fence retains a navigable line box`,
+  );
   if (sample.embedded && sample.guideHeight !== null)
     check(
-      Math.abs(sample.guideHeight - sample.embedHeight) < 1,
+      Math.abs(sample.openingTop + sample.guideHeight - sample.embedBottom) < 1,
       `${name}: native guide spans preview`,
     );
   fs.writeFileSync(
@@ -301,6 +348,7 @@ function layout(name, side, openingText, siblingText) {
       "base64",
     ),
   );
+  return sample;
 }
 
 function mouse(type, point, buttons) {
@@ -492,29 +540,33 @@ try {
     command("source", "bullet:zoom-in");
     cursor("source", codeSiblingLine);
     assertZoomRoots("before-zoomed-drag");
-    layout("before-zoomed-drag", "source", "\t\t- ```js", "\t\t- code sibling");
   } else {
     cursor("source", 8);
   }
-  const start = evaluate((key) => {
-    const cm = window[key].source.view.editor.cm;
-    const row = [...cm.contentDOM.querySelectorAll(".cm-line")].find(
-      (element) =>
-        cm.state.doc.lineAt(cm.posAtDOM(element)).text === "\t\t- ```js",
-    );
-    const marker =
-      row?.querySelector(".list-bullet") ??
-      row?.querySelector(".cm-formatting-list");
-    if (!marker) throw Error("Source preview bullet is not rendered");
-    const rect = marker.getBoundingClientRect();
-    const point = {
-      x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2,
-    };
-    if (!marker.contains(document.elementFromPoint(point.x, point.y)))
-      throw Error("Source preview bullet is occluded");
-    return point;
-  }, key);
+  const start = layout(
+    sourceZoom ? "before-zoomed-drag" : "before-cross-note-drag",
+    "source",
+    "\t\t- ```js",
+    "\t\t- code sibling",
+  ).bulletPoint;
+  guardWindow();
+  evaluate(
+    (key, point) => {
+      const cm = window[key].source.view.editor.cm;
+      const row = [...cm.contentDOM.querySelectorAll(".cm-line")].find(
+        (element) =>
+          cm.state.doc.lineAt(cm.posAtDOM(element)).text === "\t\t- ```js",
+      );
+      const marker =
+        row?.querySelector(".list-bullet,.list-number") ??
+        row?.querySelector(".cm-formatting-list");
+      if (!marker) throw Error("Source preview bullet is not rendered");
+      if (!marker.contains(document.elementFromPoint(point.x, point.y)))
+        throw Error("Source preview bullet paint is occluded");
+    },
+    key,
+    start,
+  );
   mouse("mouseMoved", start, 0);
   mouse("mousePressed", start, 1);
   mouse("mouseMoved", { x: start.x + 12, y: start.y + 2 }, 1);
