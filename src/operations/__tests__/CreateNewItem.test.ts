@@ -3,6 +3,71 @@ import { CreateNewItem } from "../CreateNewItem";
 import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 describe("CreateNewItem operation", () => {
+  describe.each([false, true])("reversed selection: %s", (reversed) => {
+    test.each([
+      {
+        text: "- [x] abcdef",
+        line: 0,
+        from: 6,
+        to: 9,
+        want: "- [x] \n- [ ] def",
+        ch: 6,
+      },
+      {
+        text: "- [ ] abcdef",
+        line: 0,
+        from: 6,
+        to: 9,
+        want: "- [ ] \n- [ ] def",
+        ch: 6,
+      },
+      {
+        text: "1. [x] abcdef",
+        line: 0,
+        from: 7,
+        to: 10,
+        want: "1. [x] \n2. [ ] def",
+        ch: 7,
+      },
+      { text: "- abcdef", line: 0, from: 2, to: 5, want: "- \n- def", ch: 2 },
+      {
+        text: "1. abcdef",
+        line: 0,
+        from: 3,
+        to: 6,
+        want: "1. \n2. def",
+        ch: 3,
+      },
+      {
+        text: "- item\n  abcdef",
+        line: 1,
+        from: 4,
+        to: 6,
+        want: "- item\n  ab\n  ef",
+        ch: 2,
+      },
+    ])(
+      "replaces selected text in $text",
+      ({ text, line, from, to, want, ch }) => {
+        const root = makeRoot({
+          editor: makeEditor({ text, cursor: { line, ch: from } }),
+        });
+        root.replaceSelections([
+          {
+            anchor: { line, ch: reversed ? to : from },
+            head: { line, ch: reversed ? from : to },
+          },
+        ]);
+
+        expect(new CreateNewItem(root, "\t", true).perform()).toEqual(
+          UPDATED_OUTCOME,
+        );
+        expect(root.print()).toBe(want);
+        expect(root.getCursor()).toEqual({ line: line + 1, ch });
+      },
+    );
+  });
+
   describe("forced child insertion", () => {
     test.each([
       {
