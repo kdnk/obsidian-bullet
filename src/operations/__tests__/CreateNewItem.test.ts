@@ -46,6 +46,38 @@ describe("CreateNewItem operation", () => {
         want: "- item\n  ab\n  ef",
         ch: 2,
       },
+      {
+        text: "- [x] abc\n\t- child",
+        line: 0,
+        from: 6,
+        to: 9,
+        want: "- [x] \n- [ ] \n\t- child",
+        ch: 6,
+      },
+      {
+        text: "- abcdef\n\t- child",
+        line: 0,
+        from: 5,
+        to: 8,
+        want: "- abc\n- \n\t- child",
+        ch: 2,
+      },
+      {
+        text: "1. abcdef\n\t1. child",
+        line: 0,
+        from: 6,
+        to: 9,
+        want: "1. abc\n2. \n\t1. child",
+        ch: 3,
+      },
+      {
+        text: "1. [x] abc\n\t1. child",
+        line: 0,
+        from: 7,
+        to: 10,
+        want: "1. [x] \n2. [ ] \n\t1. child",
+        ch: 7,
+      },
     ])(
       "replaces selected text in $text",
       ({ text, line, from, to, want, ch }) => {
