@@ -10,6 +10,48 @@ import {
 import { OutdentList } from "../OutdentList";
 
 describe("IndentList operation", () => {
+  test.each([false, true])(
+    "moves the selected item with its children, reversed=%s",
+    (reversed) => {
+      const root = makeRoot({
+        editor: makeEditor({
+          text: "- first\n- second\n\t- child",
+          cursor: { line: 1, ch: 8 },
+        }),
+      });
+      const anchor = { line: 1, ch: reversed ? 8 : 2 };
+      const head = { line: 1, ch: reversed ? 2 : 8 };
+      root.replaceSelections([{ anchor, head }]);
+
+      expect(new IndentList(root, "\t", false).perform()).toEqual(
+        UPDATED_OUTCOME,
+      );
+      expect(root.print()).toBe("- first\n\t- second\n\t\t- child");
+      expect(root.getSelections()).toEqual([
+        {
+          anchor: { line: 1, ch: anchor.ch + 1 },
+          head: { line: 1, ch: head.ch + 1 },
+        },
+      ]);
+    },
+  );
+
+  test("leaves multiline selections for native indentation", () => {
+    const text = "- first\n- second\n\t- child";
+    const root = makeRoot({
+      editor: makeEditor({ text, cursor: { line: 1, ch: 8 } }),
+    });
+    const selection = {
+      anchor: { line: 0, ch: 2 },
+      head: { line: 1, ch: 8 },
+    };
+    root.replaceSelections([selection]);
+
+    expect(new IndentList(root, "\t", false).perform()).toEqual(NO_OP_OUTCOME);
+    expect(root.print()).toBe(text);
+    expect(root.getSelections()).toEqual([selection]);
+  });
+
   test("preserves code columns when the fence starts in continuation text", () => {
     const text = "- previous\n- note\n  ```js\n\tcode\n\t```\n- next";
     const root = makeRoot({

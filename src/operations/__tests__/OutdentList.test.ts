@@ -7,6 +7,46 @@ import {
 import { OutdentList } from "../OutdentList";
 
 describe("OutdentList operation", () => {
+  test.each([false, true])(
+    "moves the selected item with its children, reversed=%s",
+    (reversed) => {
+      const root = makeRoot({
+        editor: makeEditor({
+          text: "- first\n\t- second\n\t\t- child",
+          cursor: { line: 1, ch: 9 },
+        }),
+      });
+      const anchor = { line: 1, ch: reversed ? 9 : 3 };
+      const head = { line: 1, ch: reversed ? 3 : 9 };
+      root.replaceSelections([{ anchor, head }]);
+
+      expect(new OutdentList(root, false).perform()).toEqual(UPDATED_OUTCOME);
+      expect(root.print()).toBe("- first\n- second\n\t- child");
+      expect(root.getSelections()).toEqual([
+        {
+          anchor: { line: 1, ch: anchor.ch + -1 },
+          head: { line: 1, ch: head.ch + -1 },
+        },
+      ]);
+    },
+  );
+
+  test("leaves multiline selections for native indentation", () => {
+    const text = "- first\n\t- second\n\t\t- child";
+    const root = makeRoot({
+      editor: makeEditor({ text, cursor: { line: 1, ch: 9 } }),
+    });
+    const selection = {
+      anchor: { line: 0, ch: 2 },
+      head: { line: 1, ch: 9 },
+    };
+    root.replaceSelections([selection]);
+
+    expect(new OutdentList(root, false).perform()).toEqual(NO_OP_OUTCOME);
+    expect(root.print()).toBe(text);
+    expect(root.getSelections()).toEqual([selection]);
+  });
+
   test("should outdent a list item to its parent's level", () => {
     const root = makeRoot({
       editor: makeEditor({
