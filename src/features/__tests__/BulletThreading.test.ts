@@ -68,7 +68,8 @@ function viewFor(state: EditorState) {
       setProperty: (key: string, value: string) => properties.set(key, value),
     },
   };
-  const doc = { win: { createDiv: () => dom } };
+  const getComputedStyle = jest.fn(() => ({ getPropertyValue: () => "" }));
+  const doc = { win: { createDiv: () => dom, getComputedStyle } };
   const coordsAtPos = jest.fn((offset: number) => {
     const line = state.doc.lineAt(offset);
     const x = (offset - line.from) * 10;
@@ -102,7 +103,7 @@ function viewFor(state: EditorState) {
     scaleY: 1,
     defaultCharacterWidth: 10,
   };
-  return { view, properties, coordsAtPos, dom };
+  return { view, properties, coordsAtPos, dom, getComputedStyle };
 }
 
 test("default off installs no runtime extension or parser work", async () => {
@@ -329,8 +330,10 @@ test("clipped continuation measures native spacing instead of indent depth", asy
       node: {
         parentElement: {
           closest: () => ({
+            classList: { contains: () => false },
             querySelectorAll: () => [
               {
+                querySelector: () => null,
                 getClientRects: () => [
                   {
                     left: 100,
@@ -442,8 +445,10 @@ test("wrapped marker geometry uses its first rendered row", async () => {
         node: {
           parentElement: {
             closest: () => ({
+              classList: { contains: () => false },
               querySelectorAll: () => [
                 {
+                  querySelector: () => null,
                   getClientRects: () => [
                     {
                       left: line * 20,
@@ -491,6 +496,7 @@ test("task widgets at line boundaries use their visible bullet centers", async (
     classList: { contains: (value: string) => value === "cm-line" },
     querySelectorAll: () => [
       {
+        querySelector: () => null,
         getClientRects: () => [
           {
             left: line * 40,
@@ -526,7 +532,8 @@ test.each([1, 2])(
     settings.bulletThreading = true;
     await feature.load();
     const state = stateAt("- root\n\t- ```js\n\t  code\n\t  ```", 3);
-    const { view, properties, coordsAtPos } = viewFor(state);
+    const { view, properties, coordsAtPos, getComputedStyle } = viewFor(state);
+    getComputedStyle.mockReturnValue({ getPropertyValue: () => "20.75px" });
     let aligned = true;
     const bounds = (line: number) => ({
       left: line * 40,
@@ -539,9 +546,6 @@ test.each([1, 2])(
     const measuredView = {
       ...view,
       scaleY,
-      win: {
-        getComputedStyle: () => ({ getPropertyValue: () => "20.75px" }),
-      },
       domAtPos: (offset: number) => {
         const line = state.doc.lineAt(offset).number;
         return {
@@ -570,14 +574,6 @@ test.each([1, 2])(
     expect(properties.get("--bullet-thread-height")).toBe(
       scaleY === 1 ? "46.75px" : "67.5px",
     );
-    expect(bounds(2)).toEqual({
-      left: 80,
-      right: 88,
-      top: 60,
-      bottom: 80,
-      width: 8,
-      height: 20,
-    });
     aligned = false;
     measured.markers(measuredView as never)[0].draw();
     expect(properties.get("--bullet-thread-height")).toBe("26px");

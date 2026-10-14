@@ -145,11 +145,26 @@ function markerPoint(view: EditorView, node: ThreadNode): ThreadPoint | null {
   );
   if (markers) {
     for (const marker of Array.from(markers)) {
-      const bounds = marker.getClientRects()[0];
+      const number = marker.querySelector(".list-number")?.getClientRects()[0];
+      const bounds =
+        number && number.width > 0 && number.height > 0
+          ? number
+          : marker.getClientRects()[0];
       if (bounds && bounds.width > 0 && bounds.height > 0) {
+        const offset =
+          line?.classList.contains("bullet-plugin-code-opening-aligned") &&
+          marker.classList.contains("list-bullet")
+            ? parseFloat(
+                getObsidianDomWindow(view.dom.ownerDocument)
+                  .getComputedStyle(line)
+                  .getPropertyValue("--bullet-code-opening-marker-offset"),
+              )
+            : 0;
         return {
           x: (bounds.left + bounds.right) / 2,
-          y: (bounds.top + bounds.bottom) / 2,
+          y:
+            (bounds.top + bounds.bottom) / 2 +
+            (Number.isFinite(offset) ? offset * view.scaleY : 0),
         };
       }
     }

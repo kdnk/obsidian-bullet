@@ -32,6 +32,8 @@ const initial = evaluate(() => ({
   leaf: app.workspace.activeLeaf?.id,
   settings: app.plugins.plugins.bullet.settings.getValues(),
   settingsPopout: app.vault.getConfig("settingsPopoutWindow"),
+  shiki: !!app.plugins.plugins["shiki-highlighter"],
+  shikiSettings: app.plugins.plugins["shiki-highlighter"]?.settings,
 }));
 const results = [];
 fs.writeFileSync(
@@ -52,20 +54,56 @@ function snapshot(name) {
   const state = evaluate(() => {
     const { first } = window.__bulletThreadingCheck;
     const cm = first.view.editor.cm;
+    function paintedMarkerBounds(element) {
+      const box = element.getBoundingClientRect();
+      if (!element.matches(".list-bullet")) return box;
+      const css = getComputedStyle(element, "::after");
+      const width = parseFloat(css.width),
+        height = parseFloat(css.height);
+      const length = (value, size) =>
+        value.endsWith("%")
+          ? (parseFloat(value) * size) / 100
+          : parseFloat(value);
+      const [dx = "0px", dy = "0px"] =
+        css.translate === "none" ? [] : css.translate.split(/\s+/);
+      const transform =
+        css.transform === "none"
+          ? new DOMMatrix()
+          : new DOMMatrix(css.transform);
+      const x =
+        box.x +
+        (css.left === "auto"
+          ? box.width / 2
+          : length(css.left, box.width) + width / 2) +
+        length(dx, width) +
+        transform.e;
+      const y =
+        box.y +
+        (css.top === "auto"
+          ? box.height / 2
+          : length(css.top, box.height) + height / 2) +
+        length(dy, height) +
+        transform.f;
+      if (![x, y, width, height].every(Number.isFinite))
+        throw Error("Unmeasurable native bullet paint");
+      return new DOMRect(x - width / 2, y - height / 2, width, height);
+    }
     const anchor = (index) => {
       const row = Array.from(cm.contentDOM.children).find(
         (row) =>
           row.classList.contains("cm-line") &&
           cm.state.doc.lineAt(cm.posAtDOM(row, 0)).number === Number(index) + 1,
       );
-      for (const marker of row?.querySelectorAll(
-        ".list-bullet, .cm-formatting-list-ol, .task-list-item-checkbox",
-      ) ?? []) {
-        const bounds = marker.getClientRects()[0];
+      const markers = row?.querySelectorAll(
+        ".list-bullet, .list-number, .task-list-item-checkbox",
+      );
+      for (const marker of markers ?? []) {
+        const bounds = paintedMarkerBounds(marker);
         if (bounds?.width > 0 && bounds.height > 0)
           return {
             x: (bounds.left + bounds.right) / 2,
             y: (bounds.top + bounds.bottom) / 2,
+            source: marker.getBoundingClientRect().toJSON(),
           };
       }
       return null;
@@ -75,6 +113,11 @@ function snapshot(name) {
       doc: cm.state.doc.toString(),
       cursor: first.view.editor.getCursor(),
       layers: cm.dom.querySelectorAll(".bullet-plugin-threading-layer").length,
+      codePreviews: cm.contentDOM.querySelectorAll(".cm-preview-code-block")
+        .length,
+      codeLineNumbers: cm.contentDOM.querySelectorAll(
+        ".cm-preview-code-block .ln",
+      ).length,
       edges: Array.from(
         cm.dom.querySelectorAll(".bullet-plugin-thread-edge"),
         (el) => {
@@ -253,6 +296,114 @@ function settings(patch) {
   settle();
 }
 
+function configureShiki(mode) {
+  evaluate(async (mode) => {
+    const id = "shiki-highlighter";
+    if (mode === "native") {
+      if (app.plugins.plugins[id]) await app.plugins.disablePlugin(id);
+    } else {
+      if (!app.plugins.plugins[id]) {
+        await app.plugins.loadManifest(".obsidian/plugins/shiki-highlighter");
+        if (!app.plugins.manifests[id])
+          throw Error("Install Shiki Highlighter in the test vault");
+        await app.plugins.enablePlugin(id);
+      }
+      const plugin = app.plugins.plugins[id];
+      plugin.settings.ecDefaultShowLineNumbers = mode === "numbers";
+      await plugin.reloadHighlighter();
+    }
+    await new Promise((resolve) => setTimeout(resolve, 600));
+  }, mode);
+  settle();
+}
+
+function attachedCodeThreads() {
+  for (const marker of ["-", "10."]) {
+    const indent = " ".repeat(marker.length + 1);
+    const codeFixture = [
+      "- code root",
+      `\t${marker} \`\`\`js`,
+      `\t${indent}const value = 1;`,
+      `\t${indent}\`\`\``,
+      "\t\t- code descendant",
+      "- unrelated sibling",
+    ].join("\n");
+    evaluate((doc) => {
+      const editor = window.__bulletThreadingCheck.first.view.editor;
+      editor.setValue(doc);
+      editor.setCursor({ line: 4, ch: 8 });
+      editor.scrollIntoView(
+        { from: { line: 0, ch: 0 }, to: { line: 4, ch: 8 } },
+        true,
+      );
+    }, codeFixture);
+    settle();
+    const kind = marker === "-" ? "unordered" : "ordered";
+    for (const mode of ["native", "shiki", "numbers", "native"]) {
+      const sequence = results.length;
+      const selected = evaluate(() =>
+        window.__bulletThreadingCheck.first.view.editor.getCursor(),
+      );
+      configureShiki(mode);
+      let state = snapshot(`code-${kind}-${mode}-${sequence}-preview`);
+      assert.deepEqual(
+        state.cursor,
+        selected,
+        "Renderer toggle retains selection",
+      );
+      assert.equal(state.doc, codeFixture);
+      assert.equal(state.edges.length, 2);
+      assert.equal(state.codePreviews > 0, mode !== "native");
+      assert.equal(state.codeLineNumbers > 0, mode === "numbers");
+      assertAnchors(state);
+
+      evaluate(() =>
+        window.__bulletThreadingCheck.first.view.editor.setCursor({
+          line: 2,
+          ch: 8,
+        }),
+      );
+      settle();
+      state = snapshot(`code-${kind}-${mode}-${sequence}-editing`);
+      assert.equal(state.doc, codeFixture);
+      assert.equal(state.edges.length, 1);
+      assertAnchors(state);
+
+      evaluate(() =>
+        window.__bulletThreadingCheck.first.view.editor.setCursor({
+          line: 4,
+          ch: 8,
+        }),
+      );
+      settle();
+      state = snapshot(`code-${kind}-${mode}-${sequence}-preview-again`);
+      assert.equal(state.doc, codeFixture);
+      assert.equal(state.edges.length, 2);
+      assertAnchors(state);
+
+      evaluate(() => {
+        const editor = window.__bulletThreadingCheck.first.view.editor;
+        editor.setCursor({ line: 1, ch: 4 });
+        app.commands.executeCommandById("bullet:zoom-in");
+        editor.setCursor({ line: 4, ch: 8 });
+      });
+      settle();
+      state = snapshot(`code-${kind}-${mode}-${sequence}-zoomed`);
+      assert.equal(state.doc, codeFixture);
+      assert.equal(state.edges.length, 1);
+      assertAnchors(state);
+      evaluate(() => app.commands.executeCommandById("bullet:zoom-reset"));
+      settle();
+    }
+  }
+  evaluate((doc) => {
+    const editor = window.__bulletThreadingCheck.first.view.editor;
+    editor.setValue(doc);
+    editor.setCursor({ line: 10, ch: 8 });
+  }, fixture);
+  settle();
+}
+
 try {
   cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
   evaluate(
@@ -386,6 +537,8 @@ try {
   state = snapshot("ordered");
   assert.equal(state.edges.length, 2);
   assertAnchors(state);
+
+  attachedCodeThreads();
 
   settings({ bulletThreadingColor: "#ff6600" });
   state = snapshot("custom-color");
@@ -596,6 +749,15 @@ try {
     for (const [key, value] of Object.entries(initial.settings))
       settings.setValue(key, value);
     await settings.save();
+    if (initial.shiki) {
+      if (!app.plugins.plugins["shiki-highlighter"])
+        await app.plugins.enablePlugin("shiki-highlighter");
+      const shiki = app.plugins.plugins["shiki-highlighter"];
+      Object.assign(shiki.settings, initial.shikiSettings);
+      await shiki.reloadHighlighter();
+    } else if (app.plugins.plugins["shiki-highlighter"]) {
+      await app.plugins.disablePlugin("shiki-highlighter");
+    }
     const original = app.workspace.getLeafById(initial.leaf);
     if (original) app.workspace.setActiveLeaf(original, { focus: true });
   }, initial);
