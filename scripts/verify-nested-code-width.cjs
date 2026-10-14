@@ -394,15 +394,20 @@ function sample(
     const gap = background.right - end;
     const flair = sample.opening?.flair;
     const adjacentText = flair
-      ? glyphs.filter(
-          (rect) => rect.top < flair.bottom && rect.bottom > flair.top,
-        )
+      ? sample.rows
+          .filter(
+            (row) =>
+              row.body &&
+              row.bounds.top < flair.bottom &&
+              row.bounds.bottom > flair.top,
+          )
+          .flatMap((row) => row.glyphs)
       : [];
     const adjacentEnd = adjacentText.length
       ? Math.max(...adjacentText.map((rect) => rect.right))
       : end;
     // Native copy controls exist even without a language label. Allow their
-    // independently measured width beside the rows its actual height covers:
+    // independently measured width beside the line boxes its hit target covers:
     // a wider later row already supplies some or all of that room. An absent editing flair
     // provides no allowance, and measuring its width cannot excuse an
     // arbitrary gap between the text and a control at the full editor edge.
