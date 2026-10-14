@@ -20,6 +20,29 @@ const parseListItemRe = new RegExp(
   `^([ \t]*)(${bulletSignRe})(?:( |\t)(${optionalCheckboxRe})(.*))?$`,
 );
 
+interface ParserFenceOwner {
+  marker: FenceMarker;
+  continuationIndent: string;
+  contentOffset: number;
+}
+
+function parserFenceOwner(
+  sourceLine: string,
+  fenceCandidate: string,
+): ParserFenceOwner | null {
+  const marker = getFenceOpening(fenceCandidate);
+  if (!marker) return null;
+  const contentOffset =
+    sourceLine.length - fenceCandidate.length + fenceCandidate.search(/[^ ]/);
+  return {
+    marker,
+    continuationIndent: sourceLine
+      .slice(0, contentOffset)
+      .replace(/[^ \t]/g, " "),
+    contentOffset,
+  };
+}
+
 export interface ReaderPosition {
   line: number;
   ch: number;
@@ -197,13 +220,11 @@ export class Parser {
       const listMatch = parseListItemRe.exec(line);
       if (listMatch) {
         const content = listMatch[5] ?? "";
-        const marker = getFenceOpening(content);
-        if (marker) {
-          const indent = listMatch[1];
+        const opening = parserFenceOwner(line, content);
+        if (opening) {
           rangeFence = {
-            marker,
-            containerIndent:
-              indent + " ".repeat(line.length - content.length - indent.length),
+            marker: opening.marker,
+            containerIndent: opening.continuationIndent,
           };
         }
       } else {
@@ -296,13 +317,23 @@ export class Parser {
       const matches = parseListItemRe.exec(line);
 
       if (matches) {
-        const [, indent, bullet, spaceAfterBullet = ""] = matches;
-        let [, , , , optionalCheckbox = "", content = ""] = matches;
+        const [, indent, bullet] = matches;
+        let [, , , spaceAfterBullet = "", optionalCheckbox = "", content = ""] =
+          matches;
         const hadCheckbox = optionalCheckbox.length > 0;
 
         content = optionalCheckbox + content;
         if (this.settings.keepCursorWithinContent !== "bullet-and-checkbox") {
           optionalCheckbox = "";
+        }
+
+        const opening = parserFenceOwner(line, content);
+        if (opening) {
+          spaceAfterBullet = line.slice(
+            indent.length + bullet.length,
+            opening.contentOffset,
+          );
+          content = line.slice(opening.contentOffset);
         }
 
         const indentWidth = this.getIndentWidth(indent) - baseIndentWidth;
@@ -347,20 +378,9 @@ export class Parser {
         );
         currentParent.addAfterAll(currentList);
         indentWidths.set(currentList, indentWidth);
-        const opening = getFenceOpening(currentList.getLines()[0]);
         if (opening) {
-          const contentStart =
-            currentList.getFirstLineIndent().length +
-            bullet.length +
-            spaceAfterBullet.length +
-            optionalCheckbox.length;
-          currentList.setNotesIndent(
-            currentList.getFirstLineIndent() +
-              " ".repeat(
-                contentStart - currentList.getFirstLineIndent().length,
-              ),
-          );
-          activeFence = { marker: opening, owner: currentList };
+          currentList.setNotesIndent(opening.continuationIndent);
+          activeFence = { marker: opening.marker, owner: currentList };
         }
       } else if (this.isLineWithIndent(line)) {
         if (!currentList) {
@@ -519,14 +539,12 @@ export class Parser {
       const listMatch = parseListItemRe.exec(line);
       if (listMatch) {
         const content = listMatch[5] ?? "";
-        const marker = getFenceOpening(content);
+        const opening = parserFenceOwner(line, content);
         lastListOwner = lineNumber;
-        if (marker) {
-          const indent = listMatch[1];
+        if (opening) {
           activeFence = {
-            marker,
-            containerIndent:
-              indent + " ".repeat(line.length - content.length - indent.length),
+            marker: opening.marker,
+            containerIndent: opening.continuationIndent,
             ownerLine: lineNumber,
           };
         }
