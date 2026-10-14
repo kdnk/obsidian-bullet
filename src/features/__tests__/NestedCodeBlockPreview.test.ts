@@ -1,3 +1,6 @@
+import { EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
+import { NestedCodeBlockLayoutPluginValue } from "../NestedCodeBlockLayout";
 import { NestedCodeBlockPreviews } from "../NestedCodeBlockPreview";
 
 function element(children: Array<ReturnType<typeof text> | HTMLElement> = []) {
@@ -296,4 +299,111 @@ test("normalizes replacement nodes and does not overwrite a renderer's later edi
   replacement.tokens[0][0].data = "renderer edit";
   owner.clear(initial.embed);
   expect(replacement.tokens[0][0].data).toBe("renderer edit");
+});
+
+
+test.each([
+  'js title="preserveIndent.js"',
+  'js title="hangingIndent.js"',
+  'js title="example preserveIndent=false hangingIndent=9"',
+  "js title='example hangingIndent=9 preserveIndent=false'",
+  'js title="escaped \\" preserveIndent=false"',
+  'js /preserveIndent=false hangingIndent=9/',
+  'js {preserveIndent=false hangingIndent=9}',
+])("does not read wrapping options inside metadata values: %s", (info) => {
+  const raw = ["  hello", "    nested"];
+  const preview = fixture(raw);
+  rendererStyle(preview.pre, "--ecMaxLine", "10ch");
+  rendererStyle(preview.rows[0], "--ecIndent", "2ch");
+  rendererStyle(preview.rows[1], "--ecIndent", "4ch");
+  const owner = new NestedCodeBlockPreviews();
+  owner.synchronize(preview.embed, raw, 2, 4, info);
+  expect(preview.contents.map((node) => node.textContent)).toEqual(["hello", "  nested"]);
+  expect(preview.button.getAttribute("data-code")).toBe("hello\u007f  nested");
+  expect(preview.rows.map((row) => row.style.getPropertyValue("--ecIndent"))).toEqual(["", "2ch"]);
+  owner.destroy();
+});
+
+test.each([
+  "js preserveIndent=false preserveIndent=true",
+  "js hangingIndent=2 hangingIndent=3",
+  "js preserveIndent=invalid",
+  'js preserveIndent="false"',
+  "js hangingIndent=-2",
+])("leaves invalid or duplicate actual options unchanged: %s", (info) => {
+  const raw = ["  hello"];
+  const preview = fixture(raw);
+  const owner = new NestedCodeBlockPreviews();
+  owner.synchronize(preview.embed, raw, 2, 4, "js");
+  expect(preview.contents[0].textContent).toBe("hello");
+  owner.synchronize(preview.embed, raw, 2, 4, info);
+  expect(preview.contents[0].textContent).toBe("  hello");
+  expect(preview.button.getAttribute("data-code")).toBe("  hello");
+});
+
+function previewLayout(doc: string, raw: string[], openingLine: number) {
+  const preview = fixture(raw);
+  const classes = new Set(["cm-preview-code-block"]);
+  Object.assign(preview.embed, {
+    classList: {
+      contains: (name: string) => classes.has(name),
+      add: (name: string) => classes.add(name),
+      remove: (name: string) => classes.delete(name),
+    },
+  });
+  preview.embed.selectors.set(".expressive-code", [preview.frame]);
+  let measurement: { read: () => unknown; write: (value: unknown) => void };
+  const state = EditorState.create({doc, extensions: EditorState.tabSize.of(4)});
+  let rendered = [preview.embed];
+  const view = {
+    state,
+    visibleRanges: [{from: 0, to: state.doc.length}],
+    dom: {ownerDocument: {defaultView: null}},
+    contentDOM: {
+      querySelectorAll: () => rendered,
+      contains: (element: HTMLElement) => rendered.includes(element),
+    },
+    posAtDOM: () => view.state.doc.line(openingLine).from,
+    requestMeasure: (next: typeof measurement) => { measurement = next; },
+  };
+  const owner = new NestedCodeBlockLayoutPluginValue(view as unknown as EditorView);
+  return {
+    ...preview,
+    owner,
+    classes,
+    measure: () => measurement.write(measurement.read()),
+    remove: () => { rendered = []; },
+    replaceSource: (next: string) => {view.state = EditorState.create({doc: next, extensions: EditorState.tabSize.of(4)});},
+  };
+}
+
+test.each([
+  {parent: "- parent", indent: "  ", raw: ["  hello", "    nested"], want: ["hello", "  nested"]},
+  {parent: "- [ ] parent", indent: "  ", raw: ["  hello", "    nested"], want: ["hello", "  nested"]},
+  {parent: "\t- parent", indent: "\t  ", raw: ["\t  hello", "\t    nested"], want: ["hello", "  nested"]},
+  {parent: "- parent", indent: "  ", raw: ["\thello", "\t  nested"], want: ["  hello", "    nested"]},
+])("normalizes continuation previews independently of marker layout: $parent $raw", ({parent, indent, raw, want}) => {
+  const doc = [parent, indent + "```js", ...raw, indent + "```"].join("\n");
+  const preview = previewLayout(doc, raw, 2);
+  preview.measure();
+  expect(preview.contents.map((node) => node.textContent)).toEqual(want);
+  expect(preview.button.getAttribute("data-code")).toBe(want.join("\u007f"));
+  expect([...preview.classes]).toEqual(["cm-preview-code-block"]);
+  preview.remove();
+  preview.measure();
+  expect(preview.contents.map((node) => node.textContent)).toEqual(raw);
+  expect(preview.button.getAttribute("data-code")).toBe(raw.join("\u007f"));
+  preview.owner.destroy();
+});
+
+test("restores a continuation preview when its source no longer matches a closed fence", () => {
+  const raw = ["  hello"];
+  const preview = previewLayout("- parent\n  ```js\n  hello\n  ```", raw, 2);
+  preview.measure();
+  expect(preview.contents[0].textContent).toBe("hello");
+  preview.replaceSource("- parent\n  ```js\n  hello\n  ~~~");
+  preview.measure();
+  expect(preview.contents[0].textContent).toBe("  hello");
+  expect(preview.button.getAttribute("data-code")).toBe("  hello");
+  preview.owner.destroy();
 });
