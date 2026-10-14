@@ -113,6 +113,12 @@ It records the empty child created by zoom, ancestor navigation, reset, and
 saved Markdown. See the [zoom map](features/branch-zoom.md) for complementary
 native breadcrumb input and exploratory case selection.
 
+For native desktop drag checks, run
+`n exec 22.23.1 node .agents/skills/verify-obsidian-bullet/scripts/verify-desktop-drag.cjs "$PROOF_DIR/desktop-drag"`.
+It checks checkbox rejection, Escape cancellation, cross-note task movement,
+immediate destination focus, and paired Undo/Redo with saved Markdown. See the
+[drag map](features/desktop-drag-and-drop.md) for code/zoom coverage limitations.
+
 For a new manual case, reuse `scripts/obsidian-scroll-driver.cjs` from a Node
 script launched with `n exec 22.23.1 node`. Its `evaluate(fn, ...args)` guards the
 exact vault path and tab configuration. Resolve selectors and source rows in

@@ -10,7 +10,7 @@ Bullet edits an item together with its descendants while keeping Markdown and th
 - `edit-select`: cycle through item content, subtree, and enclosing list scope.
 - `edit-guards`: keep directly typed body text in lists; protect marker positions during navigation/clicks, with an Alt/Option bypass.
 - `edit-delete`: Backspace/Delete join or remove items without losing descendants; removing an empty leaf moves the cursor to the previous visible item, including its parent when directly preceding.
-- `edit-vim`: normal-mode `o`/`O` creates list items inside a list and ordinary lines outside one.
+- `edit-vim`: normal-mode `o`/`O` creates siblings in ordinary list text and ordinary lines outside lists. Within fenced code, it inserts literal lines while preserving container indentation; fence-boundary cases can create a sibling item.
 
 On macOS, Cmd+Backspace deletes to the current list-content start while
 preserving its marker when cursor protection is enabled.
