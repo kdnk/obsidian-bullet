@@ -4,6 +4,7 @@ import {
   STOP_ONLY_OUTCOME,
   UPDATED_OUTCOME,
 } from "./Operation";
+import { indentFencedCode } from "./indentFencedCode";
 
 import { Root, recalculateNumericBullets } from "../root";
 
@@ -11,6 +12,7 @@ export class OutdentList implements Operation {
   constructor(
     private root: Root,
     private numericBulletsEnabled: boolean,
+    private defaultIndentChars = "\t",
   ) {}
 
   perform() {
@@ -19,6 +21,13 @@ export class OutdentList implements Operation {
     if (!root.hasSingleSelection()) {
       return NO_OP_OUTCOME;
     }
+
+    const codeOutcome = indentFencedCode(
+      root,
+      "outdent",
+      this.defaultIndentChars,
+    );
+    if (codeOutcome) return codeOutcome;
 
     const selection = root.getSelection();
     if (selection.anchor.line !== selection.head.line) {

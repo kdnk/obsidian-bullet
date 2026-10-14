@@ -4,6 +4,7 @@ import {
   STOP_ONLY_OUTCOME,
   UPDATED_OUTCOME,
 } from "./Operation";
+import { indentFencedCode } from "./indentFencedCode";
 
 import { Root, recalculateNumericBullets } from "../root";
 
@@ -46,6 +47,13 @@ export class IndentList implements Operation {
     if (!root.hasSingleSelection()) {
       return NO_OP_OUTCOME;
     }
+
+    const codeOutcome = indentFencedCode(
+      root,
+      "indent",
+      this.defaultIndentChars,
+    );
+    if (codeOutcome) return codeOutcome;
 
     const selection = root.getSelection();
     if (selection.anchor.line !== selection.head.line) {

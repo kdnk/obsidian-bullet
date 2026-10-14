@@ -123,7 +123,11 @@ export class ListsMovementCommands implements Feature {
   private outdentList = (editor: MyEditor) => {
     const { shouldStopPropagation } = this.operationPerformer.perform(
       (root) =>
-        new OutdentList(root, this.obsidianSettings.isSmartIndentListEnabled()),
+        new OutdentList(
+          root,
+          this.obsidianSettings.isSmartIndentListEnabled(),
+          this.obsidianSettings.getDefaultIndentChars(),
+        ),
       editor,
     );
 

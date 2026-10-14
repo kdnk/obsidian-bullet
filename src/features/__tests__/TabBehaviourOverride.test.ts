@@ -149,6 +149,58 @@ describe("TabBehaviourOverride", () => {
     await feature.unload();
   });
 
+  test.each([
+    {
+      command: "indentMore" as const,
+      before: "  abc",
+      after: "    abc",
+      ch: 3,
+      expectedCh: 5,
+    },
+    {
+      command: "indentLess" as const,
+      before: "    abc",
+      after: "  abc",
+      ch: 5,
+      expectedCh: 3,
+    },
+  ])(
+    "edits only code indentation for the $command toolbar action",
+    async ({ command, before, after, ch, expectedCh }) => {
+      const text = `- owner\n  \`\`\`js\n${before}\n  \`\`\``;
+      const root = makeRoot({
+        editor: makeEditor({ text, cursor: { line: 2, ch } }),
+      });
+      const changesApplicator = { apply: jest.fn() };
+      const performer = new OperationPerformer(
+        {
+          parse: jest.fn().mockReturnValue(root),
+        } as unknown as ConstructorParameters<typeof OperationPerformer>[0],
+        changesApplicator as unknown as ConstructorParameters<
+          typeof OperationPerformer
+        >[1],
+      );
+      const feature = new TabBehaviourOverride(
+        plugin,
+        imeDetector,
+        obsidianSettings,
+        settings,
+        performer,
+      );
+      const editor = makeRawEditor(text, { line: 2, ch });
+      await feature.load();
+      try {
+        editor.exec(command);
+        expect(root.print()).toBe(`- owner\n  \`\`\`js\n${after}\n  \`\`\``);
+        expect(root.getCursor()).toEqual({ line: 2, ch: expectedCh });
+        expect(changesApplicator.apply).toHaveBeenCalledTimes(1);
+        expect(editor.execCalls).toEqual([]);
+      } finally {
+        await feature.unload();
+      }
+    },
+  );
+
   test("should return no-op through a null factory for unsupported ordered lists", () => {
     const editor = makeEditor({
       text: "1. one\n2. two",

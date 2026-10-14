@@ -150,6 +150,11 @@ export class List {
     this.lineIndentOverrides = overrides;
   }
 
+  replaceLine(index: number, text: string, indentOverride: string) {
+    this.lines[index] = text;
+    this.lineIndentOverrides[index] = indentOverride;
+  }
+
   getLineCount() {
     return this.lines.length;
   }

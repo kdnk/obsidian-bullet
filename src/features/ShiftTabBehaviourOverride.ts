@@ -55,6 +55,7 @@ export class ShiftTabBehaviourOverride implements Feature {
       return new OutdentList(
         root,
         this.obsidianSettings.isSmartIndentListEnabled(),
+        this.obsidianSettings.getDefaultIndentChars(),
       );
     }, editor);
   };

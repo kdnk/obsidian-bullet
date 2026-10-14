@@ -83,6 +83,7 @@ export class TabBehaviourOverride implements Feature {
       return new OutdentList(
         root,
         this.obsidianSettings.isSmartIndentListEnabled(),
+        this.obsidianSettings.getDefaultIndentChars(),
       );
     }, editor);
   }
