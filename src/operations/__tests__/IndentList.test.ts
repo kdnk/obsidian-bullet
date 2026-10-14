@@ -36,6 +36,48 @@ describe("IndentList operation", () => {
     },
   );
 
+  test.each([
+    {
+      name: "nested code",
+      text: "- parent\n\t- ```js\n\t  abc\n\t  ```",
+      line: 2,
+      ch: 4,
+      expected: "- parent\n\t- ```js\n\t\t  abc\n\t  ```",
+      expectedCh: 5,
+    },
+    {
+      name: "physical blank",
+      text: "- parent\n\t- ```js\n\n\t  ```",
+      line: 2,
+      ch: 0,
+      expected: "- parent\n\t- ```js\n\t\t  \n\t  ```",
+      expectedCh: 4,
+    },
+  ])(
+    "indents code without moving its owner: $name",
+    ({ text, line, ch, expected, expectedCh }) => {
+      const root = makeRoot({
+        editor: makeEditor({ text, cursor: { line, ch } }),
+      });
+      expect(new IndentList(root, "\t", false).perform()).toEqual(
+        UPDATED_OUTCOME,
+      );
+      expect(root.print()).toBe(expected);
+      expect(root.getCursor()).toEqual({ line, ch: expectedCh });
+    },
+  );
+
+  test("keeps the closing fence and list hierarchy unchanged", () => {
+    const text = "- parent\n\t- ```js\n\t  abc\n\t  ```";
+    const root = makeRoot({
+      editor: makeEditor({ text, cursor: { line: 3, ch: 5 } }),
+    });
+    expect(new IndentList(root, "\t", false).perform()).toEqual(
+      STOP_ONLY_OUTCOME,
+    );
+    expect(root.print()).toBe(text);
+  });
+
   test("leaves multiline selections for native indentation", () => {
     const text = "- first\n- second\n\t- child";
     const root = makeRoot({

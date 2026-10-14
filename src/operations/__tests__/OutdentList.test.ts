@@ -31,6 +31,67 @@ describe("OutdentList operation", () => {
     },
   );
 
+  test.each([
+    {
+      name: "nested code",
+      text: "- parent\n\t- ```js\n\t\t  abc\n\t  ```",
+      line: 2,
+      ch: 5,
+      expected: "- parent\n\t- ```js\n\t  abc\n\t  ```",
+      expectedCh: 4,
+    },
+    {
+      name: "container floor",
+      text: "- parent\n\t- ```js\n\t    abc\n\t  ```",
+      line: 2,
+      ch: 6,
+      expected: "- parent\n\t- ```js\n\t  abc\n\t  ```",
+      expectedCh: 4,
+    },
+    {
+      name: "crossing tab",
+      text: "- ```js\n\tabc\n  ```",
+      line: 1,
+      ch: 2,
+      expected: "- ```js\n  abc\n  ```",
+      expectedCh: 3,
+    },
+  ])(
+    "indents code without moving its owner: $name",
+    ({ text, line, ch, expected, expectedCh }) => {
+      const root = makeRoot({
+        editor: makeEditor({ text, cursor: { line, ch } }),
+      });
+      expect(new OutdentList(root, false, "\t").perform()).toEqual(
+        UPDATED_OUTCOME,
+      );
+      expect(root.print()).toBe(expected);
+      expect(root.getCursor()).toEqual({ line, ch: expectedCh });
+    },
+  );
+
+  test("does not outdent the code container when code is flush", () => {
+    const text = "- parent\n\t- ```js\n\t  abc\n\t  ```";
+    const root = makeRoot({
+      editor: makeEditor({ text, cursor: { line: 2, ch: 4 } }),
+    });
+    expect(new OutdentList(root, false, "\t").perform()).toEqual(
+      STOP_ONLY_OUTCOME,
+    );
+    expect(root.print()).toBe(text);
+  });
+
+  test("keeps the closing fence and list hierarchy unchanged", () => {
+    const text = "- parent\n\t- ```js\n\t  abc\n\t  ```";
+    const root = makeRoot({
+      editor: makeEditor({ text, cursor: { line: 3, ch: 5 } }),
+    });
+    expect(new OutdentList(root, false, "\t").perform()).toEqual(
+      STOP_ONLY_OUTCOME,
+    );
+    expect(root.print()).toBe(text);
+  });
+
   test("leaves multiline selections for native indentation", () => {
     const text = "- first\n\t- second\n\t\t- child";
     const root = makeRoot({
