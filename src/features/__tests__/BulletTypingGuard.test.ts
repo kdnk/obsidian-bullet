@@ -476,3 +476,33 @@ describe("BulletTypingGuard", () => {
     expect(removeCallback).toHaveBeenCalledWith(settingsCallback);
   });
 });
+
+describe("typing on a physical blank code row", () => {
+  test.each([
+    {doc: "- ```js\n\n  ```", line: 2, prefix: "  "},
+    {doc: "- item\n  ```js\n\n  ```", line: 3, prefix: "  "},
+    {doc: "- [ ] item\n  ```js\n\n  ```", line: 3, prefix: "  "},
+    {doc: "\t- ```js\n\n\t  ```", line: 2, prefix: "\t  "},
+    {doc: "```js\n\n```", line: 2, prefix: ""},
+  ])("retains code ownership through successive typing in $doc", async ({doc, line, prefix}) => {
+    const guard = await loadGuard();
+    let state = EditorState.create({doc, extensions: guard});
+    const from = state.doc.line(line).from;
+    for (const [index, value] of ["x", "y"].entries()) {
+      const pos = index === 0 ? from : state.selection.main.head;
+      state = state.update({changes: {from: pos, insert: value}, selection: {anchor: pos + 1}, userEvent: "input.type"}).state;
+      const expected = doc.split("\n");
+      expected[line - 1] = prefix + (index === 0 ? "x" : "xy");
+      expect(state.doc.toString()).toBe(expected.join("\n"));
+      expect(state.selection.main.head).toBe(from + prefix.length + index + 1);
+    }
+  });
+
+  test("corrects unrelated body typing while restoring a code container", async () => {
+    const guard = await loadGuard();
+    const doc = "- ```js\n\n  ```\n\n";
+    const state = EditorState.create({doc, extensions: [guard, EditorState.allowMultipleSelections.of(true)]});
+    const transaction = state.update({changes: [{from: 8, insert: "- x"}, {from: doc.length, insert: "text"}], userEvent: "input.type"});
+    expect(transaction.newDoc.toString()).toBe("- ```js\n  - x\n  ```\n\n- text");
+  });
+});

@@ -103,3 +103,13 @@ describe("InsertNewLineWithoutBullet operation", () => {
     expect(root.getCursor().ch).toBe(2);
   });
 });
+
+ test.each([
+  { text: "- ```js\n\tfooBAR\n  ```", ch: 4, want: "- ```js\n\tfoo\n  BAR\n  ```" },
+  { text: "- ```js\n\tfoo\n  foo\n  ```", ch: 1, want: "- ```js\n\t\n  foo\n  foo\n  ```" },
+])("retains the split source row prefix in $text", ({ text, ch, want }) => {
+  const root = makeRoot({editor: makeEditor({text, cursor: {line: 1, ch}})});
+  expect(new InsertNewLineWithoutBullet(root).perform()).toEqual(UPDATED_OUTCOME);
+  expect(root.print()).toBe(want);
+  expect(root.getCursor()).toEqual({line: 2, ch: 2});
+});
