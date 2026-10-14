@@ -12,6 +12,9 @@ Bullet edits an item together with its descendants while keeping Markdown and th
 - `edit-delete`: Backspace/Delete join or remove items without losing descendants; removing an empty leaf moves the cursor to the previous visible item, including its parent when directly preceding.
 - `edit-vim`: normal-mode `o`/`O` creates list items inside a list and ordinary lines outside one.
 
+On macOS, Cmd+Backspace deletes to the current list-content start while
+preserving its marker when cursor protection is enabled.
+
 ## How to get to it (user POV)
 
 - In a Markdown editor, use Enter, Shift+Enter, Tab, Shift+Tab, Backspace, Delete, arrow keys, and repeated Cmd+A on macOS or Ctrl+A elsewhere. Move branches with Cmd/Ctrl+Shift+Up/Down.
@@ -29,9 +32,10 @@ Bullet edits an item together with its descendants while keeping Markdown and th
 
 ## Driving it with Obsidian CLI/CDP
 
-Preconditions: use the parent lifecycle and index guards. Start with default Bullet editing settings; use actual tabs with width four. Enable Vim only for its recipe.
+Preconditions: use the parent lifecycle and index guards. Start with default Bullet editing settings; use actual tabs with width four. Keep Obsidian's **Smart indent lists** enabled (`app.vault.getConfig("smartIndentList") === true`) for ordered Enter/Tab/Shift+Tab cases; Bullet delegates those ordered-key paths to native handling when it is disabled. Enable Vim only for its recipe.
 
-- **Native selection replacement and indentation:** `n exec 22.23.1 node scripts/verify-editing-selections.cjs "$PROOF_DIR/editing-selections"` covers Enter and Shift+Enter over selected text, Tab and Shift+Tab over selected parents with children, and code-body indentation. It checks both selection directions with Shiki disabled and enabled, native Undo/Redo, the next typed character, and persisted Markdown. Shiki must be installed in the test vault.
+- **Native selection replacement and indentation:** `n exec 22.23.1 node scripts/verify-editing-selections.cjs "$PROOF_DIR/editing-selections"` covers Enter and Shift+Enter over selected text, Tab and Shift+Tab over selected parents with children, and code-body indentation while preserving the list's container indent. It checks both selection directions with Shiki disabled and enabled, native Undo/Redo, the next typed character, and persisted Markdown. Shiki must be installed in the test vault.
+- **Native macOS deletion:** with cursor protection enabled, prepare `- alpha beta\n\t- child` and place the caret after `alpha`. Send Cmd+Backspace (`key`/`code: Backspace`, key code 8, `modifiers: 4`); require `-  beta\n\t- child` and cursor `(0, 2)`. Insert `X` through native input and require saved Markdown `- X beta\n\t- child`. Cursor placement is API setup; the deletion and subsequent input must be native.
 - **Native Enter and following input:** `n exec 22.23.1 node scripts/verify-zoom-enter-splits.cjs "$PROOF_DIR/enter-splits"` tests ordinary and zoomed ordered/task roots through CDP keys, subsequent text, and Undo/Redo. Require the expected source document, visible cursor, and breadcrumb state in `results.json`; zoom is prepared by command.
 - **Native Vim code boundary cases:** `n exec 22.23.1 node scripts/verify-vim-code-newlines.cjs "$PROOF_DIR/vim-newlines"` sends Escape and `o`/`O`, then inserts `x`. Check literal code indentation and exact document/cursor results. This code-focused fixture does not cover every ordinary-list Vim entry.
 - **Command movement with fenced descendants:** `n exec 22.23.1 node scripts/verify-fenced-code-movement.cjs "$PROOF_DIR/fenced-movement"` invokes movement/indent command IDs directly. Require the entire fenced branch to move, correct tab/space indentation and ordered-marker width, then the inverse operation to restore it. This does not exercise the palette or default movement hotkey.

@@ -19,6 +19,12 @@ are missing, run `n exec 22.23.1 npm ci` first. Keep `vault/.obsidian/app.json` 
 `useTab: true`, `tabSize: 4`; start outside mobile emulation. Read the repository's
 `AGENTS.md` before driving.
 
+If `n` is unavailable, replace `n exec 22.23.1` in these recipes with
+`npm exec --package=node@22.23.1 --`. For example,
+`npm exec --package=node@22.23.1 -- node scripts/verify-nested-code-hover.cjs "$PROOF_DIR/code-hover"`.
+This runs the selected Node version without changing the global installation;
+the first use requires access to the npm registry unless the package is cached.
+
 ```sh
 export PROOF_DIR="/tmp/obsidian-bullet-verify-$(uuidgen)"
 mkdir -p vault/pages
