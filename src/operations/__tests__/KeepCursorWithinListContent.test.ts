@@ -2,6 +2,27 @@ import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { KeepCursorWithinListContent } from "../KeepCursorWithinListContent";
 import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
+test.each([
+  { text: "-   ```js\n    value\n    ```", boundaries: [4, 4, 4] },
+  { text: "10.   ```js\n      value\n      ```", boundaries: [6, 6, 6] },
+  { text: "-\t```js\n\tvalue\n\t```", boundaries: [2, 1, 1] },
+  { text: "\t-   ```js\n\t    value\n\t    ```", boundaries: [5, 5, 5] },
+])(
+  "clamps each attached-fence row after its full source prefix in $text",
+  ({ text, boundaries }) => {
+    for (const [line, ch] of boundaries.entries()) {
+      const root = makeRoot({
+        editor: makeEditor({ text, cursor: { line, ch: 0 } }),
+      });
+      const operation = new KeepCursorWithinListContent(root);
+      expect(operation.perform()).toEqual(UPDATED_OUTCOME);
+      expect(root.getCursor()).toEqual({ line, ch });
+      expect(root.print()).toBe(text);
+      expect(operation.perform()).toEqual(NO_OP_OUTCOME);
+    }
+  },
+);
+
 test("should move cursor to the start of content if cursor is before content start", () => {
   const root = makeRoot({
     editor: makeEditor({

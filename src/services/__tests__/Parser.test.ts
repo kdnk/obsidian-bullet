@@ -23,6 +23,91 @@ function makeLogSink() {
 }
 
 describe("parseList", () => {
+  test.each([
+    { opening: "-   ```js", body: "    ", container: "    ", firstCh: 4 },
+    { opening: "10.   ```js", body: "      ", container: "      ", firstCh: 6 },
+    { opening: "-\t```js", body: "\t", container: " \t", firstCh: 2 },
+    { opening: "\t-   ```js", body: "\t    ", container: "\t    ", firstCh: 5 },
+    { opening: "10.   ```js", body: "\t\t", container: "      ", firstCh: 6 },
+  ])(
+    "uses the complete attached-fence prefix in $opening with body $body",
+    ({ opening, body, container, firstCh }) => {
+      const text = [
+        opening,
+        `${body}value`,
+        "",
+        `${body}- literal`,
+        `${body}\`\`\``,
+        opening.startsWith("\t") ? "\t- next" : "- next",
+      ].join("\n");
+      const parser = makeParser();
+      for (let line = 0; line < 6; line++) {
+        const root = parser.parse(
+          makeEditor({ text, cursor: { line, ch: 0 } }),
+        );
+        expect(root!.print()).toBe(text);
+        expect(root!.getChildren()).toHaveLength(2);
+        const code = root!.getChildren()[0];
+        expect(code.getChildren()).toEqual([]);
+        expect(code.getNotesIndent()).toBe(container);
+        expect(code.getLines()).toEqual([
+          "```js",
+          "value",
+          "",
+          "- literal",
+          "```",
+        ]);
+        expect(code.getFirstLineContentStart()).toEqual({
+          line: 0,
+          ch: firstCh,
+        });
+        expect(code.getLinesInfo().map(({ from }) => from)).toEqual([
+          { line: 0, ch: firstCh },
+          { line: 1, ch: body.length },
+          { line: 2, ch: 0 },
+          { line: 3, ch: body.length },
+          { line: 4, ch: body.length },
+        ]);
+      }
+      const roots = parser.parseRange(
+        makeEditor({ text, cursor: { line: 0, ch: 0 } }),
+        0,
+        2,
+      );
+      expect(roots.map((root) => root.print())).toEqual([
+        `${opening}\n${body}value\n`,
+      ]);
+      expect(roots[0].getContentEnd()).toEqual({ line: 2, ch: 0 });
+    },
+  );
+
+  test.each([
+    {
+      text: "-   ordinary\n  note",
+      first: "  ordinary",
+      firstCh: 2,
+      notesIndent: "  ",
+    },
+    {
+      text: "- [ ] ```js\n      value\n      ```",
+      first: "[ ] ```js",
+      firstCh: 2,
+      notesIndent: "      ",
+    },
+  ])(
+    "retains ordinary and checkbox content boundaries in $text",
+    ({ text, first, firstCh, notesIndent }) => {
+      const root = makeParser().parse(
+        makeEditor({ text, cursor: { line: 0, ch: 0 } }),
+      );
+      const list = root!.getChildren()[0];
+      expect(root!.print()).toBe(text);
+      expect(list.getLines()[0]).toBe(first);
+      expect(list.getFirstLineContentStart()).toEqual({ line: 0, ch: firstCh });
+      expect(list.getNotesIndent()).toBe(notesIndent);
+    },
+  );
+
   test("discovers earlier fenced owners without rescanning every preceding block", () => {
     const lines = [
       ...Array.from({ length: 500 }, () => [

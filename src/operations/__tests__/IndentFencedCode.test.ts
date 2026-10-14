@@ -1,9 +1,52 @@
 import { makeEditor, makeRoot } from "../../__mocks__";
 import { IndentList } from "../IndentList";
-import { UPDATED_OUTCOME } from "../Operation";
+import { STOP_ONLY_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 import { OutdentList } from "../OutdentList";
 
 describe("fenced code indentation", () => {
+  test.each([
+    "-   ```js\n    value\n    ```",
+    "10.   ```js\n      value\n      ```",
+    "-\t```js\n\tvalue\n\t```",
+    "\t-   ```js\n\t    value\n\t    ```",
+  ])("does not outdent the attached-fence container in %j", (text) => {
+    const root = makeRoot({
+      editor: makeEditor({ text, cursor: { line: 1, ch: 0 } }),
+    });
+    expect(new OutdentList(root, false, "\t").perform()).toEqual(
+      STOP_ONLY_OUTCOME,
+    );
+    expect(root.print()).toBe(text);
+    expect(root.getCursor()).toEqual({ line: 1, ch: 0 });
+  });
+
+  test.each([false, true])(
+    "outdents only code indentation after a complete fence prefix, reversed=%s",
+    (reverse) => {
+      const root = makeRoot({
+        editor: makeEditor({
+          text: "10.   ```js\n\t\t  one\n        two\n\n      ```",
+          cursor: { line: 1, ch: 2 },
+        }),
+      });
+      const from = { line: 1, ch: 2 };
+      const to = { line: 2, ch: 11 };
+      root.replaceSelections([
+        { anchor: reverse ? to : from, head: reverse ? from : to },
+      ]);
+      expect(new OutdentList(root, false, "\t").perform()).toEqual(
+        UPDATED_OUTCOME,
+      );
+      expect(root.print()).toBe("10.   ```js\n\t  one\n      two\n\n      ```");
+      expect(root.getSelections()).toEqual([
+        {
+          anchor: reverse ? { line: 2, ch: 9 } : { line: 1, ch: 3 },
+          head: reverse ? { line: 1, ch: 3 } : { line: 2, ch: 9 },
+        },
+      ]);
+    },
+  );
+
   test.each([false, true])(
     "moves selected code rows and retains direction, reversed=%s",
     (reverse) => {
