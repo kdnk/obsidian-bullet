@@ -1,3 +1,5 @@
+import { countColumn } from "@codemirror/state";
+
 import {
   getFenceContent,
   getFenceOpening,
@@ -356,7 +358,9 @@ export class List {
   }
 
   replateBullet(bullet: string) {
-    const widthChange = bullet.length - this.bullet.length;
+    const widthChange =
+      countColumn(this.indent + bullet + this.spaceAfterBullet, 4) -
+      countColumn(this.indent + this.bullet + this.spaceAfterBullet, 4);
     if (
       widthChange &&
       this.notesIndent !== null &&
