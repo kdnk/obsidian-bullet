@@ -364,7 +364,7 @@ try {
               "Opening and Shiki card backgrounds must match",
             );
           assert.ok(
-            block.topBlank <= sample.expectedGap,
+            block.topBlank >= -2.1 && block.topBlank <= sample.expectedGap,
             `Block ${i}: blank top space ${block.topBlank}px exceeds normal padding ${sample.expectedGap}px`,
           );
           const baseline = results.find(

@@ -5,6 +5,15 @@ const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { cdp, evaluate } = require("./obsidian-scroll-driver.cjs");
 
+const fontArgument = process.argv.find((argument) =>
+  argument.startsWith("--font="),
+);
+const fontSize = fontArgument ? Number(fontArgument.slice(7)) : null;
+if (
+  fontSize !== null &&
+  (!Number.isFinite(fontSize) || fontSize < 10 || fontSize > 30)
+)
+  throw Error("Font size must be between 10 and 30");
 const output = path.resolve(process.argv[2]);
 fs.mkdirSync(output, { recursive: false });
 const note = `vim-code-navigation-${randomUUID()}.md`;
@@ -16,6 +25,7 @@ const original = evaluate(() => {
     throw Error("Bullet list styles must be active before Vim verification");
   return {
     leaf: app.workspace.activeLeaf.id,
+    fontSize: app.getBaseFontSize(),
     vimMode: app.vault.config.vimMode ?? false,
     shiki: !!app.plugins.plugins["shiki-highlighter"],
   };
@@ -76,16 +86,30 @@ function sample() {
 }
 try {
   cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
-  evaluate(async (note) => {
-    app.vault.setConfig("vimMode", true);
-    app.workspace.updateOptions();
-    window.__vimNavigationLeaf = app.workspace.getLeaf("tab");
-    await window.__vimNavigationLeaf.openFile(await app.vault.create(note, ""));
-    await window.__vimNavigationLeaf.setViewState({
-      type: "markdown",
-      state: { file: note, mode: "source", source: false },
-    });
-  }, note);
+  evaluate(
+    async (note, fontSize) => {
+      if (fontSize !== null) {
+        app.setBaseFontSize(fontSize);
+        const applied = parseFloat(
+          getComputedStyle(document.body).getPropertyValue("--font-text-size"),
+        );
+        if (applied !== fontSize)
+          throw Error(`Font size ${applied} did not apply`);
+      }
+      app.vault.setConfig("vimMode", true);
+      app.workspace.updateOptions();
+      window.__vimNavigationLeaf = app.workspace.getLeaf("tab");
+      await window.__vimNavigationLeaf.openFile(
+        await app.vault.create(note, ""),
+      );
+      await window.__vimNavigationLeaf.setViewState({
+        type: "markdown",
+        state: { file: note, mode: "source", source: false },
+      });
+    },
+    note,
+    fontSize,
+  );
   for (const shiki of [false, true]) {
     evaluate(async (enabled) => {
       if (enabled) await app.plugins.enablePlugin("shiki-highlighter");
@@ -142,6 +166,7 @@ try {
     async (original, note) => {
       window.__vimNavigationLeaf?.detach();
       delete window.__vimNavigationLeaf;
+      app.setBaseFontSize(original.fontSize);
       app.vault.setConfig("vimMode", original.vimMode);
       app.workspace.updateOptions();
       if (original.shiki) await app.plugins.enablePlugin("shiki-highlighter");
@@ -157,7 +182,11 @@ try {
   cdp("Emulation.setFocusEmulationEnabled", { enabled: false });
   fs.writeFileSync(
     path.join(output, "results.json"),
-    JSON.stringify({ results, failures }, null, 2),
+    JSON.stringify(
+      { fontSize: fontSize ?? original.fontSize, results, failures },
+      null,
+      2,
+    ),
   );
 }
 console.log(

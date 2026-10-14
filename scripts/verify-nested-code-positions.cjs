@@ -162,12 +162,48 @@ function sample() {
     const embed = opening?.nextElementSibling?.matches(".cm-preview-code-block")
       ? opening.nextElementSibling
       : null;
+    const firstBody = opening?.nextElementSibling;
+    const code = embed
+      ? (embed.querySelector(".ec-line .code") ?? embed.querySelector("code"))
+      : firstBody?.matches(".HyperMD-codeblock:not(.HyperMD-codeblock-end)")
+        ? firstBody
+        : null;
+    let firstCodeLine = null;
+    if (code) {
+      const walker = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const bounds = range.getClientRects()[0];
+        if (!bounds?.height) continue;
+        firstCodeLine = { y: bounds.y, height: bounds.height };
+        break;
+      }
+      if (!firstCodeLine) {
+        const css = getComputedStyle(code);
+        const bounds = code.getBoundingClientRect();
+        const height = parseFloat(css.lineHeight);
+        const paddingTop = parseFloat(css.paddingTop) || 0;
+        const paddingBottom = parseFloat(css.paddingBottom) || 0;
+        if (height > 0 && bounds.height > paddingTop + paddingBottom)
+          firstCodeLine = { y: bounds.y + paddingTop, height };
+      }
+    }
     return {
       doc: editor.getValue(),
       cursor: editor.getCursor(),
       caret: cm.coordsAtPos(cm.state.selection.main.head),
       opening: openingBounds,
-      marker: markerBounds,
+      marker: markerBounds
+        ? {
+            x: markerBounds.x,
+            y: markerBounds.y,
+            width: markerBounds.width,
+            height: markerBounds.height,
+          }
+        : null,
+      firstCodeLine,
       markerCenter:
         markerBounds && openingBounds
           ? {
@@ -176,6 +212,7 @@ function sample() {
             }
           : null,
       embedded: !!embed,
+      preview: embed ? { bottom: embed.getBoundingClientRect().bottom } : null,
       numbers: embed?.querySelectorAll(".ln").length ?? 0,
       rows: [...cm.contentDOM.querySelectorAll(".HyperMD-codeblock")].map(
         (row) => ({
@@ -460,12 +497,38 @@ function verifyLayout(mode, shape, text, steps) {
         state.markerCenter && layout[0].markerCenter,
         "List marker must be visible",
       );
-      for (const axis of ["x", "y"])
+      const axes = phase.name === "preview-again" ? ["x", "y"] : ["x"];
+      for (const axis of axes)
         assert.ok(
           Math.abs(state.markerCenter[axis] - layout[0].markerCenter[axis]) <=
             1,
           `Marker ${axis} moved ${state.markerCenter[axis] - layout[0].markerCenter[axis]}px`,
         );
+      if (shape === "empty") {
+        const lastRow = state.rows[state.rows.length - 1]?.rect;
+        const bottom = state.embedded
+          ? state.preview.bottom
+          : lastRow.y + lastRow.height;
+        assert.ok(
+          state.marker.y >= state.opening.y &&
+            state.marker.y + state.marker.height <= bottom,
+          "Empty block marker must remain within the code card",
+        );
+      } else {
+        assert.ok(state.firstCodeLine, "First code line must be measurable");
+        const markerY = state.marker.y + state.marker.height / 2;
+        const codeY = state.firstCodeLine.y + state.firstCodeLine.height / 2;
+        assert.ok(
+          Math.abs(markerY - codeY) <= 1,
+          `Marker differs from the first code line center by ${markerY - codeY}px`,
+        );
+        const markerShift = state.markerCenter.y - layout[0].markerCenter.y;
+        const openingGrowth = state.opening.height - layout[0].opening.height;
+        assert.ok(
+          Math.abs(markerShift - openingGrowth) <= 1,
+          `Marker moved ${markerShift}px while the opening row grew ${openingGrowth}px`,
+        );
+      }
     });
   }
   const saved = savedMarkdown();

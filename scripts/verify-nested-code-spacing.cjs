@@ -105,6 +105,9 @@ try {
                 sibling.getBoundingClientRect().top -
                 opening.getBoundingClientRect().top,
               openingHeight: opening.getBoundingClientRect().height,
+              openingLineHeight: parseFloat(
+                getComputedStyle(opening).lineHeight,
+              ),
               rows: rows.map((el) => ({
                 height: el.getBoundingClientRect().height,
                 lineHeight: parseFloat(getComputedStyle(el).lineHeight),
@@ -149,11 +152,15 @@ try {
                 "Native guide hit boxes must remain usable",
               );
           }
-          // In the test vault's default theme, preview padding totals 24px
-          // while the editable closing fence occupies one 21px code row.
+          const sourceExpansion =
+            sample.openingHeight - samples[0].openingHeight;
           assert.ok(
-            Math.abs(sample.span - samples[0].span) <= 3.1,
-            `Preview/editing block heights differ by ${sample.span - samples[0].span}px`,
+            Math.abs(sample.span - samples[0].span - sourceExpansion) < 1,
+            `Block height changed beyond the visible source fence by ${sample.span - samples[0].span - sourceExpansion}px`,
+          );
+          assert.ok(
+            Math.abs(sample.openingHeight - sample.openingLineHeight) < 0.1,
+            "List markers must not expand the opening line",
           );
         } catch (error) {
           failures.push(`${mode}, ${count} rows, ${phase}: ${error.message}`);

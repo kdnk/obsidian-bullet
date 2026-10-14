@@ -136,10 +136,30 @@ body.bullet-plugin-better-lists
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.HyperMD-codeblock.HyperMD-list-line.bullet-plugin-code-preview-hidden-fence {
-  /* Preserve native line height so Vim can navigate into previewed fences. */
   padding-block: 0;
   overflow: visible;
   z-index: 1;
+}
+
+/* Closing fences need native height for upward Vim navigation. */
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-codeblock-begin.bullet-plugin-code-preview-hidden-fence {
+  --bullet-code-opening-height: max(
+    var(--size-4-2),
+    calc(var(--font-text-size) / 2)
+  );
+  height: var(--bullet-code-opening-height);
+  min-height: 0;
+  line-height: var(--bullet-code-opening-height);
+  font-size: 0;
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-codeblock-begin.bullet-plugin-code-preview-hidden-fence
+  :is(.cm-indent, .cm-formatting-list, .list-bullet) {
+  line-height: var(--bullet-code-opening-height);
 }
 
 body.bullet-plugin-better-lists
@@ -251,8 +271,7 @@ body.bullet-plugin-better-lists
   border-end-end-radius: 0;
 }
 
-/* Share the native fence rows' vertical space with plain processor previews.
-   Fence height stays intact for Vim navigation and CodeMirror measurement. */
+/* Share the fence rows' vertical space with plain processor previews. */
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-nested-code-block.bullet-plugin-code-preview-embed-opening.bullet-plugin-code-preview-plain::before {
