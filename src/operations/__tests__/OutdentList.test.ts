@@ -70,6 +70,34 @@ describe("OutdentList operation", () => {
     },
   );
 
+  test.each([false, true])(
+    "keeps selected text through numeric marker width changes, reversed=%s",
+    (reverse) => {
+      const previous = Array.from(
+        { length: 9 },
+        (_, index) => `${index + 1}. previous`,
+      ).join("\n");
+      const root = makeRoot({
+        editor: makeEditor({
+          text: `${previous}\n\t1. abcdef`,
+          cursor: { line: 9, ch: 7 },
+        }),
+      });
+      const from = { line: 9, ch: 4 };
+      const to = { line: 9, ch: 7 };
+      const selection = {
+        anchor: reverse ? to : from,
+        head: reverse ? from : to,
+      };
+      root.replaceSelections([selection]);
+      expect(new OutdentList(root, true, "\t").perform()).toEqual(
+        UPDATED_OUTCOME,
+      );
+      expect(root.print()).toBe(`${previous}\n10. abcdef`);
+      expect(root.getSelections()).toEqual([selection]);
+    },
+  );
+
   test("does not outdent the code container when code is flush", () => {
     const text = "- parent\n\t- ```js\n\t  abc\n\t  ```";
     const root = makeRoot({
