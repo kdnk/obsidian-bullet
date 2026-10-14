@@ -247,13 +247,17 @@ try {
                 const backgroundLeft = embed
                   ? rect(embed).left
                   : start.left + parseFloat(paint.insetInlineStart);
+                const top = openingPainted
+                  ? start.top + parseFloat(paint.insetBlockStart)
+                  : rect(embed).top;
+                const sourceFence = opening.querySelector(".cm-hmd-codeblock");
+                const firstVisible = sourceFence ? glyph(sourceFence) : text;
                 return {
+                  topBlank: firstVisible.top - top,
                   embedded: !!embed,
                   lineNumbers,
                   openingHeight: start.height,
-                  top: openingPainted
-                    ? start.top + parseFloat(paint.insetBlockStart)
-                    : rect(embed).top,
+                  top,
                   bottom: embed
                     ? rect(embed.querySelector("pre")).bottom
                     : rect(closing).bottom -
@@ -326,6 +330,7 @@ try {
         for (const [i, block] of sample.blocks.entries()) {
           for (const key of [
             "openingHeight",
+            "topBlank",
             "top",
             "bottom",
             "padding",
@@ -358,10 +363,17 @@ try {
               block.previewBackground,
               "Opening and Shiki card backgrounds must match",
             );
-          if (results[0].mode === "native" && results[0].phase === "preview")
+          assert.ok(
+            block.topBlank <= sample.expectedGap,
+            `Block ${i}: blank top space ${block.topBlank}px exceeds normal padding ${sample.expectedGap}px`,
+          );
+          const baseline = results.find(
+            (entry) => entry.mode === "native" && entry.phase === phase,
+          );
+          if (baseline)
             assert.ok(
-              Math.abs(block.textCenter - results[0].blocks[i].textCenter) < 1,
-              `Block ${i}: code text moved vertically when toggling renderer/editing`,
+              Math.abs(block.textCenter - baseline.blocks[i].textCenter) < 1,
+              `Block ${i}: code text moved vertically when toggling renderer`,
             );
         }
       } catch (error) {
