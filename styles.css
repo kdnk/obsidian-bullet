@@ -144,17 +144,41 @@ body.bullet-plugin-better-lists
 
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line.HyperMD-codeblock-begin.HyperMD-list-line.bullet-plugin-code-preview-opening
-  .cm-formatting-list {
-  position: relative;
-  inset-block-start: var(--bullet-code-preview-marker-offset);
+  .cm-line.HyperMD-codeblock-begin.HyperMD-list-line.bullet-plugin-code-opening-aligned {
+  z-index: 1;
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-codeblock-begin.HyperMD-list-line.bullet-plugin-code-opening-aligned
+  .list-bullet::before,
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-codeblock-begin.HyperMD-list-line.bullet-plugin-code-opening-aligned
+  .list-bullet::after {
+  translate: 0 var(--bullet-code-opening-marker-offset);
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-codeblock-begin.HyperMD-list-line.bullet-plugin-code-opening-aligned
+  .list-bullet::after {
+  pointer-events: auto;
 }
 
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.HyperMD-codeblock-begin.HyperMD-list-line.bullet-plugin-code-preview-opening
+  .list-number {
+  position: relative;
+  inset-block-start: var(--bullet-code-opening-marker-offset);
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.HyperMD-codeblock-begin.HyperMD-list-line.bullet-plugin-code-opening-aligned
   .cm-fold-indicator {
-  transform: translateY(var(--bullet-code-preview-marker-offset));
+  transform: translateY(var(--bullet-code-opening-marker-offset));
 }
 
 body.bullet-plugin-better-lists

@@ -451,6 +451,12 @@ describe("native preview row roles", () => {
       true,
     );
     expect(
+      opening.classList.contains("bullet-plugin-code-opening-aligned"),
+    ).toBe(false);
+    expect(
+      opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
+    ).toBe("");
+    expect(
       closing.classList.contains("bullet-plugin-code-preview-hidden-fence"),
     ).toBe(true);
     fixture.plugin.destroy();
@@ -480,12 +486,100 @@ describe("native preview row roles", () => {
     fixture.measure();
     expect(fixture.view.state.doc.line(2).text).toBe("");
     expect(
-      opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
+      opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
     ).toBe("22.5px");
     expect(opening.style.getPropertyValue("--bullet-code-preview-height")).toBe(
       "45px",
     );
     expect(opening.style.getPropertyValue("height")).toBe("");
+    opening.setRaw(true);
+    fixture.measure();
+    expect(
+      opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
+    ).toBe("22.5px");
+    expect(opening.style.getPropertyValue("--bullet-code-preview-height")).toBe(
+      "",
+    );
+    fixture.plugin.destroy();
+  });
+
+  test("keeps the opening marker on the first body row through source editing and redraw", () => {
+    const fixture = makePreviewFixture(false, true);
+    const [opening, first, , closing] = fixture.lines;
+    first.getBoundingClientRect = () =>
+      ({ left: 100, right: 300, top: 124, height: 24 }) as never;
+    const dispatch = drivers.get(fixture.plugin)!.dispatch;
+    dispatch({ selection: { anchor: fixture.view.state.doc.length } });
+    fixture.measure();
+    expect(
+      opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
+    ).toBe("24px");
+    opening.setRaw(true);
+    closing.setRaw(true);
+    dispatch({ selection: { anchor: 3 } });
+    expect(
+      opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
+    ).toBe("24px");
+    expect(
+      opening.classList.contains("bullet-plugin-code-preview-hidden-fence"),
+    ).toBe(false);
+    fixture.measure();
+    fixture.redraw();
+    expect(
+      opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
+    ).toBe("24px");
+    expect(opening.style.getPropertyValue("--bullet-code-preview-height")).toBe(
+      "",
+    );
+    opening.setRaw(false);
+    closing.setRaw(false);
+    dispatch({ selection: { anchor: fixture.view.state.doc.length } });
+    fixture.measure();
+    expect(
+      opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
+    ).toBe("24px");
+    expect(
+      opening.classList.contains("bullet-plugin-code-preview-hidden-fence"),
+    ).toBe(true);
+    fixture.plugin.destroy();
+  });
+
+  test("keeps ordered source markers at native coordinates while aligning their preview", () => {
+    const fixture = makePreviewFixture();
+    const [opening, first, , closing] = fixture.lines;
+    const dispatch = drivers.get(fixture.plugin)!.dispatch;
+    dispatch({
+      changes: {
+        from: 0,
+        to: fixture.view.state.doc.line(1).to,
+        insert: "\t1. ```js",
+      },
+    });
+    fixture.lines.forEach((line, index) => {
+      line.position = fixture.view.state.doc.line(index + 1).from;
+    });
+    const query = opening.querySelector;
+    opening.querySelector = ((selector: string) =>
+      selector === ".list-bullet"
+        ? null
+        : selector === ".list-number"
+          ? query(".cm-formatting-list")
+          : query(selector)) as typeof opening.querySelector;
+    first.getBoundingClientRect = () =>
+      ({ left: 100, right: 300, top: 124, height: 24 }) as never;
+    fixture.measure();
+    expect(
+      opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
+    ).toBe("24px");
+    opening.setRaw(true);
+    closing.setRaw(true);
+    fixture.measure();
+    expect(
+      opening.classList.contains("bullet-plugin-code-opening-aligned"),
+    ).toBe(false);
+    expect(
+      opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
+    ).toBe("");
     fixture.plugin.destroy();
   });
 
@@ -958,9 +1052,9 @@ describe("native measurement publication", () => {
     flushPublications();
     expect(lineAttributes(plugin, 0)).toEqual({
       class:
-        "bullet-plugin-nested-code-block bullet-plugin-code-preview-opening bullet-plugin-code-preview-hidden-fence",
+        "bullet-plugin-nested-code-block bullet-plugin-code-opening-aligned bullet-plugin-code-preview-opening bullet-plugin-code-preview-hidden-fence",
       style:
-        "--bullet-nested-code-block-inset: 74px; --bullet-code-preview-height: 24px; --bullet-code-preview-marker-offset: 0px;",
+        "--bullet-nested-code-block-inset: 74px; --bullet-code-opening-marker-offset: 0px; --bullet-code-preview-height: 24px;",
     });
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(fixture.measurements).toHaveLength(1);
@@ -983,7 +1077,7 @@ describe("native measurement publication", () => {
     fixture.plugin.destroy();
   });
 
-  test("drops an offscreen opener's preview alignment when editing enters its source block", () => {
+  test("keeps an offscreen opener's marker alignment when editing enters its source block", () => {
     const fixture = makePreviewFixture(false, true);
     const dispatch = drivers.get(fixture.plugin)!.dispatch;
     dispatch({ selection: { anchor: fixture.view.state.doc.length } });
@@ -996,8 +1090,10 @@ describe("native measurement publication", () => {
       selection: { anchor: fixture.view.state.doc.line(2).from + 3 },
     });
     expect(lineAttributes(fixture.plugin, 0)).toEqual({
-      class: "bullet-plugin-nested-code-block",
-      style: "--bullet-nested-code-block-inset: 64px;",
+      class:
+        "bullet-plugin-nested-code-block bullet-plugin-code-opening-aligned",
+      style:
+        "--bullet-nested-code-block-inset: 64px; --bullet-code-opening-marker-offset: 0px;",
     });
     fixture.plugin.destroy();
   });
@@ -1175,9 +1271,9 @@ describe("plain Shiki preview appearance", () => {
     const fixture = setup();
     expect(lineAttributes(fixture.plugin, 0)).toEqual({
       class:
-        "bullet-plugin-nested-code-block bullet-plugin-code-preview-opening bullet-plugin-code-preview-embed-opening bullet-plugin-code-preview-plain bullet-plugin-code-preview-hidden-fence",
+        "bullet-plugin-nested-code-block bullet-plugin-code-opening-aligned bullet-plugin-code-preview-opening bullet-plugin-code-preview-embed-opening bullet-plugin-code-preview-plain bullet-plugin-code-preview-hidden-fence",
       style:
-        "--bullet-nested-code-block-inset: 64px; --bullet-code-preview-height: 24px; --bullet-code-preview-marker-offset: 0px; --bullet-code-preview-background: rgb(31, 31, 40); --bullet-code-preview-end: 248px; --bullet-code-preview-radius: 6px;",
+        "--bullet-nested-code-block-inset: 64px; --bullet-code-opening-marker-offset: 0px; --bullet-code-preview-height: 24px; --bullet-code-preview-background: rgb(31, 31, 40); --bullet-code-preview-end: 248px; --bullet-code-preview-radius: 6px;",
     });
     fixture.opening.setRaw(true);
     fixture.notify(fixture.opening);
@@ -1413,6 +1509,8 @@ test("insets a rendered code embed from its owning list marker when the fence te
 test.each([
   "unordered",
   "ordered",
+  "no-body",
+  "blank-body",
   "empty",
   "empty-no-line-box",
   "empty-compact-no-line-box",
@@ -1421,17 +1519,26 @@ test.each([
   (kind) => {
     const noLineBox = kind.endsWith("no-line-box");
     const compact = kind === "empty-compact-no-line-box";
-    const expectedOffset = compact ? "23px" : noLineBox ? "26px" : "36px";
-    const state = EditorState.create({ doc: "\t- ```js\n\t  code\n\t  ```" });
+    const expectedOffset =
+      kind === "no-body" ? "" : compact ? "23px" : noLineBox ? "26px" : "36px";
+    const state = EditorState.create({
+      doc: [
+        "\t- ```js",
+        ...(kind === "no-body"
+          ? []
+          : [kind === "blank-body" ? "" : "\t  code"]),
+        "\t  ```",
+      ].join("\n"),
+    });
     const opening = makeLine(
       ["HyperMD-codeblock", "HyperMD-codeblock-begin", "HyperMD-list-line"],
       { position: 0, markerEnd: 164 },
     );
     const activeOffset = () =>
-      opening.classList.contains("bullet-plugin-code-preview-opening")
+      opening.classList.contains("bullet-plugin-code-opening-aligned")
         ? Number.parseFloat(
             opening.style.getPropertyValue(
-              "--bullet-code-preview-marker-offset",
+              "--bullet-code-opening-marker-offset",
             ),
           ) || 0
         : 0;
@@ -1439,21 +1546,35 @@ test.each([
       getBoundingClientRect: () => ({
         left: 164,
         right: 164,
-        top: 100 + activeOffset(),
+        top: 100 + (kind === "ordered" ? activeOffset() : 0),
+        height: 24,
+      }),
+    };
+    const markerContainer = {
+      getBoundingClientRect: () => ({
+        left: 164,
+        right: 164,
+        top: 100,
         height: 24,
       }),
     };
     opening.querySelector = ((selector: string) =>
-      selector === ".cm-formatting-list" ||
-      (selector === ".list-bullet" && kind !== "ordered")
-        ? marker
-        : null) as typeof opening.querySelector;
+      selector === ".cm-formatting-list"
+        ? markerContainer
+        : selector === (kind === "ordered" ? ".list-number" : ".list-bullet")
+          ? marker
+          : null) as typeof opening.querySelector;
     opening.getBoundingClientRect = () =>
       ({ left: 100, right: 300, top: 100 }) as never;
-    opening.ownerDocument.defaultView.getComputedStyle = () => ({
+    opening.ownerDocument.defaultView.getComputedStyle = (
+      element?: unknown,
+    ) => ({
       direction: "ltr",
       marginInlineEnd: "0px",
-      insetBlockStart: `${activeOffset()}px`,
+      insetBlockStart:
+        element === marker && kind === "ordered"
+          ? `${activeOffset()}px`
+          : "0px",
     });
     const embed = makeLine(["cm-preview-code-block"], { position: 3 });
     Object.assign(opening, { nextElementSibling: embed });
@@ -1481,7 +1602,8 @@ test.each([
       }) as never;
     Object.assign(embed.ownerDocument, {
       createTreeWalker: () => ({
-        nextNode: () => (kind.startsWith("empty") ? null : {}),
+        nextNode: () =>
+          kind.startsWith("empty") || kind.endsWith("body") ? null : {},
       }),
       createRange: () => ({
         selectNodeContents: () => {},
@@ -1505,27 +1627,39 @@ test.each([
       configurable: true,
     });
     try {
-      const plugin = mountLayout(view as never, names(BEGIN, CONTENT, END));
+      const plugin = mountLayout(
+        view as never,
+        names(
+          BEGIN,
+          ...(kind === "no-body"
+            ? []
+            : [kind === "blank-body" ? null : CONTENT]),
+          END,
+        ),
+      );
 
       const measure = () => runMeasurement(measurements[0]);
       measure();
       expect(
-        opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
+        opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
       ).toBe(expectedOffset);
       measure();
       expect(
-        opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
+        opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
       ).toBe(expectedOffset);
-      opening.classList.remove("bullet-plugin-code-preview-opening");
+      opening.classList.remove("bullet-plugin-code-opening-aligned");
       drivers.get(plugin)!.render();
       measure();
       expect(
-        opening.style.getPropertyValue("--bullet-code-preview-marker-offset"),
+        opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
       ).toBe(expectedOffset);
       expect(
         opening.style.getPropertyValue("--bullet-code-preview-height"),
       ).toBe(compact ? "47px" : noLineBox ? "50px" : "71px");
-      if (compact) expect(marker.getBoundingClientRect().top + 24).toBe(147);
+      if (compact)
+        expect(marker.getBoundingClientRect().top + activeOffset() + 24).toBe(
+          147,
+        );
       plugin.destroy();
       expect(
         opening.style.getPropertyValue("--bullet-code-preview-height"),
@@ -1856,7 +1990,7 @@ test("marks only parser-confirmed visible code content", () => {
     marked.push(state.doc.sliceString(from, to));
   });
 
-  expect(marked).toEqual(["i", " ", "}", "n"]);
+  expect(marked).toEqual(["`", "i", " ", "}", " ", "~", "n", " "]);
 });
 
 test.each(["HyperMD-codeblock", null])(
@@ -1876,7 +2010,7 @@ test.each(["HyperMD-codeblock", null])(
 
     // The empty body row is transparent to ownership lookup; the closing
     // fence is not. A later list-like line must not inherit this block.
-    expect(marked).toEqual(["a"]);
+    expect(marked).toEqual(["a", "`"]);
   },
 );
 
@@ -2038,6 +2172,7 @@ test.each(["", "\t", " "])(
         ownerDocument: doc,
         className: "",
         textContent: "",
+        children: [],
         style: makeStyle(),
         setAttribute: jest.fn(),
         appendChild: jest.fn(),
@@ -2254,6 +2389,62 @@ test.each([
   },
 );
 
+test("measures each source row against the same content edge, including both fences", () => {
+  const state = EditorState.create({ doc: "\t- ```js\n\t  hello\n\t  ```" });
+  const starts = [164, 150, 139];
+  const rows = [BEGIN, CONTENT, END].map((name, index) => {
+    const row = makeLine(name.split("_"), {
+      position: state.doc.line(index + 1).from,
+      markerEnd: 164,
+    });
+    const query = row.querySelector;
+    row.querySelector = ((selector: string) =>
+      selector === ".bullet-plugin-nested-code-block-content"
+        ? {
+            getBoundingClientRect: () => ({
+              left: starts[index],
+              right: starts[index] + 8,
+            }),
+          }
+        : query(selector)) as never;
+    return row;
+  });
+  const measurements: Measurement[] = [];
+  const view = {
+    state,
+    visibleRanges: [{ from: 0, to: state.doc.length }],
+    contentDOM: { querySelectorAll: () => rows },
+    posAtDOM: (element: { position: number }) => element.position,
+    coordsAtPos: () => {
+      throw Error("Use unpadded source bounds");
+    },
+    dom: { ownerDocument: { defaultView: {} } },
+    requestMeasure: (measurement: Measurement) =>
+      measurements.push(measurement),
+  };
+  const plugin = mountLayout(view as never, names(BEGIN, CONTENT, END));
+  const marked: number[] = [];
+  plugin.decorations.between(0, state.doc.length, (from, to) => {
+    if (from !== to) marked.push(from);
+  });
+  expect(marked).toEqual([3, 12, 21]);
+  runMeasurement(measurements[0]);
+  expect(
+    rows.map((row) =>
+      row.style.getPropertyValue("--bullet-code-content-padding"),
+    ),
+  ).toEqual([
+    "calc(64px - 64px + 0ch + var(--size-4-4))",
+    "calc(64px - 50px + 0ch + var(--size-4-4))",
+    "calc(64px - 39px + 0ch + var(--size-4-4))",
+  ]);
+  drivers.get(plugin)!.render();
+  expect(rows[2].style.getPropertyValue("--bullet-code-content-padding")).toBe(
+    "calc(64px - 39px + 0ch + var(--size-4-4))",
+  );
+  plugin.destroy();
+});
+
 function makeWidthFixture(
   openingText: string,
   firstText: string,
@@ -2397,6 +2588,9 @@ function makeWidthFixture(
       marginInlineEnd: "0px",
       direction: "ltr",
     })) as never;
+    Object.assign(first.ownerDocument, {
+      createTreeWalker: () => ({ nextNode: () => null }),
+    });
     const openingRect = opening.getBoundingClientRect();
     opening.getBoundingClientRect = () => ({
       ...openingRect,
@@ -2529,19 +2723,24 @@ test.each([
   },
 );
 
-test.each(["", "\t"])(
-  "fits a long unpadded closing fence from its raw continuation prefix with hidden indent %j",
-  (hidden) => {
+test.each([
+  ["", "  ", "184"],
+  ["\t", "\t  ", "184"],
+  ["", "\t", "200"],
+])(
+  "fits a padded closing fence after removing its container prefix with hidden indent %j",
+  (hidden, closingPrefix, expectedEnd) => {
     const fixture = makeWidthFixture(
       `${hidden}- \`\`\`js`,
       `${hidden}  hi`,
       `${hidden}  yo`,
       hidden,
-      { closing: `${hidden}  ${"`".repeat(20)}`, editing: true },
+      { closing: `${closingPrefix}${"`".repeat(20)}`, editing: true },
     );
     try {
-      // 16px raw continuation + 160px fence, without the list marker's 24px inset.
-      expect(fixture.measure()).toContain("calc(176px + var(--size-4-4))");
+      expect(fixture.measure()).toContain(
+        `calc(${expectedEnd}px + 2 * var(--size-4-4))`,
+      );
     } finally {
       fixture.plugin.destroy();
     }

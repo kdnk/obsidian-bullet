@@ -35,7 +35,8 @@ const HIDDEN_FENCE_CLASS = "bullet-plugin-code-preview-hidden-fence";
 const PREVIEW_FIRST_CLASS = "bullet-plugin-code-preview-first";
 const PREVIEW_LAST_CLASS = "bullet-plugin-code-preview-last";
 const PREVIEW_HEIGHT = "--bullet-code-preview-height";
-const PREVIEW_MARKER_OFFSET = "--bullet-code-preview-marker-offset";
+const OPENING_ALIGNED_CLASS = "bullet-plugin-code-opening-aligned";
+const OPENING_MARKER_OFFSET = "--bullet-code-opening-marker-offset";
 const PLAIN_PREVIEW_CLASS = "bullet-plugin-code-preview-plain";
 const PREVIEW_BACKGROUND = "--bullet-code-preview-background";
 const PREVIEW_END = "--bullet-code-preview-end";
@@ -48,7 +49,8 @@ interface MeasuredLine {
   end?: string;
   contentPadding?: string;
   emptyBody?: boolean;
-  preview?: { height: string; markerOffset: string };
+  markerOffset?: string;
+  preview?: { height: string };
   previewBlock?: HTMLElement;
   previewEmbed?: boolean;
   plainPreview?: boolean;
@@ -80,6 +82,7 @@ interface NativeRowLayout {
   inset: string;
   end: string | undefined;
   contentPadding: string | undefined;
+  markerOffset: string | undefined;
   presentation: NativePresentation;
 }
 
@@ -104,6 +107,7 @@ interface MeasuredFrame {
 
 const NATIVE_CLASSES = [
   CODE_BLOCK_CLASS,
+  OPENING_ALIGNED_CLASS,
   PREVIEW_OPENING_CLASS,
   PREVIEW_EMBED_OPENING_CLASS,
   PLAIN_PREVIEW_CLASS,
@@ -309,7 +313,7 @@ export class NestedCodeBlockLayoutPluginValue {
       rowProbes: Map<string, CodeRowProbe>;
       fence: HTMLElement;
       openingFence: HTMLElement;
-      closingFence: HTMLElement;
+      closingFence: CodeRowProbe;
       closingSource: string;
       containerColumn: number;
       source: string;
@@ -732,18 +736,49 @@ export class NestedCodeBlockLayoutPluginValue {
       openingFence.textContent = fenceText;
     if (!reusable) fenceProbe.appendChild(openingFence);
     let closingFence = reusable?.closingFence;
-    if (!closingFence || reusable?.closingSource !== closingSource) {
-      closingFence?.remove();
-      closingFence = win.createSpan();
-      closingFence.className = "bullet-plugin-code-width-row";
+    if (
+      !closingFence ||
+      reusable?.closingSource !== closingSource ||
+      reusable.containerColumn !== containerColumn
+    ) {
+      closingFence?.element.remove();
+      const closingElement = win.createSpan();
+      closingElement.className = "bullet-plugin-code-width-row";
       const closingIndent = /^[ \t]*/.exec(closingSource)![0];
-      closingFence.appendChild(
-        makeIndentMeasurement(doc, closingIndent, hidden, state.tabSize),
+      const indent = makeIndentMeasurement(
+        doc,
+        closingIndent,
+        hidden,
+        state.tabSize,
       );
-      closingFence.appendChild(
+      closingElement.appendChild(indent);
+      const offset =
+        offsetAtColumn(closingSource, containerColumn, state.tabSize) ?? 0;
+      const residualColumns = Math.max(
+        0,
+        countColumn(closingSource.slice(0, offset), state.tabSize) -
+          containerColumn,
+      );
+      let residual: HTMLElement | undefined;
+      if (residualColumns) {
+        residual = win.createSpan();
+        residual.className = "bullet-plugin-code-width-residual";
+        residual.textContent = " ".repeat(residualColumns);
+        closingElement.appendChild(residual);
+      }
+      closingElement.appendChild(
         doc.createTextNode(closingSource.slice(closingIndent.length)),
       );
-      fenceProbe.appendChild(closingFence);
+      fenceProbe.appendChild(closingElement);
+      closingFence = {
+        element: closingElement,
+        indent,
+        residual,
+        contentOffset: Math.max(
+          0,
+          offset - hiddenIndentEnd(closingIndent, hidden, state.tabSize),
+        ),
+      };
     }
     if (!reusable) {
       this.markerMeasureContainer.appendChild(element);
@@ -793,16 +828,18 @@ export class NestedCodeBlockLayoutPluginValue {
       ? Math.max(
           Number.parseFloat(inset) +
             probe.openingFence.getBoundingClientRect().width,
-          probe.closingFence.getBoundingClientRect().width,
+          Number.parseFloat(inset) +
+            probe.closingFence.element.getBoundingClientRect().width -
+            measureProbeContentStart(probe.closingFence) +
+            (probe.closingFence.residual?.getBoundingClientRect().width ?? 0),
         )
       : 0;
     const end = Math.max(
       bodyEnd,
+      fenceEnd,
       leadingEnd + (editing ? 0 : probe.flairWidth),
     );
-    // Body rows have matching code padding at both edges. Source fences have
-    // no content-start decoration and need only the trailing padding.
-    return `max(calc(${inset} + 2 * var(--size-4-4)), calc(${end}px + 2 * var(--size-4-4)), calc(${fenceEnd}px + var(--size-4-4)))`;
+    return `max(calc(${inset} + 2 * var(--size-4-4)), calc(${end}px + 2 * var(--size-4-4)))`;
   }
 
   private measureLines(): MeasuredLine[] {
@@ -844,10 +881,23 @@ export class NestedCodeBlockLayoutPluginValue {
           measured.push({ element, inset: currentInset });
           const preceding = measured[measured.length - 2];
           if (preceding) {
-            preceding.preview = measurePreviewOpening(
+            const alignment = measureOpeningAlignment(
               preceding.element,
               element,
             );
+            preceding.preview = alignment;
+            const emptySource =
+              opening.openingLineNumber < this.view.state.doc.lines &&
+              hasClassName(
+                this.syntaxContext.lineNameAt(opening.openingLineNumber + 1) ??
+                  "",
+                "HyperMD-codeblock-end",
+              );
+            preceding.markerOffset =
+              emptySource ||
+              preceding.element.querySelector(".cm-hmd-codeblock")
+                ? undefined
+                : alignment?.markerOffset;
             preceding.previewBlock = element;
             measured[measured.length - 1].previewEmbed = !!preceding.preview;
             preceding.previewAppearance = measurePreviewAppearance(
@@ -950,6 +1000,14 @@ export class NestedCodeBlockLayoutPluginValue {
         }
         visibleInsets.set(opening.openingLineNumber, inset);
         const next = element.nextElementSibling;
+        const alignment =
+          isOpening && isCodeBody(next)
+            ? measureOpeningAlignment(
+                element,
+                next as HTMLElement,
+                next?.querySelector(`.${CODE_CONTENT_CLASS}`) ?? next,
+              )
+            : undefined;
         const nativePreview =
           isNativePreviewOpening(element) && isCodeBody(next);
         measured.push({
@@ -963,15 +1021,12 @@ export class NestedCodeBlockLayoutPluginValue {
             inset,
           ),
           emptyBody,
-          previewBlock: nativePreview ? (next as HTMLElement) : undefined,
-          preview:
-            nativePreview && next
-              ? measurePreviewOpening(
-                  element,
-                  next as HTMLElement,
-                  next.querySelector(`.${CODE_CONTENT_CLASS}`) ?? next,
-                )
+          markerOffset:
+            nativePreview || element.querySelector(".list-bullet")
+              ? alignment?.markerOffset
               : undefined,
+          previewBlock: nativePreview ? (next as HTMLElement) : undefined,
+          preview: nativePreview ? alignment : undefined,
         });
       } else if (emptyBody) {
         // An empty row has no source indentation to measure. Resolve it from
@@ -1013,7 +1068,7 @@ export class NestedCodeBlockLayoutPluginValue {
     const rows = new Map<number, NativeRowLayout>();
     const processors: ProcessorLayout[] = [];
     for (const measurement of this.measureLines()) {
-      const { element, inset, end, contentPadding } = measurement;
+      const { element, inset, end, contentPadding, markerOffset } = measurement;
       const line = documentLineForElement(this.view, element);
       if (!line) continue;
       if (element.classList.contains("cm-preview-code-block")) {
@@ -1041,6 +1096,7 @@ export class NestedCodeBlockLayoutPluginValue {
           inset,
           end,
           contentPadding,
+          markerOffset,
           presentation: nativePresentation(measurement),
         });
     }
@@ -1290,6 +1346,10 @@ function nativeAttributes(row: NativeRowLayout | undefined): {
       [CODE_BLOCK_END, row.end],
       [CODE_CONTENT_PADDING, row.contentPadding],
     );
+    if (row.markerOffset !== undefined) {
+      classes.push(OPENING_ALIGNED_CLASS);
+      properties.push([OPENING_MARKER_OFFSET, row.markerOffset]);
+    }
     const presentation = row.presentation;
     switch (presentation.kind) {
       case "native-opening":
@@ -1297,10 +1357,7 @@ function nativeAttributes(row: NativeRowLayout | undefined): {
         const { alignment } = presentation;
         if (alignment) {
           classes.push(PREVIEW_OPENING_CLASS);
-          properties.push(
-            [PREVIEW_HEIGHT, alignment.height],
-            [PREVIEW_MARKER_OFFSET, alignment.markerOffset],
-          );
+          properties.push([PREVIEW_HEIGHT, alignment.height]);
         }
         if (presentation.kind === "processor-opening") {
           classes.push(PREVIEW_EMBED_OPENING_CLASS);
@@ -1466,15 +1523,10 @@ function codeBlockContentDecorations(
       }
       visitedLines.add(line.number);
       const name = lineNameAt(line.number);
-      if (
-        name !== null &&
-        isNestedCodeBlockName(name) &&
-        !hasClassName(name, "HyperMD-codeblock-begin") &&
-        !hasClassName(name, "HyperMD-codeblock-end")
-      ) {
+      if (name !== null && isNestedCodeBlockName(name)) {
         const opening = fenceOpeningAt(line.number);
         const contentOffset = opening
-          ? offsetAtColumn(line.text, opening.contentColumn, state.tabSize)
+          ? codeContentOffset(line, opening, state.tabSize)
           : null;
         if (contentOffset !== null && contentOffset < line.text.length) {
           decorations.push(
@@ -1573,14 +1625,16 @@ function documentLineForElement(view: EditorView, element: HTMLElement) {
   }
 }
 
-function measurePreviewOpening(
+function measureOpeningAlignment(
   opening: HTMLElement,
   embed: HTMLElement,
   code: Element | null = embed.querySelector(".ec-line .code") ??
     embed.querySelector("code"),
-): MeasuredLine["preview"] {
+): { height: string; markerOffset: string } | undefined {
+  const bullet = opening.querySelector<HTMLElement>(".list-bullet");
   const marker =
-    opening.querySelector<HTMLElement>(".list-bullet") ??
+    bullet ??
+    opening.querySelector<HTMLElement>(".list-number") ??
     opening.querySelector<HTMLElement>(".cm-formatting-list");
   if (!marker || !code) return;
 
@@ -1612,16 +1666,12 @@ function measurePreviewOpening(
 
   const lineBounds = opening.getBoundingClientRect();
   const markerBounds = marker.getBoundingClientRect();
-  const markerContainer = opening.querySelector<HTMLElement>(
-    ".cm-formatting-list",
-  );
-  const previousOffset =
-    Number.parseFloat(
-      markerContainer
-        ? (opening.ownerDocument.defaultView?.getComputedStyle(markerContainer)
-            .insetBlockStart ?? "0")
-        : "0",
-    ) || 0;
+  const previousOffset = bullet
+    ? 0
+    : Number.parseFloat(
+        opening.ownerDocument.defaultView?.getComputedStyle(marker)
+          .insetBlockStart ?? "0",
+      ) || 0;
   const firstLineCenter = firstLine.top + firstLine.height / 2;
   const markerCenter = hasLineBox
     ? firstLineCenter
@@ -1686,6 +1736,16 @@ function measureContentInset(
   return logicalInset(element, content, includeCodePadding);
 }
 
+function codeContentOffset(
+  line: { text: string; number: number },
+  opening: FenceOpening,
+  tabSize: number,
+): number | null {
+  return line.number === opening.openingLineNumber
+    ? opening.sourceOffset
+    : offsetAtColumn(line.text, opening.contentColumn, tabSize);
+}
+
 function measureCodeContentPadding(
   view: EditorView,
   element: HTMLElement,
@@ -1697,11 +1757,7 @@ function measureCodeContentPadding(
   const start = logicalInset(element, mark.getBoundingClientRect(), false);
   const line = documentLineForElement(view, element);
   if (start === null || !line) return;
-  const offset = offsetAtColumn(
-    line.text,
-    opening.contentColumn,
-    view.state.tabSize,
-  );
+  const offset = codeContentOffset(line, opening, view.state.tabSize);
   if (offset === null) return;
   // The mark precedes literal code whitespace. If its source tab straddles
   // the container boundary, keep that tab's remaining columns as code indent.
