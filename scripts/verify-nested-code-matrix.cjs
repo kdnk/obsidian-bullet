@@ -12,6 +12,8 @@ const original = evaluate(() => ({
   file: app.workspace.getActiveFile()?.path,
   shiki: !!app.plugins.plugins["shiki-highlighter"],
   dpr: devicePixelRatio,
+  leftCollapsed: app.workspace.leftSplit.collapsed,
+  rightCollapsed: app.workspace.rightSplit.collapsed,
 }));
 assert.equal(
   original.shiki,
@@ -120,6 +122,7 @@ function sample(label, fixture, mode) {
     const rect = (e) => e?.getBoundingClientRect();
     const marker =
       start.querySelector(".list-bullet") ??
+      start.querySelector(".list-number") ??
       start.querySelector(".cm-formatting-list");
     const firstRow = embed?.querySelector(".ec-line") ?? next;
     const content =
@@ -140,7 +143,41 @@ function sample(label, fixture, mode) {
         }
       }
     }
-    const mark = rect(marker),
+    function paintedMarkerBounds(element) {
+      const box = element?.getBoundingClientRect();
+      if (!box || !element.matches(".list-bullet")) return box;
+      const css = getComputedStyle(element, "::after");
+      const width = parseFloat(css.width),
+        height = parseFloat(css.height);
+      const length = (value, size) =>
+        value.endsWith("%")
+          ? (parseFloat(value) * size) / 100
+          : parseFloat(value);
+      const [dx = "0px", dy = "0px"] =
+        css.translate === "none" ? [] : css.translate.split(/\s+/);
+      const transform =
+        css.transform === "none"
+          ? new DOMMatrix()
+          : new DOMMatrix(css.transform);
+      const x =
+        box.x +
+        (css.left === "auto"
+          ? box.width / 2
+          : length(css.left, box.width) + width / 2) +
+        length(dx, width) +
+        transform.e;
+      const y =
+        box.y +
+        (css.top === "auto"
+          ? box.height / 2
+          : length(css.top, box.height) + height / 2) +
+        length(dy, height) +
+        transform.f;
+      if (![x, y, width, height].every(Number.isFinite))
+        throw Error("Unmeasurable native bullet paint");
+      return new DOMRect(x - width / 2, y - height / 2, width, height);
+    }
+    const mark = paintedMarkerBounds(marker),
       row = glyph ?? rect(firstRow),
       pre = embed?.querySelector("pre");
     const guides = (e) =>
@@ -203,6 +240,8 @@ function sample(label, fixture, mode) {
 try {
   cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
   evaluate(async (name) => {
+    app.workspace.leftSplit.collapse();
+    app.workspace.rightSplit.collapse();
     await app.workspace
       .getLeaf(false)
       .openFile(await app.vault.create(name, "audit"));
@@ -235,6 +274,10 @@ try {
     );
   } finally {
     cdp("Emulation.clearDeviceMetricsOverride");
+    evaluate((original) => {
+      if (!original.leftCollapsed) app.workspace.leftSplit.expand();
+      if (!original.rightCollapsed) app.workspace.rightSplit.expand();
+    }, original);
     cdp("Emulation.setFocusEmulationEnabled", { enabled: false });
     fs.writeFileSync(
       path.join(output, "results.json"),

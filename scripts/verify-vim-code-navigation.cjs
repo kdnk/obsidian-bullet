@@ -21,6 +21,14 @@ const original = evaluate(() => {
   };
 });
 const fixtures = [
+  {
+    name: "ordered",
+    text: "- before\n1. ```js\n   one\n   two\n   ```\n- after",
+  },
+  {
+    name: "nested ordered",
+    text: "- before\n\t1. ```js\n\t   one\n\t   two\n\t   ```\n\t- after",
+  },
   { name: "attached", text: "- before\n- ```js\n  one\n  two\n  ```\n- after" },
   {
     name: "nested",

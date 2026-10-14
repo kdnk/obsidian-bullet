@@ -92,6 +92,40 @@ try {
         [...cm.contentDOM.querySelectorAll(".cm-line")].find(
           (e) => cm.state.doc.lineAt(cm.posAtDOM(e)).number === n,
         );
+      function paintedMarkerBounds(element) {
+        const box = element?.getBoundingClientRect();
+        if (!box || !element.matches(".list-bullet")) return box;
+        const css = getComputedStyle(element, "::after");
+        const width = parseFloat(css.width),
+          height = parseFloat(css.height);
+        const length = (value, size) =>
+          value.endsWith("%")
+            ? (parseFloat(value) * size) / 100
+            : parseFloat(value);
+        const [dx = "0px", dy = "0px"] =
+          css.translate === "none" ? [] : css.translate.split(/\s+/);
+        const transform =
+          css.transform === "none"
+            ? new DOMMatrix()
+            : new DOMMatrix(css.transform);
+        const x =
+          box.x +
+          (css.left === "auto"
+            ? box.width / 2
+            : length(css.left, box.width) + width / 2) +
+          length(dx, width) +
+          transform.e;
+        const y =
+          box.y +
+          (css.top === "auto"
+            ? box.height / 2
+            : length(css.top, box.height) + height / 2) +
+          length(dy, height) +
+          transform.f;
+        if (![x, y, width, height].every(Number.isFinite))
+          throw Error("Unmeasurable native bullet paint");
+        return new DOMRect(x - width / 2, y - height / 2, width, height);
+      }
       const rect = (e) => e?.getBoundingClientRect();
       const guides = (e) =>
         [...e.querySelectorAll(".cm-indent")].map((e) => ({
@@ -144,7 +178,9 @@ try {
           return {
             nativePreview: nativePreview
               ? {
-                  bulletCenter: rect(bullet).y + rect(bullet).height / 2,
+                  bulletCenter:
+                    paintedMarkerBounds(bullet).y +
+                    paintedMarkerBounds(bullet).height / 2,
                   textCenter:
                     rect(nativeContent).y + rect(nativeContent).height / 2,
                   openingHeight: rect(start).height,
@@ -154,7 +190,9 @@ try {
             opening,
             preview: embed
               ? {
-                  bulletCenter: rect(bullet).y + rect(bullet).height / 2,
+                  bulletCenter:
+                    paintedMarkerBounds(bullet).y +
+                    paintedMarkerBounds(bullet).height / 2,
                   textCenter: firstCodeRect.y + firstCodeRect.height / 2,
                   embedLeft: rect(embed).x,
                   codeLeft: rect(embed.querySelector("pre")).x,
@@ -340,6 +378,40 @@ try {
       [...cm.contentDOM.querySelectorAll(".cm-line")].find(
         (e) => cm.state.doc.lineAt(cm.posAtDOM(e)).number === n,
       );
+    function paintedMarkerBounds(element) {
+      const box = element?.getBoundingClientRect();
+      if (!box || !element.matches(".list-bullet")) return box;
+      const css = getComputedStyle(element, "::after");
+      const width = parseFloat(css.width),
+        height = parseFloat(css.height);
+      const length = (value, size) =>
+        value.endsWith("%")
+          ? (parseFloat(value) * size) / 100
+          : parseFloat(value);
+      const [dx = "0px", dy = "0px"] =
+        css.translate === "none" ? [] : css.translate.split(/\s+/);
+      const transform =
+        css.transform === "none"
+          ? new DOMMatrix()
+          : new DOMMatrix(css.transform);
+      const x =
+        box.x +
+        (css.left === "auto"
+          ? box.width / 2
+          : length(css.left, box.width) + width / 2) +
+        length(dx, width) +
+        transform.e;
+      const y =
+        box.y +
+        (css.top === "auto"
+          ? box.height / 2
+          : length(css.top, box.height) + height / 2) +
+        length(dy, height) +
+        transform.f;
+      if (![x, y, width, height].every(Number.isFinite))
+        throw Error("Unmeasurable native bullet paint");
+      return new DOMRect(x - width / 2, y - height / 2, width, height);
+    }
     const bounds = (e) => e.getBoundingClientRect();
     const entries = [
       [2, 4],
@@ -351,6 +423,7 @@ try {
       const embedded = next.matches(".cm-preview-code-block");
       const marker =
         opening.querySelector(".list-bullet") ??
+        opening.querySelector(".list-number") ??
         opening.querySelector(".cm-formatting-list");
       const code = embedded
         ? (next.querySelector(".ec-line .code") ?? next.querySelector("code"))
@@ -369,7 +442,7 @@ try {
           }
         }
       }
-      const r = bounds(marker);
+      const r = paintedMarkerBounds(marker);
       return {
         opening: n,
         embedded,
