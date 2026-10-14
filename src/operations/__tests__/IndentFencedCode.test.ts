@@ -39,6 +39,50 @@ describe("fenced code indentation", () => {
     },
   );
 
+  test.each([2, 3, 4, 5, 6])(
+    "keeps a cursor at column %s inside the code container while outdenting",
+    (ch) => {
+      const root = makeRoot({
+        editor: makeEditor({
+          text: "- owner\n  ```\n      code\n  ```",
+          cursor: { line: 2, ch },
+        }),
+      });
+      expect(new OutdentList(root, false, "\t").perform()).toEqual(
+        UPDATED_OUTCOME,
+      );
+      expect(root.print()).toBe("- owner\n  ```\n  code\n  ```");
+      expect(root.getCursor()).toEqual({ line: 2, ch: 2 });
+    },
+  );
+
+  test.each([false, true])(
+    "clamps selection endpoints inside removed code indentation, reversed=%s",
+    (reverse) => {
+      const root = makeRoot({
+        editor: makeEditor({
+          text: "- owner\n  ```\n      code\n  ```",
+          cursor: { line: 2, ch: 3 },
+        }),
+      });
+      const from = { line: 2, ch: 3 },
+        to = { line: 2, ch: 8 };
+      root.replaceSelections([
+        { anchor: reverse ? to : from, head: reverse ? from : to },
+      ]);
+      expect(new OutdentList(root, false, "\t").perform()).toEqual(
+        UPDATED_OUTCOME,
+      );
+      expect(root.print()).toBe("- owner\n  ```\n  code\n  ```");
+      expect(root.getSelections()).toEqual([
+        {
+          anchor: { line: 2, ch: reverse ? 4 : 2 },
+          head: { line: 2, ch: reverse ? 2 : 4 },
+        },
+      ]);
+    },
+  );
+
   test("does not indent the closing fence at the end-exclusive selection boundary", () => {
     const text = "- ```js\n  one\n  ```";
     const root = makeRoot({
