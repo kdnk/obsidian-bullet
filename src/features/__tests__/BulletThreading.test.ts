@@ -518,3 +518,135 @@ test("task widgets at line boundaries use their visible bullet centers", async (
   expect(coordsAtPos).not.toHaveBeenCalled();
   await feature.unload();
 });
+
+test.each([1, 2])(
+  "attached code threads follow the painted bullet through layout changes at scale %s",
+  async (scaleY) => {
+    const { settings, feature } = setup();
+    settings.bulletThreading = true;
+    await feature.load();
+    const state = stateAt("- root\n\t- ```js\n\t  code\n\t  ```", 3);
+    const { view, properties, coordsAtPos } = viewFor(state);
+    let aligned = true;
+    const bounds = (line: number) => ({
+      left: line * 40,
+      right: line * 40 + 8,
+      top: line * 30,
+      bottom: line * 30 + 20,
+      width: 8,
+      height: 20,
+    });
+    const measuredView = {
+      ...view,
+      scaleY,
+      win: {
+        getComputedStyle: () => ({ getPropertyValue: () => "20.75px" }),
+      },
+      domAtPos: (offset: number) => {
+        const line = state.doc.lineAt(offset).number;
+        return {
+          node: {
+            parentElement: {
+              closest: () => ({
+                classList: { contains: () => line === 2 && aligned },
+                querySelectorAll: () => [
+                  {
+                    classList: { contains: () => true },
+                    querySelector: () => null,
+                    getClientRects: () => [bounds(line)],
+                  },
+                ],
+              }),
+            },
+          },
+        };
+      },
+    };
+    const measured = config();
+    const preview = measured.markers(measuredView as never);
+    expect(preview).toHaveLength(1);
+    preview[0].draw();
+    expect(properties.get("--bullet-thread-top")).toBe("44px");
+    expect(properties.get("--bullet-thread-height")).toBe(
+      scaleY === 1 ? "46.75px" : "67.5px",
+    );
+    expect(bounds(2)).toEqual({
+      left: 80,
+      right: 88,
+      top: 60,
+      bottom: 80,
+      width: 8,
+      height: 20,
+    });
+    aligned = false;
+    measured.markers(measuredView as never)[0].draw();
+    expect(properties.get("--bullet-thread-height")).toBe("26px");
+    aligned = true;
+    measured.markers(measuredView as never)[0].draw();
+    expect(properties.get("--bullet-thread-height")).toBe(
+      scaleY === 1 ? "46.75px" : "67.5px",
+    );
+    expect(coordsAtPos).not.toHaveBeenCalled();
+    await feature.unload();
+  },
+);
+
+test("attached ordered code threads measure the positioned number before its wrapper", async () => {
+  const { settings, feature } = setup();
+  settings.bulletThreading = true;
+  await feature.load();
+  const state = stateAt("- root\n\t1. ```js\n\t   code\n\t   ```", 3);
+  const { view, properties, coordsAtPos } = viewFor(state);
+  const measuredView = {
+    ...view,
+    domAtPos: (offset: number) => {
+      const line = state.doc.lineAt(offset).number;
+      const bounds = {
+        left: line * 40,
+        right: line * 40 + 8,
+        top: line * 30,
+        bottom: line * 30 + 20,
+        width: 8,
+        height: 20,
+      };
+      return {
+        node: {
+          parentElement: {
+            closest: () => ({
+              classList: { contains: () => line === 2 },
+              querySelectorAll: () => [
+                {
+                  classList: { contains: () => line === 1 },
+                  getClientRects: () => [bounds],
+                  querySelector: () =>
+                    line === 2
+                      ? {
+                          getClientRects: () => [
+                            {
+                              ...bounds,
+                              left: 82,
+                              right: 94,
+                              top: 80.75,
+                              bottom: 100.75,
+                              width: 12,
+                            },
+                          ],
+                        }
+                      : null,
+                },
+              ],
+            }),
+          },
+        },
+      };
+    },
+  };
+  const markers = config().markers(measuredView as never);
+  expect(markers).toHaveLength(1);
+  markers[0].draw();
+  expect(properties.get("--bullet-thread-left")).toBe("44px");
+  expect(properties.get("--bullet-thread-width")).toBe("40px");
+  expect(properties.get("--bullet-thread-height")).toBe("46.75px");
+  expect(coordsAtPos).not.toHaveBeenCalled();
+  await feature.unload();
+});
