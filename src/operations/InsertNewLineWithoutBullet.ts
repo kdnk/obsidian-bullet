@@ -31,14 +31,13 @@ export class InsertNewLineWithoutBullet implements Operation {
       return NO_OP_OUTCOME;
     }
 
-    if (cursor.ch < lineUnderCursor.from.ch) {
+    if (selection.from < lineUnderCursor.from.ch) {
       return NO_OP_OUTCOME;
     }
 
-    const lineOffset = cursor.ch - lineUnderCursor.from.ch;
     const lineText = lineUnderCursor.text;
-    const left = lineText.slice(0, lineOffset);
-    const right = lineText.slice(lineOffset);
+    const left = lineText.slice(0, selection.from - lineUnderCursor.from.ch);
+    const right = lineText.slice(selection.to - lineUnderCursor.from.ch);
     const newLines = list.getLines();
 
     newLines.splice(lineIndex, 1, left, right);

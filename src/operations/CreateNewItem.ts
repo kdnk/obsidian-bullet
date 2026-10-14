@@ -55,7 +55,7 @@ export class CreateNewItem implements Operation {
       return NO_OP_OUTCOME;
     }
 
-    if (cursor.ch < lineUnderCursor.from.ch) {
+    if (selection.from < lineUnderCursor.from.ch) {
       return NO_OP_OUTCOME;
     }
 
@@ -93,6 +93,7 @@ export class CreateNewItem implements Operation {
     );
 
     const shouldInsertUncheckedSiblingBeforeCurrentItem =
+      selection.from === selection.to &&
       lineIndex === 0 &&
       checkboxAtContentStart !== null &&
       oldLines[0] === checkboxAtContentStart[0];
@@ -134,15 +135,14 @@ export class CreateNewItem implements Operation {
       !hasCheckbox &&
       !createSiblingAfterFence
     ) {
-      const lineOffset = cursor.ch - lineUnderCursor.from.ch;
       const line = lines[lineIndex];
       if (!line) {
         return STOP_ONLY_OUTCOME;
       }
 
       const lineText = line.text;
-      const left = lineText.slice(0, lineOffset);
-      const right = lineText.slice(lineOffset);
+      const left = lineText.slice(0, selection.from - line.from.ch);
+      const right = lineText.slice(selection.to - line.from.ch);
       const newLines = list.getLines();
 
       newLines.splice(lineIndex, 1, left, right);
