@@ -78,6 +78,50 @@ const fixtures = [
     typed: "- ab\n  Xef",
   },
   {
+    name: "continue tab-separated bullet",
+    text: "-\tabcdef",
+    line: 0,
+    from: 4,
+    to: 6,
+    key: "Enter",
+    shift: true,
+    expected: "-\tab\n    ef",
+    typed: "-\tab\n    Xef",
+  },
+  {
+    name: "continue nested tab-separated bullet",
+    text: "- parent\n\t-\tabcdef",
+    line: 1,
+    from: 5,
+    to: 7,
+    key: "Enter",
+    shift: true,
+    expected: "- parent\n\t-\tab\n\t    ef",
+    typed: "- parent\n\t-\tab\n\t    Xef",
+  },
+  {
+    name: "continue tab-separated numbered item",
+    text: "9.\tabcdef",
+    line: 0,
+    from: 5,
+    to: 7,
+    key: "Enter",
+    shift: true,
+    expected: "9.\tab\n    ef",
+    typed: "9.\tab\n    Xef",
+  },
+  {
+    name: "continue numbered item across tab stop",
+    text: " 10.\tabcdef",
+    line: 0,
+    from: 7,
+    to: 9,
+    key: "Enter",
+    shift: true,
+    expected: " 10.\tab\n        ef",
+    typed: " 10.\tab\n        Xef",
+  },
+  {
     name: "replace task prefix selection with sibling",
     text: "- [x] abcdef",
     line: 0,
@@ -132,19 +176,28 @@ const fixtures = [
 ];
 
 function focus() {
-  evaluate(() => {
+  evaluate((note) => {
     window.focus();
-    if (!document.title.includes("vault") || document.title.includes("base"))
-      throw Error("Wrong vault window");
-    app.workspace.activeLeaf.view.editor.focus();
-  });
+    const view = app.workspace.activeLeaf.view;
+    if (
+      !document.title.includes(" - vault - ") ||
+      document.visibilityState !== "visible" ||
+      view.file?.path !== note ||
+      app.isVimEnabled() ||
+      view.editor.cm.cm
+    )
+      throw Error("Wrong native editing context");
+    view.editor.focus();
+    if (document.activeElement !== view.editor.cm.contentDOM)
+      throw Error("Expected editor must own focus");
+  }, note);
 }
 
 function keypress(key, modifiers = 0) {
-  focus();
   const code = key === "z" ? "KeyZ" : key;
   const windowsVirtualKeyCode = { Enter: 13, Tab: 9, z: 90 }[key];
-  for (const type of ["keyDown", "keyUp"])
+  for (const type of ["keyDown", "keyUp"]) {
+    focus();
     cdp("Input.dispatchKeyEvent", {
       type,
       key,
@@ -152,6 +205,7 @@ function keypress(key, modifiers = 0) {
       windowsVirtualKeyCode,
       modifiers,
     });
+  }
 }
 
 function sample() {
@@ -165,6 +219,7 @@ function sample() {
 const original = evaluate(() => ({
   leaf: app.workspace.activeLeaf.id,
   vim: app.vault.config.vimMode ?? false,
+  hasVim: Object.hasOwn(app.vault.config, "vimMode"),
   shiki: !!app.plugins.plugins["shiki-highlighter"],
 }));
 const results = [];
@@ -173,6 +228,7 @@ try {
   cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
   evaluate(async (note) => {
     app.vault.setConfig("vimMode", false);
+    await app.vault.saveConfig();
     app.workspace.updateOptions();
     app.workspace.leftSplit.collapse();
     app.workspace.rightSplit.collapse();
@@ -188,6 +244,9 @@ try {
       } else await app.plugins.disablePlugin("shiki-highlighter");
       if (!!app.plugins.plugins["shiki-highlighter"] !== enabled)
         throw Error("Shiki state did not change");
+      app.vault.setConfig("vimMode", false);
+      await app.vault.saveConfig();
+      app.workspace.updateOptions();
     }, shiki);
     for (const fixture of fixtures) {
       for (const reverse of fixture.from === fixture.to
@@ -265,7 +324,11 @@ try {
       if (file) await app.vault.trash(file, true);
       if (original.shiki) await app.plugins.enablePlugin("shiki-highlighter");
       else await app.plugins.disablePlugin("shiki-highlighter");
-      app.vault.setConfig("vimMode", original.vim);
+      app.vault.setConfig(
+        "vimMode",
+        original.hasVim ? original.vim : undefined,
+      );
+      await app.vault.saveConfig();
       app.workspace.updateOptions();
       const leaf = app.workspace.getLeafById(original.leaf);
       if (leaf) app.workspace.setActiveLeaf(leaf);

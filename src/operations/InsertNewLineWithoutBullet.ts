@@ -1,3 +1,5 @@
+import { countColumn } from "@codemirror/state";
+
 import { NO_OP_OUTCOME, Operation, UPDATED_OUTCOME } from "./Operation";
 
 import { List, Root } from "../root";
@@ -57,9 +59,10 @@ export class InsertNewLineWithoutBullet implements Operation {
   }
 
   private createNotesIndent(list: List) {
-    return (
-      list.getFirstLineIndent() +
-      " ".repeat(list.getBullet().length + list.getSpaceAfterBullet().length)
-    );
+    const indent = list.getFirstLineIndent();
+    const contentPrefix =
+      indent + list.getBullet() + list.getSpaceAfterBullet();
+    const markerWidth = countColumn(contentPrefix, 4) - countColumn(indent, 4);
+    return indent + " ".repeat(markerWidth);
   }
 }
