@@ -495,8 +495,38 @@
 	|five
 ```
 
-# enter should fallback behavior while multiline selection with nested bullets
+# enter should keep the surviving text in a list after replacing a nested selection
 
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+-	1|one
+	-	two |three
+- four
+```
+
+- keydown: `Enter`
+- assertState:
+
+```md
+-	1
+- |three
+- four
+```
+
+- typeText: `X`
+- assertState:
+
+```md
+-	1
+- X|three
+- four
+```
+
+# enter should retain native nested selection behavior when list body protection is disabled
+
+- setting: `keepBodyTextInBullets=false`
 - applyState:
 
 ```md
@@ -511,5 +541,14 @@
 ```md
 -	1
 |three
+- four
+```
+
+- typeText: `X`
+- assertState:
+
+```md
+-	1
+X|three
 - four
 ```

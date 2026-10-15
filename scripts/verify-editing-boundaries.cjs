@@ -131,6 +131,7 @@ function sample() {
     return {
       doc: view.editor.getValue(),
       cursor: view.editor.getCursor(),
+      selections: view.editor.listSelections(),
       saved: await app.vault.read(view.file),
       folds: view.currentMode.getFoldInfo()?.folds ?? [],
       zoomed: !!view.containerEl.querySelector(
@@ -483,6 +484,196 @@ try {
       expectState(result.typed, entry.typedAfter);
     });
   }
+
+  const rangeCases = [
+    {
+      name: "root",
+      doc: "- alpha\n- beta",
+      start: { line: 0, ch: 4 },
+      end: { line: 1, ch: 4 },
+      after: "- alta",
+    },
+    {
+      name: "nested",
+      doc: "- parent\n\t- alpha\n\t- beta",
+      start: { line: 1, ch: 5 },
+      end: { line: 2, ch: 5 },
+      after: "- parent\n\t- alta",
+    },
+    {
+      name: "ordered",
+      doc: "9. alpha\n10. beta",
+      start: { line: 0, ch: 5 },
+      end: { line: 1, ch: 6 },
+      after: "9. alta",
+    },
+    {
+      name: "task",
+      doc: "- [x] alpha\n- [ ] beta",
+      start: { line: 0, ch: 8 },
+      end: { line: 1, ch: 8 },
+      after: "- [x] alta",
+    },
+    {
+      name: "descendants",
+      doc: "- alpha\n\t- child\n- middle\n- beta",
+      start: { line: 0, ch: 4 },
+      end: { line: 3, ch: 4 },
+      after: "- alta",
+    },
+    {
+      name: "empty-first-item",
+      doc: "- \n- beta",
+      start: { line: 0, ch: 1 },
+      end: { line: 1, ch: 4 },
+      after: "- ta",
+      cursor: { line: 0, ch: 2 },
+    },
+    {
+      name: "partial-first-marker",
+      doc: "10. alpha\n* beta",
+      start: { line: 0, ch: 1 },
+      end: { line: 1, ch: 4 },
+      after: "10. ta",
+      cursor: { line: 0, ch: 4 },
+    },
+    {
+      name: "whole-first-item",
+      doc: "10. alpha\n* beta",
+      start: { line: 0, ch: 0 },
+      end: { line: 1, ch: 4 },
+      after: "* ta",
+      cursor: { line: 0, ch: 2 },
+    },
+  ];
+  for (const entry of rangeCases) {
+    for (const reverse of [false, true]) {
+      for (const key of ["Backspace", "Delete"]) {
+        check(`range-${entry.name}-${key}-${reverse}`, (result) => {
+          setup(entry.doc, entry.start);
+          evaluate(
+            (start, end, reverse) => {
+              window.__editingBoundariesLeaf.view.editor.setSelection(
+                reverse ? end : start,
+                reverse ? start : end,
+              );
+            },
+            entry.start,
+            entry.end,
+            reverse,
+          );
+          keypress(key);
+          result.after = sample();
+          const cursor = entry.cursor ?? entry.start;
+          expectState(result.after, entry.after, cursor);
+          history(result, entry.doc, entry.after);
+          assert.deepEqual(result.undo.selections, [
+            {
+              anchor: reverse ? entry.end : entry.start,
+              head: reverse ? entry.start : entry.end,
+            },
+          ]);
+          assert.deepEqual(result.redo.cursor, cursor);
+          type("X");
+          result.typed = sample();
+          const lines = entry.after.split("\n");
+          const line = lines[cursor.line];
+          lines[cursor.line] =
+            line.slice(0, cursor.ch) + "X" + line.slice(cursor.ch);
+          expectState(result.typed, lines.join("\n"), {
+            ...cursor,
+            ch: cursor.ch + 1,
+          });
+        });
+      }
+    }
+  }
+  for (const cursorMode of ["never", "bullet-and-checkbox"]) {
+    for (const reverse of [false, true]) {
+      check(`range-enter-${cursorMode}-${reverse}`, (result) => {
+        evaluate((mode) => {
+          app.plugins.plugins.bullet.settings.keepCursorWithinContent = mode;
+        }, cursorMode);
+        try {
+          const before = "- alpha\n- beta";
+          const after = "- al\n- ta";
+          setup(before, { line: 0, ch: 4 });
+          const selection = {
+            anchor: reverse ? { line: 1, ch: 4 } : { line: 0, ch: 4 },
+            head: reverse ? { line: 0, ch: 4 } : { line: 1, ch: 4 },
+          };
+          evaluate((selection) => {
+            window.__editingBoundariesLeaf.view.editor.setSelection(
+              selection.anchor,
+              selection.head,
+            );
+          }, selection);
+          keypress("Enter");
+          result.after = sample();
+          expectState(result.after, after, { line: 1, ch: 2 });
+          history(result, before, after);
+          assert.deepEqual(result.undo.selections, [selection]);
+          assert.deepEqual(result.redo.cursor, { line: 1, ch: 2 });
+          type("X");
+          result.typed = sample();
+          expectState(result.typed, "- al\n- Xta", { line: 1, ch: 3 });
+          result.typingHistory = {};
+          history(result.typingHistory, after, "- al\n- Xta");
+          assert.deepEqual(result.typingHistory.redo.cursor, {
+            line: 1,
+            ch: 3,
+          });
+        } finally {
+          evaluate(() => {
+            app.plugins.plugins.bullet.settings.keepCursorWithinContent =
+              "bullet-and-checkbox";
+          });
+        }
+      });
+    }
+  }
+  check("multiple-selected-joins", (result) => {
+    const before = "- alpha\n- beta\n- gamma\n- delta";
+    const after = "- alta\n- galta";
+    setup(before, { line: 0, ch: 4 });
+    evaluate(() => {
+      window.__editingBoundariesLeaf.view.editor.setSelections([
+        { anchor: { line: 0, ch: 4 }, head: { line: 1, ch: 4 } },
+        { anchor: { line: 3, ch: 4 }, head: { line: 2, ch: 4 } },
+      ]);
+    });
+    keypress("Backspace");
+    result.after = sample();
+    expectState(result.after, after);
+    history(result, before, after);
+    type("X");
+    result.typed = sample();
+    expectState(result.typed, "- alXta\n- gaXlta");
+  });
+  check("range-enter-guard-disabled", (result) => {
+    evaluate(() => {
+      app.plugins.plugins.bullet.settings.keepBodyTextInBullets = false;
+    });
+    try {
+      setup("- alpha\n- beta", { line: 0, ch: 4 });
+      evaluate(() => {
+        window.__editingBoundariesLeaf.view.editor.setSelection(
+          { line: 0, ch: 4 },
+          { line: 1, ch: 4 },
+        );
+      });
+      keypress("Enter");
+      result.after = sample();
+      expectState(result.after, "- al\nta", { line: 1, ch: 0 });
+      type("X");
+      result.typed = sample();
+      expectState(result.typed, "- al\nXta", { line: 1, ch: 1 });
+    } finally {
+      evaluate(() => {
+        app.plugins.plugins.bullet.settings.keepBodyTextInBullets = true;
+      });
+    }
+  });
 } finally {
   fs.writeFileSync(
     path.join(output, "results.json"),
