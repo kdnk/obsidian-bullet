@@ -68,7 +68,9 @@ function viewFor(state: EditorState) {
       setProperty: (key: string, value: string) => properties.set(key, value),
     },
   };
-  const getComputedStyle = jest.fn(() => ({ getPropertyValue: () => "" }));
+  const getComputedStyle = jest.fn(() => ({
+    getPropertyValue: (): string => "",
+  }));
   const doc = { win: { createDiv: () => dom, getComputedStyle } };
   const coordsAtPos = jest.fn((offset: number) => {
     const line = state.doc.lineAt(offset);

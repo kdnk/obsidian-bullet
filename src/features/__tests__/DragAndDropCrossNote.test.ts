@@ -53,8 +53,15 @@ function setup(
     { keepCursorWithinContent: "bullet-and-checkbox" } as never,
   );
   const zoom = new ListZoomState(parser);
+  const bodyClasses = new Set<string>();
   const doc = {
-    body: { classList: { add() {}, remove() {} } },
+    body: {
+      classList: {
+        add: (name: string) => bodyClasses.add(name),
+        remove: (name: string) => bodyClasses.delete(name),
+        contains: (name: string) => bodyClasses.has(name),
+      },
+    },
     elementFromPoint: (): unknown => target.dom,
   };
   function makeView(text: string, path: string, left: number) {
@@ -159,16 +166,18 @@ function setup(
     view: { editor: target.state.field(editorInfoField).editor },
   };
   const setActiveLeaf = jest.fn();
+  const settings = { dragAndDrop: true };
+  const operationPerformer = { execute: jest.fn() };
   const feature = new DragAndDrop(
     {
       app: {
         workspace: { getLeavesOfType: () => [targetLeaf], setActiveLeaf },
       },
     } as never,
-    { dragAndDrop: true } as never,
+    settings as never,
     { getDefaultIndentChars: () => "\t" } as never,
     parser,
-    {} as never,
+    operationPerformer as never,
     (state: EditorState) => zoom.range(state),
   );
   const internals = feature as unknown as {
@@ -177,6 +186,8 @@ function setup(
     startDragging(): void;
     detectAndDrawDropZone(x: number, y: number): void;
     stopDragging(): void;
+    handleSettingsChange(): void;
+    handleMouseUp(): void;
   };
   const style: Record<string, string> = {};
   internals.documents.set(doc, {
@@ -196,6 +207,8 @@ function setup(
   return {
     source,
     target,
+    settings,
+    operationPerformer,
     internals,
     style,
     doc,
@@ -529,3 +542,45 @@ test.each(["```md\n- code\n```", "~~~\nplain\n~~~", "---\ntitle: unfinished"])(
     expect(target.state.doc.toString()).toBe(text);
   },
 );
+
+test("disabling drag cancels a pending cross-note move before mouseup", () => {
+  const { source, target, settings, internals, style } = setup("- parent");
+  internals.detectAndDrawDropZone(516, 12);
+  expect(style.display).toBe("block");
+
+  settings.dragAndDrop = false;
+  internals.handleSettingsChange();
+  internals.handleMouseUp();
+
+  expect(source.state.doc.toString()).toBe("- move\n\t- child\n- keep");
+  expect(target.state.doc.toString()).toBe("- parent");
+  expect(style.display).toBe("none");
+});
+
+test("disabling drag cancels a pending same-note move before mouseup", () => {
+  const {
+    source,
+    target,
+    settings,
+    operationPerformer,
+    internals,
+    style,
+    doc,
+  } = setup("- parent");
+  jest
+    .spyOn(EditorView, "findFromDOM")
+    .mockReturnValue(source as unknown as EditorView);
+  internals.detectAndDrawDropZone(16, 52);
+  expect(style.display).toBe("block");
+  expect(doc.body.classList.contains("bullet-plugin-dragging")).toBe(true);
+
+  settings.dragAndDrop = false;
+  internals.handleSettingsChange();
+  internals.handleMouseUp();
+
+  expect(operationPerformer.execute).not.toHaveBeenCalled();
+  expect(source.state.doc.toString()).toBe("- move\n\t- child\n- keep");
+  expect(target.state.doc.toString()).toBe("- parent");
+  expect(style.display).toBe("none");
+  expect(doc.body.classList.contains("bullet-plugin-dragging")).toBe(false);
+});

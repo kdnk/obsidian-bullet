@@ -68,7 +68,13 @@ export class DragAndDrop implements Feature {
       crossNoteHistory,
     ]);
     this.enableFeatureToggle();
+    this.addManagedDocument(
+      this.plugin.app.workspace.containerEl.ownerDocument,
+    );
     this.addManagedDocument(activeDocument);
+    this.plugin.app.workspace.iterateAllLeaves((leaf) => {
+      this.addManagedDocument(leaf.view.containerEl.ownerDocument);
+    });
     this.plugin.registerEvent(
       this.plugin.app.workspace.on("window-open", this.handleWindowOpen),
     );
@@ -164,6 +170,13 @@ export class DragAndDrop implements Feature {
   }
 
   private handleSettingsChange = () => {
+    if (!this.settings.dragAndDrop) {
+      this.preStart = null;
+      if (this.state) {
+        this.cancelDragging();
+      }
+    }
+
     if (!isFeatureSupported()) {
       return;
     }
@@ -181,6 +194,7 @@ export class DragAndDrop implements Feature {
     if (
       !isFeatureSupported() ||
       !this.settings.dragAndDrop ||
+      e.button !== 0 ||
       !isClickOnBullet(e)
     ) {
       return;

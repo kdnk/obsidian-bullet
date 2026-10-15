@@ -40,12 +40,21 @@ jest.mock(
 
 describe("DragAndDrop", () => {
   const originalWindow = Object.getOwnPropertyDescriptor(global, "window");
+  const originalActiveDocument = Object.getOwnPropertyDescriptor(
+    global,
+    "activeDocument",
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
   afterEach(() => {
+    if (originalActiveDocument) {
+      Object.defineProperty(global, "activeDocument", originalActiveDocument);
+    } else {
+      Reflect.deleteProperty(global, "activeDocument");
+    }
     if (originalWindow) {
       Object.defineProperty(global, "window", originalWindow);
     } else {
@@ -143,7 +152,11 @@ describe("DragAndDrop", () => {
       onChange: jest.fn(),
       removeCallback: jest.fn(),
     };
-    const workspace = { on: jest.fn().mockReturnValue({}) };
+    const workspace = {
+      containerEl: { ownerDocument: document },
+      on: jest.fn().mockReturnValue({}),
+      iterateAllLeaves: jest.fn(),
+    };
     const plugin = {
       app: { workspace },
       registerEditorExtension: jest.fn(),
@@ -168,6 +181,112 @@ describe("DragAndDrop", () => {
     expect(settings.removeCallback).toHaveBeenCalledWith(expect.any(Function));
   });
 
+  test("loads every already-open document exactly once", async () => {
+    const mainDocument = makeDocument();
+    const active = makeDocument();
+    const background = makeDocument();
+    Object.defineProperty(global, "activeDocument", {
+      configurable: true,
+      value: active,
+    });
+    const workspace = {
+      containerEl: { ownerDocument: mainDocument },
+      on: jest.fn().mockReturnValue({}),
+      iterateAllLeaves: (callback: (leaf: unknown) => void) => {
+        for (const doc of [mainDocument, active, background, background]) {
+          callback({ view: { containerEl: { ownerDocument: doc } } });
+        }
+      },
+    };
+    const feature = new DragAndDrop(
+      {
+        app: { workspace },
+        registerEditorExtension: jest.fn(),
+        registerEvent: jest.fn(),
+      } as never,
+      {
+        dragAndDrop: true,
+        onChange: jest.fn(),
+        removeCallback: jest.fn(),
+      } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+
+    await feature.load();
+
+    for (const doc of [mainDocument, active, background]) {
+      expect(doc.appended).toHaveLength(1);
+      expect(doc.addEventListener).toHaveBeenCalledTimes(4);
+      expect(doc.body.classList.contains("bullet-plugin-dnd")).toBe(true);
+    }
+    await feature.unload();
+    for (const doc of [mainDocument, active, background]) {
+      expect(doc.removed).toHaveLength(1);
+      expect(doc.removeEventListener).toHaveBeenCalledTimes(4);
+    }
+  });
+
+  test.each([1, 2])("ignores mouse button %i on drag handles", (button) => {
+    const feature = new DragAndDrop(
+      {} as never,
+      { dragAndDrop: true } as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const target = {
+      classList: {
+        contains: (name: string) =>
+          ["cm-editor", "cm-formatting-list"].includes(name),
+      },
+    };
+    const lookup = jest.spyOn(EditorView, "findFromDOM").mockReturnValue(null);
+    const event = {
+      button,
+      target,
+      preventDefault: jest.fn(),
+      stopPropagation: jest.fn(),
+    };
+    (
+      feature as unknown as { handleMouseDown(event: MouseEvent): void }
+    ).handleMouseDown(event as never);
+
+    expect(lookup).not.toHaveBeenCalled();
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(event.stopPropagation).not.toHaveBeenCalled();
+    lookup.mockRestore();
+  });
+
+  test("disabling drag cancels a pending press even after enabling it again", () => {
+    const settings = { dragAndDrop: true };
+    const feature = new DragAndDrop(
+      {} as never,
+      settings as never,
+      {} as never,
+      {} as never,
+      {} as never,
+    );
+    const internals = feature as unknown as {
+      preStart: unknown;
+      handleSettingsChange(): void;
+      handleMouseMove(event: Pick<MouseEvent, "x" | "y">): void;
+      startDragging(): void;
+    };
+    internals.preStart = { x: 0, y: 0, view: {}, doc: {} };
+    const start = jest
+      .spyOn(internals, "startDragging")
+      .mockImplementation(() => {});
+    settings.dragAndDrop = false;
+    internals.handleSettingsChange();
+    settings.dragAndDrop = true;
+    internals.handleSettingsChange();
+    internals.handleMouseMove({ x: 20, y: 20 });
+
+    expect(start).not.toHaveBeenCalled();
+  });
+
   test("marks only the dragged item's first line as the source", async () => {
     const document = makeDocument();
     Object.defineProperty(global, "activeDocument", {
@@ -180,7 +299,13 @@ describe("DragAndDrop", () => {
       removeCallback: jest.fn(),
     };
     const plugin = {
-      app: { workspace: { on: jest.fn().mockReturnValue({}) } },
+      app: {
+        workspace: {
+          containerEl: { ownerDocument: document },
+          on: jest.fn().mockReturnValue({}),
+          iterateAllLeaves: jest.fn(),
+        },
+      },
       registerEditorExtension: jest.fn<void, [Extension]>(),
       registerEvent: jest.fn(),
     };
@@ -792,7 +917,12 @@ test.each(["task-list-item-checkbox", "task-list-label"])(
       });
     marker.classList.contains = (name: string) =>
       ["cm-formatting-list", "cm-editor"].includes(name);
-    const e = { target, preventDefault: jest.fn(), stopPropagation: jest.fn() };
+    const e = {
+      button: 0,
+      target,
+      preventDefault: jest.fn(),
+      stopPropagation: jest.fn(),
+    };
     expect(() =>
       (
         feature as unknown as { handleMouseDown: (event: MouseEvent) => void }
