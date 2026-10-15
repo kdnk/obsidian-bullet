@@ -152,3 +152,90 @@ test("should do nothing when there are multiple selections", () => {
   const op = new MoveCursorToPreviousUnfoldedLine(root, editor);
   expect(op.perform()).toEqual(NO_OP_OUTCOME);
 });
+
+test.each([
+  {
+    text: "- [ ] task\n  notes",
+    ch: 2,
+    expected: { line: 0, ch: 10 },
+    outcome: UPDATED_OUTCOME,
+  },
+  {
+    text: "- [x] task\n  notes",
+    ch: 2,
+    expected: { line: 0, ch: 10 },
+    outcome: UPDATED_OUTCOME,
+  },
+  {
+    text: "12. [x] task\n    notes",
+    ch: 4,
+    expected: { line: 0, ch: 12 },
+    outcome: UPDATED_OUTCOME,
+  },
+  {
+    text: "- [ ] task\n  notes",
+    ch: 6,
+    expected: { line: 1, ch: 6 },
+    outcome: NO_OP_OUTCOME,
+  },
+  {
+    text: "12. [x] task\n    notes",
+    ch: 8,
+    expected: { line: 1, ch: 8 },
+    outcome: NO_OP_OUTCOME,
+  },
+  {
+    text: "- [ ] task\n  notes\n  more",
+    ch: 2,
+    line: 2,
+    expected: { line: 1, ch: 7 },
+    outcome: UPDATED_OUTCOME,
+  },
+])(
+  "uses the continuation's actual text boundary in $text at $ch",
+  ({ text, ch, line = 1, expected, outcome }) => {
+    const editor = makeEditor({ text, cursor: { line, ch } });
+    const root = makeRoot({ editor });
+    expect(
+      new MoveCursorToPreviousUnfoldedLine(root, editor).perform(),
+    ).toEqual(outcome);
+    expect(root.getCursor()).toEqual(expected);
+    expect(root.print()).toBe(text);
+  },
+);
+
+test.each([
+  { protection: "bullet-and-checkbox", ch: 6 },
+  { protection: "bullet-only", ch: 2 },
+  { protection: "never", ch: 2 },
+] as const)(
+  "retains first-row boundary behavior with $protection",
+  ({ protection, ch }) => {
+    const text = "- previous\n- [x] task";
+    const editor = makeEditor({ text, cursor: { line: 1, ch } });
+    const settings = makeSettings();
+    settings.keepCursorWithinContent = protection;
+    const root = makeRoot({ editor, settings });
+    expect(
+      new MoveCursorToPreviousUnfoldedLine(root, editor).perform(),
+    ).toEqual(UPDATED_OUTCOME);
+    expect(root.getCursor()).toEqual({ line: 0, ch: 10 });
+    expect(root.print()).toBe(text);
+  },
+);
+
+test("leaves a noncollapsed continuation selection unchanged", () => {
+  const text = "- [x] task\n  notes";
+  const editor = makeEditor({ text, cursor: { line: 1, ch: 2 } });
+  editor.listSelections = () => [
+    { anchor: { line: 1, ch: 5 }, head: { line: 1, ch: 2 } },
+  ];
+  const root = makeRoot({ editor });
+  expect(new MoveCursorToPreviousUnfoldedLine(root, editor).perform()).toEqual(
+    NO_OP_OUTCOME,
+  );
+  expect(root.print()).toBe(text);
+  expect(root.getSelections()).toEqual([
+    { anchor: { line: 1, ch: 5 }, head: { line: 1, ch: 2 } },
+  ]);
+});

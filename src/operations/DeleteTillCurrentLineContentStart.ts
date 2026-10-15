@@ -21,16 +21,21 @@ export class DeleteTillCurrentLineContentStart implements Operation {
     const list = root.getListUnderCursor();
     const lines = list.getLinesInfo();
     const lineNo = lines.findIndex((l) => l.from.line === cursor.line);
+    const line = lines[lineNo];
+    const checkboxLength = lineNo === 0 ? list.getCheckboxLength() : 0;
+    const contentStart = { ...line.from, ch: line.from.ch + checkboxLength };
 
-    if (cursor.ch < lines[lineNo].from.ch) {
+    if (cursor.ch < contentStart.ch) {
       return STOP_ONLY_OUTCOME;
     }
 
     list.spliceRows(lineNo, 1, {
       ...list.getRow(lineNo),
-      text: lines[lineNo].text.slice(cursor.ch - lines[lineNo].from.ch),
+      text:
+        line.text.slice(0, checkboxLength) +
+        line.text.slice(cursor.ch - line.from.ch),
     });
-    root.replaceCursor(lines[lineNo].from);
+    root.replaceCursor(contentStart);
     return UPDATED_OUTCOME;
   }
 }
