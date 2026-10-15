@@ -12,6 +12,8 @@ const original = evaluate(() => ({
 }));
 const results = [];
 const failures = [];
+const inputEvents = [];
+let pendingInput = null;
 const cases = [
   {
     name: "partial-tab split",
@@ -46,18 +48,105 @@ function key(key, modifiers = 0) {
   const codes = { Enter: 13, Backspace: 8, Escape: 27, i: 73, z: 90 };
   for (const type of ["keyDown", "keyUp"]) {
     focus();
-    evaluate((type) => {
-      const cm = app.workspace.activeLeaf.view.editor.cm;
-      if (!cm.hasFocus) throw Error("Editor does not have keyboard focus");
-      window.__codeEditingReceivedKey = null;
-      window.addEventListener(
-        type.toLowerCase(),
-        (event) => {
-          window.__codeEditingReceivedKey = event.key;
-        },
-        { capture: true, once: true },
-      );
-    }, type);
+    pendingInput = { key, modifiers, type };
+    evaluate(
+      (type, key) => {
+        const leaf = app.workspace.activeLeaf;
+        const editor = leaf.view.editor;
+        const cm = editor.cm;
+        if (!cm.hasFocus) throw Error("Editor does not have keyboard focus");
+        const snapshot = () => ({
+          doc: editor.getValue(),
+          cursor: editor.getCursor(),
+          selection: cm.state.selection.toJSON(),
+          focused: cm.hasFocus,
+          activeLeafUnchanged: app.workspace.activeLeaf === leaf,
+          vimEnabled: app.isVimEnabled(),
+          vimAdapterPresent: !!cm.cm,
+          vimInsertMode: cm.cm?.state?.vim?.insertMode ?? null,
+          composing: cm.inputState.composing,
+          imeOpen: app.plugins.plugins.bullet.imeDetector.isOpened(),
+        });
+        const restores = [];
+        const trace = {
+          before: snapshot(),
+          steps: [],
+          event: null,
+          snapshot,
+          dispose: () =>
+            restores
+              .splice(0)
+              .reverse()
+              .forEach((restore) => restore()),
+          contentDOM: cm.contentDOM,
+        };
+        window.__codeEditingInputTrace = trace;
+        const receive = (event) => {
+          trace.event = event;
+          trace.receivedState = snapshot();
+        };
+        window.addEventListener(type.toLowerCase(), receive, {
+          capture: true,
+          once: true,
+        });
+        restores.push(() =>
+          window.removeEventListener(type.toLowerCase(), receive, true),
+        );
+        if (type !== "keyDown" || key !== "Backspace") return;
+
+        const preventDefault = Event.prototype.preventDefault;
+        Event.prototype.preventDefault = function () {
+          if (this.type === "keydown" && this.key === "Backspace") {
+            trace.steps.push({
+              kind: "preventDefault",
+              stack: new Error().stack,
+              state: snapshot(),
+            });
+          }
+          return preventDefault.call(this);
+        };
+        restores.push(() => {
+          Event.prototype.preventDefault = preventDefault;
+        });
+        const consoleError = console.error;
+        console.error = function (...args) {
+          trace.steps.push({
+            kind: "console-error",
+            errors: args.map((value) => value?.stack ?? String(value)),
+          });
+          return consoleError.apply(this, args);
+        };
+        restores.push(() => {
+          console.error = consoleError;
+        });
+        const performer = app.plugins.plugins.bullet.operationPerformer;
+        const perform = performer.perform;
+        performer.perform = function (...args) {
+          trace.steps.push({ kind: "operation-start", state: snapshot() });
+          try {
+            const result = perform.apply(this, args);
+            trace.steps.push({
+              kind: "operation-result",
+              result,
+              state: snapshot(),
+            });
+            return result;
+          } catch (error) {
+            trace.steps.push({
+              kind: "operation-error",
+              error: String(error),
+              stack: error.stack,
+            });
+            throw error;
+          }
+        };
+        restores.push(() => {
+          performer.perform = perform;
+        });
+      },
+      type,
+      key,
+    );
     cdp("Input.dispatchKeyEvent", {
       type,
       key,
@@ -65,12 +154,49 @@ function key(key, modifiers = 0) {
       windowsVirtualKeyCode: codes[key],
       modifiers,
     });
+    const trace = collectInputTrace();
+    pendingInput = null;
+    inputEvents.push({ key, modifiers, type, ...trace });
     assert.equal(
-      evaluate(() => window.__codeEditingReceivedKey),
+      trace.received?.key,
       key,
       `${type} was not received by the renderer`,
     );
+    assert.equal(
+      trace.received.editorTarget,
+      true,
+      `${type} did not target the editor`,
+    );
   }
+}
+function collectInputTrace() {
+  return evaluate(() => {
+    const trace = window.__codeEditingInputTrace;
+    if (!trace) return null;
+    const event = trace.event;
+    const result = {
+      before: trace.before,
+      receivedState: trace.receivedState,
+      steps: trace.steps,
+      received: event && {
+        key: event.key,
+        code: event.code,
+        keyCode: event.keyCode,
+        defaultPrevented: event.defaultPrevented,
+        isComposing: event.isComposing,
+        target: event.target?.className,
+        editorTarget: event.target === trace.contentDOM,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey,
+      },
+      after: trace.snapshot(),
+    };
+    trace.dispose();
+    delete window.__codeEditingInputTrace;
+    return result;
+  });
 }
 function type(text) {
   focus();
@@ -288,15 +414,28 @@ try {
     }
   }
 } finally {
+  if (pendingInput) {
+    try {
+      const trace = collectInputTrace();
+      if (trace) inputEvents.push({ ...pendingInput, ...trace });
+    } catch (error) {
+      fs.writeFileSync(`${output}/input-trace-error.txt`, String(error));
+    }
+  }
+  fs.writeFileSync(
+    `${output}/input-events.json`,
+    JSON.stringify(inputEvents, null, 2),
+  );
   fs.writeFileSync(
     `${output}/results.json`,
     JSON.stringify({ results, failures }, null, 2),
   );
   evaluate(
     async (original, note) => {
+      window.__codeEditingInputTrace?.dispose();
+      delete window.__codeEditingInputTrace;
       window.__codeEditingRegressionLeaf?.detach();
       delete window.__codeEditingRegressionLeaf;
-      delete window.__codeEditingReceivedKey;
       app.vault.setConfig("vimMode", original.vim);
       app.workspace.updateOptions();
       if (original.shiki) await app.plugins.enablePlugin("shiki-highlighter");
