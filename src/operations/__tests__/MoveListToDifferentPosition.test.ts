@@ -3,6 +3,94 @@ import { MoveListToDifferentPosition } from "../MoveListToDifferentPosition";
 import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 describe("MoveListToDifferentPosition operation", () => {
+  test("keeps the cursor inside a moved descendant below its parent's own rows", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- target\n- parent\n\t- child",
+        cursor: { line: 2, ch: 4 },
+      }),
+    });
+    const moved = root.getChildren()[1];
+    const target = root.getChildren()[0];
+
+    new MoveListToDifferentPosition(
+      root,
+      moved,
+      target,
+      "before",
+      "\t",
+      false,
+    ).perform();
+    expect(root.print()).toBe("- parent\n\t- child\n- target");
+    expect(root.getCursor()).toEqual({ line: 1, ch: 4 });
+  });
+
+  test.each([9, 99])(
+    "keeps a moved cursor on content across %i in both directions",
+    (last) => {
+      const text = Array.from(
+        { length: last + 1 },
+        (_, index) => `${index + 1}. content`,
+      ).join("\n");
+      const root = makeRoot({
+        editor: makeEditor({
+          text,
+          cursor: { line: last, ch: String(last + 1).length + 2 },
+        }),
+      });
+      const moved = root.getChildren()[last];
+      const target = root.getChildren()[last - 1];
+
+      new MoveListToDifferentPosition(
+        root,
+        moved,
+        target,
+        "before",
+        "\t",
+        true,
+      ).perform();
+      expect(root.getCursor()).toEqual({
+        line: last - 1,
+        ch: String(last).length + 2,
+      });
+      new MoveListToDifferentPosition(
+        root,
+        moved,
+        target,
+        "after",
+        "\t",
+        true,
+      ).perform();
+      expect(root.getCursor()).toEqual({
+        line: last,
+        ch: String(last + 1).length + 2,
+      });
+      expect(root.print()).toBe(text);
+    },
+  );
+
+  test("keeps a physical blank code row cursor at column zero when nesting", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- parent\n- ```js\n\n\tcode\n\t```",
+        cursor: { line: 2, ch: 0 },
+      }),
+    });
+    const moved = root.getChildren()[1];
+    const target = root.getChildren()[0];
+
+    new MoveListToDifferentPosition(
+      root,
+      moved,
+      target,
+      "inside",
+      "\t",
+      false,
+    ).perform();
+    expect(root.print()).toBe("- parent\n\t- ```js\n\n\t\tcode\n\t\t```");
+    expect(root.getCursor()).toEqual({ line: 2, ch: 0 });
+  });
+
   test("should move list before another list", () => {
     const root = makeRoot({
       editor: makeEditor({

@@ -23,6 +23,24 @@ function makeLogSink() {
 }
 
 describe("parseList", () => {
+  test.each([" \t", "  \t", "   \t"])(
+    "treats tab-stop-aligned indent %j as a sibling",
+    (indent) => {
+      const text = `- parent\n\t- first\n${indent}- sibling`;
+      const root = makeParser().parse(
+        makeEditor({ text, cursor: { line: 0, ch: 2 } }),
+      );
+
+      expect(root!.print()).toBe(text);
+      const parent = root!.getChildren()[0];
+      expect(parent.getChildren().map((child) => child.getLines())).toEqual([
+        ["first"],
+        ["sibling"],
+      ]);
+      expect(parent.getChildren()[0].getChildren()).toEqual([]);
+    },
+  );
+
   test.each([
     { opening: "-   ```js", body: "    ", container: "    ", firstCh: 4 },
     { opening: "10.   ```js", body: "      ", container: "      ", firstCh: 6 },

@@ -471,7 +471,7 @@ export class Parser {
 
     for (const char of indent) {
       if (char === "\t") {
-        width += defaultTabSize;
+        width += defaultTabSize - (width % defaultTabSize);
       } else {
         width++;
       }

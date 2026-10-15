@@ -26,8 +26,8 @@ export class MoveListToDifferentPosition implements Operation {
     const cursorAnchor = this.calculateCursorAnchor();
     this.moveList();
     this.changeIndent();
-    this.restoreCursor(cursorAnchor);
     recalculateNumericBullets(this.root, this.numericBulletsEnabled);
+    this.restoreCursor(cursorAnchor);
     return UPDATED_OUTCOME;
   }
 
@@ -36,9 +36,9 @@ export class MoveListToDifferentPosition implements Operation {
 
     const lines = [
       this.listToMove.getFirstLineContentStart().line,
-      this.listToMove.getLastLineContentEnd().line,
+      this.listToMove.getContentEndIncludingChildren().line,
       this.placeToMove.getFirstLineContentStart().line,
-      this.placeToMove.getLastLineContentEnd().line,
+      this.placeToMove.getContentEndIncludingChildren().line,
     ];
     const listStartLine = Math.min(...lines);
     const listEndLine = Math.max(...lines);
@@ -55,7 +55,7 @@ export class MoveListToDifferentPosition implements Operation {
 
     const cursorListStart = cursorList.getFirstLineContentStart();
     const lineDiff = cursor.line - cursorListStart.line;
-    const chDiff = cursor.ch - cursorListStart.ch;
+    const chDiff = cursor.ch - cursorList.getLinesInfo()[lineDiff].from.ch;
 
     return { cursorList, lineDiff, chDiff };
   }
@@ -94,12 +94,11 @@ export class MoveListToDifferentPosition implements Operation {
 
   private restoreCursor(cursorAnchor: CursorAnchor | null) {
     if (cursorAnchor) {
-      const cursorListStart =
-        cursorAnchor.cursorList.getFirstLineContentStart();
+      const row = cursorAnchor.cursorList.getLinesInfo()[cursorAnchor.lineDiff];
 
       this.root.replaceCursor({
-        line: cursorListStart.line + cursorAnchor.lineDiff,
-        ch: cursorListStart.ch + cursorAnchor.chDiff,
+        line: row.from.line,
+        ch: Math.max(0, row.from.ch + cursorAnchor.chDiff),
       });
     } else {
       // When you move a list, the screen scrolls to the cursor.

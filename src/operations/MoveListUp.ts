@@ -5,7 +5,7 @@ import {
   UPDATED_OUTCOME,
 } from "./Operation";
 
-import { Root, recalculateNumericBullets } from "../root";
+import { Position, Root, recalculateNumericBullets } from "../root";
 
 export class MoveListUp implements Operation {
   constructor(
@@ -29,7 +29,21 @@ export class MoveListUp implements Operation {
     const grandParent = parent.getParent();
     const prev = parent.getPrevSiblingOf(list);
 
-    const listStartLineBefore = root.getContentLinesRangeOf(list)[0];
+    const anchorPosition = (position: Position) => {
+      const owner = root.getListUnderLine(position.line);
+      if (!owner) return () => position;
+
+      const row = position.line - root.getContentLinesRangeOf(owner)[0];
+      const offset = position.ch - owner.getLinesInfo()[row].from.ch;
+      return () => {
+        const { from } = owner.getLinesInfo()[row];
+        return { line: from.line, ch: Math.max(0, from.ch + offset) };
+      };
+    };
+    const selections = root.getSelections().map((selection) => ({
+      anchor: anchorPosition(selection.anchor),
+      head: anchorPosition(selection.head),
+    }));
     let moved = false;
 
     if (!prev && grandParent) {
@@ -50,23 +64,14 @@ export class MoveListUp implements Operation {
       return STOP_ONLY_OUTCOME;
     }
 
-    const listStartLineAfter = root.getContentLinesRangeOf(list)[0];
-    const lineDiff = listStartLineAfter - listStartLineBefore;
+    recalculateNumericBullets(root, this.numericBulletsEnabled);
 
     root.replaceSelections(
-      root.getSelections().map((selection) => ({
-        anchor: {
-          line: selection.anchor.line + lineDiff,
-          ch: selection.anchor.ch,
-        },
-        head: {
-          line: selection.head.line + lineDiff,
-          ch: selection.head.ch,
-        },
+      selections.map((selection) => ({
+        anchor: selection.anchor(),
+        head: selection.head(),
       })),
     );
-
-    recalculateNumericBullets(root, this.numericBulletsEnabled);
     return UPDATED_OUTCOME;
   }
 }
