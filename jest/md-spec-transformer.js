@@ -24,7 +24,7 @@ function parseState(l) {
   const openingFenceLength = getCodeFenceLength(l.line);
   if (openingFenceLength === null) {
     throw new Error(
-      `parseState: Unexpected line "${l.line}", expected "\`\`\`"`
+      `parseState: Unexpected line "${l.line}", expected "\`\`\`"`,
     );
   }
 
@@ -129,7 +129,7 @@ function parseClickGuide(l) {
 
 function parseAssertNativeListBullet(l) {
   const options = JSON.parse(
-    l.line.replace(/^- assertNativeListBullet:\s*/, "")
+    l.line.replace(/^- assertNativeListBullet:\s*/, ""),
   );
 
   l.nextNotEmpty();
@@ -142,7 +142,7 @@ function parseAssertNativeListBullet(l) {
 
 function parseMove(l) {
   const { to, offsetX, offsetY } = JSON.parse(
-    l.line.replace(/- move: `([^`]+)`/, "$1")
+    l.line.replace(/- move: `([^`]+)`/, "$1"),
   );
 
   l.nextNotEmpty();
@@ -213,7 +213,13 @@ function parseExecuteCommandById(l) {
 }
 
 function parseSetSetting(l) {
-  const [k, v] = l.line.replace(/- setting: `([^`]+)`/, "$1").split("=", 2);
+  const assignment = l.line.replace(/- setting: `([^`]+)`/, "$1");
+  const separator = assignment.indexOf("=");
+  if (separator === -1) {
+    throw new Error("parseSetSetting: Expected a key=value assignment");
+  }
+  const k = assignment.slice(0, separator);
+  const v = assignment.slice(separator + 1);
 
   l.nextNotEmpty();
 
@@ -227,7 +233,7 @@ function parseSetSetting(l) {
 function parseAction(l) {
   if (!isAction(l.line)) {
     throw new Error(
-      `parseAction: Unexpected line "${l.line}", expected ACTION`
+      `parseAction: Unexpected line "${l.line}", expected ACTION`,
     );
   }
 
@@ -329,7 +335,7 @@ class LinesIterator {
 const currentPlatform = process.platform;
 
 module.exports.process = function process(sourceText, sourcePath, options) {
-  const l = new LinesIterator(sourceText.split("\n"));
+  const l = new LinesIterator(sourceText.split(/\r?\n/));
   const s = (v) => JSON.stringify(v);
 
   const name = sourcePath.replace(options.config.cwd + "/", "");
@@ -394,14 +400,15 @@ module.exports.process = function process(sourceText, sourcePath, options) {
         case "assertState":
           code += `    await waitForIdle();\n`;
           code += `    await expect(await getCurrentState()).toEqualEditorState(${s(
-            action.state.lines
+            action.state.lines,
           )});\n`;
           break;
         case "assertStateOneOf":
+          code += `    {\n`;
           code += `    await waitForIdle();\n`;
           code += `    const currentState = await getCurrentState();\n`;
           code += `    const expectedStates = ${s(
-            action.states.map((state) => state.lines)
+            action.states.map((state) => state.lines),
           )};\n`;
           code += `    let lastStateError = null;\n`;
           code += `    let stateMatched = false;\n`;
@@ -415,6 +422,7 @@ module.exports.process = function process(sourceText, sourcePath, options) {
           code += `      }\n`;
           code += `    }\n`;
           code += `    if (!stateMatched) throw lastStateError;\n`;
+          code += `    }\n`;
           break;
       }
     }
