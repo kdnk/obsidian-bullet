@@ -79,6 +79,37 @@ function captureInputTransaction() {
 }
 
 describe("BulletTypingGuard", () => {
+  test.each([
+    { name: "empty document", doc: "", from: 0 },
+    { name: "blank code row", doc: "- ```\n\n  ```", from: 6 },
+  ])(
+    "preserves native provisional composition in $name",
+    async ({ doc, from }) => {
+      const guard = await loadGuard();
+      let state = EditorState.create({
+        doc,
+        selection: { anchor: from },
+        extensions: guard,
+      });
+      let previousLength = 0;
+      for (const text of ["に", "日本", "日本語"]) {
+        state = state.update({
+          changes: { from, to: from + previousLength, insert: text },
+          selection: { anchor: from + text.length },
+          userEvent:
+            previousLength === 0
+              ? "input.type.compose.start"
+              : "input.type.compose",
+        }).state;
+        expect(state.doc.toString()).toBe(
+          doc.slice(0, from) + text + doc.slice(from),
+        );
+        expect(state.selection.main.head).toBe(from + text.length);
+        previousLength = text.length;
+      }
+    },
+  );
+
   test.each(["abc", "", "- literal"])(
     "leaves embedded table input unchanged in %p",
     async (doc) => {
