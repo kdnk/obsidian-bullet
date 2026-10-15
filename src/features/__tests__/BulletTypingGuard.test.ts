@@ -1,4 +1,4 @@
-import { Plugin } from "obsidian";
+import { Plugin, editorEditorField } from "obsidian";
 
 import { history, redo, undo } from "@codemirror/commands";
 import {
@@ -14,6 +14,23 @@ import {
 import { makeLogger } from "../../__mocks__";
 import { KeepCursorWithinContent, Settings } from "../../services/Settings";
 import { BulletTypingGuard } from "../BulletTypingGuard";
+
+jest.mock(
+  "obsidian",
+  () => {
+    const { StateField } =
+      jest.requireActual<typeof import("@codemirror/state")>(
+        "@codemirror/state",
+      );
+    return {
+      editorEditorField: StateField.define({
+        create: () => null,
+        update: (value: null) => value,
+      }),
+    };
+  },
+  { virtual: true },
+);
 
 interface GuardOptions {
   keepBodyTextInBullets?: boolean;
@@ -62,6 +79,162 @@ function captureInputTransaction() {
 }
 
 describe("BulletTypingGuard", () => {
+  test.each(["abc", "", "- literal"])(
+    "leaves embedded table input unchanged in %p",
+    async (doc) => {
+      const guard = await loadGuard();
+      const state = EditorState.create({
+        doc,
+        selection: { anchor: doc.length },
+        extensions: [
+          guard,
+          editorEditorField.init(
+            () =>
+              ({
+                dom: {
+                  closest: (selector: string) =>
+                    selector === ".table-cell-wrapper" ? {} : null,
+                },
+              }) as unknown as import("@codemirror/view").EditorView,
+          ),
+        ],
+      });
+      const typed = state.update({
+        ...state.replaceSelection("X"),
+        userEvent: "input.type",
+      }).state;
+      expect(typed.doc.toString()).toBe(doc + "X");
+      expect(typed.selection.main.head).toBe(doc.length + 1);
+      const deleted = typed.update({
+        changes: { from: doc.length, to: doc.length + 1 },
+        userEvent: "delete.backward",
+      }).state;
+      expect(deleted.doc.toString()).toBe(doc);
+    },
+  );
+
+  describe.each(["", "- "])("incremental Markdown input from %p", (doc) => {
+    test.each([
+      "~~~js",
+      "~~~~ python",
+      "***",
+      "**** ",
+      "___",
+      "____ ",
+      "* * *",
+      "_ _ _",
+      "*\t*\t*",
+    ])("keeps %p as a root structure", async (input) => {
+      const guard = await loadGuard();
+      let state = EditorState.create({
+        doc,
+        selection: { anchor: doc.length },
+        extensions: guard,
+      });
+      for (const character of input) {
+        state = state.update({
+          ...state.replaceSelection(character),
+          userEvent: "input.type",
+        }).state;
+      }
+      expect(state.doc.toString()).toBe(input);
+      expect(state.selection.main.head).toBe(input.length);
+    });
+
+    test.each(["*word*", "**word**", "_word_", "__word__", "~~word~~"])(
+      "keeps inline formatting %p in a bullet",
+      async (input) => {
+        const guard = await loadGuard();
+        let state = EditorState.create({
+          doc,
+          selection: { anchor: doc.length },
+          extensions: guard,
+        });
+        for (const character of input) {
+          state = state.update({
+            ...state.replaceSelection(character),
+            userEvent: "input.type",
+          }).state;
+        }
+        expect(state.doc.toString()).toBe("- " + input);
+        expect(state.selection.main.head).toBe(input.length + 2);
+      },
+    );
+  });
+
+  test.each([
+    { doc: "- existing ", input: "***" },
+    { doc: "- existing ", input: "___" },
+    { doc: "- existing ", input: "~~~" },
+    { doc: "- parent\n\t- ", input: "***" },
+    { doc: "- parent\n\t- ", input: "___" },
+    { doc: "- parent\n\t- ", input: "~~~js" },
+    { doc: "- [ ] ", input: "***" },
+    { doc: "```\n- ", input: "***" },
+    { doc: "```\n- ", input: "___" },
+    { doc: "```\n- ", input: "~~~js" },
+    { doc: "- ~~~", input: "~" },
+    { doc: "- ***", input: " " },
+  ])(
+    "preserves the container when typing $input in $doc",
+    async ({ doc, input }) => {
+      const guard = await loadGuard();
+      let state = EditorState.create({
+        doc,
+        selection: { anchor: doc.length },
+        extensions: guard,
+      });
+      for (const character of input) {
+        state = state.update({
+          ...state.replaceSelection(character),
+          userEvent: "input.type",
+        }).state;
+      }
+      expect(state.doc.toString()).toBe(doc + input);
+      expect(state.selection.main.head).toBe(doc.length + input.length);
+    },
+  );
+
+  test.each(["*", "_", "~"])(
+    "promotes only the completed %p structure and undoes the promotion with its input",
+    async (marker) => {
+      const guard = await loadGuard();
+      let state = EditorState.create({
+        doc: "- ",
+        selection: { anchor: 2 },
+        extensions: [guard, history()],
+      });
+      for (let count = 1; count <= 2; count++) {
+        state = state.update({
+          ...state.replaceSelection(marker),
+          userEvent: "input.type",
+        }).state;
+        expect(state.doc.toString()).toBe("- " + marker.repeat(count));
+        expect(state.selection.main.head).toBe(count + 2);
+      }
+      state = state.update({
+        ...state.replaceSelection(marker),
+        userEvent: "input.type",
+      }).state;
+      expect(state.doc.toString()).toBe(marker.repeat(3));
+      expect(state.selection.main.head).toBe(3);
+      const editor = {
+        get state() {
+          return state;
+        },
+        dispatch(transaction: Transaction) {
+          state = transaction.state;
+        },
+      };
+      expect(undo(editor)).toBe(true);
+      expect(state.doc.toString()).toBe("- ");
+      expect(state.selection.main.head).toBe(2);
+      expect(redo(editor)).toBe(true);
+      expect(state.doc.toString()).toBe(marker.repeat(3));
+      expect(state.selection.main.head).toBe(3);
+    },
+  );
+
   test.each(["* * *", "- - -", "_ _ _"])(
     "does not turn a thematic break into the following fence's list owner: %p",
     async (rule) => {

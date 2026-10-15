@@ -143,10 +143,13 @@ export class CreateNewItem implements Operation {
       const lineText = line.text;
       const left = lineText.slice(0, selection.from - line.from.ch);
       const right = lineText.slice(selection.to - line.from.ch);
-      const newLines = list.getLines();
-
-      newLines.splice(lineIndex, 1, left, right);
-      list.replaceLines(newLines);
+      const row = list.getRow(lineIndex);
+      list.spliceRows(
+        lineIndex,
+        1,
+        { ...row, text: left },
+        { ...row, text: right },
+      );
 
       root.replaceCursor({
         line: cursor.line + 1,
@@ -208,8 +211,13 @@ export class CreateNewItem implements Operation {
       const continuedLines = asChild
         ? list.getLinesForFenceParsing().slice(lineIndex + 1)
         : newLines;
-      for (const line of continuedLines) {
-        newList.addLine(line);
+      for (const [index, line] of continuedLines.entries()) {
+        const row = list.getRow(lineIndex + 1 + index);
+        const indentOverride =
+          asChild && (row.text !== "" || row.indentOverride !== "")
+            ? null
+            : row.indentOverride;
+        newList.addLine(line, indentOverride);
       }
     }
 
@@ -231,7 +239,11 @@ export class CreateNewItem implements Operation {
       }
     }
 
-    list.replaceLines(oldLines);
+    list.spliceRows(
+      0,
+      list.getLineCount(),
+      ...oldLines.map((text, index) => ({ ...list.getRow(index), text })),
+    );
     recalculateNumericBullets(
       this.editingRoot ?? root,
       this.numericBulletsEnabled,

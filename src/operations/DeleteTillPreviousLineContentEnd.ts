@@ -12,6 +12,7 @@ import {
   Root,
   recalculateNumericBullets,
 } from "../root";
+import { getFenceContent, reindentListPrefix } from "../utils/fencedCode";
 import { isEmptyLineOrEmptyCheckbox } from "../utils/isEmptyLineOrEmptyCheckbox";
 
 export class DeleteTillPreviousLineContentEnd implements Operation {
@@ -161,10 +162,26 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
         return mutated ? UPDATED_OUTCOME : STOP_ONLY_OUTCOME;
       }
 
-      oldLines[oldLines.length - 1] = lastOldLine + firstNewLine;
-      const resultLines = oldLines.concat(newLines.slice(1));
-
-      prev.replaceLines(resultLines);
+      prev.spliceRows(oldLines.length - 1, 1, {
+        ...prev.getRow(oldLines.length - 1),
+        text: lastOldLine + firstNewLine,
+      });
+      for (let index = 1; index < newLines.length; index++) {
+        const row = list.getRow(index);
+        const oldIndent = list.getNotesIndentOrThrow();
+        const newIndent = prev.getNotesIndentOrThrow();
+        const raw = (row.indentOverride ?? oldIndent) + row.text;
+        if (oldIndent === newIndent || raw === "") {
+          prev.addLine(row.text, row.indentOverride);
+          continue;
+        }
+        const prefix = raw.match(/^[ \t]*/)?.[0] ?? "";
+        const adjusted =
+          reindentListPrefix(prefix, oldIndent, newIndent) +
+          raw.slice(prefix.length);
+        const offset = getFenceContent(adjusted, newIndent)?.offset ?? 0;
+        prev.addLine(adjusted.slice(offset), adjusted.slice(0, offset));
+      }
       parent.removeChild(list);
 
       for (const c of list.getChildren()) {

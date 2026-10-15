@@ -157,3 +157,17 @@ test("should stop propagation and update editor", () => {
   const op = new DeleteTillNextLineContentStart(root, true);
   expect(op.perform()).toEqual(UPDATED_OUTCOME);
 });
+
+test("preserves partial tabs and physical blank rows when merging items", () => {
+  const root = makeRoot({
+    editor: makeEditor({
+      text: "- prev\n- title\n  ```js\n\tfoo\n\n  ```",
+      cursor: { line: 0, ch: 6 },
+    }),
+  });
+  expect(new DeleteTillNextLineContentStart(root, true).perform()).toEqual(
+    UPDATED_OUTCOME,
+  );
+  expect(root.print()).toBe("- prevtitle\n  ```js\n\tfoo\n\n  ```");
+  expect(root.getCursor()).toEqual({ line: 0, ch: 6 });
+});

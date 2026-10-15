@@ -578,3 +578,164 @@ test("queries distant fences and refreshes ownership after source changes withou
     containerIndent: "  ",
   });
 });
+
+describe("pipe tables", () => {
+  test.each([
+    "| Name | Value |\n| --- | --- |\n| Sample | abc |",
+    "Name | Value\n:--- | ---:\nSample | abc",
+    "| Name | Value\n| :---: | ---\n| Sample | abc",
+    "Name | Value |\n--- | --- |\nSample | abc |",
+    "| Name |\n| --- |\n| Sample |",
+    "Name \\| literal | Value\n--- | ---\nSample \\| text | abc",
+    "Name \\\\| Value\n--- | ---\nSample | abc",
+  ])("preserves every row of %p", (doc) => {
+    const classifier = new MarkdownLineClassifier();
+    for (const extensions of [[], classifier.extension]) {
+      const state = EditorState.create({ doc, extensions });
+      expect([1, 2, 3].map((line) => classifier.classify(state, line))).toEqual(
+        ["structure", "structure", "structure"],
+      );
+      expect(classifier.getCodeFence(state, 2)).toBeNull();
+    }
+  });
+
+  test.each([
+    "Name | Value\nnot a delimiter\nSample | abc",
+    "Name | Value\n--- | --- | ---\nSample | abc",
+    "Name \\| Value\n--- | ---\nSample | abc",
+    "| Name | Value |\n| --- | invalid |\n| Sample | abc |",
+    "    Name | Value\n    --- | ---\n    Sample | abc",
+  ])("does not infer a table from %p", (doc) => {
+    expect(inspect(doc, 1).kind).toBe("body");
+    expect(inspect(doc, 3).kind).toBe("body");
+  });
+
+  test.each([
+    ["", "blank"],
+    ["# heading", "structure"],
+    ["- sibling", "list-item"],
+    ["```js", "structure"],
+  ] as const)("ends before %p", (boundary, kind) => {
+    const doc =
+      "| Name | Value |\n| --- | --- |\n| Sample | abc |\n" + boundary;
+    expect(inspect(doc, 3).kind).toBe("structure");
+    expect(inspect(doc, 4).kind).toBe(kind);
+  });
+
+  test.each([
+    "- parent\n\t| Name | Value |\n\t| --- | --- |\n\t| Sample | abc |\n\tnote",
+    "- | Name | Value |\n  | --- | --- |\n  | Sample | abc |\n  note",
+  ])("retains a nested table's list owner in %p", (doc) => {
+    const lines = doc.split("\n");
+    expect(inspect(doc, lines.length - 1).kind).toBe("structure");
+    expect(inspect(doc, lines.length).kind).toBe("list-continuation");
+    expect(inspect(doc, 1).kind).toBe("list-item");
+  });
+
+  test("does not interpret table rows inside fenced code as table boundaries", () => {
+    const doc = "```\n| H | V |\n| --- | --- |\n```\nplain";
+    expect(inspect(doc, 3).kind).toBe("structure");
+    expect(inspect(doc, 5).kind).toBe("body");
+  });
+
+  test.each([
+    {
+      before: "- parent\n\tH | V\n\t--- | ---\n\tA | B",
+      line: 2,
+      replacement: "\tH | V | X",
+      target: 4,
+      beforeKind: "structure",
+      afterKind: "list-continuation",
+    },
+    {
+      before: "H | V\n--- | ---\nA | B\nC | D",
+      line: 3,
+      replacement: "A \\| B",
+      target: 4,
+      beforeKind: "structure",
+      afterKind: "body",
+    },
+    {
+      before: "H | V\n--- | invalid\nA | B",
+      line: 2,
+      replacement: "--- | ---",
+      target: 3,
+      beforeKind: "body",
+      afterKind: "structure",
+    },
+    {
+      before: "H | V\n--- | ---\nA | B",
+      line: 2,
+      replacement: "--- | invalid",
+      target: 3,
+      beforeKind: "structure",
+      afterKind: "body",
+    },
+    {
+      before: "H | V\n--- | ---\nA | B",
+      line: 1,
+      replacement: "H | V | X",
+      target: 3,
+      beforeKind: "structure",
+      afterKind: "body",
+    },
+    {
+      before: "H | V\n--- | ---\nA | B\n\nC | D",
+      line: 4,
+      replacement: "E | F",
+      target: 5,
+      beforeKind: "body",
+      afterKind: "structure",
+    },
+  ])(
+    "refreshes table membership after editing line $line",
+    ({ before, line, replacement, target, beforeKind, afterKind }) => {
+      const classifier = new MarkdownLineClassifier();
+      let state = EditorState.create({
+        doc: before,
+        extensions: classifier.extension,
+      });
+      expect(classifier.classify(state, target)).toBe(beforeKind);
+      const changed = state.doc.line(line);
+      state = state.update({
+        changes: { from: changed.from, to: changed.to, insert: replacement },
+      }).state;
+      expect(classifier.classify(state, target)).toBe(afterKind);
+    },
+  );
+});
+
+test("reuses table ranges during ordinary cell typing", () => {
+  const classifier = new MarkdownLineClassifier();
+  let state = EditorState.create({
+    doc: "H | V\n--- | ---\nA | B",
+    extensions: classifier.extension,
+  });
+  const line = jest.spyOn(
+    Object.getPrototypeOf(state.doc) as EditorState["doc"],
+    "line",
+  );
+  state = state.update({
+    changes: { from: state.doc.length, insert: "x" },
+  }).state;
+  expect(line).not.toHaveBeenCalled();
+  line.mockRestore();
+  expect(classifier.classify(state, 3)).toBe("structure");
+  expect(state.doc.toString()).toBe("H | V\n--- | ---\nA | Bx");
+});
+
+test.each(["#", "-", "*"])(
+  "refreshes attached table membership when its header changes to and from %p syntax",
+  (marker) => {
+    const classifier = new MarkdownLineClassifier();
+    let state = EditorState.create({
+      doc: "- | h | a |\n  | --- | --- |\n  | x | y |",
+      extensions: classifier.extension,
+    });
+    expect(classifier.classify(state, 3)).toBe("structure");
+    state = state.update({ changes: { from: 2, to: 3, insert: marker } }).state;
+    expect(classifier.classify(state, 3)).toBe("list-continuation");
+    state = state.update({ changes: { from: 2, to: 3, insert: "|" } }).state;
+    expect(classifier.classify(state, 3)).toBe("structure");
+  },
+);

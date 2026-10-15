@@ -1,4 +1,4 @@
-import { Plugin } from "obsidian";
+import { Plugin, editorEditorField } from "obsidian";
 
 import { EditorState, Extension, Transaction } from "@codemirror/state";
 
@@ -66,7 +66,12 @@ export class BulletTypingGuard implements Feature {
   }
 
   private filterTransaction = (transaction: Transaction) => {
-    if (!this.settings.keepBodyTextInBullets) {
+    if (
+      !this.settings.keepBodyTextInBullets ||
+      transaction.startState
+        .field(editorEditorField, false)
+        ?.dom.closest(".table-cell-wrapper")
+    ) {
       return transaction;
     }
 

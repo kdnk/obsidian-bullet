@@ -27,6 +27,7 @@ const deletionUserEvents = [
 ] as const;
 
 const structuralTriggers = new Set(["#", ">", "`", "-"]);
+const completedStructureRe = /^(?:~{3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/;
 
 interface TypedTrigger {
   fromBefore: number;
@@ -294,7 +295,7 @@ export class BulletTypingPolicy {
 
   private getStructuralPromotion(transaction: Transaction): ChangeSpec | null {
     const trigger = getSingleTypedTrigger(transaction);
-    if (!trigger || !structuralTriggers.has(trigger.value)) {
+    if (!trigger) {
       return null;
     }
 
@@ -306,16 +307,26 @@ export class BulletTypingPolicy {
     const listItem = before.listItem;
     if (
       !listItem?.isRoot ||
-      !listItem.isPlainEmpty ||
       listItem.hasOwnedFollowingLine ||
-      !/[ \t]$/.test(listItem.prefix) ||
-      trigger.fromBefore !== before.from + listItem.contentStart
+      !/[ \t]$/.test(listItem.prefix)
     ) {
       return null;
     }
 
     const afterLine = transaction.newDoc.lineAt(trigger.fromAfter);
     if (!afterLine.text.startsWith(listItem.prefix)) {
+      return null;
+    }
+
+    const startsStructure =
+      listItem.isPlainEmpty &&
+      trigger.fromBefore === before.from + listItem.contentStart &&
+      structuralTriggers.has(trigger.value);
+    const completesStructure =
+      trigger.fromBefore === before.to &&
+      !completedStructureRe.test(before.text.slice(listItem.contentStart)) &&
+      completedStructureRe.test(afterLine.text.slice(listItem.contentStart));
+    if (!startsStructure && !completesStructure) {
       return null;
     }
 

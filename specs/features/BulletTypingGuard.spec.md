@@ -723,3 +723,222 @@ code|
   - x|
   ```
 ````
+
+# Typing a tilde fence with a language from an empty line should produce a root structure
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+|
+```
+
+- typeText: `~`
+- typeText: `~`
+- typeText: `~`
+- typeText: `j`
+- typeText: `s`
+- assertState:
+
+```text
+~~~js|
+```
+
+# Typing an asterisk rule from an empty line should produce a root structure
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+|
+```
+
+- typeText: `*`
+- typeText: `*`
+- typeText: `*`
+- assertState:
+
+```text
+***|
+```
+
+# Typing an underscore rule from an empty line should produce a root structure
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+|
+```
+
+- typeText: `_`
+- typeText: `_`
+- typeText: `_`
+- assertState:
+
+```text
+___|
+```
+
+# Typing a tilde fence with a language from an empty root item should produce a root structure
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- |
+```
+
+- typeText: `~`
+- typeText: `~`
+- typeText: `~`
+- typeText: `j`
+- typeText: `s`
+- assertState:
+
+```text
+~~~js|
+```
+
+# Typing an asterisk rule from an empty root item should produce a root structure
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- |
+```
+
+- typeText: `*`
+- typeText: `*`
+- typeText: `*`
+- assertState:
+
+```text
+***|
+```
+
+# Typing an underscore rule from an empty root item should produce a root structure
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- |
+```
+
+- typeText: `_`
+- typeText: `_`
+- typeText: `_`
+- assertState:
+
+```text
+___|
+```
+
+# Typing single asterisk emphasis should preserve inline formatting
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- |
+```
+
+- typeText: `*`
+- typeText: `w`
+- typeText: `o`
+- typeText: `r`
+- typeText: `d`
+- typeText: `*`
+- assertState:
+
+```text
+- *word*|
+```
+
+# Typing double underscore emphasis should preserve inline formatting
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- |
+```
+
+- typeText: `_`
+- typeText: `_`
+- typeText: `w`
+- typeText: `o`
+- typeText: `r`
+- typeText: `d`
+- typeText: `_`
+- typeText: `_`
+- assertState:
+
+```text
+- __word__|
+```
+
+# Typing ~~word~~ should preserve inline formatting or complete a spaced rule
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- |
+```
+
+- typeText: `~`
+- typeText: `~`
+- typeText: `w`
+- typeText: `o`
+- typeText: `r`
+- typeText: `d`
+- typeText: `~`
+- typeText: `~`
+- assertState:
+
+```md
+- ~~word~~|
+```
+
+# Typing \* \* \* should preserve inline formatting or complete a spaced rule
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- |
+```
+
+- typeText: `*`
+- typeText: ` `
+- typeText: `*`
+- typeText: ` `
+- typeText: `*`
+- assertState:
+
+```text
+* * *|
+```
+
+# Typing \_ \_ \_ should preserve inline formatting or complete a spaced rule
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+```md
+- |
+```
+
+- typeText: `_`
+- typeText: ` `
+- typeText: `_`
+- typeText: ` `
+- typeText: `_`
+- assertState:
+
+```text
+_ _ _|
+```

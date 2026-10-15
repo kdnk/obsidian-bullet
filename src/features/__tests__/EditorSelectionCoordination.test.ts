@@ -29,6 +29,12 @@ jest.mock(
   "obsidian",
   () => ({
     Editor: class {},
+    editorEditorField: jest
+      .requireActual<typeof import("@codemirror/state")>("@codemirror/state")
+      .StateField.define({
+        create: () => null,
+        update: (value: unknown) => value,
+      }),
     editorInfoField: jest
       .requireActual<typeof import("@codemirror/state")>("@codemirror/state")
       .StateField.define({

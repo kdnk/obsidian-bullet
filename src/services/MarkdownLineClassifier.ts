@@ -246,10 +246,8 @@ export class MarkdownLineClassifier {
       previousLineNumber >= 1;
       previousLineNumber--
     ) {
-      const fence = structuralBlockIndex.getCodeFence(previousLineNumber);
-      if (fence) {
-        const owner = structuralBlockIndex.getListOwner(previousLineNumber);
-        if (owner === null) return false;
+      const owner = structuralBlockIndex.getListOwner(previousLineNumber);
+      if (owner !== null) {
         previousLineNumber = owner;
       }
       const previousText = doc.line(previousLineNumber).text;
@@ -433,6 +431,23 @@ function buildStructuralBlockIndex(
         width,
         ownerLineNumber: lineNumber,
       });
+      const tableEnd = getTableEnd(
+        doc,
+        lineNumber,
+        listItem.content,
+        containerIndent,
+      );
+      if (tableEnd !== null) {
+        ranges.push({
+          from: lineNumber,
+          to: tableEnd,
+          structureFrom: lineNumber + 1,
+          fence: null,
+          ownerLineNumber: lineNumber,
+        });
+        lineNumber = tableEnd;
+        continue;
+      }
       const marker = getFenceOpening(listItem.content);
       if (marker) {
         fence = {
@@ -459,8 +474,25 @@ function buildStructuralBlockIndex(
         containerIndent: continuationFence ? container.indent : "",
         ownerLineNumber: continuationFence ? container.ownerLineNumber : null,
       };
-    } else if (classifyLexicalLine(text, false) !== "body") {
-      listContainers.length = 0;
+    } else {
+      const tableEnd = getTableEnd(
+        doc,
+        lineNumber,
+        content?.text ?? text,
+        container?.indent ?? "",
+      );
+      if (tableEnd !== null) {
+        ranges.push({
+          from: lineNumber,
+          to: tableEnd,
+          structureFrom: lineNumber,
+          fence: null,
+          ownerLineNumber: container?.ownerLineNumber ?? null,
+        });
+        lineNumber = tableEnd;
+      } else if (classifyLexicalLine(text, false) !== "body") {
+        listContainers.length = 0;
+      }
     }
   }
 
@@ -487,6 +519,70 @@ function buildStructuralBlockIndex(
   }
 
   return new StructuralBlockIndex(ranges);
+}
+
+function getTableCells(text: string): string[] | null {
+  if (getIndentWidth(indentRe.exec(text)?.[0] ?? "") > 3) return null;
+  const row = text.trim();
+  const cells: string[] = [];
+  let start = 0;
+  for (let index = 0; index < row.length; index++) {
+    if (row[index] === "\\") {
+      index++;
+    } else if (row[index] === "|") {
+      cells.push(row.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  if (cells.length === 0) return null;
+  cells.push(row.slice(start).trim());
+  if (row.startsWith("|")) cells.shift();
+  if (start === row.length) cells.pop();
+  return cells.length > 0 ? cells : null;
+}
+
+function isTableDelimiter(cells: readonly string[]): boolean {
+  return cells.every((cell) => /^:?-+:?$/.test(cell));
+}
+
+function getTableEnd(
+  doc: Text,
+  headerLineNumber: number,
+  headerText: string,
+  containerIndent: string,
+): number | null {
+  if (
+    headerLineNumber >= doc.lines ||
+    classifyLexicalLine(headerText, false) !== "body"
+  )
+    return null;
+  const header = getTableCells(headerText);
+  if (!header) return null;
+  const delimiterText = getFenceContent(
+    doc.line(headerLineNumber + 1).text,
+    containerIndent,
+  )?.text;
+  const delimiter =
+    delimiterText === undefined ? null : getTableCells(delimiterText);
+  if (
+    !delimiter ||
+    delimiter.length !== header.length ||
+    !isTableDelimiter(delimiter)
+  )
+    return null;
+  let end = headerLineNumber + 1;
+  while (end < doc.lines) {
+    const row = getFenceContent(doc.line(end + 1).text, containerIndent)?.text;
+    if (
+      row === undefined ||
+      classifyLexicalLine(row, false) !== "body" ||
+      getFenceOpening(row) ||
+      !getTableCells(row)
+    )
+      break;
+    end++;
+  }
+  return end;
 }
 
 function canReuseStructuralBlockIndex(transaction: Transaction): boolean {
@@ -528,7 +624,16 @@ function isStructuralBoundaryCandidate(text: string): boolean {
 }
 
 function hasSameContainerContext(before: string, after: string): boolean {
+  const beforeContent = (matchListItem(before)?.content ?? before).trimStart();
+  const afterContent = (matchListItem(after)?.content ?? after).trimStart();
+  const beforeCells = getTableCells(beforeContent);
+  const afterCells = getTableCells(afterContent);
   return (
+    classifyLexicalLine(beforeContent, false) ===
+      classifyLexicalLine(afterContent, false) &&
+    beforeCells?.length === afterCells?.length &&
+    (beforeCells === null || isTableDelimiter(beforeCells)) ===
+      (afterCells === null || isTableDelimiter(afterCells)) &&
     indentRe.exec(before)?.[0] === indentRe.exec(after)?.[0] &&
     matchListItem(before)?.prefix === matchListItem(after)?.prefix &&
     classifyLexicalLine(before, false) === classifyLexicalLine(after, false)

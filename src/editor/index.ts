@@ -1,4 +1,4 @@
-import { Editor, editorInfoField } from "obsidian";
+import { Editor, editorEditorField, editorInfoField } from "obsidian";
 
 import {
   foldEffect,
@@ -39,7 +39,13 @@ export function getEditorFromState(state: EditorState) {
     return null;
   }
 
-  return new MyEditor(editor);
+  const adapter = new MyEditor(editor);
+  const view = state.field(editorEditorField, false);
+  if (view && view !== adapter.getCodeMirrorView()) {
+    return null;
+  }
+
+  return adapter;
 }
 
 export function getFoldedLinesFromState(state: EditorState): number[] {

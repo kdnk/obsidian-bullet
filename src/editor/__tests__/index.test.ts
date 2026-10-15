@@ -1,9 +1,13 @@
+import { editorEditorField, editorInfoField } from "obsidian";
+
 import {
   foldEffect,
   foldable,
   foldedRanges,
   unfoldEffect,
 } from "@codemirror/language";
+import { EditorState } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 
 import { MyEditor, getEditorFromState, getFoldedLinesFromState } from "..";
 
@@ -11,7 +15,18 @@ jest.mock(
   "obsidian",
   () => ({
     Editor: class {},
-    editorInfoField: {},
+    editorInfoField: jest
+      .requireActual<typeof import("@codemirror/state")>("@codemirror/state")
+      .StateField.define({
+        create: () => null,
+        update: (value: unknown) => value,
+      }),
+    editorEditorField: jest
+      .requireActual<typeof import("@codemirror/state")>("@codemirror/state")
+      .StateField.define({
+        create: () => null,
+        update: (value: unknown) => value,
+      }),
   }),
   { virtual: true },
 );
@@ -30,12 +45,59 @@ jest.mock("@codemirror/language", () => ({
 }));
 
 describe("getEditorFromState", () => {
+  function makeState(includeView = true) {
+    const view = { state: EditorState.create() };
+    const editor = {
+      cm: view,
+      getLine: () => "- Main document",
+    };
+    const state = EditorState.create({
+      doc: "- Main document",
+      extensions: [
+        editorInfoField.init(() => ({ editor }) as never),
+        includeView ? editorEditorField.init(() => view as EditorView) : [],
+      ],
+    });
+    view.state = state;
+    return { state, view, editor };
+  }
+
   test("returns null when editor info field is not initialized yet", () => {
     const state = {
       field: jest.fn().mockReturnValue(undefined),
     };
 
     expect(getEditorFromState(state as never)).toBeNull();
+  });
+
+  test("does not use a parent document editor for an embedded editor state", () => {
+    const { state, editor } = makeState();
+    const cellView = {} as EditorView;
+    const cellState = EditorState.create({
+      doc: "cell",
+      extensions: [
+        editorInfoField.init(() => ({ editor }) as never),
+        editorEditorField.init(() => cellView),
+      ],
+    });
+
+    expect(getEditorFromState(state)?.getLine(0)).toBe("- Main document");
+    expect(getEditorFromState(cellState)).toBeNull();
+  });
+
+  test("keeps the adapter for a new state owned by the same editor view", () => {
+    const { state, view } = makeState();
+    const nextState = state.update({ selection: { anchor: 2 } }).state;
+
+    expect(nextState).not.toBe(view.state);
+    expect(getEditorFromState(nextState)?.getLine(0)).toBe("- Main document");
+    expect(getEditorFromState(nextState)?.getCodeMirrorView()).toBe(view);
+  });
+
+  test("keeps the adapter when the state has no editor view field", () => {
+    const { state } = makeState(false);
+
+    expect(getEditorFromState(state)?.getLine(0)).toBe("- Main document");
   });
 });
 

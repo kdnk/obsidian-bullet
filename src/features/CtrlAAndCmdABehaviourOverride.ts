@@ -1,6 +1,7 @@
 import { Plugin } from "obsidian";
 
-import { keymap } from "@codemirror/view";
+import { EditorSelection, Text } from "@codemirror/state";
+import { EditorView, keymap } from "@codemirror/view";
 
 import { Feature } from "./Feature";
 
@@ -14,7 +15,10 @@ import { createEditorCallback } from "../utils/createEditorCallback";
 import { createKeymapRunCallback } from "../utils/createKeymapRunCallback";
 
 export class CtrlAAndCmdABehaviourOverride implements Feature {
-  private cycleCursor: Position | null = null;
+  private selectionCycles = new WeakMap<
+    EditorView,
+    { cursor: Position; doc: Text; selection: EditorSelection }
+  >();
 
   constructor(
     private plugin: Plugin,
@@ -45,7 +49,9 @@ export class CtrlAAndCmdABehaviourOverride implements Feature {
     });
   }
 
-  async unload() {}
+  async unload() {
+    this.selectionCycles = new WeakMap();
+  }
 
   private check = () => {
     return (
@@ -54,15 +60,30 @@ export class CtrlAAndCmdABehaviourOverride implements Feature {
   };
 
   private run = (editor: MyEditor) => {
+    const view = editor.getCodeMirrorView();
+    const cycle = this.selectionCycles.get(view);
+    const cursor =
+      cycle?.doc === view.state.doc && cycle.selection.eq(view.state.selection)
+        ? cycle.cursor
+        : null;
     const operationRef: { current: SelectAllContent | null } = {
       current: null,
     };
     const result = this.operationPerformer.perform((root) => {
-      operationRef.current = new SelectAllContent(root, this.cycleCursor);
+      operationRef.current = new SelectAllContent(root, cursor);
       return operationRef.current;
     }, editor);
 
-    this.cycleCursor = operationRef.current?.getCycleCursor() ?? null;
+    const nextCursor = operationRef.current?.getCycleCursor();
+    if (nextCursor) {
+      this.selectionCycles.set(view, {
+        cursor: nextCursor,
+        doc: view.state.doc,
+        selection: view.state.selection,
+      });
+    } else {
+      this.selectionCycles.delete(view);
+    }
 
     return result;
   };

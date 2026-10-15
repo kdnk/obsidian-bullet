@@ -434,3 +434,61 @@ test("keeps a partial tab and the insertion point when joining code rows", () =>
   rows[line] = rows[line].slice(0, ch) + "X" + rows[line].slice(ch);
   expect(rows.join("\n")).toBe("- ```js\n\tfooXBAR\n  ```");
 });
+
+test("preserves partial tabs and physical blank rows when merging items", () => {
+  const root = makeRoot({
+    editor: makeEditor({
+      text: "- prev\n- title\n  ```js\n\tfoo\n\n  ```",
+      cursor: { line: 1, ch: 2 },
+    }),
+  });
+  expect(
+    new DeleteTillPreviousLineContentEnd(root, true, true).perform(),
+  ).toEqual(UPDATED_OUTCOME);
+  expect(root.print()).toBe("- prevtitle\n  ```js\n\tfoo\n\n  ```");
+  expect(root.getCursor()).toEqual({ line: 0, ch: 6 });
+});
+
+test.each([
+  {
+    text: "- parent\n\t- child\n\t  ```js\n\t\tfoo\n\n\t  ```",
+    ch: 3,
+    want: "- parentchild\n  ```js\n\tfoo\n\n  ```",
+  },
+  {
+    text: "- parent\n  prior\n10. child\n    ```js\n\t\tfoo\n\n    ```",
+    ch: 4,
+    want: "- parent\n  priorchild\n  ```js\n\t  foo\n\n  ```",
+  },
+])(
+  "keeps code columns when merging different containers: $text",
+  ({ text, ch, want }) => {
+    const line = text.startsWith("- parent\n  prior") ? 2 : 1;
+    const root = makeRoot({
+      editor: makeEditor({ text, cursor: { line, ch } }),
+    });
+    expect(
+      new DeleteTillPreviousLineContentEnd(root, true, true).perform(),
+    ).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe(want);
+    expect(root.getCursor()).toEqual(
+      line === 2 ? { line: 1, ch: 7 } : { line: 0, ch: 8 },
+    );
+  },
+);
+
+test("retains code columns when merging into a wider ordered continuation", () => {
+  const root = makeRoot({
+    editor: makeEditor({
+      text: "10. parent\n    prior\n- child\n  ```js\n\tfoo\n\n  ```",
+      cursor: { line: 2, ch: 2 },
+    }),
+  });
+  expect(
+    new DeleteTillPreviousLineContentEnd(root, false, true).perform(),
+  ).toEqual(UPDATED_OUTCOME);
+  expect(root.print()).toBe(
+    "10. parent\n    priorchild\n    ```js\n\t  foo\n\n    ```",
+  );
+  expect(root.getCursor()).toEqual({ line: 1, ch: 9 });
+});

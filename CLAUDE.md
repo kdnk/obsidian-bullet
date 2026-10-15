@@ -166,3 +166,6 @@ Rollup bundles to a single CJS `dist/main.js`. `PLUGIN_VERSION` and `CHANGELOG_M
     - Follow AGENTS.md's empty-parent save verification using `scripts/verify-empty-parent-code-save.cjs` and the actual installed formatter. Preserve formatter whitespace, atomic history, and literal code/HTML; verify repeated saves as well as the first save.
 - Zoom editing
     - When changing zoom editing, run `scripts/verify-zoom-subtree-editing.cjs` against the deployed test build. Preserve leaf child creation, subtree boundaries, descendant fold behavior, and cursor placement across numbered-marker width changes.
+- Editing experience regression checks
+    - After changing structural input, editor ownership, or zoom cursor placement, run `scripts/verify-editing-experience.cjs <fresh-output-directory>` through the managed verification lifecycle. Check native table-cell input, raw code indentation after split and join, incremental Markdown syntax, typing after ordered zoom, and Cmd+Backspace after Option+ArrowLeft.
+    - After changing select-all cycles, run `scripts/verify-select-all-isolation.cjs <fresh-output-directory>` in the same managed lifecycle. Verify independent cycles across panes and the text replaced by the next native input.

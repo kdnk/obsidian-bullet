@@ -773,3 +773,74 @@ describe("CreateNewItem operation", () => {
     expect(root.getCursor().ch).toBe(6);
   });
 });
+
+describe("preserving fenced continuation rows when splitting an item", () => {
+  test.each([false, true])("selection reversed: %s", (reversed) => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- title\n  ```js\n\tfoo\n\n  ```",
+        cursor: { line: 0, ch: 4 },
+      }),
+    });
+    root.replaceSelections([
+      {
+        anchor: { line: 0, ch: reversed ? 5 : 4 },
+        head: { line: 0, ch: reversed ? 4 : 5 },
+      },
+    ]);
+    expect(new CreateNewItem(root, "\t", true).perform()).toEqual(
+      UPDATED_OUTCOME,
+    );
+    expect(root.print()).toBe("- ti\n- le\n  ```js\n\tfoo\n\n  ```");
+    expect(root.getCursor()).toEqual({ line: 1, ch: 2 });
+  });
+
+  test("retains the source rows after splitting a continuation before code", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- title\n  abcdef\n  ```js\n\tfoo\n\n  ```",
+        cursor: { line: 1, ch: 5 },
+      }),
+    });
+    expect(new CreateNewItem(root, "\t", true).perform()).toEqual(
+      UPDATED_OUTCOME,
+    );
+    expect(root.print()).toBe("- title\n  abc\n  def\n  ```js\n\tfoo\n\n  ```");
+    expect(root.getCursor()).toEqual({ line: 2, ch: 2 });
+  });
+
+  test("retains code columns and physical blank rows when creating a zoom child", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- title\n  ```js\n\tfoo\n\n  ```",
+        cursor: { line: 0, ch: 4 },
+      }),
+    });
+    expect(
+      new CreateNewItem(
+        root,
+        "\t",
+        true,
+        true,
+        "",
+        root.getChildren()[0],
+      ).perform(),
+    ).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe("- ti\n\t- tle\n\t  ```js\n\t    foo\n\n\t  ```");
+    expect(root.getCursor()).toEqual({ line: 1, ch: 3 });
+  });
+});
+
+test("retains continuation tabs when splitting an ordered item with a wide marker", () => {
+  const root = makeRoot({
+    editor: makeEditor({
+      text: "10. title\n    ```js\n\t\tfoo\n\n    ```",
+      cursor: { line: 0, ch: 6 },
+    }),
+  });
+  expect(new CreateNewItem(root, "\t", false).perform()).toEqual(
+    UPDATED_OUTCOME,
+  );
+  expect(root.print()).toBe("10. ti\n10. tle\n    ```js\n\t\tfoo\n\n    ```");
+  expect(root.getCursor()).toEqual({ line: 1, ch: 4 });
+});

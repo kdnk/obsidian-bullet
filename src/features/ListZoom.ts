@@ -671,7 +671,7 @@ export class ListZoom implements Feature {
 
   constructor(
     private plugin: Plugin,
-    parser: Parser,
+    private parser: Parser,
     private defaultIndentChars = () => "\t",
     private imeIsOpened = () => false,
     private numericBullets = () => true,
@@ -774,6 +774,12 @@ export class ListZoom implements Feature {
       if (entering) this.snapshots.set(view, captureFoldScrollCheckpoint(view));
       const range = this.zoom.resolve(view.state, from);
       if (!range) return;
+      const line = view.state.doc.lineAt(range.from);
+      const list = this.parser
+        .parse(reader(view.state), { line: line.number - 1, ch: 0 })
+        ?.getListUnderLine(line.number - 1);
+      if (!list) return;
+      const contentStart = list.getFirstLineContentStartAfterCheckbox();
       const insertion = this.zoom.childInsertion(
         view.state,
         range.from,
@@ -806,7 +812,7 @@ export class ListZoom implements Feature {
         ...insertion,
         effects,
         selection: insertion?.selection ?? {
-          anchor: Math.min(range.to, from + range.indent.length + 2),
+          anchor: line.from + contentStart.ch,
         },
       });
       if (insertion) view.dispatch({ selection: view.state.selection });

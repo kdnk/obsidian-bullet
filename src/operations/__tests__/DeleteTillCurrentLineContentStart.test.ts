@@ -1,6 +1,10 @@
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { DeleteTillCurrentLineContentStart } from "../DeleteTillCurrentLineContentStart";
-import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
+import {
+  NO_OP_OUTCOME,
+  STOP_ONLY_OUTCOME,
+  UPDATED_OUTCOME,
+} from "../Operation";
 
 test("should delete content from cursor to start of the line content and move cursor to content start", () => {
   const root = makeRoot({
@@ -111,3 +115,22 @@ test("retains the source prefix when deleting code text to its start", () => {
   expect(root.print()).toBe("- ```js\n\tBAR\n  ```");
   expect(root.getCursor()).toEqual({ line: 1, ch: 1 });
 });
+
+test.each([
+  { text: "- abcdef", line: 0, ch: 1 },
+  { text: "- abc😀", line: 0, ch: 1 },
+  { text: "10. abcdef", line: 0, ch: 2 },
+  { text: "- ```js\n  abcdef\n  ```", line: 1, ch: 1 },
+])(
+  "protects text after a cursor inside the container prefix: $text",
+  ({ text, line, ch }) => {
+    const root = makeRoot({
+      editor: makeEditor({ text, cursor: { line, ch } }),
+    });
+    expect(new DeleteTillCurrentLineContentStart(root).perform()).toEqual(
+      STOP_ONLY_OUTCOME,
+    );
+    expect(root.print()).toBe(text);
+    expect(root.getCursor()).toEqual({ line, ch });
+  },
+);

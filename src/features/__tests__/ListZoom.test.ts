@@ -491,6 +491,72 @@ test("the zoom command accepts an empty bare marker at EOF", async () => {
   expect(view.state.doc.toString()).toBe("-\n\t- ");
 });
 
+describe.each(["never", "bullet-only", "bullet-and-checkbox"] as const)(
+  "zoom navigation with cursor protection %s",
+  (keepCursor) => {
+    test.each([
+      { prefix: "1. ", bodyColumn: 3, checkboxColumn: 3 },
+      { prefix: "12. ", bodyColumn: 4, checkboxColumn: 4 },
+      { prefix: "123.\t", bodyColumn: 5, checkboxColumn: 5 },
+      { prefix: "-\t", bodyColumn: 2, checkboxColumn: 2 },
+      { prefix: "- [ ] ", bodyColumn: 6, checkboxColumn: 2 },
+      { prefix: "12. [x] ", bodyColumn: 8, checkboxColumn: 4 },
+    ])(
+      "places continued typing after the appropriate prefix for $prefix",
+      async ({ prefix, bodyColumn, checkboxColumn }) => {
+        const commands: Command[] = [];
+        const extensions: Extension[] = [];
+        const settings = makeSettings();
+        settings.keepCursorWithinContent = keepCursor;
+        const feature = new ListZoom(
+          {
+            addCommand: (command: Command) => commands.push(command),
+            registerEditorExtension: (extension: Extension) =>
+              extensions.push(extension),
+          } as never,
+          new Parser(makeLogger(), settings),
+        );
+        await feature.load();
+        const text = `- parent\n\t${prefix}task\n\t\t- branch\n\t\t\t- child\n- after`;
+        const column =
+          keepCursor === "bullet-and-checkbox" ? bodyColumn : checkboxColumn;
+        for (const navigation of ["zoom-in", "zoom-out"]) {
+          const view = {
+            plugin: () => null,
+            state: EditorState.create({ doc: text, extensions }),
+            scrollSnapshot: () => StateEffect.define<void>().of(),
+            dispatch: (spec: TransactionSpec) => {
+              view.state = view.state.update(spec).state;
+            },
+            focus: () => undefined,
+          };
+          const run = (id: string) =>
+            commands.find((command) => command.id === id)!.editorCheckCallback!(
+              false,
+              { cm: view } as never,
+              {} as never,
+            );
+          view.dispatch({
+            selection: {
+              anchor: view.state.doc.line(navigation === "zoom-in" ? 2 : 3).to,
+            },
+          });
+          expect(run("zoom-in")).toBe(true);
+          if (navigation === "zoom-out") expect(run("zoom-out")).toBe(true);
+          expect(view.state.selection.main.head).toBe(10 + column);
+          view.dispatch({
+            ...view.state.replaceSelection("X"),
+            userEvent: "input.type",
+          });
+          expect(view.state.doc.toString()).toBe(
+            `- parent\n\t${prefix.slice(0, column)}X${prefix.slice(column)}task\n\t\t- branch\n\t\t\t- child\n- after`,
+          );
+        }
+      },
+    );
+  },
+);
+
 test("restores the original viewport anchor after folding a zoomed branch below Properties", async () => {
   const commands: Command[] = [];
   const extensions: Extension[] = [codeFolding()];
