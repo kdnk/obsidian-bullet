@@ -7,6 +7,22 @@ describe("InsertNewLineWithoutBullet operation", () => {
     test.each([
       { text: "- abcdef", line: 0, from: 4, to: 6, want: "- ab\n  ef", ch: 2 },
       {
+        text: "-\tabcdef",
+        line: 0,
+        from: 4,
+        to: 6,
+        want: "-\tab\n    ef",
+        ch: 4,
+      },
+      {
+        text: "\t -\tabcdef",
+        line: 0,
+        from: 6,
+        to: 8,
+        want: "\t -\tab\n\t    ef",
+        ch: 5,
+      },
+      {
         text: "1. abcdef",
         line: 0,
         from: 5,
@@ -51,6 +67,58 @@ describe("InsertNewLineWithoutBullet operation", () => {
       },
     );
   });
+
+  test.each([
+    { text: "-\talpha", want: "-\talpha\n    ", ch: 4 },
+    { text: "\t-\talpha", want: "\t-\talpha\n\t    ", ch: 5 },
+    { text: " \t-\talpha", want: " \t-\talpha\n \t    ", ch: 6 },
+    { text: "\t -\talpha", want: "\t -\talpha\n\t    ", ch: 5 },
+    { text: "9.\talpha", want: "9.\talpha\n    ", ch: 4 },
+    { text: "10.\talpha", want: "10.\talpha\n    ", ch: 4 },
+    { text: " 9.\talpha", want: " 9.\talpha\n    ", ch: 4 },
+    { text: " 10.\talpha", want: " 10.\talpha\n        ", ch: 8 },
+  ])(
+    "aligns the continuation with the content in $text",
+    ({ text, want, ch }) => {
+      const root = makeRoot({
+        editor: makeEditor({ text, cursor: { line: 0, ch: text.length } }),
+      });
+
+      expect(new InsertNewLineWithoutBullet(root).perform()).toEqual(
+        UPDATED_OUTCOME,
+      );
+      expect(root.print()).toBe(want);
+      expect(root.getCursor()).toEqual({ line: 1, ch });
+    },
+  );
+
+  test.each([
+    {
+      text: "-\talpha\n\tnote text",
+      line: 0,
+      ch: 7,
+      want: "-\talpha\n\t\n\tnote text",
+    },
+    {
+      text: "-\talpha\n\tnote text",
+      line: 1,
+      ch: 6,
+      want: "-\talpha\n\tnote \n\ttext",
+    },
+  ])(
+    "reuses existing continuation indentation from row $line",
+    ({ text, line, ch, want }) => {
+      const root = makeRoot({
+        editor: makeEditor({ text, cursor: { line, ch } }),
+      });
+
+      expect(new InsertNewLineWithoutBullet(root).perform()).toEqual(
+        UPDATED_OUTCOME,
+      );
+      expect(root.print()).toBe(want);
+      expect(root.getCursor()).toEqual({ line: line + 1, ch: 1 });
+    },
+  );
 
   test("should create a note line below the current list item", () => {
     const root = makeRoot({
