@@ -513,7 +513,7 @@ describe("BulletTypingPolicy", () => {
     expect(policy.decide(transaction)).toEqual({ kind: "pass" });
   });
 
-  test("does not start bullets from multiple Space insertions", () => {
+  test("starts a bullet at each empty-line Space insertion", () => {
     const state = EditorState.create({
       doc: "\n",
       selection: EditorSelection.create([
@@ -530,7 +530,9 @@ describe("BulletTypingPolicy", () => {
       userEvent: "input.type",
     });
 
-    expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+    expect(applyCorrection(transaction, policy.decide(transaction))).toBe(
+      "- \n- ",
+    );
   });
 
   test("keeps the existing body correction for Space before pasted text", () => {
@@ -730,7 +732,7 @@ describe("BulletTypingPolicy", () => {
     },
   );
 
-  test("does not promote from multiple selections", () => {
+  test("promotes an eligible insertion while another caret is unchanged", () => {
     const state = EditorState.create({
       doc: "- ",
       selection: EditorSelection.create([
@@ -744,7 +746,7 @@ describe("BulletTypingPolicy", () => {
       userEvent: "input.type",
     });
 
-    expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+    expect(applyCorrection(transaction, policy.decide(transaction))).toBe("#");
   });
 
   test("does not promote multiple typed characters", () => {
