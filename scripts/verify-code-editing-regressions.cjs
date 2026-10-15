@@ -8,12 +8,14 @@ const note = `pages/code-editing-regressions-${randomUUID()}.md`;
 const original = evaluate(() => ({
   leaf: app.workspace.activeLeaf.id,
   vim: app.vault.config.vimMode ?? false,
+  hasVim: Object.hasOwn(app.vault.config, "vimMode"),
   shiki: !!app.plugins.plugins["shiki-highlighter"],
 }));
 const results = [];
 const failures = [];
 const inputEvents = [];
 let pendingInput = null;
+let expectedVimMode = false;
 const cases = [
   {
     name: "partial-tab split",
@@ -34,7 +36,7 @@ const cases = [
   },
 ];
 function focus() {
-  evaluate(() => {
+  evaluate((expectedVimMode) => {
     window.focus();
     if (
       !document.title.includes(" - vault - ") ||
@@ -42,7 +44,23 @@ function focus() {
     )
       throw Error("Wrong visible test vault");
     app.workspace.activeLeaf.view.editor.focus();
-  });
+    const cm = app.workspace.activeLeaf.view.editor.cm;
+    if (app.isVimEnabled() !== expectedVimMode || !!cm.cm !== expectedVimMode)
+      throw Error(
+        `Unexpected Vim mode before input: expected ${expectedVimMode}`,
+      );
+  }, expectedVimMode);
+}
+function setVimMode(enabled) {
+  evaluate(async (enabled) => {
+    app.vault.setConfig("vimMode", enabled);
+    await app.vault.saveConfig();
+    app.workspace.updateOptions();
+    const persisted = await app.vault.readConfigJson("app");
+    if (persisted.vimMode !== enabled || app.isVimEnabled() !== enabled)
+      throw Error(`Vim mode did not persist: expected ${enabled}`);
+  }, enabled);
+  expectedVimMode = enabled;
 }
 function key(key, modifiers = 0) {
   const codes = { Enter: 13, Backspace: 8, Escape: 27, i: 73, z: 90 };
@@ -235,9 +253,8 @@ try {
     evaluate(async (enabled) => {
       if (enabled) await app.plugins.enablePlugin("shiki-highlighter");
       else await app.plugins.disablePlugin("shiki-highlighter");
-      app.vault.setConfig("vimMode", false);
-      app.workspace.updateOptions();
     }, shiki);
+    setVimMode(false);
     for (const fixture of [
       {
         name: "continuation after fenced code",
@@ -386,11 +403,10 @@ try {
         assert.equal(redone.doc, fixture.expected);
       });
     }
+    setVimMode(true);
     for (const prefix of ["", "  "]) {
       const text = `- \`\`\`js\n${prefix}\n  \`\`\``;
       evaluate(async (text) => {
-        app.vault.setConfig("vimMode", true);
-        app.workspace.updateOptions();
         const e = app.workspace.activeLeaf.view.editor;
         e.setValue(text);
         e.setCursor(1, 0);
@@ -436,10 +452,14 @@ try {
       delete window.__codeEditingInputTrace;
       window.__codeEditingRegressionLeaf?.detach();
       delete window.__codeEditingRegressionLeaf;
-      app.vault.setConfig("vimMode", original.vim);
-      app.workspace.updateOptions();
       if (original.shiki) await app.plugins.enablePlugin("shiki-highlighter");
       else await app.plugins.disablePlugin("shiki-highlighter");
+      app.vault.setConfig(
+        "vimMode",
+        original.hasVim ? original.vim : undefined,
+      );
+      await app.vault.saveConfig();
+      app.workspace.updateOptions();
       const leaf = app.workspace.getLeafById(original.leaf);
       if (leaf) app.workspace.setActiveLeaf(leaf, { focus: true });
       const file = app.vault.getAbstractFileByPath(note);
