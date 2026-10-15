@@ -82,33 +82,40 @@ export class BulletTypingPolicy {
       return this.getDeletionDecision(transaction);
     }
 
-    const bulletStart = this.getEmptyLineBulletStart(transaction);
-    if (bulletStart) {
-      return { kind: "correct", changes: [bulletStart] };
+    const typedCorrections = new Map<number, ConcreteChange>();
+    for (const trigger of getTypedTriggers(transaction)) {
+      const correction =
+        this.getEmptyLineBulletStart(transaction, trigger) ??
+        this.getStructuralPromotion(transaction, trigger);
+      if (correction) {
+        typedCorrections.set(
+          transaction.newDoc.lineAt(trigger.fromAfter).number,
+          correction,
+        );
+      }
     }
 
-    const promotion = this.getStructuralPromotion(transaction);
-    if (promotion) {
-      return { kind: "correct", changes: [promotion] };
-    }
-
-    const codeCorrections = this.getBlankCodeCorrections(transaction);
+    const prefixCorrections = [
+      ...typedCorrections.values(),
+      ...this.getBlankCodeCorrections(transaction),
+    ];
     const classificationState =
-      codeCorrections.length === 0
+      prefixCorrections.length === 0
         ? transaction.state
         : EditorState.create({
-            doc: ChangeSet.of(codeCorrections, transaction.newDoc.length).apply(
-              transaction.newDoc,
-            ),
+            doc: ChangeSet.of(
+              prefixCorrections,
+              transaction.newDoc.length,
+            ).apply(transaction.newDoc),
             extensions: this.classifier.extension,
           });
     const correctedLines = new Set(
-      codeCorrections.map(
+      prefixCorrections.map(
         (change) => transaction.newDoc.lineAt(change.from).number,
       ),
     );
     const changes = [
-      ...codeCorrections,
+      ...prefixCorrections,
       ...this.getBodyCorrections(
         transaction,
         getChangedLineNumbers(transaction),
@@ -270,13 +277,11 @@ export class BulletTypingPolicy {
       .sort((left, right) => left.before.from - right.before.from);
   }
 
-  private getEmptyLineBulletStart(transaction: Transaction): ChangeSpec | null {
-    if (transaction.annotation(Transaction.userEvent) !== "input.type") {
-      return null;
-    }
-
-    const trigger = getSingleTypedTrigger(transaction);
-    if (!trigger || trigger.value !== " ") {
+  private getEmptyLineBulletStart(
+    transaction: Transaction,
+    trigger: TypedTrigger,
+  ): ConcreteChange | null {
+    if (trigger.value !== " ") {
       return null;
     }
 
@@ -293,12 +298,10 @@ export class BulletTypingPolicy {
     return { from: trigger.fromAfter, insert: "-" };
   }
 
-  private getStructuralPromotion(transaction: Transaction): ChangeSpec | null {
-    const trigger = getSingleTypedTrigger(transaction);
-    if (!trigger) {
-      return null;
-    }
-
+  private getStructuralPromotion(
+    transaction: Transaction,
+    trigger: TypedTrigger,
+  ): ConcreteChange | null {
     const beforeLine = transaction.startState.doc.lineAt(trigger.fromBefore);
     const before = this.classifier.inspect(
       transaction.startState,
@@ -534,31 +537,32 @@ function getEmptyLeafRemoval(
   };
 }
 
-function getSingleTypedTrigger(transaction: Transaction): TypedTrigger | null {
-  const selection = transaction.startState.selection;
-  if (selection.ranges.length !== 1 || !selection.main.empty) {
-    return null;
+function getTypedTriggers(transaction: Transaction): TypedTrigger[] {
+  if (transaction.annotation(Transaction.userEvent) !== "input.type") {
+    return [];
   }
 
-  let changeCount = 0;
-  let trigger: TypedTrigger | null = null;
+  const carets = new Set(
+    transaction.startState.selection.ranges
+      .filter((range) => range.empty)
+      .map((range) => range.head),
+  );
+  const triggers: TypedTrigger[] = [];
   transaction.changes.iterChanges(
     (fromBefore, toBefore, fromAfter, _toAfter, inserted) => {
-      changeCount += 1;
       const value = inserted.toString();
       if (
         fromBefore === toBefore &&
-        selection.main.anchor === fromBefore &&
-        selection.main.head === fromBefore &&
+        carets.has(fromBefore) &&
         value.length === 1
       ) {
-        trigger = { fromBefore, fromAfter, value };
+        triggers.push({ fromBefore, fromAfter, value });
       }
     },
     true,
   );
 
-  return changeCount === 1 ? trigger : null;
+  return triggers;
 }
 
 function getChangedLineNumbers(transaction: Transaction): number[] {

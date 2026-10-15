@@ -869,3 +869,272 @@ test("fills only missing container columns after a tab on a blank row", async ()
   }).state;
   expect(state.doc.toString()).toBe("\t- ```js\n\t  xy\n\t  ```");
 });
+
+describe("BulletTypingGuard multiple carets", () => {
+  async function createState(doc: string, positions: number[], mainIndex = 0) {
+    return EditorState.create({
+      doc,
+      selection: EditorSelection.create(
+        positions.map((position) => EditorSelection.cursor(position)),
+        mainIndex,
+      ),
+      extensions: [
+        await loadGuard(),
+        EditorState.allowMultipleSelections.of(true),
+        history(),
+      ],
+    });
+  }
+
+  function type(state: EditorState, text: string, userEvent = "input.type") {
+    return state.update({ ...state.replaceSelection(text), userEvent }).state;
+  }
+
+  function carets(state: EditorState) {
+    return state.selection.ranges.map(({ head }) => {
+      const line = state.doc.lineAt(head);
+      return [line.number, head - line.from];
+    });
+  }
+
+  test.each([0, 1])(
+    "starts two empty bullets with main caret %i",
+    async (mainIndex) => {
+      let state = await createState("\n", [0, 1], mainIndex);
+      state = type(state, " ");
+      expect(state.doc.toString()).toBe("- \n- ");
+      expect(carets(state)).toEqual([
+        [1, 2],
+        [2, 2],
+      ]);
+      expect(state.selection.mainIndex).toBe(mainIndex);
+      state = type(state, "x");
+      expect(state.doc.toString()).toBe("- x\n- x");
+      expect(carets(state)).toEqual([
+        [1, 3],
+        [2, 3],
+      ]);
+    },
+  );
+
+  test.each(["#", ">", "`", "-"])(
+    "promotes both empty roots with %p",
+    async (input) => {
+      let state = await createState("- \n\n- ", [2, 6]);
+      state = type(state, input);
+      expect(state.doc.toString()).toBe(`${input}\n\n${input}`);
+      expect(carets(state)).toEqual([
+        [1, 1],
+        [3, 1],
+      ]);
+      if (input === "`") {
+        state = type(state, "`");
+        state = type(state, "`");
+        expect(state.doc.toString()).toBe("```\n\n```");
+        expect(carets(state)).toEqual([
+          [1, 3],
+          [3, 3],
+        ]);
+      } else {
+        state = type(state, " ");
+        expect(state.doc.toString()).toBe(`${input} \n\n${input} `);
+        expect(carets(state)).toEqual([
+          [1, 2],
+          [3, 2],
+        ]);
+      }
+    },
+  );
+
+  test.each(["~~~", "***", "___", "* * *", "_ _ _"])(
+    "promotes two completed %p structures",
+    async (input) => {
+      let state = await createState("- \n\n- ", [2, 6], 1);
+      for (const character of input) state = type(state, character);
+      expect(state.doc.toString()).toBe(`${input}\n\n${input}`);
+      expect(carets(state)).toEqual([
+        [1, input.length],
+        [3, input.length],
+      ]);
+      expect(state.selection.mainIndex).toBe(1);
+    },
+  );
+
+  test.each([
+    {
+      doc: "- \n\t- child\n\n- ",
+      positions: [2, 15],
+      expected: "- #\n\t- child\n\n#",
+      expectedCarets: [
+        [1, 3],
+        [4, 1],
+      ],
+    },
+    {
+      doc: "- root\n\t- \n\n- ",
+      positions: [10, 14],
+      expected: "- root\n\t- #\n\n#",
+      expectedCarets: [
+        [2, 4],
+        [4, 1],
+      ],
+    },
+    {
+      doc: "- [ ] \n\n- ",
+      positions: [6, 10],
+      expected: "- [ ] #\n\n#",
+      expectedCarets: [
+        [1, 7],
+        [3, 1],
+      ],
+    },
+    {
+      doc: "- ```\n\n  ```\n\n- ",
+      positions: [6, 16],
+      expected: "- ```\n  #\n  ```\n\n#",
+      expectedCarets: [
+        [2, 3],
+        [5, 1],
+      ],
+    },
+    {
+      doc: "body\n\n- ",
+      positions: [4, 8],
+      expected: "- body#\n\n#",
+      expectedCarets: [
+        [1, 7],
+        [3, 1],
+      ],
+    },
+    {
+      doc: "- \n\nbody",
+      positions: [2, 8],
+      expected: "#\n\n- body#",
+      expectedCarets: [
+        [1, 1],
+        [3, 7],
+      ],
+    },
+  ])(
+    "keeps row context in $doc",
+    async ({ doc, positions, expected, expectedCarets }) => {
+      let state = await createState(doc, positions);
+      state = type(state, "#");
+      expect(state.doc.toString()).toBe(expected);
+      expect(carets(state)).toEqual(expectedCarets);
+    },
+  );
+
+  test("classifies a changed body row after promoting a fence", async () => {
+    let state = await createState("- ~~\n\nbody", [4, 10]);
+    state = type(state, "~");
+    expect(state.doc.toString()).toBe("~~~\n\nbody~");
+    expect(carets(state)).toEqual([
+      [1, 3],
+      [3, 5],
+    ]);
+  });
+
+  test("starts an empty bullet and corrects another body row together", async () => {
+    let state = await createState("\nbody", [0, 5]);
+    state = type(state, " ");
+    expect(state.doc.toString()).toBe("- \n- body ");
+    expect(carets(state)).toEqual([
+      [1, 2],
+      [2, 7],
+    ]);
+  });
+
+  test("corrects one prefix for multiple carets in a body row", async () => {
+    let state = await createState("abcd", [1, 3]);
+    state = type(state, "#");
+    expect(state.doc.toString()).toBe("- a#bc#d");
+    expect(carets(state)).toEqual([
+      [1, 4],
+      [1, 7],
+    ]);
+  });
+
+  test("does not remove the prefix twice for carets in a structure candidate", async () => {
+    let state = await createState("- **", [3, 4]);
+    state = type(state, "*");
+    expect(state.doc.toString()).toBe("****");
+    expect(carets(state)).toEqual([
+      [1, 2],
+      [1, 4],
+    ]);
+  });
+
+  test("promotes a caret insertion while preserving a replacement selection", async () => {
+    let state = await createState("- \n\n- old", [2, 9]);
+    state = state.update({
+      selection: EditorSelection.create([
+        EditorSelection.cursor(2),
+        EditorSelection.range(6, 9),
+      ]),
+    }).state;
+    state = type(state, "#");
+    expect(state.doc.toString()).toBe("#\n\n- #");
+    expect(carets(state)).toEqual([
+      [1, 1],
+      [3, 3],
+    ]);
+  });
+
+  test.each(["input.paste", "input.type.compose"])(
+    "does not promote %p input",
+    async (userEvent) => {
+      let state = await createState("- \n\n- ", [2, 6]);
+      state = type(state, "#", userEvent);
+      expect(state.doc.toString()).toBe("- #\n\n- #");
+      expect(carets(state)).toEqual([
+        [1, 3],
+        [3, 3],
+      ]);
+    },
+  );
+
+  test("does not promote a multi-character insertion", async () => {
+    let state = await createState("- \n\n- ", [2, 6]);
+    state = type(state, "##");
+    expect(state.doc.toString()).toBe("- ##\n\n- ##");
+    expect(carets(state)).toEqual([
+      [1, 4],
+      [3, 4],
+    ]);
+  });
+
+  test("restores every caret and both promotions through Undo and Redo", async () => {
+    let state = await createState("- \n\n- ", [2, 6], 1);
+    state = type(state, "#");
+    expect(state.doc.toString()).toBe("#\n\n#");
+    const editor = {
+      get state() {
+        return state;
+      },
+      dispatch(transaction: Transaction) {
+        state = transaction.state;
+      },
+    };
+    expect(undo(editor)).toBe(true);
+    expect(state.doc.toString()).toBe("- \n\n- ");
+    expect(carets(state)).toEqual([
+      [1, 2],
+      [3, 2],
+    ]);
+    expect(state.selection.mainIndex).toBe(1);
+    expect(redo(editor)).toBe(true);
+    expect(state.doc.toString()).toBe("#\n\n#");
+    expect(carets(state)).toEqual([
+      [1, 1],
+      [3, 1],
+    ]);
+    state = type(state, " ");
+    state = type(state, "x");
+    expect(state.doc.toString()).toBe("# x\n\n# x");
+    expect(carets(state)).toEqual([
+      [1, 3],
+      [3, 3],
+    ]);
+  });
+});
