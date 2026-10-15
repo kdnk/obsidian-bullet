@@ -121,7 +121,7 @@ export class Parser {
       listLookingPos = parsingStartLine;
     } else if (this.isLineWithIndent(line)) {
       let listLookingPosSearch = parsingStartLine - 1;
-      while (listLookingPosSearch >= 0) {
+      while (listLookingPosSearch >= limitFrom) {
         const line = editor.getLine(listLookingPosSearch);
         if (this.isListItem(line)) {
           listLookingPos = listLookingPosSearch;
@@ -146,7 +146,7 @@ export class Parser {
 
     let listStartLine: number | null = null;
     let listStartLineLookup = listLookingPos;
-    while (listStartLineLookup >= 0) {
+    while (listStartLineLookup >= limitFrom) {
       const line = editor.getLine(listStartLineLookup);
       if (!this.isListItem(line) && !this.isLineWithIndent(line)) {
         break;

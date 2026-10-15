@@ -23,6 +23,49 @@ function makeLogSink() {
 }
 
 describe("parseList", () => {
+  test.each(["  note", "  \n  note", "\t\n\tnote"])(
+    "does not recover a list owner outside the range for %j",
+    (continuation) => {
+      const text = `- parent\n${continuation}`;
+      const editor = makeEditor({ text, cursor: { line: 0, ch: 0 } });
+      const parser = makeParser();
+
+      expect(parser.parseRange(editor, 1).map((root) => root.print())).toEqual(
+        [],
+      );
+      expect(parser.parse(editor)?.print()).toBe(text);
+    },
+  );
+
+  test("starts an in-range child after an out-of-range parent's continuation", () => {
+    const editor = makeEditor({
+      text: "- parent\n  note\n  - child\n    child note",
+      cursor: { line: 0, ch: 0 },
+    });
+    const roots = makeParser().parseRange(editor, 1, 3);
+
+    expect(roots.map((root) => root.print())).toEqual([
+      "  - child\n    child note",
+    ]);
+    expect(roots[0].getContentStart()).toEqual({ line: 2, ch: 0 });
+    expect(roots[0].getContentEnd()).toEqual({ line: 3, ch: 14 });
+  });
+
+  test("does not repeat a list across bounded segments separated by a blank gap", () => {
+    const editor = makeEditor({
+      text: "- parent\n  \n  note",
+      cursor: { line: 0, ch: 0 },
+    });
+    const parser = makeParser();
+    const roots = [
+      ...parser.parseRange(editor, 0, 0),
+      ...parser.parseRange(editor, 2, 2),
+    ];
+
+    expect(roots.map((root) => root.print())).toEqual(["- parent"]);
+    expect(roots[0].getContentEnd()).toEqual({ line: 0, ch: 8 });
+  });
+
   test.each([" \t", "  \t", "   \t"])(
     "treats tab-stop-aligned indent %j as a sibling",
     (indent) => {
