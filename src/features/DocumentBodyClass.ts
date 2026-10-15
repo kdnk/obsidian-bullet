@@ -1,7 +1,8 @@
-import { Plugin } from "obsidian";
+import { EventRef, Plugin } from "obsidian";
 
 export class DocumentBodyClass {
   private documents = new Set<Document>();
+  private events: EventRef[] = [];
 
   constructor(
     private plugin: Plugin,
@@ -10,17 +11,31 @@ export class DocumentBodyClass {
   ) {}
 
   load() {
+    if (this.events.length > 0) {
+      return;
+    }
+
+    const workspace = this.plugin.app.workspace;
+    this.addDocument(workspace.containerEl.ownerDocument);
     this.addDocument(activeDocument);
-    this.plugin.registerEvent(
-      this.plugin.app.workspace.on("window-open", this.handleWindowOpen),
-    );
-    this.plugin.registerEvent(
-      this.plugin.app.workspace.on("window-close", this.handleWindowClose),
-    );
+    workspace.iterateAllLeaves((leaf) => {
+      this.addDocument(leaf.view.containerEl.ownerDocument);
+    });
+    this.events = [
+      workspace.on("window-open", this.handleWindowOpen),
+      workspace.on("window-close", this.handleWindowClose),
+    ];
+    for (const event of this.events) {
+      this.plugin.registerEvent(event);
+    }
   }
 
   unload() {
-    for (const doc of Array.from(this.documents)) {
+    for (const event of this.events) {
+      this.plugin.app.workspace.offref(event);
+    }
+    this.events = [];
+    for (const doc of this.documents) {
       this.removeDocument(doc);
     }
   }

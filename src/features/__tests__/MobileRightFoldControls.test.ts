@@ -54,6 +54,9 @@ function makePlugin() {
   type WorkspaceHandler = (...args: never[]) => void;
   const eventHandlers = new Map<string, WorkspaceHandler[]>();
   const workspace = {
+    containerEl: { ownerDocument: activeDocument },
+    iterateAllLeaves: jest.fn(),
+    offref: jest.fn(),
     on: jest.fn((eventName: string, handler: WorkspaceHandler) => {
       const handlers = eventHandlers.get(eventName) ?? [];
       handlers.push(handler);

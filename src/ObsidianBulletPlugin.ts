@@ -55,7 +55,7 @@ export default class ObsidianBulletPlugin extends Plugin {
       this.changesApplicator,
     );
 
-    this.imeDetector = new IMEDetector();
+    this.imeDetector = new IMEDetector(this);
     await this.imeDetector.load();
 
     const listZoom = new ListZoom(
