@@ -1,6 +1,13 @@
 import { Plugin, editorEditorField } from "obsidian";
 
-import { EditorState, Extension, Transaction } from "@codemirror/state";
+import {
+  Annotation,
+  ChangeSet,
+  EditorState,
+  Extension,
+  Transaction,
+} from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
 
 import { Feature } from "./Feature";
 
@@ -8,6 +15,8 @@ import { BulletTypingPolicy } from "../services/BulletTypingPolicy";
 import { Logger } from "../services/Logger";
 import { MarkdownLineClassifier } from "../services/MarkdownLineClassifier";
 import { Settings } from "../services/Settings";
+
+const correctedNewlineInput = Annotation.define<boolean>();
 
 export class BulletTypingGuard implements Feature {
   private classifier: MarkdownLineClassifier;
@@ -55,6 +64,15 @@ export class BulletTypingGuard implements Feature {
       this.editorExtensions.push(
         this.classifier.extension,
         this.filterExtension,
+        EditorView.updateListener.of((update) => {
+          if (
+            update.transactions.some((transaction) =>
+              transaction.annotation(correctedNewlineInput),
+            )
+          ) {
+            update.view.dispatch({ selection: update.view.state.selection });
+          }
+        }),
       );
     } else {
       this.editorExtensions.splice(0);
@@ -82,10 +100,19 @@ export class BulletTypingGuard implements Feature {
     if (decision.kind === "reject") {
       return {};
     }
+    const corrections = ChangeSet.of(
+      decision.changes,
+      transaction.newDoc.length,
+    );
     return [
       transaction,
       {
-        changes: decision.changes,
+        changes: corrections,
+        selection: transaction.newSelection.map(corrections, 1),
+        annotations:
+          transaction.annotation(Transaction.userEvent) === "input"
+            ? correctedNewlineInput.of(true)
+            : undefined,
         sequential: true,
       },
     ];

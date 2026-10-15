@@ -1,6 +1,6 @@
 import { Plugin, editorEditorField } from "obsidian";
 
-import { history, redo, undo } from "@codemirror/commands";
+import { history, insertNewline, redo, undo } from "@codemirror/commands";
 import {
   Annotation,
   EditorSelection,
@@ -1149,6 +1149,7 @@ describe("BulletTypingGuard selected line joins", () => {
   ])("%s", (userEvent) => {
     test.each([
       { doc: "- alpha\n- beta", from: 4, to: 12, expected: "- alta", caret: 4 },
+      { doc: "- \n- beta", from: 1, to: 7, expected: "- ta", caret: 2 },
       {
         doc: "10. alpha\n* beta",
         from: 6,
@@ -1163,7 +1164,7 @@ describe("BulletTypingGuard selected line joins", () => {
         expected: "10. ta",
         caret: 4,
       },
-      { doc: "10. alpha\n* beta", from: 0, to: 14, expected: "* ta", caret: 0 },
+      { doc: "10. alpha\n* beta", from: 0, to: 14, expected: "* ta", caret: 2 },
       {
         doc: "- alpha\n* middle\n+ beta",
         from: 4,
@@ -1278,7 +1279,7 @@ describe("BulletTypingGuard selected line joins", () => {
         });
         const result = state.update({
           ...state.replaceSelection("\n"),
-          userEvent: "input.type",
+          userEvent: "input",
         }).state;
         expect(result.doc.toString()).toBe(expected);
         expect(result.selection).toEqual(EditorSelection.single(caret));
@@ -1306,7 +1307,7 @@ describe("BulletTypingGuard selected line joins", () => {
       };
       state = state.update({
         ...state.replaceSelection(insert),
-        userEvent: insert ? "input.type" : "delete.cut",
+        userEvent: insert ? "input" : "delete.cut",
       }).state;
       expect(state.doc.toString()).toBe(insert ? "- al\n- ta" : "- alta");
       expect(state.selection.main.head).toBe(insert ? 7 : 4);
@@ -1324,9 +1325,14 @@ describe("BulletTypingGuard selected line joins", () => {
     },
   );
 
-  test.each([0, 1])(
-    "keeps both selected joins and main range %i",
-    async (mainIndex) => {
+  test.each([
+    { mainIndex: 0, insert: "" },
+    { mainIndex: 1, insert: "" },
+    { mainIndex: 0, insert: "\n" },
+    { mainIndex: 1, insert: "\n" },
+  ])(
+    "keeps both selected joins and main range $mainIndex with $insert",
+    async ({ mainIndex, insert }) => {
       const guard = await loadGuard();
       const state = EditorState.create({
         doc: "- alpha\n- beta\n- gamma\n- delta",
@@ -1337,11 +1343,15 @@ describe("BulletTypingGuard selected line joins", () => {
         extensions: [guard, EditorState.allowMultipleSelections.of(true)],
       });
       const result = state.update({
-        ...state.replaceSelection(""),
-        userEvent: "delete.selection",
+        ...state.replaceSelection(insert),
+        userEvent: insert ? "input" : "delete.selection",
       }).state;
-      expect(result.doc.toString()).toBe("- alta\n- gata");
-      expect(result.selection.ranges.map(({ head }) => head)).toEqual([4, 11]);
+      expect(result.doc.toString()).toBe(
+        insert ? "- al\n- ta\n- ga\n- ta" : "- alta\n- gata",
+      );
+      expect(result.selection.ranges.map(({ head }) => head)).toEqual(
+        insert ? [7, 17] : [4, 11],
+      );
       expect(result.selection.mainIndex).toBe(mainIndex);
     },
   );
@@ -1379,4 +1389,34 @@ describe("BulletTypingGuard selected line joins", () => {
     expect(result.doc.toString()).toBe("- al\nta");
     expect(result.selection.main.head).toBe(5);
   });
+});
+
+describe("BulletTypingGuard native newline command", () => {
+  test.each([false, true])(
+    "keeps the suffix editable with reverse selection %p",
+    async (reverse) => {
+      const guard = await loadGuard({ keepCursorWithinContent: "never" });
+      let state = EditorState.create({
+        doc: "- alpha\n- beta",
+        selection: EditorSelection.single(reverse ? 12 : 4, reverse ? 4 : 12),
+        extensions: guard,
+      });
+      expect(
+        insertNewline({
+          state,
+          dispatch(transaction) {
+            state = transaction.state;
+          },
+        }),
+      ).toBe(true);
+      expect(state.doc.toString()).toBe("- al\n- ta");
+      expect(state.selection.main.head).toBe(7);
+      state = state.update({
+        ...state.replaceSelection("X"),
+        userEvent: "input.type",
+      }).state;
+      expect(state.doc.toString()).toBe("- al\n- Xta");
+      expect(state.selection.main.head).toBe(8);
+    },
+  );
 });

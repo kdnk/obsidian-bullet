@@ -142,7 +142,7 @@ export class BulletTypingPolicy {
 
       const mappedLine = getMappedLine(transaction, affected.before);
       if (!mappedLine) {
-        if (this.isValidForwardListJoin(transaction, affected)) {
+        if (this.isValidListJoin(transaction, affected, correctedLineNumbers)) {
           continue;
         }
         return { kind: "reject" };
@@ -157,7 +157,8 @@ export class BulletTypingPolicy {
       if (
         isBackwardLikeDeletion(transaction) &&
         listItem.isPlainEmpty &&
-        !listItem.hasOwnedFollowingLine
+        !listItem.hasOwnedFollowingLine &&
+        mappedLine.contentStart === mappedLine.to
       ) {
         const removal = getEmptyLeafRemoval(transaction, mappedLine);
         if (!removal) {
@@ -214,15 +215,15 @@ export class BulletTypingPolicy {
       : { kind: "pass" };
   }
 
-  private isValidForwardListJoin(
+  private isValidListJoin(
     transaction: Transaction,
     affected: AffectedPrefix,
+    correctedLineNumbers: ReadonlySet<number>,
   ): boolean {
     const [range] = affected.ranges;
     if (
-      !transaction.isUserEvent("delete.forward") ||
-      range.fromBefore !== affected.before.from - 1 ||
-      range.toBefore !== affected.before.from
+      range.fromBefore >= affected.before.from ||
+      range.toBefore < affected.before.from
     ) {
       return false;
     }
@@ -230,8 +231,9 @@ export class BulletTypingPolicy {
     const joinedPosition = transaction.changes.mapPos(affected.before.from, -1);
     const joinedLine = transaction.newDoc.lineAt(joinedPosition);
     return (
+      correctedLineNumbers.has(joinedLine.number) ||
       this.classifier.classify(transaction.state, joinedLine.number) ===
-      "list-item"
+        "list-item"
     );
   }
 
@@ -403,8 +405,24 @@ export class BulletTypingPolicy {
 function isSupportedUserEvent(transaction: Transaction): boolean {
   return (
     transaction.isUserEvent("input.type") ||
+    isNewlineInput(transaction) ||
     deletionUserEvents.some((event) => transaction.isUserEvent(event))
   );
+}
+
+function isNewlineInput(transaction: Transaction): boolean {
+  if (transaction.annotation(Transaction.userEvent) !== "input") {
+    return false;
+  }
+
+  let onlyNewlines = true;
+  transaction.changes.iterChanges(
+    (_fromBefore, _toBefore, _fromAfter, _toAfter, inserted) => {
+      onlyNewlines &&= /^\n[ \t]*$/.test(inserted.toString());
+    },
+    true,
+  );
+  return onlyNewlines;
 }
 
 function isDeletionUserEvent(transaction: Transaction): boolean {
@@ -570,8 +588,7 @@ function getChangedLineNumbers(transaction: Transaction): number[] {
   transaction.changes.iterChangedRanges(
     (_fromBefore, _toBefore, fromAfter, toAfter) => {
       const firstLine = transaction.newDoc.lineAt(fromAfter).number;
-      const lastChangedPosition = toAfter > fromAfter ? toAfter - 1 : fromAfter;
-      const lastLine = transaction.newDoc.lineAt(lastChangedPosition).number;
+      const lastLine = transaction.newDoc.lineAt(toAfter).number;
 
       for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++) {
         lineNumbers.add(lineNumber);

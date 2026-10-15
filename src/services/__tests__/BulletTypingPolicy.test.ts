@@ -841,3 +841,46 @@ describe("BulletTypingPolicy selected deletion ownership", () => {
     expect(policy.decide(transaction)).toEqual({ kind: "reject" });
   });
 });
+
+describe("BulletTypingPolicy native newline annotations", () => {
+  test.each([
+    { insert: "\n", expected: "- pl\n- ain" },
+    { insert: "\n\t", expected: "- pl\n- \tain" },
+    { insert: "\n  ", expected: "- pl\n-   ain" },
+  ])("adopts native input suffix for $insert", ({ insert, expected }) => {
+    const transaction = makeTransaction(
+      "plain",
+      { from: 2, insert },
+      "input",
+      2,
+    );
+    expect(applyCorrection(transaction, policy.decide(transaction))).toBe(
+      expected,
+    );
+  });
+
+  test.each(["text", " ", "\t", "\ntext", "\n\n", ""])(
+    "leaves generic input %p outside the newline gate",
+    (insert) => {
+      const transaction = makeTransaction(
+        "plain",
+        { from: 2, to: 3, insert },
+        "input",
+        2,
+      );
+      expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+    },
+  );
+
+  test("excludes generic input with a newline and an unrelated text edit", () => {
+    const transaction = makeTransaction(
+      "plain\nbody",
+      [
+        { from: 2, insert: "\n" },
+        { from: 9, insert: "x" },
+      ],
+      "input",
+    );
+    expect(policy.decide(transaction)).toEqual({ kind: "pass" });
+  });
+});
