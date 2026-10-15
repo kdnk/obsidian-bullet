@@ -1138,3 +1138,245 @@ describe("BulletTypingGuard multiple carets", () => {
     ]);
   });
 });
+
+describe("BulletTypingGuard selected line joins", () => {
+  describe.each([
+    "delete.backward",
+    "delete.forward",
+    "delete.selection",
+    "delete.cut",
+    "input.type",
+  ])("%s", (userEvent) => {
+    test.each([
+      { doc: "- alpha\n- beta", from: 4, to: 12, expected: "- alta", caret: 4 },
+      {
+        doc: "10. alpha\n* beta",
+        from: 6,
+        to: 14,
+        expected: "10. alta",
+        caret: 6,
+      },
+      {
+        doc: "10. alpha\n* beta",
+        from: 1,
+        to: 14,
+        expected: "10. ta",
+        caret: 4,
+      },
+      { doc: "10. alpha\n* beta", from: 0, to: 14, expected: "* ta", caret: 0 },
+      {
+        doc: "- alpha\n* middle\n+ beta",
+        from: 4,
+        to: 21,
+        expected: "- alta",
+        caret: 4,
+      },
+      {
+        doc: "- parent\n\t- alpha\n\t- beta",
+        from: 14,
+        to: 23,
+        expected: "- parent\n\t- alta",
+        caret: 14,
+      },
+      { doc: "- alpha\n- beta", from: 0, to: 8, expected: "- beta", caret: 0 },
+      { doc: "- alpha\n- beta", from: 0, to: 14, expected: "", caret: 0 },
+    ])(
+      "joins $doc from $from to $to",
+      async ({ doc, from, to, expected, caret }) => {
+        const guard = await loadGuard();
+        for (const reverse of [false, true]) {
+          const state = EditorState.create({
+            doc,
+            selection: EditorSelection.single(
+              reverse ? to : from,
+              reverse ? from : to,
+            ),
+            extensions: guard,
+          });
+          const result = state.update({
+            ...state.replaceSelection(""),
+            userEvent,
+          }).state;
+          expect(result.doc.toString()).toBe(expected);
+          expect(result.selection).toEqual(EditorSelection.single(caret));
+        }
+      },
+    );
+  });
+
+  test.each([
+    {
+      doc: "- alpha\n- beta",
+      from: 4,
+      to: 12,
+      expected: "- al\n- ta",
+      caret: 7,
+    },
+    { doc: "plain", from: 2, to: 2, expected: "- pl\n- ain", caret: 7 },
+    { doc: "- alpha", from: 7, to: 7, expected: "- alpha\n", caret: 8 },
+    {
+      doc: "- alpha\n\t- beta",
+      from: 4,
+      to: 8,
+      expected: "- al\n\t- beta",
+      caret: 5,
+    },
+    {
+      doc: "- alpha\n  continuation",
+      from: 4,
+      to: 8,
+      expected: "- al\n  continuation",
+      caret: 5,
+    },
+    {
+      doc: "```\nalpha\n```",
+      from: 6,
+      to: 6,
+      expected: "```\nal\npha\n```",
+      caret: 7,
+    },
+    {
+      doc: "---\nkey: value\n---",
+      from: 8,
+      to: 8,
+      expected: "---\nkey:\n value\n---",
+      caret: 9,
+    },
+    {
+      doc: "- alpha\n# heading",
+      from: 4,
+      to: 8,
+      expected: "- al\n# heading",
+      caret: 5,
+    },
+    {
+      doc: "- alpha\n> quote",
+      from: 4,
+      to: 8,
+      expected: "- al\n> quote",
+      caret: 5,
+    },
+    {
+      doc: "- alpha\n| a |\n| - |",
+      from: 4,
+      to: 8,
+      expected: "- al\n| a |\n| - |",
+      caret: 5,
+    },
+  ])(
+    "classifies the newline suffix in $doc",
+    async ({ doc, from, to, expected, caret }) => {
+      const guard = await loadGuard();
+      for (const reverse of [false, true]) {
+        const state = EditorState.create({
+          doc,
+          selection: EditorSelection.single(
+            reverse ? to : from,
+            reverse ? from : to,
+          ),
+          extensions: guard,
+        });
+        const result = state.update({
+          ...state.replaceSelection("\n"),
+          userEvent: "input.type",
+        }).state;
+        expect(result.doc.toString()).toBe(expected);
+        expect(result.selection).toEqual(EditorSelection.single(caret));
+      }
+    },
+  );
+
+  test.each(["", "\n"])(
+    "restores directional selection and corrected %p through history",
+    async (insert) => {
+      const guard = await loadGuard();
+      const selection = EditorSelection.single(12, 4);
+      let state = EditorState.create({
+        doc: "- alpha\n- beta",
+        selection,
+        extensions: [guard, history()],
+      });
+      const editor = {
+        get state() {
+          return state;
+        },
+        dispatch(transaction: Transaction) {
+          state = transaction.state;
+        },
+      };
+      state = state.update({
+        ...state.replaceSelection(insert),
+        userEvent: insert ? "input.type" : "delete.cut",
+      }).state;
+      expect(state.doc.toString()).toBe(insert ? "- al\n- ta" : "- alta");
+      expect(state.selection.main.head).toBe(insert ? 7 : 4);
+      expect(undo(editor)).toBe(true);
+      expect(state.doc.toString()).toBe("- alpha\n- beta");
+      expect(state.selection).toEqual(selection);
+      expect(redo(editor)).toBe(true);
+      expect(state.doc.toString()).toBe(insert ? "- al\n- ta" : "- alta");
+      state = state.update({
+        ...state.replaceSelection("X"),
+        userEvent: "input.type",
+      }).state;
+      expect(state.doc.toString()).toBe(insert ? "- al\n- Xta" : "- alXta");
+      expect(state.selection.main.head).toBe(insert ? 8 : 5);
+    },
+  );
+
+  test.each([0, 1])(
+    "keeps both selected joins and main range %i",
+    async (mainIndex) => {
+      const guard = await loadGuard();
+      const state = EditorState.create({
+        doc: "- alpha\n- beta\n- gamma\n- delta",
+        selection: EditorSelection.create(
+          [EditorSelection.range(12, 4), EditorSelection.range(28, 19)],
+          mainIndex,
+        ),
+        extensions: [guard, EditorState.allowMultipleSelections.of(true)],
+      });
+      const result = state.update({
+        ...state.replaceSelection(""),
+        userEvent: "delete.selection",
+      }).state;
+      expect(result.doc.toString()).toBe("- alta\n- gata");
+      expect(result.selection.ranges.map(({ head }) => head)).toEqual([4, 11]);
+      expect(result.selection.mainIndex).toBe(mainIndex);
+    },
+  );
+
+  test("keeps an independent body deletion alongside a selected join", async () => {
+    const guard = await loadGuard();
+    const state = EditorState.create({
+      doc: "- alpha\n- beta\n- gamma",
+      selection: EditorSelection.create(
+        [EditorSelection.range(4, 12), EditorSelection.range(18, 20)],
+        1,
+      ),
+      extensions: [guard, EditorState.allowMultipleSelections.of(true)],
+    });
+    const result = state.update({
+      ...state.replaceSelection(""),
+      userEvent: "delete.backward",
+    }).state;
+    expect(result.doc.toString()).toBe("- alta\n- gma");
+    expect(result.selection.ranges.map(({ head }) => head)).toEqual([4, 10]);
+    expect(result.selection.mainIndex).toBe(1);
+  });
+
+  test("keeps native multiline Enter when the guard is disabled", async () => {
+    const guard = await loadGuard({ keepBodyTextInBullets: false });
+    const state = EditorState.create({
+      doc: "- alpha\n- beta",
+      selection: EditorSelection.single(4, 12),
+      extensions: guard,
+    });
+    const result = state.update({
+      ...state.replaceSelection("\n"),
+      userEvent: "input.type",
+    }).state;
+    expect(result.doc.toString()).toBe("- al\nta");
+    expect(result.selection.main.head).toBe(5);
+  });
+});

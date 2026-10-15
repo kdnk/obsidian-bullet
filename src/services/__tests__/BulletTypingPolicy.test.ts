@@ -816,3 +816,28 @@ describe("BulletTypingPolicy", () => {
     expect(sink).toHaveBeenCalledWith("bulletTypingPolicy", error);
   });
 });
+
+describe("BulletTypingPolicy selected deletion ownership", () => {
+  test.each([
+    { doc: "plain\n- item", from: 5, to: 8 },
+    { doc: "# title\n- item", from: 5, to: 10 },
+    { doc: "> quote\n- item", from: 5, to: 10 },
+  ])("rejects a join without a list owner in $doc", ({ doc, from, to }) => {
+    const transaction = makeTransaction(
+      doc,
+      { from, to },
+      "delete.cut",
+      EditorSelection.single(from, to),
+    );
+    expect(policy.decide(transaction)).toEqual({ kind: "reject" });
+  });
+
+  test("rejects a competing prefix even alongside a valid selected join", () => {
+    const transaction = makeMultiRangeDeletion("- alpha\n- beta\n10. item", [
+      { from: 4, to: 12 },
+      { from: 15, to: 16 },
+      { from: 17, to: 18 },
+    ]);
+    expect(policy.decide(transaction)).toEqual({ kind: "reject" });
+  });
+});
