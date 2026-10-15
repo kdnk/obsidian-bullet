@@ -263,7 +263,7 @@ describe("empty leaf item removal", () => {
     expect(root.getCursor()).toEqual({ line: 0, ch: 10 });
   });
 
-  test("moves to a visible folded item instead of its hidden descendant", () => {
+  test("reveals a folded item before removing its following empty sibling", () => {
     const root = makeRoot({
       editor: makeEditor({
         text: "- parent\n  - hidden child\n- ",
@@ -279,8 +279,14 @@ describe("empty leaf item removal", () => {
     ).perform();
 
     expect(outcome).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe("- parent\n  - hidden child\n- ");
+    expect(root.getCursor()).toEqual({ line: 2, ch: 2 });
+    expect(root.getChildren()[0].isFoldRoot()).toBe(false);
+    expect(
+      new DeleteTillPreviousLineContentEnd(root, true, true).perform(),
+    ).toEqual(UPDATED_OUTCOME);
     expect(root.print()).toBe("- parent\n  - hidden child");
-    expect(root.getCursor()).toEqual({ line: 0, ch: 8 });
+    expect(root.getCursor()).toEqual({ line: 1, ch: 16 });
   });
 
   test("recalculates ordered markers after removing the first item", () => {
@@ -490,5 +496,108 @@ test("retains code columns when merging into a wider ordered continuation", () =
   expect(root.print()).toBe(
     "10. parent\n    priorchild\n    ```js\n\t  foo\n\n    ```",
   );
+  expect(root.getCursor()).toEqual({ line: 1, ch: 9 });
+});
+
+test.each([
+  {
+    text: "- parent\n  - child\n- next",
+    joined: "- parent\n  - childnext",
+    ch: 9,
+  },
+  { text: "- parent\n  note\n- next", joined: "- parent\n  notenext", ch: 6 },
+])(
+  "reveals the hidden previous row before joining: $text",
+  ({ text, joined, ch }) => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text,
+        cursor: { line: 2, ch: 2 },
+        getAllFoldedLines: () => [0],
+      }),
+    });
+    const op = new DeleteTillPreviousLineContentEnd(root, true, true);
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe(text);
+    expect(root.getCursor()).toEqual({ line: 2, ch: 2 });
+    expect(root.getChildren()[0].isFoldRoot()).toBe(false);
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe(joined);
+    expect(root.getCursor()).toEqual({ line: 1, ch });
+  },
+);
+
+test("reveals nested folds separately before joining hidden descendants", () => {
+  const text = "- parent\n  - child\n    - grandchild\n- next";
+  const root = makeRoot({
+    editor: makeEditor({
+      text,
+      cursor: { line: 3, ch: 2 },
+      getAllFoldedLines: () => [0, 1],
+    }),
+  });
+  const op = new DeleteTillPreviousLineContentEnd(root, true, true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
+  expect(root.print()).toBe(text);
+  expect(root.getCursor()).toEqual({ line: 3, ch: 2 });
+  expect(root.getChildren()[0].isFoldRoot()).toBe(false);
+  expect(root.getChildren()[0].getChildren()[0].isFoldRoot()).toBe(true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
+  expect(root.print()).toBe(text);
+  expect(root.getCursor()).toEqual({ line: 3, ch: 2 });
+  expect(root.getChildren()[0].getChildren()[0].isFoldRoot()).toBe(false);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
+  expect(root.print()).toBe("- parent\n  - child\n    - grandchildnext");
+  expect(root.getCursor()).toEqual({ line: 2, ch: 16 });
+});
+
+test("does not reveal a previous fold for deletion inside visible text", () => {
+  const text = "- parent\n  - child\n- next";
+  const root = makeRoot({
+    editor: makeEditor({
+      text,
+      cursor: { line: 2, ch: 4 },
+      getAllFoldedLines: () => [0],
+    }),
+  });
+  expect(
+    new DeleteTillPreviousLineContentEnd(root, true, true).perform(),
+  ).toEqual(NO_OP_OUTCOME);
+  expect(root.print()).toBe(text);
+  expect(root.getCursor()).toEqual({ line: 2, ch: 4 });
+  expect(root.getChildren()[0].isFoldRoot()).toBe(true);
+});
+
+test("joins a visible previous header without treating the header itself as hidden", () => {
+  const root = makeRoot({
+    editor: makeEditor({
+      text: "- parent\n- next",
+      cursor: { line: 1, ch: 2 },
+      getAllFoldedLines: () => [0],
+    }),
+  });
+  expect(
+    new DeleteTillPreviousLineContentEnd(root, true, true).perform(),
+  ).toEqual(UPDATED_OUTCOME);
+  expect(root.print()).toBe("- parentnext");
+  expect(root.getCursor()).toEqual({ line: 0, ch: 8 });
+});
+
+test("reveals a hidden previous row before removing a bare empty marker", () => {
+  const text = "- parent\n  - child\n-";
+  const root = makeRoot({
+    editor: makeEditor({
+      text,
+      cursor: { line: 2, ch: 1 },
+      getAllFoldedLines: () => [0],
+    }),
+  });
+  const op = new DeleteTillPreviousLineContentEnd(root, true, true);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
+  expect(root.print()).toBe(text);
+  expect(root.getCursor()).toEqual({ line: 2, ch: 1 });
+  expect(root.getChildren()[0].isFoldRoot()).toBe(false);
+  expect(op.perform()).toEqual(UPDATED_OUTCOME);
+  expect(root.print()).toBe("- parent\n  - child");
   expect(root.getCursor()).toEqual({ line: 1, ch: 9 });
 });

@@ -171,3 +171,62 @@ test("preserves partial tabs and physical blank rows when merging items", () => 
   expect(root.print()).toBe("- prevtitle\n  ```js\n\tfoo\n\n  ```");
   expect(root.getCursor()).toEqual({ line: 0, ch: 6 });
 });
+
+test.each([
+  { text: "- parent\n  - child\n- next", joined: "- parentchild\n- next" },
+  { text: "- parent\n  note\n- next", joined: "- parentnote\n- next" },
+])(
+  "reveals hidden content before deleting its boundary: $text",
+  ({ text, joined }) => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text,
+        cursor: { line: 0, ch: 8 },
+        getAllFoldedLines: () => [0],
+      }),
+    });
+    const op = new DeleteTillNextLineContentStart(root, true);
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe(text);
+    expect(root.getCursor()).toEqual({ line: 0, ch: 8 });
+    expect(root.getChildren()[0].isFoldRoot()).toBe(false);
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe(joined);
+    expect(root.getCursor()).toEqual({ line: 0, ch: 8 });
+  },
+);
+
+test("preserves independent child folds when revealing a parent", () => {
+  const text = "- parent\n  - child\n    - grandchild\n- next";
+  const root = makeRoot({
+    editor: makeEditor({
+      text,
+      cursor: { line: 0, ch: 8 },
+      getAllFoldedLines: () => [0, 1],
+    }),
+  });
+  expect(new DeleteTillNextLineContentStart(root, true).perform()).toEqual(
+    UPDATED_OUTCOME,
+  );
+  expect(root.print()).toBe(text);
+  expect(root.getCursor()).toEqual({ line: 0, ch: 8 });
+  expect(root.getChildren()[0].isFoldRoot()).toBe(false);
+  expect(root.getChildren()[0].getChildren()[0].isFoldRoot()).toBe(true);
+});
+
+test("does not reveal a fold for deletion inside visible text", () => {
+  const text = "- parent\n  - child";
+  const root = makeRoot({
+    editor: makeEditor({
+      text,
+      cursor: { line: 0, ch: 4 },
+      getAllFoldedLines: () => [0],
+    }),
+  });
+  expect(new DeleteTillNextLineContentStart(root, true).perform()).toEqual(
+    NO_OP_OUTCOME,
+  );
+  expect(root.print()).toBe(text);
+  expect(root.getCursor()).toEqual({ line: 0, ch: 4 });
+  expect(root.getChildren()[0].isFoldRoot()).toBe(true);
+});

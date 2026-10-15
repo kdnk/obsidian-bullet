@@ -9,19 +9,19 @@ export class ChangesApplicator {
     isListInsertion = false,
   ) {
     const changes = this.calculateChanges(editor, prevRoot, newRoot);
+    const { unfold, fold } = this.calculateFoldingOperations(
+      prevRoot,
+      newRoot,
+      changes ? [changes.changeFrom, changes.changeTo] : null,
+    );
+
+    for (const line of unfold) {
+      editor.unfold(line);
+    }
+
+    let acceptedSelections = newRoot.getSelections();
     if (changes) {
       const { replacement, changeFrom, changeTo } = changes;
-
-      const { unfold, fold } = this.calculateFoldingOprations(
-        prevRoot,
-        newRoot,
-        changeFrom,
-        changeTo,
-      );
-
-      for (const line of unfold) {
-        editor.unfold(line);
-      }
 
       editor.replaceRange(
         replacement,
@@ -34,12 +34,12 @@ export class ChangesApplicator {
       // Preserve any selection corrected by a transaction filter. Recording
       // that accepted position after the edit also gives Obsidian's bundled
       // history its redo destination and keeps refolds away from the cursor.
-      const acceptedSelections = editor.listSelections();
-      for (const line of fold) {
-        editor.fold(line);
-      }
-      editor.setSelections(acceptedSelections);
-    } else editor.setSelections(newRoot.getSelections());
+      acceptedSelections = editor.listSelections();
+    }
+    for (const line of fold) {
+      editor.fold(line);
+    }
+    editor.setSelections(acceptedSelections);
   }
 
   private calculateChanges(editor: MyEditor, prevRoot: Root, newRoot: Root) {
@@ -104,14 +104,11 @@ export class ChangesApplicator {
     };
   }
 
-  private calculateFoldingOprations(
+  private calculateFoldingOperations(
     prevRoot: Root,
     newRoot: Root,
-    changeFrom: Position,
-    changeTo: Position,
+    changedRange: [Position, Position] | null,
   ) {
-    const changedRange: [Position, Position] = [changeFrom, changeTo];
-
     const prevLists = getAllChildren(prevRoot);
     const newLists = getAllChildren(newRoot);
 
@@ -129,12 +126,17 @@ export class ChangesApplicator {
         continue;
       }
 
+      if (!newList.isFoldRoot()) {
+        unfold.push(prevList.getFirstLineContentStart().line);
+        continue;
+      }
+
       const prevListRange: [Position, Position] = [
         prevList.getFirstLineContentStart(),
         prevList.getContentEndIncludingChildren(),
       ];
 
-      if (isRangesIntersects(prevListRange, changedRange)) {
+      if (changedRange && isRangesIntersects(prevListRange, changedRange)) {
         unfold.push(prevList.getFirstLineContentStart().line);
         fold.push(newList.getFirstLineContentStart().line);
       }

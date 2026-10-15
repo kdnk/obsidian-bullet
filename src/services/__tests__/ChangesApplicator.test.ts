@@ -1,5 +1,6 @@
 import { makeEditor, makeRoot } from "../../__mocks__";
 import { MyEditor } from "../../editor";
+import { DeleteTillPreviousLineContentEnd } from "../../operations/DeleteTillPreviousLineContentEnd";
 import { List, Root } from "../../root";
 import { ChangesApplicator } from "../ChangesApplicator";
 
@@ -103,6 +104,33 @@ describe("changesApplicator", () => {
   });
 });
 
+test("reveals only the outer fold without replacing text or moving the cursor", () => {
+  const text = "- parent\n  - child\n    - grandchild\n- next";
+  const { actions, editor, prevRoot, newRoot } = makeArgs({
+    editor: makeEditor({
+      text,
+      cursor: { line: 3, ch: 2 },
+      getAllFoldedLines: () => [0, 1],
+    }),
+    changes: (root) => {
+      new DeleteTillPreviousLineContentEnd(root, true, true).perform();
+    },
+  });
+  new ChangesApplicator().apply(editor, prevRoot, newRoot);
+  expect(newRoot.print()).toBe(text);
+  expect(actions).toEqual([
+    ["getRange", { line: 0, ch: 0 }, { line: 3, ch: 6 }],
+    ["unfold", 0],
+    [
+      "setSelections",
+      [{ anchor: { line: 3, ch: 2 }, head: { line: 3, ch: 2 } }],
+    ],
+  ]);
+  expect(prevRoot.getChildren()[0].isFoldRoot()).toBe(true);
+  expect(newRoot.getChildren()[0].isFoldRoot()).toBe(false);
+  expect(newRoot.getChildren()[0].getChildren()[0].isFoldRoot()).toBe(true);
+});
+
 function makeArgs(opts: {
   editor: MyEditor;
   changes: (root: Root) => void;
@@ -142,3 +170,71 @@ function makeArgs(opts: {
     newRoot,
   };
 }
+
+test("keeps a requested unfold when the same update also changes text", () => {
+  const { actions, editor, prevRoot, newRoot } = makeArgs({
+    editor: makeEditor({
+      text: "- parent\n  - child\n- next",
+      cursor: { line: 2, ch: 2 },
+      getAllFoldedLines: () => [0],
+    }),
+    changes: (root) => {
+      const parent = root.getChildren()[0];
+      parent.unfold();
+      parent.replaceLines(["updated"]);
+    },
+  });
+  new ChangesApplicator().apply(editor, prevRoot, newRoot);
+  expect(newRoot.print()).toBe("- updated\n  - child\n- next");
+  expect(actions).toEqual([
+    ["getRange", { line: 0, ch: 0 }, { line: 2, ch: 6 }],
+    ["unfold", 0],
+    [
+      "replaceRange",
+      "- updated",
+      { line: 0, ch: 0 },
+      { line: 0, ch: 8 },
+      [{ anchor: { line: 2, ch: 2 }, head: { line: 2, ch: 2 } }],
+      false,
+    ],
+    [
+      "setSelections",
+      [{ anchor: { line: 2, ch: 2 }, head: { line: 2, ch: 2 } }],
+    ],
+  ]);
+});
+
+test("retains the editor's accepted selection after a text edit and refold", () => {
+  const { actions, editor, prevRoot, newRoot } = makeArgs({
+    editor: makeEditor({
+      text: "- parent\n  - child\n- next",
+      cursor: { line: 2, ch: 2 },
+      getAllFoldedLines: () => [0],
+    }),
+    changes: (root) => {
+      root.getChildren()[0].replaceLines(["updated"]);
+    },
+  });
+  editor.listSelections = () => [
+    { anchor: { line: 2, ch: 4 }, head: { line: 2, ch: 4 } },
+  ];
+  new ChangesApplicator().apply(editor, prevRoot, newRoot);
+  expect(newRoot.print()).toBe("- updated\n  - child\n- next");
+  expect(actions).toEqual([
+    ["getRange", { line: 0, ch: 0 }, { line: 2, ch: 6 }],
+    ["unfold", 0],
+    [
+      "replaceRange",
+      "- updated",
+      { line: 0, ch: 0 },
+      { line: 0, ch: 8 },
+      [{ anchor: { line: 2, ch: 2 }, head: { line: 2, ch: 2 } }],
+      false,
+    ],
+    ["fold", 0],
+    [
+      "setSelections",
+      [{ anchor: { line: 2, ch: 4 }, head: { line: 2, ch: 4 } }],
+    ],
+  ]);
+});

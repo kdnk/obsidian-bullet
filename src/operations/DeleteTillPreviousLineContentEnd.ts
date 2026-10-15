@@ -45,6 +45,15 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
       cursor.ch === firstLine.to.ch &&
       isEmptyLineOrEmptyCheckbox(firstLine.text);
 
+    if (lineNo >= 0 || syntheticContentStartMatch) {
+      const previousLine = cursor.line - 1;
+      const fold = root.getListUnderLine(previousLine)?.getTopFoldRoot();
+      if (fold && previousLine > fold.getFirstLineContentStart().line) {
+        fold.unfold();
+        return UPDATED_OUTCOME;
+      }
+    }
+
     if (
       (lineNo === 0 || syntheticContentStartMatch) &&
       this.removeEmptyLeafItem &&

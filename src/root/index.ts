@@ -310,6 +310,10 @@ export class List {
     return this.foldRoot;
   }
 
+  unfold() {
+    this.foldRoot = false;
+  }
+
   getTopFoldRoot(): List | null {
     const parentFoldRoot: List | null = this.parent?.getTopFoldRoot() ?? null;
     if (parentFoldRoot) {

@@ -1,5 +1,5 @@
 import { DeleteTillPreviousLineContentEnd } from "./DeleteTillPreviousLineContentEnd";
-import { NO_OP_OUTCOME, Operation } from "./Operation";
+import { NO_OP_OUTCOME, Operation, UPDATED_OUTCOME } from "./Operation";
 
 import { Root } from "../root";
 
@@ -28,6 +28,15 @@ export class DeleteTillNextLineContentStart implements Operation {
     const lineNo = lines.findIndex(
       (l) => cursor.ch === l.to.ch && cursor.line === l.to.line,
     );
+
+    if (lineNo >= 0) {
+      const nextLine = cursor.line + 1;
+      const fold = root.getListUnderLine(nextLine)?.getTopFoldRoot();
+      if (fold && nextLine > fold.getFirstLineContentStart().line) {
+        fold.unfold();
+        return UPDATED_OUTCOME;
+      }
+    }
 
     if (lineNo === lines.length - 1) {
       const nextLine = lines[lineNo].to.line + 1;
