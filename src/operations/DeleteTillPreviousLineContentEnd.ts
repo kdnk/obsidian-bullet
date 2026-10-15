@@ -110,10 +110,10 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
       ch: lines[prevLineNo].text.length + lines[prevLineNo].from.ch,
     });
 
-    lines[prevLineNo].text += lines[lineNo].text;
-    lines.splice(lineNo, 1);
-
-    list.replaceLines(lines.map((l) => l.text));
+    list.spliceRows(prevLineNo, 2, {
+      ...list.getRow(prevLineNo),
+      text: lines[prevLineNo].text + lines[lineNo].text,
+    });
     return UPDATED_OUTCOME;
   }
 

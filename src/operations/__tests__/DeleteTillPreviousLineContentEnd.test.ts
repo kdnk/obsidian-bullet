@@ -418,12 +418,19 @@ describe("empty leaf item removal", () => {
 });
 
 test("keeps a partial tab and the insertion point when joining code rows", () => {
-  const root = makeRoot({editor: makeEditor({text: "- ```js\n\tfoo\n  BAR\n  ```", cursor: {line: 2, ch: 2}})});
-  expect(new DeleteTillPreviousLineContentEnd(root, true, false).perform()).toEqual(UPDATED_OUTCOME);
+  const root = makeRoot({
+    editor: makeEditor({
+      text: "- ```js\n\tfoo\n  BAR\n  ```",
+      cursor: { line: 2, ch: 2 },
+    }),
+  });
+  expect(
+    new DeleteTillPreviousLineContentEnd(root, true, false).perform(),
+  ).toEqual(UPDATED_OUTCOME);
   expect(root.print()).toBe("- ```js\n\tfooBAR\n  ```");
-  expect(root.getCursor()).toEqual({line: 1, ch: 4});
+  expect(root.getCursor()).toEqual({ line: 1, ch: 4 });
   const rows = root.print().split("\n");
-  const {line, ch} = root.getCursor();
+  const { line, ch } = root.getCursor();
   rows[line] = rows[line].slice(0, ch) + "X" + rows[line].slice(ch);
   expect(rows.join("\n")).toBe("- ```js\n\tfooXBAR\n  ```");
 });

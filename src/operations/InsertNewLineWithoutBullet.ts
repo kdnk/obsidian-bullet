@@ -38,15 +38,16 @@ export class InsertNewLineWithoutBullet implements Operation {
     const lineText = lineUnderCursor.text;
     const left = lineText.slice(0, selection.from - lineUnderCursor.from.ch);
     const right = lineText.slice(selection.to - lineUnderCursor.from.ch);
-    const newLines = list.getLines();
-
-    newLines.splice(lineIndex, 1, left, right);
-
-    if (!list.getNotesIndent()) {
+    if (list.getNotesIndent() === null) {
       list.setNotesIndent(this.createNotesIndent(list));
     }
 
-    list.replaceLines(newLines);
+    list.spliceRows(
+      lineIndex,
+      1,
+      { ...list.getRow(lineIndex), text: left },
+      { text: right, indentOverride: null },
+    );
 
     root.replaceCursor({
       line: cursor.line + 1,

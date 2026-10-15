@@ -1,5 +1,6 @@
 import { Plugin } from "obsidian";
 
+import { history, redo, undo } from "@codemirror/commands";
 import {
   Annotation,
   EditorSelection,
@@ -478,31 +479,132 @@ describe("BulletTypingGuard", () => {
 });
 
 describe("typing on a physical blank code row", () => {
-  test.each([
-    {doc: "- ```js\n\n  ```", line: 2, prefix: "  "},
-    {doc: "- item\n  ```js\n\n  ```", line: 3, prefix: "  "},
-    {doc: "- [ ] item\n  ```js\n\n  ```", line: 3, prefix: "  "},
-    {doc: "\t- ```js\n\n\t  ```", line: 2, prefix: "\t  "},
-    {doc: "```js\n\n```", line: 2, prefix: ""},
-  ])("retains code ownership through successive typing in $doc", async ({doc, line, prefix}) => {
+  test("keeps simultaneous typing on an existing code row inside its fence", async () => {
     const guard = await loadGuard();
-    let state = EditorState.create({doc, extensions: guard});
-    const from = state.doc.line(line).from;
-    for (const [index, value] of ["x", "y"].entries()) {
-      const pos = index === 0 ? from : state.selection.main.head;
-      state = state.update({changes: {from: pos, insert: value}, selection: {anchor: pos + 1}, userEvent: "input.type"}).state;
-      const expected = doc.split("\n");
-      expected[line - 1] = prefix + (index === 0 ? "x" : "xy");
-      expect(state.doc.toString()).toBe(expected.join("\n"));
-      expect(state.selection.main.head).toBe(from + prefix.length + index + 1);
-    }
+    const state = EditorState.create({
+      doc: "- ```js\n\n  hello\n  ```",
+      extensions: guard,
+    });
+    const transaction = state.update({
+      changes: [
+        { from: state.doc.line(2).from, insert: "x" },
+        { from: state.doc.line(3).to, insert: "x" },
+      ],
+      userEvent: "input.type",
+    });
+
+    expect(transaction.newDoc.toString()).toBe("- ```js\n  x\n  hellox\n  ```");
   });
+
+  test("repairs blank code rows and outside body typing in one undoable transaction", async () => {
+    const guard = await loadGuard();
+    const doc = "- ```js\n\n\n  ```\n\n";
+    let state = EditorState.create({
+      doc,
+      extensions: [
+        guard,
+        history(),
+        EditorState.allowMultipleSelections.of(true),
+      ],
+    });
+    const positions = [8, 9, 17];
+    state = state.update({
+      changes: positions.map((from) => ({ from, insert: "x" })),
+      selection: EditorSelection.create(
+        positions.map((from, index) =>
+          EditorSelection.cursor(from + index + 1),
+        ),
+      ),
+      userEvent: "input.type",
+    }).state;
+    const expected = "- ```js\n  x\n  x\n  ```\n\n- x";
+    expect(state.doc.toString()).toBe(expected);
+    expect(state.selection.ranges.map(({ head }) => head)).toEqual([
+      11, 15, 26,
+    ]);
+
+    const target = {
+      get state() {
+        return state;
+      },
+      dispatch(transaction: Transaction) {
+        state = transaction.state;
+      },
+    };
+    expect(undo(target)).toBe(true);
+    expect(state.doc.toString()).toBe(doc);
+    expect(redo(target)).toBe(true);
+    expect(state.doc.toString()).toBe(expected);
+    expect(state.selection.ranges.map(({ head }) => head)).toEqual([
+      11, 15, 26,
+    ]);
+  });
+
+  test.each([
+    { doc: "- ```js\n\n  ```", line: 2, prefix: "  " },
+    { doc: "- item\n  ```js\n\n  ```", line: 3, prefix: "  " },
+    { doc: "- [ ] item\n  ```js\n\n  ```", line: 3, prefix: "  " },
+    { doc: "\t- ```js\n\n\t  ```", line: 2, prefix: "\t  " },
+    { doc: "```js\n\n```", line: 2, prefix: "" },
+  ])(
+    "retains code ownership through successive typing in $doc",
+    async ({ doc, line, prefix }) => {
+      const guard = await loadGuard();
+      let state = EditorState.create({ doc, extensions: guard });
+      const from = state.doc.line(line).from;
+      for (const [index, value] of ["x", "y"].entries()) {
+        const pos = index === 0 ? from : state.selection.main.head;
+        state = state.update({
+          changes: { from: pos, insert: value },
+          selection: { anchor: pos + 1 },
+          userEvent: "input.type",
+        }).state;
+        const expected = doc.split("\n");
+        expected[line - 1] = prefix + (index === 0 ? "x" : "xy");
+        expect(state.doc.toString()).toBe(expected.join("\n"));
+        expect(state.selection.main.head).toBe(
+          from + prefix.length + index + 1,
+        );
+      }
+    },
+  );
 
   test("corrects unrelated body typing while restoring a code container", async () => {
     const guard = await loadGuard();
     const doc = "- ```js\n\n  ```\n\n";
-    const state = EditorState.create({doc, extensions: [guard, EditorState.allowMultipleSelections.of(true)]});
-    const transaction = state.update({changes: [{from: 8, insert: "- x"}, {from: doc.length, insert: "text"}], userEvent: "input.type"});
-    expect(transaction.newDoc.toString()).toBe("- ```js\n  - x\n  ```\n\n- text");
+    const state = EditorState.create({
+      doc,
+      extensions: [guard, EditorState.allowMultipleSelections.of(true)],
+    });
+    const transaction = state.update({
+      changes: [
+        { from: 8, insert: "- x" },
+        { from: doc.length, insert: "text" },
+      ],
+      userEvent: "input.type",
+    });
+    expect(transaction.newDoc.toString()).toBe(
+      "- ```js\n  - x\n  ```\n\n- text",
+    );
   });
+});
+
+test("fills only missing container columns after a tab on a blank row", async () => {
+  const guard = await loadGuard();
+  const doc = "\t- ```js\n\t\n\t  ```";
+  let state = EditorState.create({ doc, extensions: guard });
+  const from = state.doc.line(2).to;
+  state = state.update({
+    changes: { from, insert: "x" },
+    selection: { anchor: from + 1 },
+    userEvent: "input.type",
+  }).state;
+  expect(state.doc.toString()).toBe("\t- ```js\n\t  x\n\t  ```");
+  const next = state.selection.main.head;
+  state = state.update({
+    changes: { from: next, insert: "y" },
+    selection: { anchor: next + 1 },
+    userEvent: "input.type",
+  }).state;
+  expect(state.doc.toString()).toBe("\t- ```js\n\t  xy\n\t  ```");
 });

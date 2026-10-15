@@ -1,10 +1,18 @@
-import { ChangeSpec, Transaction } from "@codemirror/state";
+import {
+  ChangeSet,
+  ChangeSpec,
+  EditorState,
+  Transaction,
+  countColumn,
+} from "@codemirror/state";
 
 import { Logger } from "./Logger";
 import {
   MarkdownLineClassifier,
   MarkdownLineInspection,
 } from "./MarkdownLineClassifier";
+
+import { getFenceContent } from "../utils/fencedCode";
 
 export type BulletTypingDecision =
   | { kind: "pass" }
@@ -83,7 +91,30 @@ export class BulletTypingPolicy {
       return { kind: "correct", changes: [promotion] };
     }
 
-    const changes = this.getBodyCorrections(transaction);
+    const codeCorrections = this.getBlankCodeCorrections(transaction);
+    const classificationState =
+      codeCorrections.length === 0
+        ? transaction.state
+        : EditorState.create({
+            doc: ChangeSet.of(codeCorrections, transaction.newDoc.length).apply(
+              transaction.newDoc,
+            ),
+            extensions: this.classifier.extension,
+          });
+    const correctedLines = new Set(
+      codeCorrections.map(
+        (change) => transaction.newDoc.lineAt(change.from).number,
+      ),
+    );
+    const changes = [
+      ...codeCorrections,
+      ...this.getBodyCorrections(
+        transaction,
+        getChangedLineNumbers(transaction),
+        correctedLines,
+        classificationState,
+      ),
+    ];
     return changes.length > 0 ? { kind: "correct", changes } : { kind: "pass" };
   }
 
@@ -294,17 +325,57 @@ export class BulletTypingPolicy {
     };
   }
 
+  private getBlankCodeCorrections(transaction: Transaction): ConcreteChange[] {
+    const corrections = new Map<number, ConcreteChange>();
+    transaction.changes.iterChanges(
+      (fromBefore, toBefore, fromAfter, toAfter) => {
+        const before = transaction.startState.doc.lineAt(fromBefore);
+        if (before.text.trim().length !== 0 || toBefore > before.to) return;
+        const fence = this.classifier.getCodeFence(
+          transaction.startState,
+          before.number,
+        );
+        if (!fence || fence.containerIndent === "") return;
+        const firstLine = transaction.newDoc.lineAt(fromAfter).number;
+        const lastLine = transaction.newDoc.lineAt(toAfter).number;
+        for (let number = firstLine; number <= lastLine; number++) {
+          const after = transaction.newDoc.line(number);
+          if (
+            after.text.trim().length === 0 ||
+            getFenceContent(after.text, fence.containerIndent)
+          )
+            continue;
+          const indent = after.text.match(/^[ \t]*/)?.[0] ?? "";
+          const missingColumns =
+            countColumn(fence.containerIndent, 4) - countColumn(indent, 4);
+          corrections.set(number, {
+            from: after.from + indent.length,
+            insert:
+              indent.length === 0
+                ? fence.containerIndent
+                : " ".repeat(missingColumns),
+          });
+        }
+      },
+      true,
+    );
+    return [...corrections.values()];
+  }
+
   private getBodyCorrections(
     transaction: Transaction,
     lineNumbers = getChangedLineNumbers(transaction),
     excludedLineNumbers: ReadonlySet<number> = new Set(),
+    classificationState = transaction.state,
   ): ConcreteChange[] {
     const changes: ConcreteChange[] = [];
     for (const lineNumber of lineNumbers) {
       if (excludedLineNumbers.has(lineNumber)) {
         continue;
       }
-      if (this.classifier.classify(transaction.state, lineNumber) === "body") {
+      if (
+        this.classifier.classify(classificationState, lineNumber) === "body"
+      ) {
         changes.push({
           from: transaction.newDoc.line(lineNumber).from,
           insert: "- ",

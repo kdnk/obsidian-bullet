@@ -679,3 +679,47 @@ cod|
 code|
 ```
 ````
+
+# typing on a physical blank code row restores its container
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+````md
+- ```js
+  |
+  ```
+````
+
+- typeText: `x`
+- typeText: `y`
+- assertState:
+
+````md
+- ```js
+  xy|
+  ```
+````
+
+# typing a literal marker on a blank continuation code row stays code
+
+- setting: `keepBodyTextInBullets=true`
+- applyState:
+
+````md
+- [ ] item
+  ```js
+  |
+  ```
+````
+
+- typeText: `-`
+- typeText: ` x`
+- assertState:
+
+````md
+- [ ] item
+  ```js
+  - x|
+  ```
+````

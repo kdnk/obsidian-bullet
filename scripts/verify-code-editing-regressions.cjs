@@ -46,6 +46,18 @@ function key(key, modifiers = 0) {
   const codes = { Enter: 13, Backspace: 8, Escape: 27, i: 73, z: 90 };
   for (const type of ["keyDown", "keyUp"]) {
     focus();
+    evaluate((type) => {
+      const cm = app.workspace.activeLeaf.view.editor.cm;
+      if (!cm.hasFocus) throw Error("Editor does not have keyboard focus");
+      window.__codeEditingReceivedKey = null;
+      window.addEventListener(
+        type.toLowerCase(),
+        (event) => {
+          window.__codeEditingReceivedKey = event.key;
+        },
+        { capture: true, once: true },
+      );
+    }, type);
     cdp("Input.dispatchKeyEvent", {
       type,
       key,
@@ -53,6 +65,11 @@ function key(key, modifiers = 0) {
       windowsVirtualKeyCode: codes[key],
       modifiers,
     });
+    assert.equal(
+      evaluate(() => window.__codeEditingReceivedKey),
+      key,
+      `${type} was not received by the renderer`,
+    );
   }
 }
 function type(text) {
@@ -123,6 +140,53 @@ try {
         assert.equal(typed.saved, fixture.typed);
       });
     }
+    for (const fixture of [
+      {
+        name: "blank and populated code rows",
+        text: "- ```js\n\n  hello\n  ```",
+        cursors: [
+          { line: 1, ch: 0 },
+          { line: 2, ch: 7 },
+        ],
+        expected: "- ```js\n  x\n  hellox\n  ```",
+      },
+      {
+        name: "two blank code rows and outside text",
+        text: "- ```js\n\n\n  ```\n",
+        cursors: [
+          { line: 1, ch: 0 },
+          { line: 2, ch: 0 },
+          { line: 4, ch: 0 },
+        ],
+        expected: "- ```js\n  x\n  x\n  ```\n- x",
+      },
+    ]) {
+      evaluate(async (fixture) => {
+        const editor = app.workspace.activeLeaf.view.editor;
+        editor.setValue(fixture.text);
+        editor.setSelections(
+          fixture.cursors.map((cursor) => ({ anchor: cursor, head: cursor })),
+        );
+        editor.focus();
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        if (editor.listSelections().length !== fixture.cursors.length)
+          throw Error("Multiple selections were not installed");
+      }, fixture);
+      type("x");
+      const after = state();
+      key("z", 4);
+      const undone = state();
+      key("z", 12);
+      const redone = state();
+      const name = `${fixture.name}-${shiki ? "shiki" : "native"}`;
+      results.push({ name, after, undone, redone });
+      check(name, () => {
+        assert.equal(after.doc, fixture.expected);
+        assert.equal(after.saved, fixture.expected);
+        assert.equal(undone.doc, fixture.text);
+        assert.equal(redone.doc, fixture.expected);
+      });
+    }
     for (const prefix of ["", "  "]) {
       const text = `- \`\`\`js\n${prefix}\n  \`\`\``;
       evaluate(async (text) => {
@@ -159,6 +223,7 @@ try {
     async (original, note) => {
       window.__codeEditingRegressionLeaf?.detach();
       delete window.__codeEditingRegressionLeaf;
+      delete window.__codeEditingReceivedKey;
       app.vault.setConfig("vimMode", original.vim);
       app.workspace.updateOptions();
       if (original.shiki) await app.plugins.enablePlugin("shiki-highlighter");

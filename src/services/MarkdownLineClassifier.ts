@@ -51,15 +51,31 @@ interface ListItemMatch {
   content: string;
 }
 
+export interface CodeFenceContext {
+  openingLineNumber: number;
+  containerIndent: string;
+}
+
 interface StructuralBlockRange {
   from: number;
   to: number;
+  structureFrom: number;
+  fence: CodeFenceContext | null;
 }
 
 class StructuralBlockIndex {
   constructor(private ranges: readonly StructuralBlockRange[]) {}
 
   has(lineNumber: number): boolean {
+    const range = this.find(lineNumber);
+    return range !== null && lineNumber >= range.structureFrom;
+  }
+
+  getCodeFence(lineNumber: number): CodeFenceContext | null {
+    return this.find(lineNumber)?.fence ?? null;
+  }
+
+  private find(lineNumber: number): StructuralBlockRange | null {
     let low = 0;
     let high = this.ranges.length - 1;
 
@@ -71,15 +87,16 @@ class StructuralBlockIndex {
       } else if (lineNumber > range.to) {
         low = middle + 1;
       } else {
-        return true;
+        return range;
       }
     }
 
-    return false;
+    return null;
   }
 }
 
 export class MarkdownLineClassifier {
+  private codeFenceIndexes = new WeakMap<Text, StructuralBlockIndex>();
   private structuralBlockIndex = StateField.define<StructuralBlockIndex>({
     create: (state) => buildStructuralBlockIndex(state.doc, state.doc.lines),
     update: (index, transaction) =>
@@ -92,6 +109,20 @@ export class MarkdownLineClassifier {
   });
 
   readonly extension: Extension = this.structuralBlockIndex;
+
+  getCodeFence(
+    state: EditorState,
+    lineNumber: number,
+  ): CodeFenceContext | null {
+    const installed = state.field(this.structuralBlockIndex, false);
+    if (installed) return installed.getCodeFence(lineNumber);
+    let index = this.codeFenceIndexes.get(state.doc);
+    if (!index) {
+      index = buildStructuralBlockIndex(state.doc, state.doc.lines);
+      this.codeFenceIndexes.set(state.doc, index);
+    }
+    return index.getCodeFence(lineNumber);
+  }
 
   classify(state: EditorState, lineNumber: number): MarkdownLineKind {
     return this.classifyLine(
@@ -298,6 +329,7 @@ function buildStructuralBlockIndex(
   let frontmatterStart: number | null = null;
   let fence: {
     from: number;
+    openingLineNumber: number;
     marker: FenceMarker;
     containerIndent: string;
   } | null = null;
@@ -308,7 +340,12 @@ function buildStructuralBlockIndex(
 
     if (frontmatterStart !== null) {
       if (text === "---") {
-        ranges.push({ from: frontmatterStart, to: lineNumber });
+        ranges.push({
+          from: frontmatterStart,
+          to: lineNumber,
+          structureFrom: frontmatterStart,
+          fence: null,
+        });
         frontmatterStart = null;
       }
       continue;
@@ -326,13 +363,29 @@ function buildStructuralBlockIndex(
       const content = getFenceContent(text, fence.containerIndent);
       if (content) {
         if (isFenceClosing(content.text, fence.marker)) {
-          ranges.push({ from: fence.from, to: lineNumber });
+          ranges.push({
+            from: fence.openingLineNumber,
+            to: lineNumber,
+            structureFrom: fence.from,
+            fence: {
+              openingLineNumber: fence.openingLineNumber,
+              containerIndent: fence.containerIndent,
+            },
+          });
           fence = null;
         }
         continue;
       }
-      if (fence.from < lineNumber) {
-        ranges.push({ from: fence.from, to: lineNumber - 1 });
+      if (fence.openingLineNumber < lineNumber) {
+        ranges.push({
+          from: fence.openingLineNumber,
+          to: lineNumber - 1,
+          structureFrom: fence.from,
+          fence: {
+            openingLineNumber: fence.openingLineNumber,
+            containerIndent: fence.containerIndent,
+          },
+        });
       }
       fence = null;
     }
@@ -360,6 +413,7 @@ function buildStructuralBlockIndex(
         fence = {
           // Keep the opening list marker available to list editing commands.
           from: lineNumber + 1,
+          openingLineNumber: lineNumber,
           marker,
           containerIndent,
         };
@@ -374,6 +428,7 @@ function buildStructuralBlockIndex(
     if (marker) {
       fence = {
         from: lineNumber,
+        openingLineNumber: lineNumber,
         marker,
         containerIndent: continuationFence ? container.indent : "",
       };
@@ -383,10 +438,23 @@ function buildStructuralBlockIndex(
   }
 
   if (frontmatterStart !== null) {
-    ranges.push({ from: frontmatterStart, to: lastLineNumber });
+    ranges.push({
+      from: frontmatterStart,
+      to: lastLineNumber,
+      structureFrom: frontmatterStart,
+      fence: null,
+    });
   }
-  if (fence !== null && fence.from <= lastLineNumber) {
-    ranges.push({ from: fence.from, to: lastLineNumber });
+  if (fence !== null) {
+    ranges.push({
+      from: fence.openingLineNumber,
+      to: lastLineNumber,
+      structureFrom: fence.from,
+      fence: {
+        openingLineNumber: fence.openingLineNumber,
+        containerIndent: fence.containerIndent,
+      },
+    });
   }
 
   return new StructuralBlockIndex(ranges);

@@ -99,8 +99,15 @@ test("should stop propagation and update editor", () => {
 });
 
 test("retains the source prefix when deleting code text to its start", () => {
-  const root = makeRoot({editor: makeEditor({text: "- ```js\n\tfooBAR\n  ```", cursor: {line: 1, ch: 4}})});
-  expect(new DeleteTillCurrentLineContentStart(root).perform()).toEqual(UPDATED_OUTCOME);
+  const root = makeRoot({
+    editor: makeEditor({
+      text: "- ```js\n\tfooBAR\n  ```",
+      cursor: { line: 1, ch: 4 },
+    }),
+  });
+  expect(new DeleteTillCurrentLineContentStart(root).perform()).toEqual(
+    UPDATED_OUTCOME,
+  );
   expect(root.print()).toBe("- ```js\n\tBAR\n  ```");
-  expect(root.getCursor()).toEqual({line: 1, ch: 1});
+  expect(root.getCursor()).toEqual({ line: 1, ch: 1 });
 });

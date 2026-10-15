@@ -57,6 +57,11 @@ export interface ListLine {
   to: Position;
 }
 
+export interface ListRow {
+  text: string;
+  indentOverride: string | null;
+}
+
 export interface Range {
   anchor: Position;
   head: Position;
@@ -150,6 +155,30 @@ export class List {
     }
     this.lines = lines;
     this.lineIndentOverrides = overrides;
+  }
+
+  getRow(index: number): ListRow {
+    return {
+      text: this.lines[index],
+      indentOverride: this.lineIndentOverrides[index],
+    };
+  }
+
+  spliceRows(index: number, deleteCount: number, ...rows: ListRow[]) {
+    if (
+      this.lines.length - deleteCount + rows.length > 1 &&
+      this.notesIndent === null
+    ) {
+      throw new Error(
+        "Unable to add line, notes indent should be provided first",
+      );
+    }
+    this.lines.splice(index, deleteCount, ...rows.map((row) => row.text));
+    this.lineIndentOverrides.splice(
+      index,
+      deleteCount,
+      ...rows.map((row) => row.indentOverride),
+    );
   }
 
   replaceLine(index: number, text: string, indentOverride: string) {

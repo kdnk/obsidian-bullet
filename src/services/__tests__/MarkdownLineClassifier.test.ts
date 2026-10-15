@@ -449,3 +449,76 @@ describe("MarkdownLineClassifier", () => {
     expect(classifier.inspect(state, 2).kind).toBe("body");
   });
 });
+
+describe("code fence ownership", () => {
+  test.each([false, true])(
+    "queries the semantic fence with cached index %s",
+    (cached) => {
+      const classifier = new MarkdownLineClassifier();
+      for (const { doc, opening, closing, prefix } of [
+        {
+          doc: "- ```js\n\n  ```\n- after",
+          opening: 1,
+          closing: 3,
+          prefix: "  ",
+        },
+        {
+          doc: "- item\n  ```js\n\tcode\n  ```\n- after",
+          opening: 2,
+          closing: 4,
+          prefix: "  ",
+        },
+        {
+          doc: "- [ ] item\n  ```js\n\n  ```\n- after",
+          opening: 2,
+          closing: 4,
+          prefix: "  ",
+        },
+        { doc: "```js\ncode\n```\nafter", opening: 1, closing: 3, prefix: "" },
+        { doc: "- ```js\n- after", opening: 1, closing: 1, prefix: "  " },
+      ]) {
+        const state = EditorState.create({
+          doc,
+          extensions: cached ? classifier.extension : [],
+        });
+        for (let line = opening; line <= closing; line++) {
+          expect(classifier.getCodeFence(state, line)).toEqual({
+            openingLineNumber: opening,
+            containerIndent: prefix,
+          });
+        }
+        expect(classifier.getCodeFence(state, closing + 1)).toBeNull();
+        expect(classifier.classify(state, opening)).toBe(
+          doc.startsWith("- ```") ? "list-item" : "structure",
+        );
+      }
+    },
+  );
+});
+
+test("queries distant fences and refreshes ownership after source changes without an installed field", () => {
+  const classifier = new MarkdownLineClassifier();
+  const state = EditorState.create({
+    doc: "- ```js\n  one\n  ```\n- other\n  ```ts\n  two\n  ```",
+  });
+  expect(classifier.getCodeFence(state, 2)).toEqual({
+    openingLineNumber: 1,
+    containerIndent: "  ",
+  });
+  expect(classifier.getCodeFence(state, 6)).toEqual({
+    openingLineNumber: 5,
+    containerIndent: "  ",
+  });
+  const changed = state.update({
+    changes: {
+      from: state.doc.line(5).from,
+      to: state.doc.line(5).to,
+      insert: "  prose",
+    },
+  }).state;
+  expect(classifier.getCodeFence(changed, 6)).toBeNull();
+  expect(classifier.getCodeFence(changed, 2)).toEqual({
+    openingLineNumber: 1,
+    containerIndent: "  ",
+  });
+});
