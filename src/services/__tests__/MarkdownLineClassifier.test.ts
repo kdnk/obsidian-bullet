@@ -15,6 +15,54 @@ function inspect(source: string, lineNumber: number) {
 }
 
 describe("MarkdownLineClassifier", () => {
+  test.each([
+    "- parent\n  ```js\n  code\n  ```\n  note",
+    "- ```js\n\tcode\n  ```\n  note",
+    "- parent\n\t~~~js\n\tcode\n\t~~~\n\tnote",
+  ])("retains the list owner after a fence in %p", (source) => {
+    expect(inspect(source, source.split("\n").length).kind).toBe(
+      "list-continuation",
+    );
+  });
+
+  test("retains a child item's parent after a fenced continuation", () => {
+    expect(
+      inspect("- parent\n  ```js\n  code\n  ```\n  - ", 5).listItem?.isRoot,
+    ).toBe(false);
+  });
+
+  test.each([
+    "- \n  ```js\n  code\n  ```",
+    "- \n\t~~~js\n\tcode\n\t~~~",
+    "- \n\n  ```js\n  code\n  ```",
+  ])("recognizes fenced content owned by an empty parent in %p", (source) => {
+    expect(inspect(source, 1).listItem?.hasOwnedFollowingLine).toBe(true);
+  });
+
+  test.each([
+    "- parent\n```js\ncode\n```\n  note",
+    "- parent\n  ```js\n  code\n  ```\nplain\n  note",
+    "- parent\n  ```js\n  code\n  ```\n\n  note",
+  ])("does not cross an unowned boundary in %p", (source) => {
+    expect(inspect(source, source.split("\n").length).kind).toBe("body");
+  });
+
+  test.each([
+    "- \n- ```js\n  code\n  ```",
+    "- \n\n- ```js\n  code\n  ```",
+    "  - \n  - ```js\n    code\n    ```",
+  ])("does not claim a sibling's attached fence in %p", (source) => {
+    expect(inspect(source, 1).listItem?.hasOwnedFollowingLine).toBe(false);
+  });
+
+  test("recognizes blank-separated fenced ownership without its extension", () => {
+    const classifier = new MarkdownLineClassifier();
+    const state = EditorState.create({ doc: "- \n\n  ```js\n  code\n  ```" });
+    expect(classifier.inspect(state, 1).listItem?.hasOwnedFollowingLine).toBe(
+      true,
+    );
+  });
+
   test.each<[string, number, MarkdownLineKind]>([
     ["", 1, "blank"],
     ["   ", 1, "blank"],
@@ -25,6 +73,14 @@ describe("MarkdownLineClassifier", () => {
     ["# heading", 1, "structure"],
     ["> quote", 1, "structure"],
     ["---", 1, "structure"],
+    ["***", 1, "structure"],
+    ["___", 1, "structure"],
+    ["* * *", 1, "structure"],
+    ["  _ _ _\t", 1, "structure"],
+    ["**", 1, "body"],
+    ["__", 1, "body"],
+    ["*-*", 1, "body"],
+    ["* item", 1, "list-item"],
     ["`", 1, "structure-prefix"],
     ["``", 1, "structure-prefix"],
     ["--", 1, "structure-prefix"],

@@ -112,6 +112,79 @@ try {
       app.vault.setConfig("vimMode", false);
       app.workspace.updateOptions();
     }, shiki);
+    for (const fixture of [
+      {
+        name: "continuation after fenced code",
+        text: "- parent\n  ```js\n  code\n  ```\n  note",
+        cursor: { line: 4, ch: 6 },
+        input: "!",
+        expected: "- parent\n  ```js\n  code\n  ```\n  note!",
+      },
+      ...["\n", "\n  paragraph\n\n"].map((gap) => ({
+        name: `continuation after separated fence ${gap.length}`,
+        text: `- parent\n${gap}  \`\`\`js\n  code\n  \`\`\`\n  note`,
+        cursor: { line: 4 + gap.split("\n").length - 1, ch: 6 },
+        input: "!",
+        expected: `- parent\n${gap}  \`\`\`js\n  code\n  \`\`\`\n  note!`,
+      })),
+      {
+        name: "child after fenced code",
+        text: "- parent\n  ```js\n  code\n  ```\n  - ",
+        cursor: { line: 4, ch: 4 },
+        input: "#",
+        expected: "- parent\n  ```js\n  code\n  ```\n  - #",
+      },
+      ...["", "\n"].map((gap) => ({
+        name: `empty parent with ${gap ? "separated" : "immediate"} fence`,
+        text: `- \n${gap}  \`\`\`js\n  code\n  \`\`\``,
+        cursor: { line: 0, ch: 2 },
+        input: "#",
+        expected: `- #\n${gap}  \`\`\`js\n  code\n  \`\`\``,
+      })),
+      ...["***", "___", "* * *"].map((text) => ({
+        name: `thematic break ${text}`,
+        text,
+        cursor: { line: 0, ch: text.length },
+        input: " ",
+        expected: `${text} `,
+      })),
+    ]) {
+      evaluate(async (fixture) => {
+        const editor = app.workspace.activeLeaf.view.editor;
+        editor.setValue(fixture.text);
+        editor.setCursor(fixture.cursor);
+        editor.focus();
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }, fixture);
+      type(fixture.input);
+      const after = state();
+      key("z", 4);
+      const undone = state();
+      key("z", 12);
+      const redone = state();
+      type(" ");
+      const following = state();
+      const name = `${fixture.name}-${shiki ? "shiki" : "native"}`;
+      results.push({ name, after, undone, redone, following });
+      check(name, () => {
+        assert.equal(after.doc, fixture.expected);
+        assert.equal(after.saved, fixture.expected);
+        assert.deepEqual(after.cursor, {
+          line: fixture.cursor.line,
+          ch: fixture.cursor.ch + fixture.input.length,
+        });
+        assert.equal(undone.doc, fixture.text);
+        assert.equal(redone.doc, fixture.expected);
+        assert.equal(
+          following.doc,
+          fixture.expected.replace(
+            fixture.expected.split("\n")[fixture.cursor.line],
+            fixture.expected.split("\n")[fixture.cursor.line] + " ",
+          ),
+        );
+        assert.equal(following.saved, following.doc);
+      });
+    }
     for (const fixture of cases) {
       evaluate(async (fixture) => {
         const e = app.workspace.activeLeaf.view.editor;

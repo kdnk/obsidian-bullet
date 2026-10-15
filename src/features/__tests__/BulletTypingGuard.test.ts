@@ -62,6 +62,94 @@ function captureInputTransaction() {
 }
 
 describe("BulletTypingGuard", () => {
+  test.each(["* * *", "- - -", "_ _ _"])(
+    "does not turn a thematic break into the following fence's list owner: %p",
+    async (rule) => {
+      const guard = await loadGuard();
+      const doc = [rule, "  ```js", "code", "  ```"].join("\n");
+      const state = EditorState.create({ doc, extensions: guard });
+      const end = state.doc.line(3).to;
+      const transaction = state.update({
+        changes: { from: end, insert: "x" },
+        selection: { anchor: end + 1 },
+        userEvent: "input.type",
+      });
+      expect(transaction.newDoc.toString()).toBe(
+        [rule, "  ```js", "codex", "  ```"].join("\n"),
+      );
+      expect(transaction.newSelection.main.head).toBe(end + 1);
+    },
+  );
+
+  test.each(["***", "___", "* * *", "_ _ _"])(
+    "keeps an existing thematic break literal when appending whitespace to %p",
+    async (doc) => {
+      const guard = await loadGuard();
+      const state = EditorState.create({
+        doc,
+        selection: { anchor: doc.length },
+        extensions: guard,
+      });
+      const transaction = state.update({
+        changes: { from: doc.length, insert: " " },
+        selection: { anchor: doc.length + 1 },
+        userEvent: "input.type",
+      });
+      expect(transaction.newDoc.toString()).toBe(doc + " ");
+      expect(transaction.newSelection.main.head).toBe(doc.length + 1);
+    },
+  );
+
+  test.each([
+    "- parent\n  ```js\n  code\n  ```\n  note",
+    "- parent\n\n  ```js\n  code\n  ```\n  note",
+    "- parent\n\n  paragraph\n\n  ```js\n  code\n  ```\n  note",
+    "- ```js\n\tcode\n  ```\n  note",
+    "- parent\n\t~~~js\n\tcode\n\t~~~\n\tnote",
+    "- parent\n  ```js\n  code\n  ```\n  - ",
+  ])(
+    "preserves list ownership when typing after a fence in %p",
+    async (doc) => {
+      const guard = await loadGuard();
+      const state = EditorState.create({
+        doc,
+        selection: { anchor: doc.length },
+        extensions: guard,
+      });
+      const transaction = state.update({
+        changes: { from: doc.length, insert: "#" },
+        selection: { anchor: doc.length + 1 },
+        userEvent: "input.type",
+      });
+      expect(transaction.newDoc.toString()).toBe(doc + "#");
+      expect(transaction.newSelection.main.head).toBe(doc.length + 1);
+    },
+  );
+
+  test.each(["- \n  ```js\n  code\n  ```", "- \n\n  ```js\n  code\n  ```"])(
+    "preserves an empty parent's marker when it owns fenced code in %p",
+    async (doc) => {
+      const guard = await loadGuard();
+      const state = EditorState.create({
+        doc,
+        selection: { anchor: 2 },
+        extensions: guard,
+      });
+      const typed = state.update({
+        changes: { from: 2, insert: "#" },
+        selection: { anchor: 3 },
+        userEvent: "input.type",
+      });
+      expect(typed.newDoc.toString()).toBe("- #" + doc.slice(2));
+      const deleted = state.update({
+        changes: { from: 0, to: 1 },
+        selection: { anchor: 0 },
+        userEvent: "delete.backward",
+      });
+      expect(deleted.newDoc.toString()).toBe(doc);
+    },
+  );
+
   test("allows deleting a literal hyphen inside a list-attached fenced code block", async () => {
     const guard = await loadGuard();
     const doc = "- ```js\n  - code\n  ```";

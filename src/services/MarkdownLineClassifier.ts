@@ -41,7 +41,8 @@ export interface MarkdownLineInspection {
 const listItemRe = /^([ \t]*)([-*+]|\d+\.)(?:([ \t]+)(.*))?$/;
 const atxHeadingRe = /^ {0,3}#{1,6}(?:[ \t]+|$)/;
 const quoteRe = /^ {0,3}>/;
-const horizontalRuleRe = /^ {0,3}(?:-[ \t]*){3,}$/;
+const horizontalRuleRe =
+  /^ {0,3}(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/;
 const structurePrefixRe = /^(?:#{1,6}|`{1,2}|-{1,2})$/;
 const indentRe = /^[ \t]+/;
 
@@ -61,6 +62,7 @@ interface StructuralBlockRange {
   to: number;
   structureFrom: number;
   fence: CodeFenceContext | null;
+  ownerLineNumber: number | null;
 }
 
 class StructuralBlockIndex {
@@ -73,6 +75,10 @@ class StructuralBlockIndex {
 
   getCodeFence(lineNumber: number): CodeFenceContext | null {
     return this.find(lineNumber)?.fence ?? null;
+  }
+
+  getListOwner(lineNumber: number): number | null {
+    return this.find(lineNumber)?.ownerLineNumber ?? null;
   }
 
   private find(lineNumber: number): StructuralBlockRange | null {
@@ -114,31 +120,21 @@ export class MarkdownLineClassifier {
     state: EditorState,
     lineNumber: number,
   ): CodeFenceContext | null {
-    const installed = state.field(this.structuralBlockIndex, false);
-    if (installed) return installed.getCodeFence(lineNumber);
-    let index = this.codeFenceIndexes.get(state.doc);
-    if (!index) {
-      index = buildStructuralBlockIndex(state.doc, state.doc.lines);
-      this.codeFenceIndexes.set(state.doc, index);
-    }
-    return index.getCodeFence(lineNumber);
+    return this.getStructuralBlockIndex(state).getCodeFence(lineNumber);
   }
 
   classify(state: EditorState, lineNumber: number): MarkdownLineKind {
     return this.classifyLine(
       state.doc,
       lineNumber,
-      this.getStructuralBlockIndex(state, lineNumber),
+      this.getStructuralBlockIndex(state),
     );
   }
 
   inspect(state: EditorState, lineNumber: number): MarkdownLineInspection {
     const doc = state.doc;
     const line = doc.line(lineNumber);
-    const structuralBlockIndex = this.getStructuralBlockIndex(
-      state,
-      lineNumber,
-    );
+    const structuralBlockIndex = this.getStructuralBlockIndex(state);
     const kind = this.classifyLine(doc, lineNumber, structuralBlockIndex);
     const listMatch = kind === "list-item" ? matchListItem(line.text) : null;
 
@@ -169,17 +165,15 @@ export class MarkdownLineClassifier {
     };
   }
 
-  private getStructuralBlockIndex(
-    state: EditorState,
-    lineNumber: number,
-  ): StructuralBlockIndex {
-    return (
-      state.field(this.structuralBlockIndex, false) ??
-      buildStructuralBlockIndex(
-        state.doc,
-        Math.min(state.doc.lines, lineNumber + 1),
-      )
-    );
+  private getStructuralBlockIndex(state: EditorState): StructuralBlockIndex {
+    const installed = state.field(this.structuralBlockIndex, false);
+    if (installed) return installed;
+    let index = this.codeFenceIndexes.get(state.doc);
+    if (!index) {
+      index = buildStructuralBlockIndex(state.doc, state.doc.lines);
+      this.codeFenceIndexes.set(state.doc, index);
+    }
+    return index;
   }
 
   private classifyLine(
@@ -252,6 +246,12 @@ export class MarkdownLineClassifier {
       previousLineNumber >= 1;
       previousLineNumber--
     ) {
+      const fence = structuralBlockIndex.getCodeFence(previousLineNumber);
+      if (fence) {
+        const owner = structuralBlockIndex.getListOwner(previousLineNumber);
+        if (owner === null) return false;
+        previousLineNumber = owner;
+      }
       const previousText = doc.line(previousLineNumber).text;
       const previousKind = classifyLexicalLine(
         previousText,
@@ -293,13 +293,23 @@ export class MarkdownLineClassifier {
       return false;
     }
 
-    const followingLineNumber = lineNumber + 1;
+    let followingLineNumber = lineNumber + 1;
+    while (
+      followingLineNumber < doc.lines &&
+      doc.line(followingLineNumber).text.trim().length === 0
+    ) {
+      followingLineNumber++;
+    }
+    const currentIndentWidth = getIndentWidth(indent);
+    if (structuralBlockIndex.getListOwner(followingLineNumber) === lineNumber) {
+      return true;
+    }
+    if (followingLineNumber !== lineNumber + 1) return false;
     const followingText = doc.line(followingLineNumber).text;
     const followingKind = classifyLexicalLine(
       followingText,
       structuralBlockIndex.has(followingLineNumber),
     );
-    const currentIndentWidth = getIndentWidth(indent);
 
     if (followingKind === "list-item") {
       const followingListItem = matchListItem(followingText);
@@ -332,8 +342,13 @@ function buildStructuralBlockIndex(
     openingLineNumber: number;
     marker: FenceMarker;
     containerIndent: string;
+    ownerLineNumber: number | null;
   } | null = null;
-  const listContainers: { indent: string; width: number }[] = [];
+  const listContainers: {
+    indent: string;
+    width: number;
+    ownerLineNumber: number;
+  }[] = [];
 
   for (let lineNumber = 1; lineNumber <= lastLineNumber; lineNumber++) {
     const text = doc.line(lineNumber).text;
@@ -345,6 +360,7 @@ function buildStructuralBlockIndex(
           to: lineNumber,
           structureFrom: frontmatterStart,
           fence: null,
+          ownerLineNumber: null,
         });
         frontmatterStart = null;
       }
@@ -367,6 +383,7 @@ function buildStructuralBlockIndex(
             from: fence.openingLineNumber,
             to: lineNumber,
             structureFrom: fence.from,
+            ownerLineNumber: fence.ownerLineNumber,
             fence: {
               openingLineNumber: fence.openingLineNumber,
               containerIndent: fence.containerIndent,
@@ -381,6 +398,7 @@ function buildStructuralBlockIndex(
           from: fence.openingLineNumber,
           to: lineNumber - 1,
           structureFrom: fence.from,
+          ownerLineNumber: fence.ownerLineNumber,
           fence: {
             openingLineNumber: fence.openingLineNumber,
             containerIndent: fence.containerIndent,
@@ -394,7 +412,10 @@ function buildStructuralBlockIndex(
     // ending that list's container. The blank itself remains ordinary Markdown.
     if (text.trim().length === 0) continue;
 
-    const listItem = matchListItem(text);
+    const listItem =
+      classifyLexicalLine(text, false) === "list-item"
+        ? matchListItem(text)
+        : null;
     const indent = listItem?.indent ?? indentRe.exec(text)?.[0] ?? "";
     const indentWidth = getIndentWidth(indent);
     while (
@@ -407,7 +428,11 @@ function buildStructuralBlockIndex(
     if (listItem) {
       const width = getIndentWidth(listItem.prefix);
       const containerIndent = indent + " ".repeat(width - indentWidth);
-      listContainers.push({ indent: containerIndent, width });
+      listContainers.push({
+        indent: containerIndent,
+        width,
+        ownerLineNumber: lineNumber,
+      });
       const marker = getFenceOpening(listItem.content);
       if (marker) {
         fence = {
@@ -416,6 +441,7 @@ function buildStructuralBlockIndex(
           openingLineNumber: lineNumber,
           marker,
           containerIndent,
+          ownerLineNumber: lineNumber,
         };
       }
       continue;
@@ -431,6 +457,7 @@ function buildStructuralBlockIndex(
         openingLineNumber: lineNumber,
         marker,
         containerIndent: continuationFence ? container.indent : "",
+        ownerLineNumber: continuationFence ? container.ownerLineNumber : null,
       };
     } else if (classifyLexicalLine(text, false) !== "body") {
       listContainers.length = 0;
@@ -443,6 +470,7 @@ function buildStructuralBlockIndex(
       to: lastLineNumber,
       structureFrom: frontmatterStart,
       fence: null,
+      ownerLineNumber: null,
     });
   }
   if (fence !== null) {
@@ -450,6 +478,7 @@ function buildStructuralBlockIndex(
       from: fence.openingLineNumber,
       to: lastLineNumber,
       structureFrom: fence.from,
+      ownerLineNumber: fence.ownerLineNumber,
       fence: {
         openingLineNumber: fence.openingLineNumber,
         containerIndent: fence.containerIndent,
