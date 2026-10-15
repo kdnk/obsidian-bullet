@@ -9,7 +9,9 @@ import {
   StateEffect,
   StateField,
   Transaction,
+  TransactionSpec,
 } from "@codemirror/state";
+import { EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
 
 import { makeLogger } from "../../__mocks__";
 import { KeepCursorWithinContent, Settings } from "../../services/Settings";
@@ -38,6 +40,10 @@ interface GuardOptions {
 }
 
 async function loadGuard(options: GuardOptions = {}) {
+  return (await loadGuardDetails(options)).extension;
+}
+
+async function loadGuardDetails(options: GuardOptions = {}) {
   const registerEditorExtension = jest.fn<void, [Extension]>();
   const plugin = {
     app: { workspace: { updateOptions: jest.fn() } },
@@ -60,7 +66,7 @@ async function loadGuard(options: GuardOptions = {}) {
     throw new Error("BulletTypingGuard did not register an editor extension");
   }
 
-  return extension;
+  return { extension, settings };
 }
 
 function captureInputTransaction() {
@@ -77,6 +83,895 @@ function captureInputTransaction() {
     },
   };
 }
+
+async function compositionEditor(
+  doc = "",
+  selection = EditorSelection.cursor(doc.length),
+  extra: Extension = [],
+) {
+  const registration = jest.spyOn(ViewPlugin, "define");
+  const { extension: extensions, settings } = await loadGuardDetails();
+  const [create, spec] = registration.mock.calls[0];
+  registration.mockRestore();
+  let state: EditorState;
+  const measurements: Array<() => void> = [];
+  let observer: unknown = {
+    forceFlush() {},
+    pendingRecords: () => [],
+    delayedAndroidKey: null,
+  };
+  const editor = {
+    get state() {
+      return state;
+    },
+    dom: { closest: () => null },
+    compositionStarted: false,
+    get observer() {
+      return observer;
+    },
+    plugin: () => value,
+    requestMeasure<T>(request?: {
+      read(view: EditorView): T;
+      write?(result: T, view: EditorView): void;
+    }) {
+      if (request)
+        measurements.push(() => request.write?.(request.read(view), view));
+    },
+    dispatch: (transaction: Transaction | TransactionSpec) => {
+      const accepted =
+        transaction instanceof Transaction
+          ? transaction
+          : state.update(transaction);
+      state = accepted.state;
+      const update = {
+        view,
+        state,
+        startState: accepted.startState,
+        changes: accepted.changes,
+        transactions: [accepted],
+        viewportChanged: false,
+        viewportMoved: false,
+        heightChanged: false,
+        geometryChanged: accepted.docChanged,
+        focusChanged: false,
+        docChanged: accepted.docChanged,
+        selectionSet: accepted.selection !== undefined,
+      } satisfies ViewUpdate;
+      value.update?.(update);
+      for (const listener of accepted.state.facet(EditorView.updateListener)) {
+        listener(update);
+      }
+    },
+  };
+  const view = editor as unknown as EditorView;
+  const value = create(view, undefined);
+  state = EditorState.create({
+    doc,
+    selection: EditorSelection.create([selection]),
+    extensions: [
+      extensions,
+      history(),
+      extra,
+      editorEditorField.init(() => view),
+    ],
+  });
+  return {
+    view,
+    dispatch: editor.dispatch,
+    setObserver(value: unknown) {
+      observer = value;
+    },
+    keydown() {
+      spec?.eventObservers?.keydown?.call(value, {} as KeyboardEvent, view);
+    },
+    input(
+      transaction: (state: EditorState) => TransactionSpec,
+      event: "keydown" | "beforeinput" | "paste" | "cut" | "drop" = "keydown",
+    ) {
+      spec?.eventObservers?.[event]?.call(value, {} as never, view);
+      editor.dispatch(transaction(state));
+    },
+    disable() {
+      settings.keepBodyTextInBullets = false;
+    },
+    start() {
+      spec?.eventObservers?.compositionstart?.call(
+        value,
+        {} as CompositionEvent,
+        view,
+      );
+      editor.compositionStarted = true;
+    },
+    end() {
+      spec?.eventObservers?.compositionend?.call(
+        value,
+        {} as CompositionEvent,
+        view,
+      );
+      editor.compositionStarted = false;
+    },
+    async measure() {
+      measurements.splice(0).forEach((measure) => measure());
+      await Promise.resolve();
+    },
+    measureBeforeMicrotask() {
+      measurements.splice(0).forEach((measure) => measure());
+    },
+    destroy() {
+      value.destroy?.();
+    },
+    reconfigure() {
+      editor.dispatch({ effects: StateEffect.reconfigure.of([]) });
+      value.destroy?.();
+    },
+  };
+}
+
+describe("BulletTypingGuard composition completion", () => {
+  test.each(["set", "remote"])(
+    "does not invert an unrelated %s after an unsafe composition",
+    async (event) => {
+      const editor = await compositionEditor(
+        "plain\n- item",
+        EditorSelection.range(7, 5),
+      );
+      editor.start();
+      editor.dispatch({
+        changes: { from: 5, to: 7 },
+        selection: { anchor: 5 },
+        userEvent: "input",
+      });
+      editor.dispatch({
+        changes: { from: 5, insert: "に" },
+        selection: { anchor: 6 },
+        userEvent: "input.type.compose.start",
+      });
+      editor.dispatch({
+        changes: { from: 5, to: 6 },
+        selection: { anchor: 5 },
+        userEvent: "input.type.compose",
+      });
+      editor.end();
+      editor.measureBeforeMicrotask();
+      editor.dispatch({
+        changes: {
+          from: 0,
+          to: editor.view.state.doc.length,
+          insert: "external",
+        },
+        selection: { anchor: 8 },
+        userEvent: event === "remote" ? "input.type" : "set",
+        annotations:
+          event === "remote" ? Transaction.remote.of(true) : undefined,
+      });
+      await Promise.resolve();
+      await editor.measure();
+      expect(editor.view.state.doc.toString()).toBe("external");
+      expect(editor.view.state.selection.main.head).toBe(8);
+    },
+  );
+
+  test("restores an unsafe selected list boundary after native cancellation", async () => {
+    const editor = await compositionEditor(
+      "plain\n- item",
+      EditorSelection.range(7, 5),
+    );
+    editor.start();
+    editor.dispatch({
+      changes: { from: 5, to: 7 },
+      selection: { anchor: 5 },
+      userEvent: "input",
+    });
+    editor.dispatch({
+      changes: { from: 5, insert: "に" },
+      selection: { anchor: 6 },
+      userEvent: "input.type.compose.start",
+    });
+    editor.dispatch({
+      changes: { from: 5, to: 6 },
+      selection: { anchor: 5 },
+      userEvent: "input.type.compose",
+    });
+    editor.end();
+    await editor.measure();
+    expect(editor.view.state.doc.toString()).toBe("plain\n- item");
+    expect(editor.view.state.selection.main).toEqual(
+      EditorSelection.range(7, 5),
+    );
+  });
+
+  test.each([false, true])(
+    "retains blank-code origin through a second composition with a queued microtask %p",
+    async (queued) => {
+      const editor = await compositionEditor(
+        "- ```\n\n  ```",
+        EditorSelection.cursor(6),
+      );
+      editor.start();
+      editor.dispatch({
+        changes: { from: 6, insert: "日本" },
+        selection: { anchor: 8 },
+        userEvent: "input.type.compose.start",
+      });
+      editor.end();
+      if (queued) editor.measureBeforeMicrotask();
+      editor.start();
+      editor.dispatch({
+        changes: { from: 8, insert: "語" },
+        selection: { anchor: 9 },
+        userEvent: "input.type.compose.start",
+      });
+      await Promise.resolve();
+      expect(editor.view.state.doc.toString()).toBe("- ```\n日本語\n  ```");
+      editor.end();
+      await editor.measure();
+      expect(editor.view.state.doc.toString()).toBe("- ```\n  日本語\n  ```");
+      expect(editor.view.state.selection.main.head).toBe(11);
+      expect(undo(editor.view)).toBe(true);
+      expect(editor.view.state.doc.toString()).toBe("- ```\n\n  ```");
+      expect(redo(editor.view)).toBe(true);
+      expect(editor.view.state.doc.toString()).toBe("- ```\n  日本語\n  ```");
+      expect(editor.view.state.selection.main.head).toBe(11);
+    },
+  );
+
+  test.each([
+    {
+      doc: "- ```\n\n  ```",
+      from: 6,
+      split: 9,
+      afterNewline: "- ```\n  日本語\n\n  ```",
+      head: 12,
+      afterTyping: "- ```\n  日本語\n  X\n  ```",
+      typedHead: 15,
+    },
+    {
+      doc: "",
+      from: 0,
+      split: 1,
+      afterNewline: "- 日\n- 本語",
+      head: 6,
+      afterTyping: "- 日\n- X本語",
+      typedHead: 7,
+    },
+  ])(
+    "retains composition context for native newline before measurement in $doc",
+    async ({
+      doc,
+      from,
+      split,
+      afterNewline,
+      head,
+      afterTyping,
+      typedHead,
+    }) => {
+      const editor = await compositionEditor(doc, EditorSelection.cursor(from));
+      editor.start();
+      editor.dispatch({
+        changes: { from, insert: "日本語" },
+        selection: { anchor: from + 3 },
+        userEvent: "input.type.compose.start",
+      });
+      editor.end();
+      editor.input(() => ({
+        changes: { from: split + 2, insert: "\n" },
+        selection: { anchor: split + 3 },
+        userEvent: "input",
+      }));
+      await editor.measure();
+      expect(editor.view.state.doc.toString()).toBe(afterNewline);
+      expect(editor.view.state.selection.main.head).toBe(head);
+      editor.input((state) => ({
+        ...state.replaceSelection("X"),
+        userEvent: "input.type",
+      }));
+      expect(editor.view.state.doc.toString()).toBe(afterTyping);
+      expect(editor.view.state.selection.main.head).toBe(typedHead);
+    },
+  );
+
+  test("retains the original selection across native startup deletion", async () => {
+    const editor = await compositionEditor(
+      "- one\n- two",
+      EditorSelection.range(2, 8),
+    );
+    editor.start();
+    editor.dispatch({
+      changes: { from: 2, to: 8 },
+      selection: { anchor: 2 },
+      userEvent: "input",
+    });
+    editor.dispatch({
+      changes: { from: 2, insert: "日本語" },
+      selection: { anchor: 5 },
+      userEvent: "input.type.compose.start",
+    });
+    editor.end();
+    await editor.measure();
+    expect(editor.view.state.doc.toString()).toBe("- 日本語two");
+    expect(editor.view.state.selection.main.head).toBe(5);
+  });
+
+  test("uses the accepted selection after the end measurement", async () => {
+    const editor = await compositionEditor();
+    editor.start();
+    editor.dispatch({
+      changes: { from: 0, insert: "日本語" },
+      selection: { anchor: 3 },
+      userEvent: "input.type.compose.start",
+    });
+    editor.end();
+    editor.measureBeforeMicrotask();
+    editor.dispatch({ selection: { anchor: 1 }, userEvent: "select" });
+    await Promise.resolve();
+    await editor.measure();
+    expect(editor.view.state.doc.toString()).toBe("- 日本語");
+    expect(editor.view.state.selection.main.head).toBe(3);
+  });
+
+  test("makes an already queued completion inert after destruction", async () => {
+    const editor = await compositionEditor();
+    editor.start();
+    editor.dispatch({
+      changes: { from: 0, insert: "日本語" },
+      selection: { anchor: 3 },
+      userEvent: "input.type.compose.start",
+    });
+    editor.end();
+    editor.measureBeforeMicrotask();
+    editor.destroy();
+    await Promise.resolve();
+    expect(editor.view.state.doc.toString()).toBe("日本語");
+    expect(editor.view.state.selection.main.head).toBe(3);
+  });
+
+  test("repairs a selected list prefix after native composition", async () => {
+    const editor = await compositionEditor(
+      "- alpha",
+      EditorSelection.range(0, 2),
+    );
+    editor.start();
+    editor.dispatch({
+      changes: { from: 0, to: 2, insert: "日本語" },
+      selection: { anchor: 3 },
+      userEvent: "input.type.compose.start",
+    });
+    editor.end();
+    await editor.measure();
+    expect(editor.view.state.doc.toString()).toBe("- 日本語alpha");
+    expect(editor.view.state.selection.main.head).toBe(5);
+    expect(undo(editor.view)).toBe(true);
+    expect(editor.view.state.doc.toString()).toBe("- alpha");
+    expect(editor.view.state.selection.main).toEqual(
+      EditorSelection.range(0, 2),
+    );
+    expect(redo(editor.view)).toBe(true);
+    expect(editor.view.state.doc.toString()).toBe("- 日本語alpha");
+    expect(editor.view.state.selection.main.head).toBe(5);
+  });
+
+  test.each([
+    { doc: "", from: 0, expected: "- 日本語", head: 5 },
+    {
+      doc: "- ```\n\n  ```",
+      from: 6,
+      expected: "- ```\n  日本語\n  ```",
+      head: 11,
+    },
+  ])(
+    "repairs committed composition in $doc and keeps one history event",
+    async ({ doc, from, expected, head }) => {
+      const editor = await compositionEditor(doc, EditorSelection.cursor(from));
+      editor.start();
+      let length = 0;
+      for (const text of ["に", "日本", "日本語"]) {
+        editor.dispatch({
+          changes: { from, to: from + length, insert: text },
+          selection: { anchor: from + text.length },
+          userEvent: length ? "input.type.compose" : "input.type.compose.start",
+          annotations: Transaction.time.of(1000 + length * 1000),
+        });
+        length = text.length;
+      }
+      editor.end();
+      await editor.measure();
+      expect(editor.view.state.doc.toString()).toBe(expected);
+      expect(editor.view.state.selection.main.head).toBe(head);
+      expect(undo(editor.view)).toBe(true);
+      expect(editor.view.state.doc.toString()).toBe(doc);
+      expect(editor.view.state.selection.main.head).toBe(from);
+      expect(redo(editor.view)).toBe(true);
+      expect(editor.view.state.doc.toString()).toBe(expected);
+      expect(editor.view.state.selection.main.head).toBe(head);
+    },
+  );
+
+  test.each(["", "- ```\n\n  ```"])(
+    "cancels composition without creating a prefix in %p",
+    async (doc) => {
+      const from = doc ? 6 : 0;
+      const editor = await compositionEditor(doc, EditorSelection.cursor(from));
+      editor.start();
+      editor.dispatch({
+        changes: { from, insert: "に" },
+        userEvent: "input.type.compose.start",
+      });
+      editor.dispatch({
+        changes: { from, to: from + 1 },
+        userEvent: "input.type.compose",
+      });
+      editor.end();
+      await editor.measure();
+      expect(editor.view.state.doc.toString()).toBe(doc);
+      expect(editor.view.state.selection.main.head).toBe(from);
+    },
+  );
+
+  test.each([
+    { doc: "", from: 0, expected: "- 日本語X", head: 6 },
+    {
+      doc: "- ```\n\n  ```",
+      from: 6,
+      expected: "- ```\n  日本語X\n  ```",
+      head: 12,
+    },
+  ])(
+    "repairs before an immediately following character in $doc",
+    async ({ doc, from, expected, head }) => {
+      const editor = await compositionEditor(doc, EditorSelection.cursor(from));
+      editor.start();
+      editor.dispatch({
+        changes: { from, insert: "日本語" },
+        selection: { anchor: from + 3 },
+        userEvent: "input.type.compose.start",
+      });
+      editor.end();
+      editor.input((state) => ({
+        ...state.replaceSelection("X"),
+        userEvent: "input.type",
+      }));
+      await editor.measure();
+      expect(editor.view.state.doc.toString()).toBe(expected);
+      expect(editor.view.state.selection.main.head).toBe(head);
+      expect(undo(editor.view)).toBe(true);
+      expect(editor.view.state.doc.toString()).toBe(doc);
+      expect(redo(editor.view)).toBe(true);
+      expect(editor.view.state.doc.toString()).toBe(expected);
+      expect(editor.view.state.selection.main.head).toBe(head);
+    },
+  );
+
+  test.each(["destroy", "reconfigure", "disable", "set", "remote", "undo"])(
+    "does not repair after %s invalidates the editor",
+    async (action) => {
+      const editor = await compositionEditor();
+      editor.start();
+      editor.dispatch({
+        changes: { from: 0, insert: "に" },
+        userEvent: "input.type.compose.start",
+      });
+      editor.end();
+      if (action === "destroy") editor.destroy();
+      else if (action === "reconfigure") editor.reconfigure();
+      else if (action === "disable") editor.disable();
+      else if (action === "undo") undo(editor.view);
+      else
+        editor.dispatch({
+          changes: { from: 0, to: 1, insert: "replacement" },
+          userEvent: action === "remote" ? "input.type" : "set",
+          annotations:
+            action === "remote" ? Transaction.remote.of(true) : undefined,
+        });
+      const expected =
+        action === "undo"
+          ? ""
+          : action === "set" || action === "remote"
+            ? "replacement"
+            : "に";
+      await Promise.resolve();
+      expect(editor.view.state.doc.toString()).toBe(expected);
+      await editor.measure();
+      expect(editor.view.state.doc.toString()).toBe(expected);
+    },
+  );
+
+  test.each([
+    {
+      event: "delete.backward",
+      change: { from: 7, to: 8 },
+      text: "日",
+      head: 9,
+    },
+    {
+      event: "delete.forward",
+      change: { from: 6, to: 7 },
+      text: "本",
+      head: 8,
+    },
+    {
+      event: "delete.selection",
+      change: { from: 6, to: 8 },
+      text: "",
+      head: 8,
+    },
+    { event: "delete.cut", change: { from: 7, to: 8 }, text: "日", head: 9 },
+    {
+      event: "input.paste",
+      change: { from: 8, insert: "X" },
+      text: "日本X",
+      head: 11,
+    },
+    {
+      event: "input.drop",
+      change: { from: 8, insert: "X" },
+      text: "日本X",
+      head: 11,
+    },
+  ])(
+    "completes code composition before local $event",
+    async ({ event, change, text, head }) => {
+      const editor = await compositionEditor(
+        "- ```\n\n  ```",
+        EditorSelection.cursor(6),
+      );
+      editor.start();
+      editor.dispatch({
+        changes: { from: 6, insert: "日本" },
+        selection: { anchor: 8 },
+        userEvent: "input.type.compose.start",
+      });
+      editor.end();
+      editor.input(
+        () => ({
+          changes: {
+            ...change,
+            from: change.from + 2,
+            ...(change.to === undefined ? {} : { to: change.to + 2 }),
+          },
+          selection: { anchor: head },
+          userEvent: event,
+        }),
+        event === "input.paste"
+          ? "paste"
+          : event === "input.drop"
+            ? "drop"
+            : event === "delete.cut"
+              ? "cut"
+              : "keydown",
+      );
+      await editor.measure();
+      expect(editor.view.state.doc.toString()).toBe(
+        `- \`\`\`\n  ${text}\n  \`\`\``,
+      );
+      expect(editor.view.state.selection.main.head).toBe(head);
+    },
+  );
+
+  test.each([
+    {
+      event: "input.paste",
+      nativeEvent: "paste",
+      insert: "X",
+      expected: "- ```\n  日本X\n  ```",
+      head: 11,
+    },
+    {
+      event: "input.drop",
+      nativeEvent: "drop",
+      insert: "X",
+      expected: "- ```\n  日本X\n  ```",
+      head: 11,
+    },
+    {
+      event: "input",
+      nativeEvent: "keydown",
+      insert: "\n",
+      expected: "- ```\n  日本\n\n  ```",
+      head: 11,
+    },
+  ] as const)(
+    "keeps normalized composition when undoing subsequent $event",
+    async ({ event, nativeEvent, insert, expected, head }) => {
+      const editor = await compositionEditor(
+        "- ```\n\n  ```",
+        EditorSelection.cursor(6),
+      );
+      editor.start();
+      editor.dispatch({
+        changes: { from: 6, insert: "日本" },
+        selection: { anchor: 8 },
+        userEvent: "input.type.compose.start",
+        annotations: Transaction.time.of(1000),
+      });
+      editor.end();
+      editor.input(
+        (state) => ({
+          ...state.replaceSelection(insert),
+          userEvent: event,
+          annotations: Transaction.time.of(1100),
+        }),
+        nativeEvent,
+      );
+      expect(editor.view.state.doc.toString()).toBe(expected);
+      expect(editor.view.state.selection.main.head).toBe(head);
+      expect(undo(editor.view)).toBe(true);
+      expect(editor.view.state.doc.toString()).toBe("- ```\n  日本\n  ```");
+      expect(editor.view.state.selection.main.head).toBe(10);
+      expect(undo(editor.view)).toBe(true);
+      expect(editor.view.state.doc.toString()).toBe("- ```\n\n  ```");
+      expect(editor.view.state.selection.main.head).toBe(6);
+      expect(redo(editor.view)).toBe(true);
+      expect(editor.view.state.doc.toString()).toBe("- ```\n  日本\n  ```");
+      expect(editor.view.state.selection.main.head).toBe(10);
+      expect(redo(editor.view)).toBe(true);
+      expect(editor.view.state.doc.toString()).toBe(expected);
+      expect(editor.view.state.selection.main.head).toBe(head);
+    },
+  );
+
+  test.each([
+    { elapsed: 100, firstUndo: "- ```\n\n  ```", secondUndo: false },
+    { elapsed: 1000, firstUndo: "- ```\n  日本\n  ```", secondUndo: true },
+  ])(
+    "preserves the native typing history interval of $elapsed ms",
+    async ({ elapsed, firstUndo, secondUndo }) => {
+      const editor = await compositionEditor(
+        "- ```\n\n  ```",
+        EditorSelection.cursor(6),
+      );
+      editor.start();
+      editor.dispatch({
+        changes: { from: 6, insert: "日本" },
+        selection: { anchor: 8 },
+        userEvent: "input.type.compose.start",
+        annotations: Transaction.time.of(1000),
+      });
+      editor.end();
+      editor.input((state) => ({
+        ...state.replaceSelection("X"),
+        userEvent: "input.type",
+        annotations: Transaction.time.of(1000 + elapsed),
+      }));
+      expect(editor.view.state.doc.toString()).toBe("- ```\n  日本X\n  ```");
+      expect(undo(editor.view)).toBe(true);
+      expect(editor.view.state.doc.toString()).toBe(firstUndo);
+      expect(undo(editor.view)).toBe(secondUndo);
+      expect(editor.view.state.doc.toString()).toBe("- ```\n\n  ```");
+      expect(redo(editor.view)).toBe(true);
+      if (secondUndo) {
+        expect(editor.view.state.doc.toString()).toBe("- ```\n  日本\n  ```");
+        expect(redo(editor.view)).toBe(true);
+      }
+      expect(editor.view.state.doc.toString()).toBe("- ```\n  日本X\n  ```");
+      expect(editor.view.state.selection.main.head).toBe(11);
+    },
+  );
+
+  test.each([
+    { name: "missing observer", observer: undefined },
+    { name: "null observer", observer: null },
+    { name: "missing flush", observer: { pendingRecords: () => [] } },
+    { name: "missing pending records", observer: { forceFlush() {} } },
+    {
+      name: "pending Android key",
+      observer: {
+        forceFlush() {},
+        pendingRecords: () => [],
+        delayedAndroidKey: {},
+      },
+    },
+    {
+      name: "pending DOM records",
+      observer: { forceFlush() {}, pendingRecords: () => [{}] },
+    },
+    {
+      name: "invalid pending records",
+      observer: { forceFlush() {}, pendingRecords: () => null },
+    },
+  ])(
+    "defers normalization with $name until measurement",
+    async ({ observer }) => {
+      const editor = await compositionEditor();
+      editor.start();
+      editor.dispatch({
+        changes: { from: 0, insert: "日本" },
+        selection: { anchor: 2 },
+        userEvent: "input.type.compose.start",
+      });
+      editor.end();
+      editor.setObserver(observer);
+      editor.keydown();
+      expect(editor.view.state.doc.toString()).toBe("日本");
+      expect(editor.view.state.selection.main.head).toBe(2);
+      await editor.measure();
+      expect(editor.view.state.doc.toString()).toBe("- 日本");
+      expect(editor.view.state.selection.main.head).toBe(4);
+    },
+  );
+
+  test.each([
+    { delayedFlush: -1, expected: "- 日本" },
+    { delayedFlush: 0, expected: "日本" },
+    { delayedFlush: 12, expected: "日本" },
+  ])(
+    "waits for native delayed flush $delayedFlush before end-microtask normalization",
+    async ({ delayedFlush, expected }) => {
+      const editor = await compositionEditor();
+      editor.start();
+      editor.dispatch({
+        changes: { from: 0, insert: "日本" },
+        selection: { anchor: 2 },
+        userEvent: "input.type.compose.start",
+      });
+      editor.setObserver({
+        forceFlush() {},
+        pendingRecords: () => [],
+        delayedFlush,
+      });
+      editor.end();
+      await Promise.resolve();
+      expect(editor.view.state.doc.toString()).toBe(expected);
+      await editor.measure();
+      expect(editor.view.state.doc.toString()).toBe("- 日本");
+      expect(editor.view.state.selection.main.head).toBe(4);
+    },
+  );
+
+  test("normalizes in the end microtask before direct native input without a measurement", async () => {
+    const editor = await compositionEditor(
+      "- ```\n\n  ```",
+      EditorSelection.cursor(6),
+    );
+    editor.start();
+    editor.dispatch({
+      changes: { from: 6, insert: "日本" },
+      selection: { anchor: 8 },
+      userEvent: "input.type.compose.start",
+      annotations: Transaction.time.of(1000),
+    });
+    editor.end();
+    expect(editor.view.state.doc.toString()).toBe("- ```\n日本\n  ```");
+    await Promise.resolve();
+    expect(editor.view.state.doc.toString()).toBe("- ```\n  日本\n  ```");
+    expect(editor.view.state.selection.main.head).toBe(10);
+    editor.input(
+      (state) => ({
+        ...state.replaceSelection("X"),
+        userEvent: "input.type",
+        annotations: Transaction.time.of(1100),
+      }),
+      "beforeinput",
+    );
+    expect(editor.view.state.doc.toString()).toBe("- ```\n  日本X\n  ```");
+    expect(editor.view.state.selection.main.head).toBe(11);
+    expect(undo(editor.view)).toBe(true);
+    expect(editor.view.state.doc.toString()).toBe("- ```\n\n  ```");
+    expect(redo(editor.view)).toBe(true);
+    expect(editor.view.state.doc.toString()).toBe("- ```\n  日本X\n  ```");
+    expect(editor.view.state.selection.main.head).toBe(11);
+  });
+
+  test("flushes the final native composition mutation before constructing the next input", async () => {
+    const editor = await compositionEditor(
+      "- ```\n\n  ```",
+      EditorSelection.cursor(6),
+    );
+    editor.start();
+    editor.dispatch({
+      changes: { from: 6, insert: "に" },
+      selection: { anchor: 7 },
+      userEvent: "input.type.compose.start",
+      annotations: Transaction.time.of(1000),
+    });
+    editor.end();
+    editor.setObserver({
+      forceFlush() {
+        editor.dispatch({
+          changes: { from: 6, to: 7, insert: "日本語" },
+          selection: { anchor: 9 },
+          userEvent: "input.type.compose",
+          annotations: Transaction.time.of(1100),
+        });
+      },
+      pendingRecords: () => [],
+    });
+    editor.input(
+      (state) => ({
+        ...state.replaceSelection("X"),
+        userEvent: "input.paste",
+        annotations: Transaction.time.of(1200),
+      }),
+      "paste",
+    );
+    expect(editor.view.state.doc.toString()).toBe("- ```\n  日本語X\n  ```");
+    expect(editor.view.state.selection.main.head).toBe(12);
+    expect(undo(editor.view)).toBe(true);
+    expect(editor.view.state.doc.toString()).toBe("- ```\n  日本語\n  ```");
+    expect(undo(editor.view)).toBe(true);
+    expect(editor.view.state.doc.toString()).toBe("- ```\n\n  ```");
+    await editor.measure();
+    expect(editor.view.state.doc.toString()).toBe("- ```\n\n  ```");
+  });
+
+  test("preserves an incoming annotation after composition normalization", async () => {
+    const nativeAnnotation = Annotation.define<object>();
+    const payload = {};
+    let received: object | undefined;
+    const editor = await compositionEditor(
+      "",
+      EditorSelection.cursor(0),
+      EditorState.transactionExtender.of((transaction) => {
+        if (transaction.isUserEvent("input.paste"))
+          received = transaction.annotation(nativeAnnotation);
+        return null;
+      }),
+    );
+    editor.start();
+    editor.dispatch({
+      changes: { from: 0, insert: "日本" },
+      selection: { anchor: 2 },
+      userEvent: "input.type.compose.start",
+    });
+    editor.end();
+    editor.input(
+      (state) => ({
+        ...state.replaceSelection("X"),
+        userEvent: "input.paste",
+        annotations: nativeAnnotation.of(payload),
+      }),
+      "paste",
+    );
+    expect(editor.view.state.doc.toString()).toBe("- 日本X");
+    expect(editor.view.state.selection.main.head).toBe(5);
+    expect(received).toBe(payload);
+  });
+
+  test("keeps two panes independent", async () => {
+    const first = await compositionEditor();
+    const second = await compositionEditor(
+      "- ```\n\n  ```",
+      EditorSelection.cursor(6),
+    );
+    first.start();
+    second.start();
+    first.dispatch({
+      changes: { from: 0, insert: "日本語" },
+      userEvent: "input.type.compose.start",
+    });
+    second.dispatch({
+      changes: { from: 6, insert: "日本" },
+      userEvent: "input.type.compose.start",
+    });
+    first.end();
+    await first.measure();
+    expect(first.view.state.doc.toString()).toBe("- 日本語");
+    expect(second.view.state.doc.toString()).toBe("- ```\n日本\n  ```");
+    second.end();
+    await second.measure();
+    expect(second.view.state.doc.toString()).toBe("- ```\n  日本\n  ```");
+  });
+
+  test("does not replay live transaction extenders while finalizing", async () => {
+    let count = 0;
+    const editor = await compositionEditor(
+      "",
+      EditorSelection.cursor(0),
+      EditorState.transactionExtender.of((transaction) => {
+        if (transaction.docChanged) count++;
+        return null;
+      }),
+    );
+    editor.start();
+    editor.dispatch({
+      changes: { from: 0, insert: "日本語" },
+      userEvent: "input.type.compose.start",
+    });
+    editor.end();
+    await editor.measure();
+    expect(editor.view.state.doc.toString()).toBe("- 日本語");
+    expect(count).toBe(2);
+  });
+});
 
 describe("BulletTypingGuard", () => {
   test.each([
