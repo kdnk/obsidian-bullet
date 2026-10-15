@@ -14,6 +14,8 @@ import {
 } from "@codemirror/state";
 import { ViewPlugin } from "@codemirror/view";
 
+import { reindentListPrefix } from "../utils/fencedCode";
+
 interface MoveEditor {
   state: EditorState;
   dispatch: (transaction: Transaction) => void;
@@ -293,7 +295,9 @@ export class CrossNoteMove {
     const branch = original
       .split("\n")
       .map((line) =>
-        line.startsWith(base) ? this.indent + line.slice(base.length) : line,
+        line.replace(/^[\t ]*/, (prefix) =>
+          reindentListPrefix(prefix, base, this.indent),
+        ),
       )
       .join("\n");
     const before = targetDoc.sliceString(0, insertion);

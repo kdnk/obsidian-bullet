@@ -52,6 +52,62 @@ test("moves a branch and continuation lines with destination indentation", () =>
   );
 });
 
+test.each([
+  {
+    name: "a tab spanning the code container and code indentation",
+    branch: "- ```js\n\tcode\n  ```",
+    indent: "  ",
+    moved: "- target\n  - ```js\n  \t  code\n    ```",
+  },
+  {
+    name: "mixed prefixes when moving to a deeper tab stop",
+    branch: "  - ```js\n\tcode\n    ```",
+    indent: "\t",
+    moved: "- target\n\t- ```js\n\t  code\n\t  ```",
+  },
+  {
+    name: "a partial tab when moving to the root",
+    branch: "  - ```js\n\tcode\n    ```",
+    indent: "",
+    moved: "- target\n- ```js\n  code\n  ```",
+  },
+  {
+    name: "mixed space and tab prefixes when moving to a shallower tab stop",
+    branch: " \t- ```js\n\t\tcode\n \t  ```",
+    indent: " ",
+    moved: "- target\n - ```js\n\t code\n   ```",
+  },
+])(
+  "preserves code columns and paired history for $name",
+  ({ branch, indent, moved }) => {
+    const source = editor(branch);
+    const target = editor("- target");
+    expect(
+      new CrossNoteMove(
+        source,
+        target,
+        { from: 0, to: branch.length },
+        8,
+        indent,
+      ).apply(),
+    ).toBe(true);
+    expect(source.state.doc.toString()).toBe("");
+    expect(target.state.doc.toString()).toBe(moved);
+    expect(undo(target)).toBe(true);
+    expect(source.state.doc.toString()).toBe(branch);
+    expect(target.state.doc.toString()).toBe("- target");
+    expect(redo(source)).toBe(true);
+    expect(source.state.doc.toString()).toBe("");
+    expect(target.state.doc.toString()).toBe(moved);
+    expect(undo(source)).toBe(true);
+    expect(source.state.doc.toString()).toBe(branch);
+    expect(target.state.doc.toString()).toBe("- target");
+    expect(redo(target)).toBe(true);
+    expect(source.state.doc.toString()).toBe("");
+    expect(target.state.doc.toString()).toBe(moved);
+  },
+);
+
 test("moves the only branch to an empty note and restores both with undo/redo from either editor", () => {
   const source = editor("- branch\n\t- child");
   const target = editor("");
