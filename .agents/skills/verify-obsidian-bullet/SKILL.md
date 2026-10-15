@@ -119,6 +119,15 @@ It checks checkbox rejection, Escape cancellation, cross-note task movement,
 immediate destination focus, and paired Undo/Redo with saved Markdown. See the
 [drag map](features/desktop-drag-and-drop.md) for code/zoom coverage limitations.
 
+For focused mobile code-fold checks, run
+`n exec 22.23.1 node .agents/skills/verify-obsidian-bullet/scripts/verify-mobile-code-source.cjs "$PROOF_DIR/mobile-code-source"`.
+Start in desktop mode with Shiki installed. It enters mobile emulation, focuses
+the opening/body source rows, and asserts visible source glyphs and no processor
+preview before native touch fold/unfold. It checks full-height right controls
+and unchanged saved Markdown, then restores the desktop workspace and settings.
+See the [folding map](features/guides-and-folding.md) for complementary preview
+coverage; cursor placement alone does not establish editing state.
+
 For a new manual case, reuse `scripts/obsidian-scroll-driver.cjs` from a Node
 script launched with `n exec 22.23.1 node`. Its `evaluate(fn, ...args)` guards the
 exact vault path and tab configuration. Resolve selectors and source rows in
