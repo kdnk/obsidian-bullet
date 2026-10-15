@@ -17,6 +17,7 @@ import {
 import { NestedCodeBlockPreviews } from "./NestedCodeBlockPreview";
 
 import { getObsidianDomWindow } from "../obsidianDom";
+import { MarkdownLineClassifier } from "../services/MarkdownLineClassifier";
 import {
   getFenceContent,
   getFenceOpening,
@@ -100,9 +101,18 @@ interface ProcessorLayout {
   plainPreview: boolean;
 }
 
+interface ProcessorCodeSource {
+  element: HTMLElement;
+  openingFrom: number;
+  rawLines: readonly string[];
+  contentColumn: number;
+  fenceInfo: string;
+}
+
 interface MeasuredFrame {
   native: NativeSnapshot;
   processors: ProcessorLayout[];
+  previewSources: ProcessorCodeSource[];
 }
 
 const NATIVE_CLASSES = [
@@ -298,6 +308,8 @@ export class NestedCodeBlockLayoutPluginValue {
   private syntaxContext: SyntaxContext;
   private previewObserver: MutationObserver | null = null;
   private previews = new NestedCodeBlockPreviews();
+  private correctedProcessors = new Set<HTMLElement>();
+  private classifier = new MarkdownLineClassifier();
   private markerMeasureContainer: HTMLElement | null = null;
   private markerMeasurements = new Map<
     number,
@@ -495,6 +507,7 @@ export class NestedCodeBlockLayoutPluginValue {
       this.clearProcessor(element);
     this.styledProcessors.clear();
     this.previews.destroy();
+    this.correctedProcessors.clear();
     this.markerMeasureContainer?.remove();
     this.markerMeasureContainer = null;
     this.markerMeasurements.clear();
@@ -1100,7 +1113,17 @@ export class NestedCodeBlockLayoutPluginValue {
           presentation: nativePresentation(measurement),
         });
     }
-    return { native: { ...native, rows }, processors };
+    const previewSources: ProcessorCodeSource[] = [];
+    for (const element of Array.from(
+      this.view.contentDOM.querySelectorAll<HTMLElement>(
+        ".cm-preview-code-block",
+      ),
+    )) {
+      if (!element.classList.contains("cm-preview-code-block")) continue;
+      const source = this.readPreviewSource(element);
+      if (source) previewSources.push(source);
+    }
+    return { native: { ...native, rows }, processors, previewSources };
   }
 
   private isCurrent(snapshot: NativeSnapshot): boolean {
@@ -1117,7 +1140,6 @@ export class NestedCodeBlockLayoutPluginValue {
       return;
     }
     const current = new Map<HTMLElement, ProcessorLayout>();
-    let previewChanged = false;
     for (const processor of frame.processors) {
       const { element, openingFrom, inset, previewEmbed, plainPreview } =
         processor;
@@ -1132,13 +1154,38 @@ export class NestedCodeBlockLayoutPluginValue {
       setClass(element, CODE_BLOCK_CLASS, true);
       setClass(element, PREVIEW_EMBED_CLASS, previewEmbed);
       setClass(element, PLAIN_PREVIEW_CLASS, plainPreview);
-      previewChanged = this.correctPreviewContent(element) || previewChanged;
       current.set(element, processor);
     }
     for (const element of this.styledProcessors.keys()) {
       if (!current.has(element)) this.clearProcessor(element);
     }
     this.styledProcessors = current;
+    const corrected = new Set<HTMLElement>();
+    let previewChanged = false;
+    for (const source of frame.previewSources) {
+      const { element, openingFrom, rawLines, contentColumn, fenceInfo } =
+        source;
+      if (
+        !element.classList.contains("cm-preview-code-block") ||
+        !this.view.contentDOM.contains(element) ||
+        documentLineForElement(this.view, element)?.from !== openingFrom
+      )
+        continue;
+      previewChanged =
+        this.previews.synchronize(
+          element,
+          rawLines,
+          contentColumn,
+          this.view.state.tabSize,
+          fenceInfo,
+        ) || previewChanged;
+      corrected.add(element);
+    }
+    for (const element of this.correctedProcessors) {
+      if (!corrected.has(element))
+        previewChanged = this.previews.clear(element) || previewChanged;
+    }
+    this.correctedProcessors = corrected;
     if (previewChanged) {
       this.invalidateMeasurement();
       return;
@@ -1176,41 +1223,46 @@ export class NestedCodeBlockLayoutPluginValue {
     });
   }
 
-  private correctPreviewContent(element: HTMLElement): boolean {
-    if (!element.querySelector(".expressive-code")) {
-      this.previews.clear(element);
-      return false;
-    }
+  private readPreviewSource(element: HTMLElement): ProcessorCodeSource | null {
+    if (!element.querySelector(".expressive-code")) return null;
+    const { state } = this.view;
     const line = documentLineForElement(this.view, element);
-    const opening = line && this.syntaxContext.fenceOpenings.at(line.number);
-    if (!opening) return false;
-    const source: string[] = [];
-    for (
-      let n = opening.openingLineNumber + 1;
-      n <= this.view.state.doc.lines;
-      n++
-    ) {
-      const name = this.syntaxContext.lineNameAt(n);
-      if (name && hasClassName(name, "HyperMD-codeblock-end")) {
-        return this.previews.synchronize(
+    const context = line && this.classifier.getCodeFence(state, line.number);
+    if (
+      !context ||
+      !line ||
+      context.openingLineNumber !== line.number ||
+      !context.containerIndent
+    )
+      return null;
+    const attached = parseFenceOpening(state, line.number);
+    const openingText = attached
+      ? line.text.slice(attached.sourceOffset)
+      : getFenceContent(line.text, context.containerIndent)?.text;
+    if (openingText === undefined) return null;
+    const fence = getFenceOpening(openingText);
+    if (!fence) return null;
+    const rawLines: string[] = [];
+    for (let n = line.number + 1; n <= state.doc.lines; n++) {
+      const text = state.doc.line(n).text;
+      const content = getFenceContent(text, context.containerIndent);
+      if (content && isFenceClosing(content.text, fence)) {
+        return {
           element,
-          source,
-          opening.contentColumn,
-          this.view.state.tabSize,
-          this.view.state.doc.line(opening.openingLineNumber).text,
-        );
+          openingFrom: line.from,
+          rawLines,
+          contentColumn: countColumn(context.containerIndent, state.tabSize),
+          fenceInfo: openingText,
+        };
       }
-      const text = this.view.state.doc.line(n).text;
-      if (text.trim() !== "" && (!name || !isNestedCodeBlockName(name))) break;
-      source.push(text);
+      if (text.trim() !== "" && !content) return null;
+      rawLines.push(text);
     }
-    this.previews.clear(element);
-    return false;
+    return null;
   }
 
   private clearProcessor(element: HTMLElement) {
     if (!element.classList.contains("cm-preview-code-block")) return;
-    this.previews.clear(element);
     element.classList.remove(CODE_BLOCK_CLASS);
     element.classList.remove(PREVIEW_EMBED_CLASS);
     element.classList.remove(PLAIN_PREVIEW_CLASS);

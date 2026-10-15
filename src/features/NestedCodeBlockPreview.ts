@@ -209,8 +209,8 @@ export class NestedCodeBlockPreviews {
     return restored || mutations.length > 0;
   }
 
-  clear(embed: HTMLElement): void {
-    this.restore(embed);
+  clear(embed: HTMLElement): boolean {
+    return this.restore(embed);
   }
 
   destroy(): void {
@@ -267,19 +267,27 @@ function textNodes(node: Node): Text[] {
 
 function wrapOptions(info: string) {
   const result = { preserveIndent: true, hangingIndent: 0 };
+  const unquoted = info.replace(
+    /(?:^|\s)(?:([^\s="'/{]+)\s*=\s*)?(?:"(?:[^\\]|\\.)*?"|'(?:[^\\]|\\.)*?'|\/(?:[^\\]|\\.)*?\/|\{(?:[^\\]|\\.)*?\})(?=\s|$)/g,
+    (_token, key: string | undefined) => (key ? ` ${key}=<quoted> ` : " "),
+  );
+  const options = Array.from(
+    unquoted.matchAll(/([^\s=]+)(?:\s*=(?:\s*(\S+))?)?/g),
+  );
   for (const key of ["preserveIndent", "hangingIndent"] as const) {
-    const mentions = info.match(new RegExp(key, "g")) ?? [];
-    if (!mentions.length) continue;
-    const match = new RegExp(`(?:^|\\s)${key}(?:=([^\\s]+))?(?=\\s|$)`).exec(
-      info,
+    const matches = options.filter(
+      (option) => option[1].toLowerCase() === key.toLowerCase(),
     );
-    if (mentions.length !== 1 || !match) return null;
+    if (!matches.length) continue;
+    if (matches.length !== 1) return null;
+    const value = matches[0][2];
+    if (value === undefined && matches[0][0].includes("=")) return null;
     if (key === "preserveIndent") {
-      if (match[1] && match[1] !== "true" && match[1] !== "false") return null;
-      result.preserveIndent = match[1] !== "false";
+      if (value && value !== "true" && value !== "false") return null;
+      result.preserveIndent = value !== "false";
     } else {
-      if (!/^\d+$/.test(match[1] ?? "")) return null;
-      result.hangingIndent = Number(match[1]);
+      if (!/^\d+$/.test(value ?? "")) return null;
+      result.hangingIndent = Number(value);
       if (!Number.isSafeInteger(result.hangingIndent)) return null;
     }
   }

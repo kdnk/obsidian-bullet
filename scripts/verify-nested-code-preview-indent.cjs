@@ -73,6 +73,57 @@ const cases = [
     rawCopy: "echo one\n\t  echo two",
     close: "\t  ```",
   },
+  ...[
+    ["title-preserve-indent", 'title="preserveIndent.js"'],
+    ["title-hanging-indent", 'title="hangingIndent.js"'],
+    [
+      "title-options-text",
+      'title="example preserveIndent=false hangingIndent=9"',
+    ],
+  ].map(([name, metadata]) => ({
+    name,
+    opening: "- ```js " + metadata,
+    raw: ["  hello", "    nested"],
+    want: ["hello", "  nested"],
+    close: "  ```",
+  })),
+  ...[
+    [
+      "continuation",
+      "- owner",
+      "  ",
+      ["  hello", "    nested"],
+      ["hello", "  nested"],
+    ],
+    [
+      "task-continuation",
+      "- [ ] owner",
+      "  ",
+      ["  hello", "    nested"],
+      ["hello", "  nested"],
+    ],
+    [
+      "deep-continuation",
+      "\t- owner",
+      "\t  ",
+      ["\t  hello", "\t    nested"],
+      ["hello", "  nested"],
+    ],
+    [
+      "partial-tab-continuation",
+      "- owner",
+      "  ",
+      ["\thello", "\t  nested"],
+      ["  hello", "    nested"],
+    ],
+  ].map(([name, parent, indent, raw, want]) => ({
+    name,
+    before: [parent],
+    opening: indent + "```js",
+    raw,
+    want,
+    close: indent + "```",
+  })),
   {
     name: "outside-list",
     opening: "```js",
@@ -122,6 +173,7 @@ try {
         "\t- child",
         "\t\t- grandchild",
         "",
+        ...(spec.before ?? []),
         spec.opening,
         ...spec.raw,
         spec.close,
@@ -147,12 +199,15 @@ try {
         "shiki-reloaded",
       ]) {
         if (phase === "after-editing") {
-          evaluate(async () => {
-            const ed = app.workspace.activeLeaf.view.editor;
-            ed.setCursor(5, ed.getLine(5).length);
-            await new Promise((resolve) => setTimeout(resolve, 200));
-            ed.setCursor(ed.lastLine(), 5);
-          });
+          evaluate(
+            async (bodyLine) => {
+              const ed = app.workspace.activeLeaf.view.editor;
+              ed.setCursor(bodyLine, ed.getLine(bodyLine).length);
+              await new Promise((resolve) => setTimeout(resolve, 200));
+              ed.setCursor(ed.lastLine(), 5);
+            },
+            5 + (spec.before?.length ?? 0),
+          );
         } else if (phase === "reconfigured") {
           evaluate(() => app.workspace.updateOptions());
         } else if (phase.startsWith("styles-")) {
