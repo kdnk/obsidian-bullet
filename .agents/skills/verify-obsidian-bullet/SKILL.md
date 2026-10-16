@@ -135,9 +135,13 @@ the renderer, focus it, require a fresh title containing `vault` and excluding
 `base`, and hit-test the target with `document.elementFromPoint()`. Send native
 CDP input through `cdp("Input.dispatchMouseEvent", ...)`,
 `Input.dispatchTouchEvent`, `Input.dispatchKeyEvent`, or `Input.insertText`.
-Recheck the guarded target immediately before each input. Use both press and
-release; a synthetic DOM event or direct command invocation proves only that
-programmatic entry point. Record source/cursor state before and after input and
+Recheck the guarded target immediately before each input. After fixture setup,
+assert the literal Markdown and intended selection before the first input.
+When text insertion produces an unexpected change, retain setup, received
+`beforeinput`/`input`/`keydown` events, document-changing transactions, and saved
+state separately; a post-save snapshot alone does not identify the cause.
+Use both press and release; a synthetic DOM event or direct command invocation
+proves only that programmatic entry point. Record source/cursor state before and after input and
 wait for the file save before comparing persisted Markdown.
 
 When using Computer Use, follow `AGENTS.md`'s per-action vault focus/title checks
