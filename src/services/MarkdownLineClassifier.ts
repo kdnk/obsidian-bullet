@@ -256,11 +256,15 @@ export class MarkdownLineClassifier {
         structuralBlockIndex.has(previousLineNumber),
       );
 
-      if (
-        previousKind === "blank" ||
-        previousKind === "structure" ||
-        previousKind === "structure-prefix"
-      ) {
+      if (previousKind === "blank") {
+        const previousIndent = indentRe.exec(previousText)?.[0];
+        if (previousIndent && getIndentWidth(previousIndent) >= indentWidth) {
+          continue;
+        }
+        return false;
+      }
+
+      if (previousKind === "structure" || previousKind === "structure-prefix") {
         return false;
       }
 

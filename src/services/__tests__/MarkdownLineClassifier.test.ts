@@ -70,6 +70,11 @@ describe("MarkdownLineClassifier", () => {
     ["- item", 1, "list-item"],
     ["1. item", 1, "list-item"],
     ["- item\n  continuation", 2, "list-continuation"],
+    [
+      "- parent\n    - child\n      \n      continuation\n    - sibling",
+      4,
+      "list-continuation",
+    ],
     ["# heading", 1, "structure"],
     ["> quote", 1, "structure"],
     ["---", 1, "structure"],

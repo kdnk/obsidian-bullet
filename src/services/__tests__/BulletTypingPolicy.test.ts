@@ -561,6 +561,20 @@ describe("BulletTypingPolicy", () => {
     expect(applyCorrection(transaction, decision)).toBe("- a");
   });
 
+  test("keeps typed text in an indented continuation after a blank continuation", () => {
+    const doc = "- parent\n    - child\n      \n      ";
+    const transaction = makeTransaction(
+      doc,
+      { from: doc.length, insert: "X" },
+      "input.type",
+      doc.length,
+    );
+
+    expect(applyCorrection(transaction, policy.decide(transaction))).toBe(
+      "- parent\n    - child\n      \n      X",
+    );
+  });
+
   test("prefixes only an edited plain-text line", () => {
     const transaction = makeTransaction(
       "pasted\nuntouched",
