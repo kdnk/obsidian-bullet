@@ -3,6 +3,29 @@ import { CreateNewRootItemAfterEmpty } from "../CreateNewRootItemAfterEmpty";
 import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 describe("CreateNewRootItemAfterEmpty operation", () => {
+  test.each([
+    { marker: "-", expected: "-\n- ", cursorCh: 2 },
+    { marker: "*", expected: "*\n* ", cursorCh: 2 },
+    { marker: "+", expected: "+\n+ ", cursorCh: 2 },
+    { marker: "1.", expected: "1.\n2. ", cursorCh: 3 },
+  ])(
+    "adds a separator to the sibling of a bare $marker marker",
+    ({ marker, expected, cursorCh }) => {
+      const root = makeRoot({
+        editor: makeEditor({
+          text: marker,
+          cursor: { line: 0, ch: marker.length },
+        }),
+      });
+
+      const outcome = new CreateNewRootItemAfterEmpty(root, true).perform();
+
+      expect(outcome).toEqual(UPDATED_OUTCOME);
+      expect(root.print()).toBe(expected);
+      expect(root.getCursor()).toEqual({ line: 1, ch: cursorCh });
+    },
+  );
+
   test("keeps an empty root item and creates a sibling below its subtree", () => {
     const root = makeRoot({
       editor: makeEditor({
