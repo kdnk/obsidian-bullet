@@ -28,13 +28,17 @@ describe("CreateNewRootItemAfterEmpty operation", () => {
 
   test.each([
     {
-      before: Array.from({ length: 8 }, (_, i) => `${i + 1}. before`).join("\n"),
+      before: Array.from({ length: 8 }, (_, i) => `${i + 1}. before`).join(
+        "\n",
+      ),
       marker: "9.",
       expectedEnd: "9. \n10. ",
       cursorCh: 4,
     },
     {
-      before: Array.from({ length: 98 }, (_, i) => `${i + 1}. before`).join("\n"),
+      before: Array.from({ length: 98 }, (_, i) => `${i + 1}. before`).join(
+        "\n",
+      ),
       marker: "99.",
       expectedEnd: "99. \n100. ",
       cursorCh: 5,

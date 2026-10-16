@@ -382,6 +382,12 @@ export class List {
     return this.spaceAfterBullet;
   }
 
+  ensureBulletSeparator(): void {
+    if (this.bullet && !this.spaceAfterBullet) {
+      this.spaceAfterBullet = " ";
+    }
+  }
+
   getCheckboxLength() {
     return this.optionalCheckbox.length;
   }

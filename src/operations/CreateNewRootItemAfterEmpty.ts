@@ -31,6 +31,7 @@ export class CreateNewRootItemAfterEmpty implements Operation {
       return NO_OP_OUTCOME;
     }
 
+    list.ensureBulletSeparator();
     const hasCheckbox = list.hasCheckbox();
     const prefix = hasCheckbox ? "[ ] " : "";
     const sibling = new List(
