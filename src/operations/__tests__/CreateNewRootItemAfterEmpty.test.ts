@@ -4,18 +4,69 @@ import { NO_OP_OUTCOME, UPDATED_OUTCOME } from "../Operation";
 
 describe("CreateNewRootItemAfterEmpty operation", () => {
   test.each([
-    { marker: "-", expected: "-\n- ", cursorCh: 2 },
-    { marker: "*", expected: "*\n* ", cursorCh: 2 },
-    { marker: "+", expected: "+\n+ ", cursorCh: 2 },
-    { marker: "1.", expected: "1.\n2. ", cursorCh: 3 },
+    { marker: "-", expected: "- \n- ", cursorCh: 2 },
+    { marker: "*", expected: "* \n* ", cursorCh: 2 },
+    { marker: "+", expected: "+ \n+ ", cursorCh: 2 },
+    { marker: "1.", expected: "1. \n2. ", cursorCh: 3 },
   ])(
-    "adds a separator to the sibling of a bare $marker marker",
+    "completes a bare $marker marker and its new sibling",
     ({ marker, expected, cursorCh }) => {
       const root = makeRoot({
         editor: makeEditor({
           text: marker,
           cursor: { line: 0, ch: marker.length },
         }),
+      });
+
+      const outcome = new CreateNewRootItemAfterEmpty(root, true).perform();
+
+      expect(outcome).toEqual(UPDATED_OUTCOME);
+      expect(root.print()).toBe(expected);
+      expect(root.getCursor()).toEqual({ line: 1, ch: cursorCh });
+    },
+  );
+
+  test.each([
+    {
+      before: Array.from({ length: 8 }, (_, i) => `${i + 1}. before`).join("\n"),
+      marker: "9.",
+      expectedEnd: "9. \n10. ",
+      cursorCh: 4,
+    },
+    {
+      before: Array.from({ length: 98 }, (_, i) => `${i + 1}. before`).join("\n"),
+      marker: "99.",
+      expectedEnd: "99. \n100. ",
+      cursorCh: 5,
+    },
+  ])(
+    "completes $marker before crossing a digit boundary",
+    ({ before, marker, expectedEnd, cursorCh }) => {
+      const line = before.split("\n").length;
+      const root = makeRoot({
+        editor: makeEditor({
+          text: `${before}\n${marker}`,
+          cursor: { line, ch: marker.length },
+        }),
+      });
+
+      const outcome = new CreateNewRootItemAfterEmpty(root, true).perform();
+
+      expect(outcome).toEqual(UPDATED_OUTCOME);
+      expect(root.print()).toBe(`${before}\n${expectedEnd}`);
+      expect(root.getCursor()).toEqual({ line: line + 1, ch: cursorCh });
+    },
+  );
+
+  test.each([
+    { text: "- ", expected: "- \n- ", cursorCh: 2 },
+    { text: "*\t", expected: "*\t\n*\t", cursorCh: 2 },
+    { text: "1.\t", expected: "1.\t\n2.\t", cursorCh: 3 },
+  ])(
+    "preserves the existing separator in $text",
+    ({ text, expected, cursorCh }) => {
+      const root = makeRoot({
+        editor: makeEditor({ text, cursor: { line: 0, ch: text.length } }),
       });
 
       const outcome = new CreateNewRootItemAfterEmpty(root, true).perform();

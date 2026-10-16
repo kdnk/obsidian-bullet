@@ -6,7 +6,7 @@ const { cdp, evaluate } = require("./obsidian-scroll-driver.cjs");
 
 if (!process.argv[2])
   throw Error(
-    "Usage: node scripts/verify-editing-boundaries.cjs <fresh-output-dir>",
+    "Usage: node scripts/verify-editing-boundaries.cjs <fresh-output-dir> [--empty-markers]",
   );
 const output = path.resolve(process.argv[2]);
 fs.mkdirSync(output, { recursive: false });
@@ -24,6 +24,7 @@ const original = evaluate(() => {
     },
   };
 });
+const emptyMarkersOnly = process.argv.includes("--empty-markers");
 const results = [];
 const failures = [];
 const inputs = [];
@@ -154,6 +155,7 @@ function screenshot(name) {
 }
 
 function check(name, run) {
+  if (emptyMarkersOnly && !name.startsWith("empty-marker-enter-")) return;
   const result = { name };
   results.push(result);
   try {
@@ -202,6 +204,63 @@ try {
     keypress("z", 12);
     result.redo = sample();
     expectState(result.redo, after);
+  }
+
+  let emptyMarkerCase = 0;
+  for (const { before, after, cursor } of [
+    { before: "-", after: "- \n- ", cursor: { line: 1, ch: 2 } },
+    { before: "*", after: "* \n* ", cursor: { line: 1, ch: 2 } },
+    { before: "+", after: "+ \n+ ", cursor: { line: 1, ch: 2 } },
+    { before: "1.", after: "1. \n2. ", cursor: { line: 1, ch: 3 } },
+    ...[
+      { number: 9, precedingSeparator: " ", separator: "" },
+      { number: 99, precedingSeparator: " ", separator: "" },
+      { number: 9, precedingSeparator: " ", separator: "\t" },
+      { number: 9, precedingSeparator: "\t", separator: "" },
+    ].map(({ number, precedingSeparator, separator }) => {
+      const prefix = Array.from(
+        { length: number - 1 },
+        (_, index) => `${index + 1}.${precedingSeparator}previous\n`,
+      ).join("");
+      return {
+        before: `${prefix}${number}.${separator}`,
+        after: `${prefix}${number}.${separator || " "}\n${number + 1}.${separator || " "}`,
+        cursor: { line: number, ch: String(number + 1).length + 2 },
+      };
+    }),
+    { before: "-\t", after: "-\t\n-\t", cursor: { line: 1, ch: 2 } },
+  ]) {
+    check(
+      `empty-marker-enter-${++emptyMarkerCase}-${JSON.stringify(before.split("\n").at(-1))}`,
+      (result) => {
+        const lines = before.split("\n");
+        const initialCursor = {
+          line: lines.length - 1,
+          ch: lines.at(-1).length,
+        };
+        setup(before, initialCursor);
+        result.before = sample();
+        expectState(result.before, before, initialCursor);
+        keypress("Enter");
+        result.after = sample();
+        expectState(result.after, after, cursor);
+        history(result, before, after);
+        assert.deepEqual(result.undo.cursor, initialCursor);
+        assert.deepEqual(result.redo.cursor, cursor);
+        type("X");
+        result.typed = sample();
+        expectState(result.typed, after + "X", {
+          ...cursor,
+          ch: cursor.ch + 1,
+        });
+        result.typingHistory = {};
+        history(result.typingHistory, after, after + "X");
+        assert.deepEqual(result.typingHistory.redo.cursor, {
+          ...cursor,
+          ch: cursor.ch + 1,
+        });
+      },
+    );
   }
 
   for (const marker of ["[ ]", "[x]"]) {
