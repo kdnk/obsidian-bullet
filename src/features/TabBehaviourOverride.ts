@@ -58,6 +58,10 @@ export class TabBehaviourOverride implements Feature {
 
   private runIndent(editor: MyEditor) {
     return this.operationPerformer.perform((root) => {
+      if (!root.hasSingleSelection()) {
+        return null;
+      }
+
       if (
         !this.shouldHandleListEditing(root.getListUnderCursor().getBullet())
       ) {
@@ -74,6 +78,10 @@ export class TabBehaviourOverride implements Feature {
 
   private runOutdent(editor: MyEditor) {
     return this.operationPerformer.perform((root) => {
+      if (!root.hasSingleSelection()) {
+        return null;
+      }
+
       if (
         !this.shouldHandleListEditing(root.getListUnderCursor().getBullet())
       ) {

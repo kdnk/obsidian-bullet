@@ -13,6 +13,40 @@ const numberedSiblings = Array.from(
 ).join("\n");
 const fixtures = [
   {
+    name: "split separated items at multiple cursors",
+    text: "- one\n\n- two",
+    cursors: [
+      { line: 0, ch: 5 },
+      { line: 2, ch: 5 },
+    ],
+    key: "Enter",
+    expected: "- one\n- \n\n- two\n- ",
+    typed: "- one\n- X\n\n- two\n- X",
+  },
+  {
+    name: "indent separated items at multiple cursors",
+    text: "- one\n\n- two",
+    cursors: [
+      { line: 0, ch: 5 },
+      { line: 2, ch: 5 },
+    ],
+    key: "Tab",
+    expected: "\t- one\n\n\t- two",
+    typed: "\t- oneX\n\n\t- twoX",
+  },
+  {
+    name: "outdent separated items at multiple cursors",
+    text: "\t- one\n\n\t- two",
+    cursors: [
+      { line: 0, ch: 6 },
+      { line: 2, ch: 6 },
+    ],
+    key: "Tab",
+    shift: true,
+    expected: "- one\n\n- two",
+    typed: "- oneX\n\n- twoX",
+  },
+  {
     name: "replace selected parent task text",
     text: "- [x] abc\n\t- child",
     line: 0,
@@ -249,7 +283,7 @@ try {
       app.workspace.updateOptions();
     }, shiki);
     for (const fixture of fixtures) {
-      for (const reverse of fixture.from === fixture.to
+      for (const reverse of !fixture.cursors && fixture.from === fixture.to
         ? [false]
         : [false, true]) {
         const name = `${fixture.name}-${shiki ? "shiki" : "native"}-${reverse ? "reverse" : "forward"}`;
@@ -257,10 +291,22 @@ try {
           async (fixture, reverse) => {
             const editor = app.workspace.activeLeaf.view.editor;
             editor.setValue(fixture.text);
-            editor.setSelection(
-              { line: fixture.line, ch: reverse ? fixture.to : fixture.from },
-              { line: fixture.line, ch: reverse ? fixture.from : fixture.to },
-            );
+            if (fixture.cursors) {
+              const Selection = editor.cm.state.selection.constructor;
+              editor.cm.dispatch({
+                selection: Selection.create(
+                  fixture.cursors.map((position) =>
+                    Selection.cursor(editor.posToOffset(position)),
+                  ),
+                  reverse ? 1 : 0,
+                ),
+              });
+            } else {
+              editor.setSelection(
+                { line: fixture.line, ch: reverse ? fixture.to : fixture.from },
+                { line: fixture.line, ch: reverse ? fixture.from : fixture.to },
+              );
+            }
             editor.focus();
             await new Promise((resolve) => setTimeout(resolve, 150));
           },
@@ -303,6 +349,11 @@ try {
           assert.equal(redone.doc, fixture.expected);
           assert.equal(typed.doc, fixture.typed);
           assert.equal(saved, fixture.typed);
+          if (fixture.cursors) {
+            assert.equal(after.selections.length, fixture.cursors.length);
+            assert.deepEqual(undone.selections, before.selections);
+            assert.deepEqual(redone.selections, after.selections);
+          }
           console.log(`PASS ${name}`);
         } catch (error) {
           failures.push({ name, error: error.message });

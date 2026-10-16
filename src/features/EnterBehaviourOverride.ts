@@ -69,6 +69,10 @@ export class EnterBehaviourOverride implements Feature {
 
   private run = (editor: MyEditor) => {
     return this.operationPerformer.perform((root) => {
+      if (!root.hasSingleSelection()) {
+        return null;
+      }
+
       const currentList = root.getListUnderCursor();
       const orderedList = /^\d+\.$/.test(currentList.getBullet());
       const smartIndentListEnabled =
