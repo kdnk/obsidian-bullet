@@ -51,9 +51,11 @@ const CODE_OWNER_PREFIX_CLASS = "bullet-plugin-code-owner-prefix";
 const CODE_OWNER_GUIDE_CLIPPED_CLASS = "bullet-plugin-code-owner-guide-clipped";
 const CODE_OWNER_GUIDE_CLIP = "--bullet-code-owner-guide-clip";
 const CODE_GUIDE_CONTINUATION_CLASS = "bullet-plugin-code-guide-continuation";
-const CODE_GUIDE_HEIGHT = "--bullet-code-guide-height";
+const CODE_INDENT_GUIDE_HEIGHT = "--bullet-code-indent-guide-height";
+const CODE_OUTER_GUIDE_HEIGHT = "--bullet-code-outer-guide-height";
 const CODE_GUIDE_SEAM_CLASS = "bullet-plugin-code-guide-seam";
-const CODE_GUIDE_SEAM_CLIP = "--bullet-code-guide-seam-clip";
+const CODE_INDENT_GUIDE_SEAM_CLIP = "--bullet-code-indent-guide-seam-clip";
+const CODE_OUTER_GUIDE_SEAM_CLIP = "--bullet-code-outer-guide-seam-clip";
 const OPENING_ALIGNED_CLASS = "bullet-plugin-code-opening-aligned";
 const OPENING_MARKER_OFFSET = "--bullet-code-opening-marker-offset";
 const PLAIN_PREVIEW_CLASS = "bullet-plugin-code-preview-plain";
@@ -82,7 +84,8 @@ interface MeasuredLine {
   markerOffset?: string;
   ownerGuideClip?: string;
   guideHeight?: string;
-  guideSeam?: { element: HTMLElement; clip: string };
+  outerGuideHeight?: string;
+  guideSeam?: { element: HTMLElement; indentClip?: string; outerClip?: string };
   preview?: OpeningAlignment;
   previewBlock?: HTMLElement;
   previewEmbed?: boolean;
@@ -119,6 +122,7 @@ interface NativeRowLayout {
   markerOffset: string | undefined;
   ownerGuideClip: string | undefined;
   guideHeight: string | undefined;
+  outerGuideHeight: string | undefined;
   presentation: NativePresentation;
 }
 
@@ -126,7 +130,12 @@ interface NativeSnapshot {
   doc: EditorState["doc"];
   epoch: number;
   rows: ReadonlyMap<number, NativeRowLayout>;
-  seams: ReadonlyMap<number, string>;
+  seams: ReadonlyMap<number, GuideSeam>;
+}
+
+interface GuideSeam {
+  indentClip?: string;
+  outerClip?: string;
 }
 
 interface ProcessorLayout {
@@ -453,7 +462,7 @@ export class NestedCodeBlockLayoutPluginValue {
   decorations: DecorationSet;
   prefixRoleDecorations: DecorationSet;
   private nativeRows: ReadonlyMap<number, NativeRowLayout> = new Map();
-  private guideSeams: ReadonlyMap<number, string> = new Map();
+  private guideSeams: ReadonlyMap<number, GuideSeam> = new Map();
   private styledProcessors = new Map<HTMLElement, ProcessorLayout>();
   private layoutReady = StateEffect.define<NativeSnapshot>({
     map: (snapshot, changes) => (changes.empty ? snapshot : undefined),
@@ -1097,6 +1106,7 @@ export class NestedCodeBlockLayoutPluginValue {
               element,
             );
             preceding.guideHeight = guide.height;
+            preceding.outerGuideHeight = guide.outerHeight;
             preceding.guideSeam = guide.seam;
             const emptySource =
               opening.openingLineNumber < this.view.state.doc.lines &&
@@ -1254,6 +1264,7 @@ export class NestedCodeBlockLayoutPluginValue {
                 : undefined))
             : undefined,
           guideHeight: guide?.height,
+          outerGuideHeight: guide?.outerHeight,
           guideSeam: guide?.seam,
           previewBlock: nativePreview ? (next as HTMLElement) : undefined,
           preview: nativePreview ? alignment : undefined,
@@ -1304,7 +1315,7 @@ export class NestedCodeBlockLayoutPluginValue {
       seams: new Map(),
     };
     const rows = new Map<number, NativeRowLayout>();
-    const seams = new Map<number, string>();
+    const seams = new Map<number, GuideSeam>();
     const processors: ProcessorLayout[] = [];
     for (const measurement of this.measureLines()) {
       const {
@@ -1315,6 +1326,7 @@ export class NestedCodeBlockLayoutPluginValue {
         markerOffset,
         ownerGuideClip,
         guideHeight,
+        outerGuideHeight,
       } = measurement;
       const line = documentLineForElement(this.view, element);
       if (!line) continue;
@@ -1323,7 +1335,11 @@ export class NestedCodeBlockLayoutPluginValue {
           this.view,
           measurement.guideSeam.element,
         );
-        if (seamLine) seams.set(seamLine.from, measurement.guideSeam.clip);
+        if (seamLine)
+          seams.set(seamLine.from, {
+            indentClip: measurement.guideSeam.indentClip,
+            outerClip: measurement.guideSeam.outerClip,
+          });
       }
       if (element.classList.contains("cm-preview-code-block")) {
         const opening = this.syntaxContext.fenceOpenings.at(line.number);
@@ -1355,6 +1371,9 @@ export class NestedCodeBlockLayoutPluginValue {
             ownerGuideClip ?? this.nativeRows.get(source.from)?.ownerGuideClip,
           guideHeight:
             guideHeight ?? this.nativeRows.get(source.from)?.guideHeight,
+          outerGuideHeight:
+            outerGuideHeight ??
+            this.nativeRows.get(source.from)?.outerGuideHeight,
           presentation: nativePresentation(
             measurement,
             selectionInBlock(
@@ -1695,7 +1714,10 @@ function nativeAttributes(
     }
     if (row.guideHeight !== undefined) {
       classes.push(CODE_GUIDE_CONTINUATION_CLASS);
-      properties.push([CODE_GUIDE_HEIGHT, row.guideHeight]);
+      properties.push(
+        [CODE_INDENT_GUIDE_HEIGHT, row.guideHeight],
+        [CODE_OUTER_GUIDE_HEIGHT, row.outerGuideHeight],
+      );
     }
     const presentation = row.presentation;
     switch (presentation.kind) {
@@ -1750,7 +1772,8 @@ function nativeAttributes(
         .map(
           ([name, value]) =>
             `${name}: ${
-              name === CODE_GUIDE_HEIGHT || name === CODE_GUIDE_SEAM_CLIP
+              name === CODE_INDENT_GUIDE_HEIGHT ||
+              name === CODE_OUTER_GUIDE_HEIGHT
                 ? value
                 : value?.replace(
                     /-?\d+(?:\.\d+)?px\b/g,
@@ -1764,20 +1787,36 @@ function nativeAttributes(
   };
 }
 
-function guideSeamAttributes(clip: string) {
+function guideSeamAttributes(seam: GuideSeam) {
   return {
     class: CODE_GUIDE_SEAM_CLASS,
-    attributes: { style: `${CODE_GUIDE_SEAM_CLIP}: ${clip};` },
+    attributes: {
+      style: [
+        seam.indentClip === undefined
+          ? ""
+          : `${CODE_INDENT_GUIDE_SEAM_CLIP}: ${seam.indentClip};`,
+        seam.outerClip === undefined
+          ? ""
+          : `${CODE_OUTER_GUIDE_SEAM_CLIP}: ${seam.outerClip};`,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    },
   };
 }
 
 function sameGuideSeams(
-  previous: ReadonlyMap<number, string>,
-  next: ReadonlyMap<number, string>,
+  previous: ReadonlyMap<number, GuideSeam>,
+  next: ReadonlyMap<number, GuideSeam>,
 ): boolean {
   if (previous.size !== next.size) return false;
-  for (const [from, clip] of next) {
-    if (previous.get(from) !== clip) return false;
+  for (const [from, seam] of next) {
+    const old = previous.get(from);
+    if (
+      old?.indentClip !== seam.indentClip ||
+      old?.outerClip !== seam.outerClip
+    )
+      return false;
   }
   return true;
 }
@@ -2092,7 +2131,11 @@ function measureOpeningAlignment(
 function measureCodeGuideContinuation(
   opening: HTMLElement,
   firstContinuation: HTMLElement,
-): { height: string; seam?: { element: HTMLElement; clip: string } } {
+): {
+  height: string;
+  outerHeight?: string;
+  seam?: { element: HTMLElement; indentClip?: string; outerClip?: string };
+} {
   const openingBounds = opening.getBoundingClientRect();
   let paintEnd =
     openingBounds.top +
@@ -2106,39 +2149,63 @@ function measureCodeGuideContinuation(
     );
     element = element.nextElementSibling;
   }
-  let seam: { element: HTMLElement; clip: string } | undefined;
+  let indentEnd = paintEnd;
+  let outerEnd: number | undefined;
+  let seam:
+    | { element: HTMLElement; indentClip?: string; outerClip?: string }
+    | undefined;
   if (element?.classList.contains("cm-line")) {
     const target = element as HTMLElement;
-    const nextTop = measureNextGuideStart(target);
-    if (Number.isFinite(nextTop)) {
-      const dpr = opening.ownerDocument.defaultView?.devicePixelRatio || 1;
-      const snappedTop = Math.ceil(nextTop * dpr) / dpr;
-      paintEnd = Math.max(paintEnd, snappedTop);
-      seam = { element: target, clip: `${snappedTop - nextTop}px` };
-    }
+    const starts = measureNextGuideStarts(target);
+    const dpr = opening.ownerDocument.defaultView?.devicePixelRatio || 1;
+    const snappedIndent = snapGuideStart(starts.indent, dpr);
+    const snappedOuter = snapGuideStart(starts.outer, dpr);
+    if (snappedIndent !== undefined)
+      indentEnd = Math.max(paintEnd, snappedIndent);
+    if (snappedOuter !== undefined) outerEnd = Math.max(paintEnd, snappedOuter);
+    if (starts.indent !== undefined || starts.outer !== undefined)
+      seam = {
+        element: target,
+        indentClip:
+          starts.indent === undefined || snappedIndent === undefined
+            ? undefined
+            : `${snappedIndent - starts.indent}px`,
+        outerClip:
+          starts.outer === undefined || snappedOuter === undefined
+            ? undefined
+            : `${snappedOuter - starts.outer}px`,
+      };
   }
   return {
-    height: `${Math.max(0, paintEnd - openingBounds.top)}px`,
+    height: `${Math.max(0, indentEnd - openingBounds.top)}px`,
+    outerHeight:
+      outerEnd === undefined
+        ? undefined
+        : `${Math.max(0, outerEnd - openingBounds.top)}px`,
     seam,
   };
 }
 
-function measureNextGuideStart(line: HTMLElement): number {
+function snapGuideStart(start: number | undefined, dpr: number) {
+  return start === undefined ? undefined : Math.ceil(start * dpr) / dpr;
+}
+
+function measureNextGuideStarts(line: HTMLElement): {
+  indent?: number;
+  outer?: number;
+} {
   const lineTop = line.getBoundingClientRect().top;
-  const guides =
-    typeof line.querySelectorAll === "function"
-      ? Array.from(
-          line.querySelectorAll<HTMLElement>(
-            ".cm-hmd-list-indent > .cm-indent, .bullet-plugin-outer-list-guide",
-          ),
-        )
-      : [];
-  return Math.max(
-    lineTop,
-    ...guides
+  const starts = (selector: string) => {
+    if (typeof line.querySelectorAll !== "function") return;
+    const tops = Array.from(line.querySelectorAll<HTMLElement>(selector))
       .map((guide) => guide.getBoundingClientRect().top)
-      .filter((top) => Number.isFinite(top) && top >= lineTop),
-  );
+      .filter((top) => Number.isFinite(top) && top >= lineTop);
+    return tops.length ? Math.max(...tops) : undefined;
+  };
+  return {
+    indent: starts(".cm-hmd-list-indent > .cm-indent"),
+    outer: starts(".bullet-plugin-outer-list-guide"),
+  };
 }
 
 function isCodeCardContinuation(element: Element): boolean {

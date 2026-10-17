@@ -217,24 +217,36 @@ describe("BetterListsStyles", () => {
 
   test("extends native ancestor guide paint through nested code cards", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
-    const declarations = styles.match(
-      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.bullet-plugin-code-guide-continuation\s+\.cm-indent::before,\s*body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.bullet-plugin-code-guide-continuation\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
+    const indent = styles.match(
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.bullet-plugin-code-guide-continuation\s+\.cm-indent::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const outer = styles.match(
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.bullet-plugin-code-guide-continuation\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
 
-    expect(declarations?.replace(/\s+/g, " ").trim()).toBe(
-      "block-size: var(--bullet-code-guide-height); pointer-events: none;",
+    expect(indent?.replace(/\s+/g, " ").trim()).toBe(
+      "block-size: var(--bullet-code-indent-guide-height); pointer-events: none;",
     );
-    expect(declarations).not.toMatch(
+    expect(outer?.replace(/\s+/g, " ").trim()).toBe(
+      "block-size: var(--bullet-code-outer-guide-height); pointer-events: none;",
+    );
+    expect(`${indent} ${outer}`).not.toMatch(
       /\b(?:display|visibility|width|min-width|position|inset-block-start|translate|transform|border-inline-start-width)\s*:/,
     );
 
-    const seam = styles.match(
-      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-code-guide-seam\s+\.cm-indent::before,\s*body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-code-guide-seam\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
+    const indentSeam = styles.match(
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-code-guide-seam\s+\.cm-indent::before\s*\{([^}]*)\}/,
     )?.[1];
-    expect(seam?.replace(/\s+/g, " ").trim()).toBe(
-      "clip-path: inset(var(--bullet-code-guide-seam-clip) 0 0 0);",
+    const outerSeam = styles.match(
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-code-guide-seam\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+    expect(indentSeam?.replace(/\s+/g, " ").trim()).toBe(
+      "clip-path: inset(var(--bullet-code-indent-guide-seam-clip) 0 0 0);",
     );
-    expect(seam).not.toMatch(
+    expect(outerSeam?.replace(/\s+/g, " ").trim()).toBe(
+      "clip-path: inset(var(--bullet-code-outer-guide-seam-clip) 0 0 0);",
+    );
+    expect(`${indentSeam} ${outerSeam}`).not.toMatch(
       /\b(?:display|visibility|width|min-width|height|position|inset-block-start|translate|transform|border-inline-start-width)\s*:/,
     );
   });

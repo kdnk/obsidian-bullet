@@ -220,24 +220,31 @@ body.bullet-plugin-better-lists
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .bullet-plugin-code-guide-continuation
-  .cm-indent::before,
+  .cm-indent::before {
+  block-size: var(--bullet-code-indent-guide-height);
+  pointer-events: none;
+}
+
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .bullet-plugin-code-guide-continuation
   .bullet-plugin-outer-list-guide::before {
-  block-size: var(--bullet-code-guide-height);
+  block-size: var(--bullet-code-outer-guide-height);
   pointer-events: none;
 }
 
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-code-guide-seam
-  .cm-indent::before,
+  .cm-indent::before {
+  clip-path: inset(var(--bullet-code-indent-guide-seam-clip) 0 0 0);
+}
+
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-code-guide-seam
   .bullet-plugin-outer-list-guide::before {
-  clip-path: inset(var(--bullet-code-guide-seam-clip) 0 0 0);
+  clip-path: inset(var(--bullet-code-outer-guide-seam-clip) 0 0 0);
 }
 
 body.bullet-plugin-better-lists
