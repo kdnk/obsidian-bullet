@@ -1,14 +1,10 @@
 import { Plugin } from "obsidian";
 
 import { EditorState, Extension } from "@codemirror/state";
-import { ViewPlugin } from "@codemirror/view";
 
 import { DocumentBodyClass } from "./DocumentBodyClass";
 import { Feature } from "./Feature";
-import {
-  NestedCodeBlockLayoutPluginValue,
-  nestedCodeBlockCursorLayer,
-} from "./NestedCodeBlockLayout";
+import { nestedCodeBlockLayoutExtension } from "./NestedCodeBlockLayout";
 import { taskBullets } from "./TaskBullets";
 
 import { Settings } from "../services/Settings";
@@ -55,19 +51,7 @@ export class BetterListsStyles implements Feature {
       0,
       this.editorExtensions.length,
       ...(enabled
-        ? [
-            taskBullets,
-            nestedCodeBlockCursorLayer,
-            ViewPlugin.define(
-              (view) =>
-                new NestedCodeBlockLayoutPluginValue(
-                  view,
-                  undefined,
-                  this.zoomRange,
-                ),
-              { decorations: (value) => value.decorations },
-            ),
-          ]
+        ? [taskBullets, nestedCodeBlockLayoutExtension(this.zoomRange)]
         : []),
     );
     if (updateViews) this.plugin.app.workspace.updateOptions();

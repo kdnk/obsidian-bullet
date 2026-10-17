@@ -99,6 +99,7 @@ describe("BetterListsStyles", () => {
       expect.any(Function),
     );
     expect(plugin.registerEditorExtension).toHaveBeenCalledTimes(1);
+    expect(plugin.registerEditorExtension.mock.calls[0][0]).toHaveLength(2);
     expect(
       mainDocument.body.classList.contains("bullet-plugin-better-lists"),
     ).toBe(true);
@@ -183,6 +184,20 @@ describe("BetterListsStyles", () => {
     );
     expect(cursorLine?.replace(/\s+/g, " ").trim()).toBe(
       "caret-color: transparent;",
+    );
+  });
+
+  test("hides only the owning continuation guide in native code preview rows", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const declarations = styles.match(
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-code-preview-body\s+\.bullet-plugin-code-owner-prefix\s+\.cm-indent::before\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(declarations?.replace(/\s+/g, " ").trim()).toBe(
+      "visibility: hidden;",
+    );
+    expect(declarations).not.toMatch(
+      /\b(?:display|width|min-width|font-size|position)\s*:/,
     );
   });
 

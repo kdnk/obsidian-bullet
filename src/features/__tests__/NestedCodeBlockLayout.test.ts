@@ -91,6 +91,16 @@ function decorationAttributes(decoration: Decoration) {
   return { class: spec.class, style: attributes.style };
 }
 
+function decorationClass(decoration: Decoration): string | null {
+  const spec: unknown = decoration.spec;
+  return typeof spec === "object" &&
+    spec &&
+    "class" in spec &&
+    typeof spec.class === "string"
+    ? spec.class
+    : null;
+}
+
 function mountLayout(
   view: EditorView,
   lineNameAt?: (n: number) => string | null,
@@ -490,6 +500,12 @@ describe("native preview row roles", () => {
     expect(last.classList.contains("bullet-plugin-code-preview-last")).toBe(
       true,
     );
+    expect(first.classList.contains("bullet-plugin-code-preview-body")).toBe(
+      true,
+    );
+    expect(last.classList.contains("bullet-plugin-code-preview-body")).toBe(
+      true,
+    );
     expect(
       opening.classList.contains("bullet-plugin-code-preview-embed-opening"),
     ).toBe(false);
@@ -501,6 +517,34 @@ describe("native preview row roles", () => {
         ),
       ).toEqual([]);
     }
+  });
+
+  test("removes the preview-body role while editing inside the code block", () => {
+    const fixture = makePreviewFixture(false, true);
+    const body = fixture.lines[1];
+    fixture.measure();
+    expect(body.classList.contains("bullet-plugin-code-preview-body")).toBe(
+      true,
+    );
+
+    drivers.get(fixture.plugin)!.dispatch({
+      selection: { anchor: fixture.view.state.doc.length },
+    });
+    fixture.measure();
+    expect(body.classList.contains("bullet-plugin-code-preview-body")).toBe(
+      true,
+    );
+    drivers.get(fixture.plugin)!.dispatch({
+      selection: { anchor: fixture.view.state.doc.line(2).to },
+    });
+    fixture.lines[0].setRaw(true);
+    fixture.lines[3].setRaw(true);
+    fixture.measure();
+
+    expect(body.classList.contains("bullet-plugin-code-preview-body")).toBe(
+      false,
+    );
+    fixture.plugin.destroy();
   });
 
   test("marks only the hidden closing fence for an empty native block", () => {
@@ -1168,6 +1212,31 @@ describe("native measurement publication", () => {
       style:
         "--bullet-nested-code-block-inset: 64px; --bullet-code-opening-marker-offset: 0px;",
     });
+    fixture.plugin.destroy();
+  });
+
+  test("toggles an offscreen body's preview role across source editing", () => {
+    const fixture = makePreviewFixture(false, true);
+    const body = fixture.lines[1];
+    const dispatch = drivers.get(fixture.plugin)!.dispatch;
+    dispatch({ selection: { anchor: fixture.view.state.doc.length } });
+    fixture.show([body]);
+    fixture.measure();
+    expect(lineAttributes(fixture.plugin, body.position).class).toContain(
+      "bullet-plugin-code-preview-body",
+    );
+
+    dispatch({ selection: { anchor: fixture.view.state.doc.line(2).to } });
+    fixture.measure();
+    expect(lineAttributes(fixture.plugin, body.position).class).not.toContain(
+      "bullet-plugin-code-preview-body",
+    );
+
+    dispatch({ selection: { anchor: fixture.view.state.doc.length } });
+    fixture.measure();
+    expect(lineAttributes(fixture.plugin, body.position).class).toContain(
+      "bullet-plugin-code-preview-body",
+    );
     fixture.plugin.destroy();
   });
 
@@ -2581,6 +2650,72 @@ test("measures each source row against the same content edge, including both fen
   expect(rows[2].style.getPropertyValue("--bullet-code-content-padding")).toBe(
     "calc(64px - 39px + 0ch + var(--size-4-4))",
   );
+  plugin.destroy();
+});
+
+test.each([
+  ["a tab that crosses the content boundary", "\t\t\tllo", "\t"],
+  ["equivalent spaces", "\t\t  llo", "  "],
+  ["literal code indentation after the boundary", "\t\t\t\tllo", "\t"],
+])("marks the owning-list continuation for %s", (_name, bodyText, owned) => {
+  const source = `\t\t- \`\`\`\n${bodyText}\n\t\t  \`\`\``;
+  const state = EditorState.create({ doc: source });
+  const view = {
+    state,
+    visibleRanges: [{ from: 0, to: state.doc.length }],
+    contentDOM: { querySelectorAll: () => [] },
+    dom: { ownerDocument: { defaultView: {} } },
+    requestMeasure: jest.fn(),
+  };
+  const plugin = new NestedCodeBlockLayoutPluginValue(
+    view as never,
+    names(BEGIN, CONTENT, END),
+  );
+  const roles: Array<{ from: number; to: number; source: string }> = [];
+  plugin.prefixRoleDecorations.between(
+    0,
+    state.doc.length,
+    (from, to, decoration) => {
+      if (decorationClass(decoration) === "bullet-plugin-code-owner-prefix")
+        roles.push({ from, to, source: state.doc.sliceString(from, to) });
+      expect(widgetDecoration(decoration)).toBeNull();
+    },
+  );
+
+  expect(roles[0]).toEqual({
+    from: state.doc.line(2).from + 2,
+    to: state.doc.line(2).from + 2 + owned.length,
+    source: owned,
+  });
+  expect(roles.map(({ source: value }) => value)).toEqual([owned, "  "]);
+  expect(state.doc.toString()).toBe(source);
+  plugin.destroy();
+});
+
+test("does not synthesize an owning-prefix role for a physical blank row", () => {
+  const state = EditorState.create({ doc: "\t\t- ```\n\n\t\t  ```" });
+  const view = {
+    state,
+    visibleRanges: [{ from: 0, to: state.doc.length }],
+    contentDOM: { querySelectorAll: () => [] },
+    dom: { ownerDocument: { defaultView: {} } },
+    requestMeasure: jest.fn(),
+  };
+  const plugin = new NestedCodeBlockLayoutPluginValue(
+    view as never,
+    names(BEGIN, null, END),
+  );
+  const ranges: Array<{ from: number; to: number }> = [];
+  plugin.prefixRoleDecorations.between(0, state.doc.length, (from, to) => {
+    ranges.push({ from, to });
+  });
+
+  expect(ranges).toEqual([
+    {
+      from: state.doc.line(3).from + 2,
+      to: state.doc.line(3).from + 4,
+    },
+  ]);
   plugin.destroy();
 });
 

@@ -3,6 +3,7 @@ import {
   ChangeSet,
   EditorSelection,
   EditorState,
+  Extension,
   MapMode,
   StateEffect,
   Transaction,
@@ -13,6 +14,7 @@ import {
   DecorationSet,
   EditorView,
   RectangleMarker,
+  ViewPlugin,
   ViewUpdate,
   layer,
 } from "@codemirror/view";
@@ -44,6 +46,8 @@ const PREVIEW_EMBED_OPENING_CLASS = "bullet-plugin-code-preview-embed-opening";
 const HIDDEN_FENCE_CLASS = "bullet-plugin-code-preview-hidden-fence";
 const PREVIEW_FIRST_CLASS = "bullet-plugin-code-preview-first";
 const PREVIEW_LAST_CLASS = "bullet-plugin-code-preview-last";
+const PREVIEW_BODY_CLASS = "bullet-plugin-code-preview-body";
+const CODE_OWNER_PREFIX_CLASS = "bullet-plugin-code-owner-prefix";
 const PREVIEW_HEIGHT = "--bullet-code-preview-height";
 const OPENING_ALIGNED_CLASS = "bullet-plugin-code-opening-aligned";
 const OPENING_MARKER_OFFSET = "--bullet-code-opening-marker-offset";
@@ -134,6 +138,7 @@ const NATIVE_CLASSES = [
   HIDDEN_FENCE_CLASS,
   PREVIEW_FIRST_CLASS,
   PREVIEW_LAST_CLASS,
+  PREVIEW_BODY_CLASS,
 ];
 
 function withoutLayoutClasses(value: string): string {
@@ -160,8 +165,16 @@ interface CodeContentBoundary {
 }
 
 const contentGlyph = Decoration.mark({ class: CODE_CONTENT_CLASS });
+const owningListContinuation = Decoration.mark({
+  class: CODE_OWNER_PREFIX_CLASS,
+});
 
-export const nestedCodeBlockCursorLayer = layer({
+interface CodeSourceDecorations {
+  readonly content: DecorationSet;
+  readonly prefixRoles: DecorationSet;
+}
+
+const nestedCodeBlockCursorLayer = layer({
   above: true,
   class: CODE_CURSOR_LAYER_CLASS,
   markers(view) {
@@ -414,6 +427,7 @@ class FenceOpeningIndex {
 
 export class NestedCodeBlockLayoutPluginValue {
   decorations: DecorationSet;
+  prefixRoleDecorations: DecorationSet;
   private nativeRows: ReadonlyMap<number, NativeRowLayout> = new Map();
   private styledProcessors = new Map<HTMLElement, ProcessorLayout>();
   private layoutReady = StateEffect.define<NativeSnapshot>({
@@ -467,7 +481,9 @@ export class NestedCodeBlockLayoutPluginValue {
     private zoomRange?: (state: EditorState) => { indent: string } | null,
   ) {
     this.syntaxContext = makeSyntaxContext(view.state, this.lineNameAtOverride);
-    this.decorations = this.buildDecorations();
+    const decorations = this.buildDecorations();
+    this.decorations = decorations.layout;
+    this.prefixRoleDecorations = decorations.prefixRoles;
     this.presentationSignature = this.readPresentationSignature();
     this.syntaxContext.fenceOpenings.retainVisible(
       view.state,
@@ -610,7 +626,9 @@ export class NestedCodeBlockLayoutPluginValue {
       presentationChanged ||
       selectionChanged
     ) {
-      this.decorations = this.buildDecorations();
+      const decorations = this.buildDecorations();
+      this.decorations = decorations.layout;
+      this.prefixRoleDecorations = decorations.prefixRoles;
       this.syntaxContext.fenceOpenings.retainVisible(
         update.state,
         update.view.visibleRanges,
@@ -634,9 +652,12 @@ export class NestedCodeBlockLayoutPluginValue {
     this.codeMeasurements.clear();
   }
 
-  private buildDecorations(): DecorationSet {
+  private buildDecorations(): {
+    readonly layout: DecorationSet;
+    readonly prefixRoles: DecorationSet;
+  } {
     const { state, visibleRanges } = this.view;
-    const marks = codeBlockContentDecorations(
+    const sourceDecorations = codeBlockSourceDecorations(
       state,
       visibleRanges,
       this.syntaxContext.lineNameAt,
@@ -663,14 +684,17 @@ export class NestedCodeBlockLayoutPluginValue {
         if (sourceRowAt(state, this.syntaxContext, from)) positions.add(from);
       }
     }
-    return marks.update({
-      add: Array.from(positions, (from) =>
-        Decoration.line(
-          nativeAttributes(this.nativeRows.get(from), cursorLines.has(from)),
-        ).range(from),
-      ),
-      sort: true,
-    });
+    return {
+      layout: sourceDecorations.content.update({
+        add: Array.from(positions, (from) =>
+          Decoration.line(
+            nativeAttributes(this.nativeRows.get(from), cursorLines.has(from)),
+          ).range(from),
+        ),
+        sort: true,
+      }),
+      prefixRoles: sourceDecorations.prefixRoles,
+    };
   }
 
   private readPresentationSignature(): string {
@@ -1251,7 +1275,15 @@ export class NestedCodeBlockLayoutPluginValue {
           end,
           contentPadding,
           markerOffset,
-          presentation: nativePresentation(measurement),
+          presentation: nativePresentation(
+            measurement,
+            selectionInBlock(
+              this.view.state,
+              this.syntaxContext,
+              this.view.state.selection,
+              source.openingFrom,
+            ),
+          ),
         });
     }
     const previewSources: ProcessorCodeSource[] = [];
@@ -1498,7 +1530,10 @@ function retainNativeRows(
   return rows;
 }
 
-function nativePresentation(measurement: MeasuredLine): NativePresentation {
+function nativePresentation(
+  measurement: MeasuredLine,
+  selectionInsideBlock: boolean,
+): NativePresentation {
   const { element, preview, previewBlock, previewAppearance } = measurement;
   const next = element.nextElementSibling;
   if (
@@ -1518,13 +1553,29 @@ function nativePresentation(measurement: MeasuredLine): NativePresentation {
     if (isHiddenClosingFence(next)) return { kind: "empty-opening" };
   }
   if (isHiddenClosingFence(element)) return { kind: "native-closing" };
-  if (isCodeBody(element))
+  if (isCodeBody(element)) {
+    const opening = precedingCodeOpening(element);
+    if (
+      (opening && !isNativePreviewOpening(opening)) ||
+      (!opening && selectionInsideBlock)
+    )
+      return { kind: "source" };
     return {
       kind: "native-body",
       first: isNativePreviewOpening(element.previousElementSibling),
       last: isHiddenClosingFence(next),
     };
+  }
   return { kind: "source" };
+}
+
+function precedingCodeOpening(element: Element): Element | null {
+  let preceding = element.previousElementSibling;
+  while (preceding && isCodeBody(preceding))
+    preceding = preceding.previousElementSibling;
+  return preceding?.classList.contains("HyperMD-codeblock-begin")
+    ? preceding
+    : null;
 }
 
 function nativeAttributes(
@@ -1576,6 +1627,7 @@ function nativeAttributes(
         break;
       }
       case "native-body":
+        classes.push(PREVIEW_BODY_CLASS);
         if (presentation.first) classes.push(PREVIEW_FIRST_CLASS);
         if (presentation.last) classes.push(PREVIEW_LAST_CLASS);
         break;
@@ -1696,21 +1748,22 @@ export function nestedCodeBlockContentDecorations(
   ],
   lineNameAt: LineNameAt = makeLineNameResolver(state),
 ): DecorationSet {
-  return codeBlockContentDecorations(
+  return codeBlockSourceDecorations(
     state,
     visibleRanges,
     lineNameAt,
     new FenceOpeningIndex(state, lineNameAt).at,
-  );
+  ).content;
 }
 
-function codeBlockContentDecorations(
+function codeBlockSourceDecorations(
   state: EditorState,
   visibleRanges: readonly { from: number; to: number }[],
   lineNameAt: LineNameAt,
   fenceOpeningAt: FenceOpeningAt,
-): DecorationSet {
-  const decorations = [];
+): CodeSourceDecorations {
+  const contentDecorations = [];
+  const prefixRoleDecorations = [];
   const visitedLines = new Set<number>();
 
   for (const range of visibleRanges) {
@@ -1733,10 +1786,25 @@ function codeBlockContentDecorations(
         const boundary = opening
           ? codeContentBoundary(line, opening, state.tabSize)
           : null;
-        if (boundary) {
+        if (opening && boundary) {
           const from = line.from + boundary.offset;
           if (from < line.to)
-            decorations.push(contentGlyph.range(from, from + 1));
+            contentDecorations.push(contentGlyph.range(from, from + 1));
+          if (line.number !== opening.openingLineNumber) {
+            const prefixStart = offsetAtColumn(
+              line.text,
+              opening.indentColumn,
+              state.tabSize,
+            );
+            if (prefixStart !== null && prefixStart < boundary.offset) {
+              prefixRoleDecorations.push(
+                owningListContinuation.range(
+                  line.from + prefixStart,
+                  line.from + boundary.offset,
+                ),
+              );
+            }
+          }
         }
       }
 
@@ -1745,7 +1813,28 @@ function codeBlockContentDecorations(
     }
   }
 
-  return Decoration.set(decorations, true);
+  return {
+    content: Decoration.set(contentDecorations, true),
+    prefixRoles: Decoration.set(prefixRoleDecorations, true),
+  };
+}
+
+export function nestedCodeBlockLayoutExtension(
+  zoomRange?: (state: EditorState) => { indent: string } | null,
+): Extension {
+  const layoutPlugin = ViewPlugin.define(
+    (view) => new NestedCodeBlockLayoutPluginValue(view, undefined, zoomRange),
+    { decorations: (value) => value.decorations },
+  );
+
+  return [
+    nestedCodeBlockCursorLayer,
+    layoutPlugin,
+    EditorView.outerDecorations.of(
+      (view) =>
+        view.plugin(layoutPlugin)?.prefixRoleDecorations ?? Decoration.none,
+    ),
+  ];
 }
 
 function makeSyntaxContext(
