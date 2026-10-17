@@ -23,7 +23,7 @@ const block = [
   "\t  ```",
   "\t- sibling",
   "\t\t- ```js",
-  "\t\t  const b = 2",
+  "\t\t\tconst b = 2",
   "\t\t  ```",
   "\t\t- deep sibling",
   "",
@@ -128,13 +128,23 @@ try {
       }
       const rect = (e) => e?.getBoundingClientRect();
       const guides = (e) =>
-        [...e.querySelectorAll(".cm-indent")].map((e) => ({
-          x: rect(e).x,
-          width: rect(e).width,
-          margin: Number.parseFloat(
-            getComputedStyle(e, "::before").marginInlineStart,
-          ),
-        }));
+        [...e.querySelectorAll(".cm-indent")].map((e) => {
+          const paint = getComputedStyle(e, "::before");
+          return {
+            x: rect(e).x,
+            width: rect(e).width,
+            margin: Number.parseFloat(paint.marginInlineStart),
+            paintX:
+              rect(e).x +
+              Number.parseFloat(paint.marginInlineStart) +
+              Number.parseFloat(paint.borderInlineStartWidth || "0") / 2,
+            paintVisible:
+              paint.content !== "none" &&
+              paint.display !== "none" &&
+              paint.visibility !== "hidden" &&
+              Number.parseFloat(paint.opacity || "1") > 0,
+          };
+        });
       const entries = [
         [2, 3, 5],
         [6, 7, 9],
@@ -211,6 +221,9 @@ try {
               : null,
             embedded: !!embed,
             bullet: rect(start.querySelector(".list-bullet"))?.x,
+            bulletCenter:
+              paintedMarkerBounds(bullet).x +
+              paintedMarkerBounds(bullet).width / 2,
             siblingBullet: rect(next.querySelector(".list-bullet"))?.x,
             guides: guides(start),
             siblingGuides: guides(next),
@@ -318,16 +331,38 @@ try {
         ["body", entry.bodyGuides],
       ]) {
         if (!guides) continue;
-        for (let i = 0; i < entry.siblingGuides.length; i++) {
-          const a = guides[i],
-            b = entry.siblingGuides[i];
+        for (const siblingGuide of entry.siblingGuides.filter(
+          (guide) => guide.paintVisible,
+        )) {
           check(
-            a &&
-              Math.abs(a.x + a.margin - b.x - b.margin) < 0.6 &&
-              Math.abs(a.width - b.width) < 0.6,
-            `${label}: ${kind} guide ${i} alignment`,
+            guides.some(
+              (guide) =>
+                guide.paintVisible &&
+                Math.abs(guide.paintX - siblingGuide.paintX) < 0.6,
+            ),
+            `${label}: ${kind} ancestor guide at ${siblingGuide.paintX}px`,
           );
         }
+      }
+      if (entry.opening === offset + 6 && entry.nativePreview) {
+        check(
+          !entry.bodyGuides?.some(
+            (guide) =>
+              guide.paintVisible &&
+              Math.abs(guide.paintX - entry.bulletCenter) < 3,
+          ),
+          `${label}: code continuation guide paint is hidden in preview`,
+        );
+      }
+      if (entry.opening === offset + 6 && phase.includes("editing")) {
+        check(
+          entry.bodyGuides?.some(
+            (guide) =>
+              guide.paintVisible &&
+              Math.abs(guide.paintX - entry.bulletCenter) < 3,
+          ),
+          `${label}: code continuation guide paint is restored while editing`,
+        );
       }
     }
     check(
