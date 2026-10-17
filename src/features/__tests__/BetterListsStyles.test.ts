@@ -251,6 +251,30 @@ describe("BetterListsStyles", () => {
     );
   });
 
+  test("gives rendered opening rows sole ownership of covered guide paint", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const covered = styles.match(
+      /\.cm-line\.bullet-plugin-code-indent-guide-covered\s+\.cm-indent::before,\s*body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-code-outer-guide-covered\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const sourceOwner = styles.match(
+      /\.cm-line\.bullet-plugin-code-indent-guide-covered\s+\.bullet-plugin-code-owner-prefix\s+\.cm-indent::before\s*\{([^}]*)\}/,
+    )?.[1];
+    const previewOwner = styles.match(
+      /\.cm-line\.bullet-plugin-code-indent-guide-covered\.bullet-plugin-code-preview-body\s+\.bullet-plugin-code-owner-prefix\s+\.cm-indent::before\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(covered?.replace(/\s+/g, " ").trim()).toBe("visibility: hidden;");
+    expect(sourceOwner?.replace(/\s+/g, " ").trim()).toBe(
+      "visibility: visible;",
+    );
+    expect(previewOwner?.replace(/\s+/g, " ").trim()).toBe(
+      "visibility: hidden;",
+    );
+    expect(`${covered} ${sourceOwner} ${previewOwner}`).not.toMatch(
+      /\b(?:display|width|min-width|height|position|inset-block-start|translate|transform|border-inline-start-width)\s*:/,
+    );
+  });
+
   test("renders a theme-aware bullet as a seven-pixel circle", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(

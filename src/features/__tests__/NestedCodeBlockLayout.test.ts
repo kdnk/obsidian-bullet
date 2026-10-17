@@ -1309,6 +1309,14 @@ describe("native measurement publication", () => {
     expect(openingAttributes.style).toContain(
       "--bullet-code-outer-guide-height: 97.5px;",
     );
+    for (const row of [first, second, closing]) {
+      const classes = lineAttributes(fixture.plugin, row.position).class;
+      expect(classes).toContain("bullet-plugin-code-indent-guide-covered");
+      expect(classes).toContain("bullet-plugin-code-outer-guide-covered");
+    }
+    expect(
+      lineAttributes(fixture.plugin, outside.position).class,
+    ).not.toContain("bullet-plugin-code-indent-guide-covered");
     expect(lineAttributes(fixture.plugin, outside.position)).toEqual({
       class: "bullet-plugin-code-guide-seam",
       style:
@@ -1346,6 +1354,31 @@ describe("native measurement publication", () => {
       style:
         "--bullet-code-indent-guide-seam-clip: 0.25px; --bullet-code-outer-guide-seam-clip: 0.25px;",
     });
+
+    fixture.measure();
+    for (const row of [first, second, closing]) {
+      const classes = lineAttributes(fixture.plugin, row.position).class;
+      expect(classes).not.toContain("bullet-plugin-code-indent-guide-covered");
+      expect(classes).not.toContain("bullet-plugin-code-outer-guide-covered");
+    }
+    fixture.plugin.destroy();
+  });
+
+  test("covers body guides when an opening guide has no direct-child geometry", () => {
+    const fixture = makePreviewFixture();
+    const [opening, first] = fixture.lines;
+    Object.assign(opening, {
+      querySelectorAll: (selector: string) =>
+        selector === ".cm-indent"
+          ? [{ getBoundingClientRect: () => ({ top: 100 }) }]
+          : [],
+    });
+
+    fixture.measure();
+
+    expect(lineAttributes(fixture.plugin, first.position).class).toContain(
+      "bullet-plugin-code-indent-guide-covered",
+    );
     fixture.plugin.destroy();
   });
 

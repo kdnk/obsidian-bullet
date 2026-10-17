@@ -51,6 +51,9 @@ const CODE_OWNER_PREFIX_CLASS = "bullet-plugin-code-owner-prefix";
 const CODE_OWNER_GUIDE_CLIPPED_CLASS = "bullet-plugin-code-owner-guide-clipped";
 const CODE_OWNER_GUIDE_CLIP = "--bullet-code-owner-guide-clip";
 const CODE_GUIDE_CONTINUATION_CLASS = "bullet-plugin-code-guide-continuation";
+const CODE_INDENT_GUIDE_COVERED_CLASS =
+  "bullet-plugin-code-indent-guide-covered";
+const CODE_OUTER_GUIDE_COVERED_CLASS = "bullet-plugin-code-outer-guide-covered";
 const CODE_INDENT_GUIDE_HEIGHT = "--bullet-code-indent-guide-height";
 const CODE_OUTER_GUIDE_HEIGHT = "--bullet-code-outer-guide-height";
 const CODE_GUIDE_SEAM_CLASS = "bullet-plugin-code-guide-seam";
@@ -85,6 +88,8 @@ interface MeasuredLine {
   ownerGuideClip?: string;
   guideHeight?: string;
   outerGuideHeight?: string;
+  indentGuideCovered?: boolean;
+  outerGuideCovered?: boolean;
   guideSeam?: { element: HTMLElement; indentClip?: string; outerClip?: string };
   preview?: OpeningAlignment;
   previewBlock?: HTMLElement;
@@ -123,6 +128,8 @@ interface NativeRowLayout {
   ownerGuideClip: string | undefined;
   guideHeight: string | undefined;
   outerGuideHeight: string | undefined;
+  indentGuideCovered: boolean;
+  outerGuideCovered: boolean;
   presentation: NativePresentation;
 }
 
@@ -172,6 +179,8 @@ const NATIVE_CLASSES = [
   PREVIEW_BODY_CLASS,
   CODE_OWNER_GUIDE_CLIPPED_CLASS,
   CODE_GUIDE_CONTINUATION_CLASS,
+  CODE_INDENT_GUIDE_COVERED_CLASS,
+  CODE_OUTER_GUIDE_COVERED_CLASS,
 ];
 
 function withoutLayoutClasses(value: string): string {
@@ -1072,6 +1081,10 @@ export class NestedCodeBlockLayoutPluginValue {
       return codeEnds.get(key);
     };
     const visibleInsets = new Map<number, string>();
+    const renderedGuideOwners = new Map<
+      number,
+      { indent: boolean; outer: boolean }
+    >();
     const firstBodyGuideClips = new Map<Element, string>();
     const pendingEmptyRows: Array<{
       element: HTMLElement;
@@ -1108,6 +1121,10 @@ export class NestedCodeBlockLayoutPluginValue {
             preceding.guideHeight = guide.height;
             preceding.outerGuideHeight = guide.outerHeight;
             preceding.guideSeam = guide.seam;
+            renderedGuideOwners.set(opening.openingLineNumber, {
+              indent: guide.coversIndent,
+              outer: guide.coversOuter,
+            });
             const emptySource =
               opening.openingLineNumber < this.view.state.doc.lines &&
               hasClassName(
@@ -1227,6 +1244,11 @@ export class NestedCodeBlockLayoutPluginValue {
           isOpening && next && isCodeCardContinuation(next)
             ? measureCodeGuideContinuation(element, next as HTMLElement)
             : undefined;
+        if (guide)
+          renderedGuideOwners.set(opening.openingLineNumber, {
+            indent: guide.coversIndent,
+            outer: guide.coversOuter,
+          });
         const alignment =
           isOpening && isCodeBody(next)
             ? measureOpeningAlignment(
@@ -1265,6 +1287,12 @@ export class NestedCodeBlockLayoutPluginValue {
             : undefined,
           guideHeight: guide?.height,
           outerGuideHeight: guide?.outerHeight,
+          indentGuideCovered:
+            !isOpening &&
+            renderedGuideOwners.get(opening.openingLineNumber)?.indent,
+          outerGuideCovered:
+            !isOpening &&
+            renderedGuideOwners.get(opening.openingLineNumber)?.outer,
           guideSeam: guide?.seam,
           previewBlock: nativePreview ? (next as HTMLElement) : undefined,
           preview: nativePreview ? alignment : undefined,
@@ -1302,6 +1330,9 @@ export class NestedCodeBlockLayoutPluginValue {
             inset,
           ),
           emptyBody: true,
+          indentGuideCovered:
+            renderedGuideOwners.get(openingLineNumber)?.indent,
+          outerGuideCovered: renderedGuideOwners.get(openingLineNumber)?.outer,
         });
     }
     return measured;
@@ -1327,6 +1358,8 @@ export class NestedCodeBlockLayoutPluginValue {
         ownerGuideClip,
         guideHeight,
         outerGuideHeight,
+        indentGuideCovered,
+        outerGuideCovered,
       } = measurement;
       const line = documentLineForElement(this.view, element);
       if (!line) continue;
@@ -1374,6 +1407,11 @@ export class NestedCodeBlockLayoutPluginValue {
           outerGuideHeight:
             outerGuideHeight ??
             this.nativeRows.get(source.from)?.outerGuideHeight,
+          // Coverage belongs to a rendered opening in this measurement pass.
+          // Unlike geometry, it must never survive after that opener leaves
+          // the DOM or its continuation paint would hide native body guides.
+          indentGuideCovered: indentGuideCovered ?? false,
+          outerGuideCovered: outerGuideCovered ?? false,
           presentation: nativePresentation(
             measurement,
             selectionInBlock(
@@ -1719,6 +1757,8 @@ function nativeAttributes(
         [CODE_OUTER_GUIDE_HEIGHT, row.outerGuideHeight],
       );
     }
+    if (row.indentGuideCovered) classes.push(CODE_INDENT_GUIDE_COVERED_CLASS);
+    if (row.outerGuideCovered) classes.push(CODE_OUTER_GUIDE_COVERED_CLASS);
     const presentation = row.presentation;
     switch (presentation.kind) {
       case "native-opening":
@@ -2134,10 +2174,18 @@ function measureCodeGuideContinuation(
 ): {
   height: string;
   outerHeight?: string;
+  coversIndent: boolean;
+  coversOuter: boolean;
   seam?: { element: HTMLElement; indentClip?: string; outerClip?: string };
 } {
   const openingBounds = opening.getBoundingClientRect();
   const openingStarts = measureGuideStarts(opening);
+  const coversIndent =
+    typeof opening.querySelectorAll === "function" &&
+    opening.querySelectorAll(".cm-indent").length > 0;
+  const coversOuter =
+    typeof opening.querySelectorAll === "function" &&
+    opening.querySelectorAll(".bullet-plugin-outer-list-guide").length > 0;
   let paintEnd =
     openingBounds.top +
     (Number.isFinite(openingBounds.height) ? openingBounds.height : 0);
@@ -2189,6 +2237,11 @@ function measureCodeGuideContinuation(
             0,
             outerEnd - (openingStarts.outer ?? openingBounds.top),
           )}px`,
+    // The continuation selector paints every matching guide on the opening.
+    // Its geometric start can be unavailable when CodeMirror wraps the same
+    // guide differently, so paint ownership must follow selector membership.
+    coversIndent,
+    coversOuter: coversOuter && outerEnd !== undefined,
     seam,
   };
 }

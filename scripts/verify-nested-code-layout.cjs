@@ -381,56 +381,52 @@ try {
           `${label}: expected native preview/editing mode`,
         );
       }
-      for (const [kind, guides] of [
-        ["opening", entry.guides],
-        ["body", entry.bodyGuides],
-      ]) {
-        if (!guides) continue;
-        for (const siblingGuide of entry.siblingGuides.filter(
-          (guide) => guide.paintVisible,
-        )) {
-          const openingGuide = entry.guides.find(
-            (guide) =>
-              guide.paintVisible &&
-              Math.abs(guide.paintX - siblingGuide.paintX) < 0.6,
-          );
-          check(
-            kind === "opening"
-              ? openingGuide
-              : guides.some(
-                  (guide) =>
-                    guide.paintVisible &&
-                    Math.abs(guide.paintX - siblingGuide.paintX) < 0.6,
-                ),
-            `${label}: ${kind} ancestor guide at ${siblingGuide.paintX}px`,
-          );
-          if (kind !== "opening" || !openingGuide) continue;
-          check(
-            openingGuide.paintBottom >= siblingGuide.paintTop - 0.6,
-            `${label}: ancestor guide at ${siblingGuide.paintX}px covers the code card through its next sibling`,
-          );
-          check(
-            openingGuide.paintBottom <= siblingGuide.paintTop + 0.6,
-            `${label}: ancestor guide at ${siblingGuide.paintX}px stops at its next sibling`,
-          );
-          check(
-            Math.abs(openingGuide.paintBottom - siblingGuide.paintTop) < 0.02,
-            `${label}: ancestor guide at ${siblingGuide.paintX}px has a non-overlapping seam`,
-          );
-          check(
-            Math.abs(
-              openingGuide.paintBottom * sample.dpr -
-                Math.round(openingGuide.paintBottom * sample.dpr),
-            ) < 0.02,
-            `${label}: ancestor guide at ${siblingGuide.paintX}px ends on a device-pixel boundary`,
-          );
-          check(
-            Math.abs(
-              openingGuide.paintThickness - siblingGuide.paintThickness,
-            ) < 0.1,
-            `${label}: ancestor guide at ${siblingGuide.paintX}px keeps one thickness across the code card`,
-          );
-        }
+      for (const siblingGuide of entry.siblingGuides.filter(
+        (guide) => guide.paintVisible,
+      )) {
+        const openingGuide = entry.guides.find(
+          (guide) =>
+            guide.paintVisible &&
+            Math.abs(guide.paintX - siblingGuide.paintX) < 0.6,
+        );
+        const bodyGuide = entry.bodyGuides?.find(
+          (guide) =>
+            !guide.owner &&
+            Math.abs(guide.paintX - siblingGuide.paintX) < 0.6,
+        );
+        check(
+          openingGuide,
+          `${label}: opening ancestor guide at ${siblingGuide.paintX}px`,
+        );
+        check(
+          entry.embedded || (bodyGuide && !bodyGuide.paintVisible),
+          `${label}: embedded preview or covered body ancestor guide at ${siblingGuide.paintX}px does not repaint`,
+        );
+        if (!openingGuide) continue;
+        check(
+          openingGuide.paintBottom >= siblingGuide.paintTop - 0.6,
+          `${label}: ancestor guide at ${siblingGuide.paintX}px covers the code card through its next sibling`,
+        );
+        check(
+          openingGuide.paintBottom <= siblingGuide.paintTop + 0.6,
+          `${label}: ancestor guide at ${siblingGuide.paintX}px stops at its next sibling`,
+        );
+        check(
+          Math.abs(openingGuide.paintBottom - siblingGuide.paintTop) < 0.02,
+          `${label}: ancestor guide at ${siblingGuide.paintX}px has a non-overlapping seam`,
+        );
+        check(
+          Math.abs(
+            openingGuide.paintBottom * sample.dpr -
+              Math.round(openingGuide.paintBottom * sample.dpr),
+          ) < 0.02,
+          `${label}: ancestor guide at ${siblingGuide.paintX}px ends on a device-pixel boundary`,
+        );
+        check(
+          Math.abs(openingGuide.paintThickness - siblingGuide.paintThickness) <
+            0.1,
+          `${label}: ancestor guide at ${siblingGuide.paintX}px keeps one thickness across the code card`,
+        );
       }
       for (const bodyGuide of entry.bodyGuides?.filter(
         (guide) => guide.paintVisible && !guide.owner,
