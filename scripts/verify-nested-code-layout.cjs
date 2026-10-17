@@ -129,20 +129,33 @@ try {
       const rect = (e) => e?.getBoundingClientRect();
       const guides = (e) =>
         [...e.querySelectorAll(".cm-indent")].map((e) => {
+          const box = rect(e);
           const paint = getComputedStyle(e, "::before");
+          const clipValues = paint.clipPath.match(/^inset\(([^)]+)\)$/)?.[1]
+            .trim()
+            .split(/\s+/)
+            .map((value) => Number.parseFloat(value));
+          const clipTop = clipValues?.[0] ?? 0;
+          const clipBottom =
+            clipValues?.length === 2
+              ? clipValues[0]
+              : (clipValues?.[2] ?? clipTop);
           return {
-            x: rect(e).x,
-            width: rect(e).width,
+            x: box.x,
+            width: box.width,
             margin: Number.parseFloat(paint.marginInlineStart),
             paintX:
-              rect(e).x +
+              box.x +
               Number.parseFloat(paint.marginInlineStart) +
               Number.parseFloat(paint.borderInlineStartWidth || "0") / 2,
+            paintTop: box.top + clipTop,
+            paintBottom: box.bottom - clipBottom,
             paintVisible:
               paint.content !== "none" &&
               paint.display !== "none" &&
               paint.visibility !== "hidden" &&
               Number.parseFloat(paint.opacity || "1") > 0,
+            owner: !!e.closest(".bullet-plugin-code-owner-prefix"),
           };
         });
       const entries = [
@@ -224,6 +237,9 @@ try {
             bulletCenter:
               paintedMarkerBounds(bullet).x +
               paintedMarkerBounds(bullet).width / 2,
+            bulletCenterY:
+              paintedMarkerBounds(bullet).y +
+              paintedMarkerBounds(bullet).height / 2,
             siblingBullet: rect(next.querySelector(".list-bullet"))?.x,
             guides: guides(start),
             siblingGuides: guides(next),
@@ -355,13 +371,23 @@ try {
         );
       }
       if (entry.opening === offset + 6 && phase.includes("editing")) {
+        const ownerGuide = entry.bodyGuides?.find(
+          (guide) =>
+            guide.owner &&
+            guide.paintVisible &&
+            Math.abs(guide.paintX - entry.bulletCenter) < 3,
+        );
         check(
-          entry.bodyGuides?.some(
-            (guide) =>
-              guide.paintVisible &&
-              Math.abs(guide.paintX - entry.bulletCenter) < 3,
-          ),
+          ownerGuide,
           `${label}: code continuation guide paint is restored while editing`,
+        );
+        check(
+          ownerGuide?.paintTop >= entry.bulletCenterY - 0.6,
+          `${label}: code continuation guide starts at the bullet center while editing`,
+        );
+        check(
+          ownerGuide?.paintBottom > entry.bulletCenterY + 0.6,
+          `${label}: code continuation guide continues below the bullet while editing`,
         );
       }
     }
