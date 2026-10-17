@@ -432,6 +432,23 @@ try {
           );
         }
       }
+      for (const bodyGuide of entry.bodyGuides?.filter(
+        (guide) => guide.paintVisible && !guide.owner,
+      ) ?? []) {
+        const openingGuide = entry.guides.find(
+          (guide) =>
+            guide.paintVisible &&
+            Math.abs(guide.paintX - bodyGuide.paintX) < 0.6,
+        );
+        if (!openingGuide) continue;
+        const overlap =
+          Math.min(openingGuide.paintBottom, bodyGuide.paintBottom) -
+          Math.max(openingGuide.paintTop, bodyGuide.paintTop);
+        check(
+          overlap <= 0.02,
+          `${label}: ancestor guide at ${bodyGuide.paintX}px has one paint layer across the code card`,
+        );
+      }
       if (entry.opening === offset + 6 && entry.nativePreview) {
         check(
           !entry.bodyGuides?.some(
