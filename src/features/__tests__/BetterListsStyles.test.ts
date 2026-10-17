@@ -201,6 +201,20 @@ describe("BetterListsStyles", () => {
     );
   });
 
+  test("clips the first source owner guide without hiding or resizing its indent", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const declarations = styles.match(
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-code-owner-guide-clipped\s+\.bullet-plugin-code-owner-prefix\s+\.cm-indent::before\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(declarations?.replace(/\s+/g, " ").trim()).toBe(
+      "clip-path: inset(var(--bullet-code-owner-guide-clip) 0 0 0);",
+    );
+    expect(declarations).not.toMatch(
+      /\b(?:display|visibility|width|min-width|height|position|inset-block-start|translate|transform)\s*:/,
+    );
+  });
+
   test("renders a theme-aware bullet as a seven-pixel circle", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(

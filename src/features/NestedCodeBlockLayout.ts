@@ -48,6 +48,8 @@ const PREVIEW_FIRST_CLASS = "bullet-plugin-code-preview-first";
 const PREVIEW_LAST_CLASS = "bullet-plugin-code-preview-last";
 const PREVIEW_BODY_CLASS = "bullet-plugin-code-preview-body";
 const CODE_OWNER_PREFIX_CLASS = "bullet-plugin-code-owner-prefix";
+const CODE_OWNER_GUIDE_CLIPPED_CLASS = "bullet-plugin-code-owner-guide-clipped";
+const CODE_OWNER_GUIDE_CLIP = "--bullet-code-owner-guide-clip";
 const PREVIEW_HEIGHT = "--bullet-code-preview-height";
 const OPENING_ALIGNED_CLASS = "bullet-plugin-code-opening-aligned";
 const OPENING_MARKER_OFFSET = "--bullet-code-opening-marker-offset";
@@ -57,6 +59,18 @@ const PREVIEW_END = "--bullet-code-preview-end";
 const PREVIEW_RADIUS = "--bullet-code-preview-radius";
 const listFenceRe = /^([ \t]*)([-*+]|\d+\.)([ \t]+)(`{3,}|~{3,})/;
 
+interface OpeningAlignment {
+  height: string;
+  markerOffset: string;
+  ownerGuideClip: string;
+}
+
+interface FirstCodeLineGeometry {
+  blockBounds: DOMRect;
+  firstLine: { top: number; height: number };
+  hasLineBox: boolean;
+}
+
 interface MeasuredLine {
   element: HTMLElement;
   inset: string;
@@ -64,7 +78,8 @@ interface MeasuredLine {
   contentPadding?: string;
   emptyBody?: boolean;
   markerOffset?: string;
-  preview?: { height: string };
+  ownerGuideClip?: string;
+  preview?: OpeningAlignment;
   previewBlock?: HTMLElement;
   previewEmbed?: boolean;
   plainPreview?: boolean;
@@ -98,6 +113,7 @@ interface NativeRowLayout {
   end: string | undefined;
   contentPadding: string | undefined;
   markerOffset: string | undefined;
+  ownerGuideClip: string | undefined;
   presentation: NativePresentation;
 }
 
@@ -139,6 +155,7 @@ const NATIVE_CLASSES = [
   PREVIEW_FIRST_CLASS,
   PREVIEW_LAST_CLASS,
   PREVIEW_BODY_CLASS,
+  CODE_OWNER_GUIDE_CLIPPED_CLASS,
 ];
 
 function withoutLayoutClasses(value: string): string {
@@ -1028,6 +1045,7 @@ export class NestedCodeBlockLayoutPluginValue {
       return codeEnds.get(key);
     };
     const visibleInsets = new Map<number, string>();
+    const firstBodyGuideClips = new Map<Element, string>();
     const pendingEmptyRows: Array<{
       element: HTMLElement;
       opening: FenceOpening;
@@ -1179,8 +1197,13 @@ export class NestedCodeBlockLayoutPluginValue {
                 next?.querySelector(`.${CODE_CONTENT_CLASS}`) ?? next,
               )
             : undefined;
+        if (alignment?.ownerGuideClip && next)
+          firstBodyGuideClips.set(next, alignment.ownerGuideClip);
         const nativePreview =
           isNativePreviewOpening(element) && isCodeBody(next);
+        const firstBody =
+          isCodeBody(element) && line.number === opening.openingLineNumber + 1;
+        const codeContent = element.querySelector(`.${CODE_CONTENT_CLASS}`);
         measured.push({
           element,
           inset,
@@ -1196,6 +1219,12 @@ export class NestedCodeBlockLayoutPluginValue {
             nativePreview || element.querySelector(".list-bullet")
               ? alignment?.markerOffset
               : undefined,
+          ownerGuideClip: firstBody
+            ? (firstBodyGuideClips.get(element) ??
+              (codeContent
+                ? measureOwnerGuideClip(element, codeContent)
+                : undefined))
+            : undefined,
           previewBlock: nativePreview ? (next as HTMLElement) : undefined,
           preview: nativePreview ? alignment : undefined,
         });
@@ -1246,7 +1275,14 @@ export class NestedCodeBlockLayoutPluginValue {
     const rows = new Map<number, NativeRowLayout>();
     const processors: ProcessorLayout[] = [];
     for (const measurement of this.measureLines()) {
-      const { element, inset, end, contentPadding, markerOffset } = measurement;
+      const {
+        element,
+        inset,
+        end,
+        contentPadding,
+        markerOffset,
+        ownerGuideClip,
+      } = measurement;
       const line = documentLineForElement(this.view, element);
       if (!line) continue;
       if (element.classList.contains("cm-preview-code-block")) {
@@ -1275,6 +1311,8 @@ export class NestedCodeBlockLayoutPluginValue {
           end,
           contentPadding,
           markerOffset,
+          ownerGuideClip:
+            ownerGuideClip ?? this.nativeRows.get(source.from)?.ownerGuideClip,
           presentation: nativePresentation(
             measurement,
             selectionInBlock(
@@ -1638,6 +1676,10 @@ function nativeAttributes(
         classes.push(PREVIEW_LAST_CLASS);
         break;
       case "source":
+        if (row.ownerGuideClip !== undefined) {
+          classes.push(CODE_OWNER_GUIDE_CLIPPED_CLASS);
+          properties.push([CODE_OWNER_GUIDE_CLIP, row.ownerGuideClip]);
+        }
         break;
       default: {
         const exhaustive: never = presentation;
@@ -1921,7 +1963,7 @@ function measureOpeningAlignment(
   embed: HTMLElement,
   code: Element | null = embed.querySelector(".ec-line .code") ??
     embed.querySelector("code"),
-): { height: string; markerOffset: string } | undefined {
+): OpeningAlignment | undefined {
   const bullet = opening.querySelector<HTMLElement>(".list-bullet");
   const marker =
     bullet ??
@@ -1929,31 +1971,9 @@ function measureOpeningAlignment(
     opening.querySelector<HTMLElement>(".cm-formatting-list");
   if (!marker || !code) return;
 
-  const doc = embed.ownerDocument;
-  const walker = doc.createTreeWalker(code, NodeFilter.SHOW_TEXT);
-  let node: Node | null;
-  let firstLine: { top: number; height: number } | undefined;
-  while ((node = walker.nextNode())) {
-    const range = doc.createRange();
-    range.selectNodeContents(node);
-    firstLine = range.getClientRects()[0];
-    if (firstLine?.height) break;
-  }
-  const blockBounds = embed.getBoundingClientRect();
-  const hasLineBox = !!firstLine || isCodeBody(embed);
-  if (!firstLine) {
-    const style = doc.defaultView?.getComputedStyle(code);
-    const height = Number.parseFloat(style?.lineHeight ?? "0");
-    if (!height) return;
-    const codeBounds = code.getBoundingClientRect();
-    const paddingTop = Number.parseFloat(style?.paddingTop ?? "0") || 0;
-    const paddingBottom = Number.parseFloat(style?.paddingBottom ?? "0") || 0;
-    // Empty processor output can consist only of padding, with no text row.
-    firstLine =
-      codeBounds.height <= paddingTop + paddingBottom
-        ? blockBounds
-        : { top: codeBounds.top + paddingTop, height };
-  }
+  const geometry = measureFirstCodeLine(embed, code);
+  if (!geometry) return;
+  const { blockBounds, firstLine, hasLineBox } = geometry;
 
   const lineBounds = opening.getBoundingClientRect();
   const markerBounds = marker.getBoundingClientRect();
@@ -1985,7 +2005,56 @@ function measureOpeningAlignment(
   return {
     height: `${blockBounds.top + blockBounds.height - lineBounds.top}px`,
     markerOffset: `${markerOffset}px`,
+    ownerGuideClip: `${Math.max(0, firstLineCenter - blockBounds.top)}px`,
   };
+}
+
+function measureOwnerGuideClip(
+  body: HTMLElement,
+  code: Element,
+): string | undefined {
+  const geometry = measureFirstCodeLine(body, code);
+  if (!geometry) return;
+  const offset =
+    geometry.firstLine.top +
+    geometry.firstLine.height / 2 -
+    geometry.blockBounds.top;
+  return Number.isFinite(offset) ? `${Math.max(0, offset)}px` : undefined;
+}
+
+function measureFirstCodeLine(
+  block: HTMLElement,
+  code: Element,
+): FirstCodeLineGeometry | undefined {
+  const doc = block.ownerDocument;
+  const walker =
+    typeof doc.createTreeWalker === "function"
+      ? doc.createTreeWalker(code, NodeFilter.SHOW_TEXT)
+      : null;
+  let node: Node | null;
+  let firstLine: { top: number; height: number } | undefined;
+  while (walker && (node = walker.nextNode())) {
+    const range = doc.createRange();
+    range.selectNodeContents(node);
+    firstLine = range.getClientRects()[0];
+    if (firstLine?.height) break;
+  }
+  const blockBounds = block.getBoundingClientRect();
+  const hasLineBox = !!firstLine || isCodeBody(block);
+  if (!firstLine) {
+    const style = doc.defaultView?.getComputedStyle(code);
+    const height = Number.parseFloat(style?.lineHeight ?? "0");
+    if (!height) return;
+    const codeBounds = code.getBoundingClientRect();
+    const paddingTop = Number.parseFloat(style?.paddingTop ?? "0") || 0;
+    const paddingBottom = Number.parseFloat(style?.paddingBottom ?? "0") || 0;
+    // Empty processor output can consist only of padding, with no text row.
+    firstLine =
+      codeBounds.height <= paddingTop + paddingBottom
+        ? blockBounds
+        : { top: codeBounds.top + paddingTop, height };
+  }
+  return { blockBounds, firstLine, hasLineBox };
 }
 
 function measureOpeningInset(element: HTMLElement): string | null {

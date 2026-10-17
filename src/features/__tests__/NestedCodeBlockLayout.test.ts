@@ -1215,6 +1215,42 @@ describe("native measurement publication", () => {
     fixture.plugin.destroy();
   });
 
+  test("clips the first owner guide at the aligned bullet center while its opener is offscreen", () => {
+    const fixture = makePreviewFixture(false, true);
+    const [opening, first] = fixture.lines;
+    first.getBoundingClientRect = () =>
+      ({ left: 100, right: 300, top: 124, height: 24 }) as never;
+    const dispatch = drivers.get(fixture.plugin)!.dispatch;
+    dispatch({ selection: { anchor: fixture.view.state.doc.length } });
+    fixture.measure();
+
+    fixture.show([first]);
+    dispatch({ selection: { anchor: fixture.view.state.doc.line(2).to } });
+    expect(lineAttributes(fixture.plugin, first.position)).toEqual({
+      class:
+        "bullet-plugin-nested-code-block bullet-plugin-code-owner-guide-clipped",
+      style:
+        "--bullet-nested-code-block-inset: 64px; --bullet-code-owner-guide-clip: 12px;",
+    });
+
+    fixture.measure();
+    expect(lineAttributes(fixture.plugin, first.position).style).toContain(
+      "--bullet-code-owner-guide-clip: 12px;",
+    );
+
+    dispatch({ selection: { anchor: fixture.view.state.doc.length } });
+    fixture.measure();
+    const preview = lineAttributes(fixture.plugin, first.position);
+    expect(preview.class).not.toContain(
+      "bullet-plugin-code-owner-guide-clipped",
+    );
+    expect(preview.style).not.toContain("--bullet-code-owner-guide-clip");
+    expect(
+      lineAttributes(fixture.plugin, opening.position).style,
+    ).not.toContain("--bullet-code-owner-guide-clip");
+    fixture.plugin.destroy();
+  });
+
   test("toggles an offscreen body's preview role across source editing", () => {
     const fixture = makePreviewFixture(false, true);
     const body = fixture.lines[1];
