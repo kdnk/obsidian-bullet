@@ -314,6 +314,35 @@ body.bullet-plugin-better-lists
   padding-inline-start: var(--bullet-code-content-padding, var(--size-4-4));
 }
 
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-nested-code-cursor-line {
+  caret-color: transparent;
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-nested-code-cursor-line::after {
+  position: absolute;
+  inline-size: var(--bullet-code-cursor-offset, var(--size-4-4));
+  block-size: 0;
+  visibility: hidden;
+  content: "";
+  pointer-events: none;
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .bullet-plugin-nested-code-cursor-layer {
+  pointer-events: none;
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .bullet-plugin-nested-code-cursor-layer.bullet-plugin-nested-code-cursor-blink-alt {
+  animation-name: cm-blink2;
+}
+
 body:not(.is-mobile).bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.HyperMD-list-line

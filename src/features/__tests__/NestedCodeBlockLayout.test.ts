@@ -1,5 +1,10 @@
 import { EditorState, TransactionSpec } from "@codemirror/state";
-import { Decoration, DecorationSet, EditorView } from "@codemirror/view";
+import {
+  Decoration,
+  DecorationSet,
+  EditorView,
+  WidgetType,
+} from "@codemirror/view";
 
 import {
   NestedCodeBlockLayoutPluginValue,
@@ -51,6 +56,18 @@ function flushPublications() {
 function runMeasurement(measurement: Measurement) {
   measurement.write(measurement.read());
   flushPublications();
+}
+
+function widgetDecoration(decoration: Decoration) {
+  const spec: unknown = decoration.spec;
+  return typeof spec === "object" &&
+    spec &&
+    "widget" in spec &&
+    spec.widget instanceof WidgetType &&
+    "side" in spec &&
+    typeof spec.side === "number"
+    ? { widget: spec.widget, side: spec.side }
+    : null;
 }
 
 function decorationAttributes(decoration: Decoration) {
@@ -109,7 +126,7 @@ function mountLayout(
       ),
     ).filter((element) => !element.classList.contains("cm-preview-code-block"));
     decorations.between(0, view.state.doc.length, (from, to, decoration) => {
-      if (from !== to) return;
+      if (from !== to || widgetDecoration(decoration)) return;
       const attrs = decorationAttributes(decoration);
       for (const element of lines.filter(
         (line) => view.posAtDOM(line) === from,
@@ -411,6 +428,52 @@ describe("native preview row roles", () => {
     }),
   );
 
+  test("hides the native caret only on the selected nested code row", () => {
+    const fixture = makePreviewFixture(false, true);
+    const [opening, first, , , outside] = fixture.lines;
+    const dispatch = drivers.get(fixture.plugin)!.dispatch;
+
+    dispatch({
+      selection: { anchor: fixture.view.state.doc.line(1).from + 3 },
+    });
+
+    expect(
+      opening.classList.contains("bullet-plugin-nested-code-cursor-line"),
+    ).toBe(true);
+    expect(
+      first.classList.contains("bullet-plugin-nested-code-cursor-line"),
+    ).toBe(false);
+
+    dispatch({
+      selection: { anchor: fixture.view.state.doc.line(2).from + 3 },
+    });
+    expect(
+      opening.classList.contains("bullet-plugin-nested-code-cursor-line"),
+    ).toBe(false);
+    expect(
+      first.classList.contains("bullet-plugin-nested-code-cursor-line"),
+    ).toBe(true);
+
+    dispatch({
+      selection: {
+        anchor: fixture.view.state.doc.line(2).from + 3,
+        head: fixture.view.state.doc.line(2).from + 4,
+      },
+    });
+    expect(
+      first.classList.contains("bullet-plugin-nested-code-cursor-line"),
+    ).toBe(false);
+
+    dispatch({ selection: { anchor: fixture.view.state.doc.length } });
+    expect(
+      first.classList.contains("bullet-plugin-nested-code-cursor-line"),
+    ).toBe(false);
+    expect(
+      outside.classList.contains("bullet-plugin-nested-code-cursor-line"),
+    ).toBe(false);
+    fixture.plugin.destroy();
+  });
+
   test("marks native preview fences and rounds the first and last code rows", () => {
     const fixture = makePreviewFixture();
     const [opening, first, last, closing] = fixture.lines;
@@ -699,10 +762,20 @@ function lineAttributes(
 ) {
   let result = { class: "", style: "" };
   plugin.decorations.between(position, position, (from, to, decoration) => {
-    if (from === position && to === position)
+    if (from === position && to === position && !widgetDecoration(decoration))
       result = decorationAttributes(decoration);
   });
   return result;
+}
+
+function withoutCursorLine(attributes: { class: string; style: string }) {
+  return {
+    ...attributes,
+    class: attributes.class
+      .split(" ")
+      .filter((name) => name !== "bullet-plugin-nested-code-cursor-line")
+      .join(" "),
+  };
 }
 
 function makeSourceFixture() {
@@ -1123,7 +1196,9 @@ describe("native measurement publication", () => {
       expect(dispatch.mock.calls.length).toBe(
         published + (change === "document" || change === "selection" ? 1 : 0),
       );
-      expect(lineAttributes(plugin, 0)).toEqual(before);
+      expect(withoutCursorLine(lineAttributes(plugin, 0))).toEqual(
+        withoutCursorLine(before),
+      );
       if (change !== "destroy") {
         fixture.measure();
         expect(lineAttributes(plugin, 0).style).toContain(
@@ -1987,10 +2062,69 @@ test("marks only parser-confirmed visible code content", () => {
     [{ from: state.doc.line(4).from, to: state.doc.length }],
     lineNameAt,
   ).between(0, state.doc.length, (from, to) => {
-    marked.push(state.doc.sliceString(from, to));
+    if (from !== to) marked.push(state.doc.sliceString(from, to));
   });
 
   expect(marked).toEqual(["`", "i", " ", "}", " ", "~", "n", " "]);
+});
+
+test("marks source glyphs without inserting widgets at owned boundaries", () => {
+  const source = [
+    "- ```js",
+    "\tcode",
+    "\t  ",
+    "",
+    " ",
+    " underindented",
+    "  ```",
+    "",
+    "  outside",
+  ].join("\n");
+  const state = EditorState.create({ doc: source });
+  const decorations = nestedCodeBlockContentDecorations(
+    state,
+    undefined,
+    names(
+      BEGIN,
+      CONTENT,
+      null,
+      null,
+      "HyperMD-codeblock",
+      CONTENT,
+      END,
+      null,
+      CONTENT,
+    ),
+  );
+  const widgets: Array<{ from: number; to: number; side: number }> = [];
+  const marks: Array<{ from: number; to: number }> = [];
+  decorations.between(0, state.doc.length, (from, to, decoration) => {
+    const widget = widgetDecoration(decoration);
+    if (widget) {
+      widgets.push({ from, to, side: widget.side });
+    } else {
+      marks.push({ from, to });
+    }
+  });
+
+  const boundaries = [
+    state.doc.line(1).from + 2,
+    state.doc.line(2).from + 1,
+    state.doc.line(3).from + 1,
+    state.doc.line(4).from,
+    state.doc.line(5).to,
+    state.doc.line(7).from + 2,
+  ];
+  expect(widgets).toEqual([]);
+  expect(marks).toEqual(
+    [boundaries[0], boundaries[1], boundaries[2], boundaries[5]].map(
+      (from) => ({
+        from,
+        to: from + 1,
+      }),
+    ),
+  );
+  expect(state.doc.toString()).toBe(source);
 });
 
 test.each(["HyperMD-codeblock", null])(
@@ -2005,7 +2139,7 @@ test.each(["HyperMD-codeblock", null])(
       [{ from: state.doc.line(3).from, to: state.doc.length }],
       names(BEGIN, CONTENT, blankName, CONTENT, END, null, CONTENT),
     ).between(0, state.doc.length, (from, to) => {
-      marked.push(state.doc.sliceString(from, to));
+      if (from !== to) marked.push(state.doc.sliceString(from, to));
     });
 
     // The empty body row is transparent to ownership lookup; the closing
@@ -2024,7 +2158,6 @@ test("uses a visible continuation to inset preceding empty code rows when the op
   const content = makeLine(["HyperMD-codeblock", "HyperMD-list-line"], {
     position: state.doc.line(4).from,
   });
-
   const measurements: Measurement[] = [];
   const view = {
     state,
@@ -2051,6 +2184,9 @@ test("uses a visible continuation to inset preceding empty code rows when the op
       element.style.getPropertyValue("--bullet-nested-code-block-inset"),
     ).toBe("calc(48.5px + var(--list-padding-inline-start))");
   }
+  expect(blank.style.getPropertyValue("--bullet-code-content-padding")).toBe(
+    "",
+  );
   plugin.destroy();
   expect(blank.classList.contains("bullet-plugin-nested-code-block")).toBe(
     false,
@@ -2333,6 +2469,9 @@ test.each([
   ["\t\t\t- ```js", "\t\t\t  hello", 0],
   ["\t\t\t- ```js", "\t\t\t    hello", 0],
   ["- ```js", "\thello", 2],
+  ["- ```js", "\t", 2],
+  ["\t- ```js", " ", 0],
+  ["- ```js", "", 0],
 ])(
   "pads the source container boundary relative to the background for %j / %j",
   (openingText, bodyText, residual) => {

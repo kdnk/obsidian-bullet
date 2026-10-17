@@ -5,7 +5,10 @@ import { ViewPlugin } from "@codemirror/view";
 
 import { DocumentBodyClass } from "./DocumentBodyClass";
 import { Feature } from "./Feature";
-import { NestedCodeBlockLayoutPluginValue } from "./NestedCodeBlockLayout";
+import {
+  NestedCodeBlockLayoutPluginValue,
+  nestedCodeBlockCursorLayer,
+} from "./NestedCodeBlockLayout";
 import { taskBullets } from "./TaskBullets";
 
 import { Settings } from "../services/Settings";
@@ -54,6 +57,7 @@ export class BetterListsStyles implements Feature {
       ...(enabled
         ? [
             taskBullets,
+            nestedCodeBlockCursorLayer,
             ViewPlugin.define(
               (view) =>
                 new NestedCodeBlockLayoutPluginValue(

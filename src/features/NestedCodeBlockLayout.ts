@@ -1,6 +1,7 @@
 import { syntaxTree } from "@codemirror/language";
 import {
   ChangeSet,
+  EditorSelection,
   EditorState,
   MapMode,
   StateEffect,
@@ -11,7 +12,9 @@ import {
   Decoration,
   DecorationSet,
   EditorView,
+  RectangleMarker,
   ViewUpdate,
+  layer,
 } from "@codemirror/view";
 
 import { NestedCodeBlockPreviews } from "./NestedCodeBlockPreview";
@@ -26,6 +29,12 @@ import {
 
 const CODE_BLOCK_CLASS = "bullet-plugin-nested-code-block";
 const CODE_CONTENT_CLASS = "bullet-plugin-nested-code-block-content";
+const CODE_CURSOR_LINE_CLASS = "bullet-plugin-nested-code-cursor-line";
+const CODE_CURSOR_LAYER_CLASS = "bullet-plugin-nested-code-cursor-layer";
+const CODE_CURSOR_CLASS = "bullet-plugin-nested-code-cursor";
+const CODE_CURSOR_BLINK_ALT_CLASS =
+  "bullet-plugin-nested-code-cursor-blink-alt";
+const CODE_CURSOR_OFFSET = "--bullet-code-cursor-offset";
 const CODE_CONTENT_PADDING = "--bullet-code-content-padding";
 const CODE_BLOCK_INSET = "--bullet-nested-code-block-inset";
 const CODE_BLOCK_END = "--bullet-nested-code-block-end";
@@ -63,6 +72,7 @@ interface SourceRow {
   openingFrom: number;
   openingText: string;
   prefix: string;
+  residualColumns: number;
   kind: "opening" | "body" | "closing";
 }
 
@@ -142,6 +152,115 @@ interface FenceOpening {
   indentColumn: number;
   sourceOffset: number;
   openingLineNumber: number;
+}
+
+interface CodeContentBoundary {
+  readonly offset: number;
+  readonly residualColumns: number;
+}
+
+const contentGlyph = Decoration.mark({ class: CODE_CONTENT_CLASS });
+
+export const nestedCodeBlockCursorLayer = layer({
+  above: true,
+  class: CODE_CURSOR_LAYER_CLASS,
+  markers(view) {
+    const range = singleCursor(view.state);
+    if (
+      !view.hasFocus ||
+      !range ||
+      !view.dom.closest(".markdown-source-view.mod-cm6.is-live-preview")
+    )
+      return [];
+    const caretColor =
+      view.dom.ownerDocument.defaultView?.getComputedStyle(view.contentDOM)
+        .caretColor ?? "";
+    if (nativeCaretIsTransparent(caretColor)) return [];
+    const { node } = view.domAtPos(range.head);
+    const element =
+      node.nodeType === 1 ? (node as Element) : node.parentElement;
+    if (!element?.closest(`.${CODE_CURSOR_LINE_CLASS}`)) return [];
+    const className = `cm-cursor cm-cursor-primary ${CODE_CURSOR_CLASS}`;
+    const markers = RectangleMarker.forRange(view, className, range);
+    if (markers.length !== 1) return markers;
+    const line = element.closest<HTMLElement>(".cm-line");
+    const glyph = line?.querySelector<HTMLElement>(`.${CODE_CONTENT_CLASS}`);
+    if (glyph) {
+      try {
+        if (range.head === view.posAtDOM(glyph, 0))
+          return RectangleMarker.forRange(
+            view,
+            className,
+            EditorSelection.cursor(range.head, 1),
+          );
+      } catch {
+        return markers;
+      }
+    }
+    const screenLeft =
+      line && blankCodeBoundaryScreenLeft(view, line, range.head);
+    if (screenLeft === null || screenLeft === undefined) return markers;
+    const native = view.coordsAtPos(range.head, range.assoc || 1);
+    if (!native) return markers;
+    const marker = markers[0];
+    return [
+      new RectangleMarker(
+        className,
+        marker.left + screenLeft - native.left,
+        marker.top,
+        marker.width,
+        marker.height,
+      ),
+    ];
+  },
+  update(update, dom) {
+    if (update.transactions.some((transaction) => transaction.selection))
+      dom.classList.toggle(CODE_CURSOR_BLINK_ALT_CLASS);
+    return (
+      update.docChanged ||
+      update.selectionSet ||
+      update.focusChanged ||
+      update.viewportChanged ||
+      update.geometryChanged
+    );
+  },
+  mount(dom) {
+    dom.classList.add("cm-cursorLayer");
+  },
+});
+
+function singleCursor(state: EditorState) {
+  const { main, ranges } = state.selection;
+  return ranges.length === 1 && main.empty ? main : null;
+}
+
+function nativeCaretIsTransparent(caretColor: string) {
+  const normalized = caretColor.toLowerCase().replace(/ /g, "");
+  return (
+    normalized === "transparent" ||
+    normalized === "rgba(0,0,0,0)" ||
+    normalized.endsWith("/0)")
+  );
+}
+
+function blankCodeBoundaryScreenLeft(
+  view: EditorView,
+  lineElement: HTMLElement,
+  position: number,
+): number | null {
+  const line = view.state.doc.lineAt(position);
+  if (line.text.trim() !== "" || position !== line.to) return null;
+  const inset = Number.parseFloat(
+    lineElement.style.getPropertyValue(CODE_BLOCK_INSET),
+  );
+  const padding = Number.parseFloat(
+    lineElement.ownerDocument.defaultView?.getComputedStyle(
+      lineElement,
+      "::after",
+    ).inlineSize ?? "",
+  );
+  if (!Number.isFinite(inset) || !Number.isFinite(padding)) return null;
+  return lineElement.getBoundingClientRect().left + inset + padding;
 }
 
 interface CodeRowProbe {
@@ -488,7 +607,8 @@ export class NestedCodeBlockLayoutPluginValue {
       update.viewportChanged ||
       treeChanged ||
       published ||
-      presentationChanged
+      presentationChanged ||
+      selectionChanged
     ) {
       this.decorations = this.buildDecorations();
       this.syntaxContext.fenceOpenings.retainVisible(
@@ -523,6 +643,19 @@ export class NestedCodeBlockLayoutPluginValue {
       this.syntaxContext.fenceOpenings.at,
     );
     const positions = new Set(this.nativeRows.keys());
+    const cursor = singleCursor(state);
+    const cursorLine = cursor ? state.doc.lineAt(cursor.head).from : null;
+    const cursorSource =
+      cursorLine !== null
+        ? sourceRowAt(state, this.syntaxContext, cursorLine)
+        : null;
+    const cursorLines = new Set(
+      cursorLine !== null &&
+        cursorSource &&
+        cursor?.head === cursorSource.from + cursorSource.prefix.length
+        ? [cursorLine]
+        : [],
+    );
     for (const range of visibleRanges) {
       const last = state.doc.lineAt(range.to).number;
       for (let n = state.doc.lineAt(range.from).number; n <= last; n++) {
@@ -532,9 +665,9 @@ export class NestedCodeBlockLayoutPluginValue {
     }
     return marks.update({
       add: Array.from(positions, (from) =>
-        Decoration.line(nativeAttributes(this.nativeRows.get(from))).range(
-          from,
-        ),
+        Decoration.line(
+          nativeAttributes(this.nativeRows.get(from), cursorLines.has(from)),
+        ).range(from),
       ),
       sort: true,
     });
@@ -873,7 +1006,7 @@ export class NestedCodeBlockLayoutPluginValue {
     const visibleInsets = new Map<number, string>();
     const pendingEmptyRows: Array<{
       element: HTMLElement;
-      openingLineNumber: number;
+      opening: FenceOpening;
     }> = [];
     const fenceOpeningAt = this.syntaxContext.fenceOpenings.at;
     let currentInset: string | null = null;
@@ -933,6 +1066,12 @@ export class NestedCodeBlockLayoutPluginValue {
       if (!isNestedCodeBlockElement(element) && !emptyBody) continue;
       const opening = fenceOpeningAt(line.number);
       if (!opening) continue;
+      const boundary = codeContentBoundary(
+        line,
+        opening,
+        this.view.state.tabSize,
+      );
+      if (!boundary) continue;
 
       const marker = this.markerMeasurements.get(
         opening.openingLineNumber,
@@ -964,26 +1103,21 @@ export class NestedCodeBlockLayoutPluginValue {
             : measureContentInset(
                 this.view,
                 element,
-                line.from + opening.sourceOffset,
+                line.from + boundary.offset,
                 false,
               ));
       } else if (
         previousLineNumber !== line.number - 1 ||
         currentInset === null
       ) {
-        const contentOffset = offsetAtColumn(
-          line.text,
-          opening.contentColumn,
-          this.view.state.tabSize,
-        );
         currentInset = marker
           ? nativeInset()
-          : contentOffset === null
+          : emptyBody
             ? null
             : measureContentInset(
                 this.view,
                 element,
-                line.from + contentOffset,
+                line.from + boundary.offset,
                 true,
               );
       }
@@ -1046,7 +1180,7 @@ export class NestedCodeBlockLayoutPluginValue {
         // another visible row of this same fence during this measurement pass.
         pendingEmptyRows.push({
           element,
-          openingLineNumber: opening.openingLineNumber,
+          opening,
         });
       }
       previousLineNumber = line.number;
@@ -1056,7 +1190,8 @@ export class NestedCodeBlockLayoutPluginValue {
       }
     }
 
-    for (const { element, openingLineNumber } of pendingEmptyRows) {
+    for (const { element, opening } of pendingEmptyRows) {
+      const openingLineNumber = opening.openingLineNumber;
       const probe = this.markerMeasurements.get(openingLineNumber);
       const inset =
         visibleInsets.get(openingLineNumber) ??
@@ -1066,6 +1201,12 @@ export class NestedCodeBlockLayoutPluginValue {
           element,
           inset,
           end: codeEndFor(openingLineNumber, inset),
+          contentPadding: measureCodeContentPadding(
+            this.view,
+            element,
+            opening,
+            inset,
+          ),
           emptyBody: true,
         });
     }
@@ -1310,15 +1451,14 @@ function sourceRowAt(
           )
         ? "closing"
         : "body";
-  const offset =
-    kind === "opening"
-      ? opening.sourceOffset
-      : offsetAtColumn(line.text, opening.contentColumn, state.tabSize);
+  const boundary = codeContentBoundary(line, opening, state.tabSize);
+  if (!boundary) return null;
   return {
     from,
     openingFrom: openingLine.from,
     openingText: openingLine.text,
-    prefix: line.text.slice(0, offset ?? line.text.length),
+    prefix: line.text.slice(0, boundary.offset),
+    residualColumns: boundary.residualColumns,
     kind,
   };
 }
@@ -1344,6 +1484,7 @@ function retainNativeRows(
       source.openingFrom !== openingFrom ||
       source.openingText !== row.source.openingText ||
       source.prefix !== row.source.prefix ||
+      source.residualColumns !== row.source.residualColumns ||
       source.kind !== row.source.kind
     )
       continue;
@@ -1386,11 +1527,15 @@ function nativePresentation(measurement: MeasuredLine): NativePresentation {
   return { kind: "source" };
 }
 
-function nativeAttributes(row: NativeRowLayout | undefined): {
+function nativeAttributes(
+  row: NativeRowLayout | undefined,
+  cursorLine = false,
+): {
   class: string;
   attributes: { style: string };
 } {
   const classes = [CODE_BLOCK_CLASS];
+  if (cursorLine) classes.push(CODE_CURSOR_LINE_CLASS);
   const properties: Array<[string, string | undefined]> = [];
   if (row) {
     properties.push(
@@ -1398,6 +1543,11 @@ function nativeAttributes(row: NativeRowLayout | undefined): {
       [CODE_BLOCK_END, row.end],
       [CODE_CONTENT_PADDING, row.contentPadding],
     );
+    if (cursorLine)
+      properties.push([
+        CODE_CURSOR_OFFSET,
+        `calc(${row.source.residualColumns}ch + var(--size-4-4))`,
+      ]);
     if (row.markerOffset !== undefined) {
       classes.push(OPENING_ALIGNED_CLASS);
       properties.push([OPENING_MARKER_OFFSET, row.markerOffset]);
@@ -1575,18 +1725,18 @@ function codeBlockContentDecorations(
       }
       visitedLines.add(line.number);
       const name = lineNameAt(line.number);
-      if (name !== null && isNestedCodeBlockName(name)) {
+      if (
+        (name !== null && isNestedCodeBlockName(name)) ||
+        line.text.trim() === ""
+      ) {
         const opening = fenceOpeningAt(line.number);
-        const contentOffset = opening
-          ? codeContentOffset(line, opening, state.tabSize)
+        const boundary = opening
+          ? codeContentBoundary(line, opening, state.tabSize)
           : null;
-        if (contentOffset !== null && contentOffset < line.text.length) {
-          decorations.push(
-            Decoration.mark({ class: CODE_CONTENT_CLASS }).range(
-              line.from + contentOffset,
-              line.from + contentOffset + 1,
-            ),
-          );
+        if (boundary) {
+          const from = line.from + boundary.offset;
+          if (from < line.to)
+            decorations.push(contentGlyph.range(from, from + 1));
         }
       }
 
@@ -1788,14 +1938,24 @@ function measureContentInset(
   return logicalInset(element, content, includeCodePadding);
 }
 
-function codeContentOffset(
+function codeContentBoundary(
   line: { text: string; number: number },
   opening: FenceOpening,
   tabSize: number,
-): number | null {
-  return line.number === opening.openingLineNumber
-    ? opening.sourceOffset
-    : offsetAtColumn(line.text, opening.contentColumn, tabSize);
+): CodeContentBoundary | null {
+  const offset =
+    line.number === opening.openingLineNumber
+      ? opening.sourceOffset
+      : (offsetAtColumn(line.text, opening.contentColumn, tabSize) ??
+        (line.text.trim() === "" ? line.text.length : null));
+  if (offset === null) return null;
+  return {
+    offset,
+    residualColumns: Math.max(
+      0,
+      countColumn(line.text.slice(0, offset), tabSize) - opening.contentColumn,
+    ),
+  };
 }
 
 function measureCodeContentPadding(
@@ -1809,14 +1969,11 @@ function measureCodeContentPadding(
   const start = logicalInset(element, mark.getBoundingClientRect(), false);
   const line = documentLineForElement(view, element);
   if (start === null || !line) return;
-  const offset = codeContentOffset(line, opening, view.state.tabSize);
-  if (offset === null) return;
+  const boundary = codeContentBoundary(line, opening, view.state.tabSize);
+  if (!boundary) return;
   // The mark precedes literal code whitespace. If its source tab straddles
   // the container boundary, keep that tab's remaining columns as code indent.
-  const residual =
-    countColumn(line.text.slice(0, offset), view.state.tabSize) -
-    opening.contentColumn;
-  return `calc(${inset} - ${start} + ${residual}ch + var(--size-4-4))`;
+  return `calc(${inset} - ${start} + ${boundary.residualColumns}ch + var(--size-4-4))`;
 }
 
 function hiddenIndentEnd(raw: string, hidden: string, tabSize: number): number {

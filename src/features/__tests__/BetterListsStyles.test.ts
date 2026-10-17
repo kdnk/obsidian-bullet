@@ -172,11 +172,17 @@ describe("BetterListsStyles", () => {
     const content = styles.match(
       /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-nested-code-block\s+\.bullet-plugin-nested-code-block-content\s*\{([^}]*)\}/,
     )?.[1];
+    const cursorLine = styles.match(
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-nested-code-cursor-line\s*\{([^}]*)\}/,
+    )?.[1];
 
     expect(line).toContain("background-color: transparent;");
     expect(line).toContain("isolation: isolate;");
     expect(content?.replace(/\s+/g, " ").trim()).toBe(
       "padding-inline-start: var(--bullet-code-content-padding, var(--size-4-4));",
+    );
+    expect(cursorLine?.replace(/\s+/g, " ").trim()).toBe(
+      "caret-color: transparent;",
     );
   });
 
