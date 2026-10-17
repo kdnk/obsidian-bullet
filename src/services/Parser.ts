@@ -297,7 +297,7 @@ export class Parser {
             ? getFenceContent(line, expectedIndent)
             : null;
         if (!content && line.trim().length === 0) {
-          owner.addLine(line, "");
+          owner.addLine("", line);
           currentList = owner;
           continue;
         }
