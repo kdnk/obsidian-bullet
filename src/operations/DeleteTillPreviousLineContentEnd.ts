@@ -122,7 +122,7 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
 
     list.spliceRows(prevLineNo, 2, {
       ...list.getRow(prevLineNo),
-      text: lines[prevLineNo].text + lines[lineNo].text,
+      text: lines[prevLineNo].text + list.getLinesForFenceParsing()[lineNo],
     });
     return UPDATED_OUTCOME;
   }
