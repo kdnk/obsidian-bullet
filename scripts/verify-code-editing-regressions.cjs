@@ -17,6 +17,15 @@ const inputEvents = [];
 let pendingInput = null;
 let expectedVimMode = false;
 const cases = [
+  ...[" ", "\t", "\t ", "\t\t"].map((blank) => ({
+    name: `incomplete code container ${JSON.stringify(blank)}`,
+    text: `- parent\n\t\t- \`\`\`js\n\t\t  before\n${blank}\n\t\t  \`\`\``,
+    cursor: { line: 3, ch: blank.length },
+    key: "Backspace",
+    expected: "- parent\n\t\t- ```js\n\t\t  before\n\t\t  ```",
+    typed: "- parent\n\t\t- ```js\n\t\t  beforeX\n\t\t  ```",
+    joinCursor: { line: 2, ch: 10 },
+  })),
   {
     name: "partial-tab split",
     text: "- ```js\n\tfooBAR\n  ```",

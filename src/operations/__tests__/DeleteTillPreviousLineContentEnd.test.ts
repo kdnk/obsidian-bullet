@@ -42,6 +42,22 @@ test("should merge with previous note line", () => {
   expect(root.getCursor().ch).toBe(17);
 });
 
+test.each(["", " ", "\t", "\t "])(
+  "joins a blank fenced-code row with incomplete container %j",
+  (blank) => {
+    const text = `- parent\n\t- \`\`\`js\n\t  before\n${blank}\n\t  \`\`\``;
+    const root = makeRoot({
+      editor: makeEditor({ text, cursor: { line: 3, ch: blank.length } }),
+    });
+    expect(root.print()).toBe(text);
+    expect(
+      new DeleteTillPreviousLineContentEnd(root, true, false).perform(),
+    ).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe("- parent\n\t- ```js\n\t  before\n\t  ```");
+    expect(root.getCursor()).toEqual({ line: 2, ch: 9 });
+  },
+);
+
 test("should merge empty bullets with previous bullet", () => {
   const root = makeRoot({
     editor: makeEditor({

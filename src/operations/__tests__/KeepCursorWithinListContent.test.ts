@@ -146,7 +146,7 @@ test("should not do anything if there are multiple cursors", () => {
   expect(op.perform()).toEqual(NO_OP_OUTCOME);
 });
 
-test.each(["", "\t  "])(
+test.each(["", " ", "\t", "\t ", "\t  "])(
   "respects the physical prefix of a blank code row %j without repeated cursor repair",
   (blank) => {
     const root = makeRoot({
