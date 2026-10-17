@@ -4,7 +4,7 @@ import {
   foldedRanges,
   unfoldEffect,
 } from "@codemirror/language";
-import { Range, Text } from "@codemirror/state";
+import { EditorState, Range, Text } from "@codemirror/state";
 import {
   Decoration,
   DecorationSet,
@@ -97,6 +97,12 @@ interface OuterListChunk {
 interface GuideFoldTarget {
   line: number;
   fallbackCursor: MyEditorPosition;
+}
+
+interface GuideVisibleRange {
+  from: number;
+  to: number;
+  indent: string;
 }
 
 class OuterListGuideWidget extends WidgetType {
@@ -388,7 +394,10 @@ function synchronizePersistentIndentGuides(
   }
 }
 
-function getGuideIndentPrefix(pressedGuide: Element): string | null {
+function getGuideIndentPrefix(
+  pressedGuide: Element,
+  hiddenIndent: string,
+): string | null {
   const indentContainer = pressedGuide.parentElement;
   if (!indentContainer?.matches(INDENT_CONTAINER_SELECTOR)) {
     return null;
@@ -397,7 +406,7 @@ function getGuideIndentPrefix(pressedGuide: Element): string | null {
   let prefix = "";
   for (const child of Array.from(indentContainer.childNodes)) {
     if (child === pressedGuide) {
-      return prefix;
+      return hiddenIndent + prefix;
     }
     prefix += child.textContent ?? "";
   }
@@ -408,8 +417,9 @@ function getGuideIndentPrefix(pressedGuide: Element): string | null {
 function resolveVerticalGuideTarget(
   list: List,
   pressedGuide: Element,
+  hiddenIndent = "",
 ): List | null {
-  const indentPrefix = getGuideIndentPrefix(pressedGuide);
+  const indentPrefix = getGuideIndentPrefix(pressedGuide, hiddenIndent);
   if (indentPrefix === null) {
     return null;
   }
@@ -436,19 +446,30 @@ function collectVerticalGuideGroup(
   hoveredGuide: Element,
   guides: Iterable<Element>,
   getListForGuide: (guide: Element) => List | null,
+  getHiddenIndent: (guide: Element) => string | null = () => "",
 ): Element[] {
   const hoveredList = getListForGuide(hoveredGuide);
+  const hoveredHiddenIndent = getHiddenIndent(hoveredGuide);
   const hoveredTarget = hoveredList
-    ? resolveVerticalGuideTarget(hoveredList, hoveredGuide)
+    ? resolveVerticalGuideTarget(
+        hoveredList,
+        hoveredGuide,
+        hoveredHiddenIndent ?? "",
+      )
     : null;
-  if (!hoveredTarget) {
+  if (!hoveredTarget || hoveredHiddenIndent === null) {
     return [];
   }
 
   return Array.from(guides).filter((guide) => {
     const list = getListForGuide(guide);
-    const target = list ? resolveVerticalGuideTarget(list, guide) : null;
-    return target ? hasSameListStart(target, hoveredTarget) : false;
+    const hiddenIndent = getHiddenIndent(guide);
+    const target = list
+      ? resolveVerticalGuideTarget(list, guide, hiddenIndent ?? "")
+      : null;
+    return hiddenIndent !== null && target
+      ? hasSameListStart(target, hoveredTarget)
+      : false;
   });
 }
 
@@ -536,6 +557,7 @@ export class GuideFoldingPluginValue implements PluginValue {
     private settings: Settings,
     private parser: Parser,
     private view: EditorView,
+    private visibleListRange?: (state: EditorState) => GuideVisibleRange | null,
   ) {
     this.lastOuterVisibility = this.outerVisibility();
     this.activeDocument = this.view.contentDOM.ownerDocument ?? null;
@@ -638,6 +660,17 @@ export class GuideFoldingPluginValue implements PluginValue {
         event.preventDefault();
         return true;
       }
+      const zoom = this.visibleListRange?.(this.view.state);
+      if (zoom) {
+        const zoomLine = this.view.state.doc.lineAt(zoom.from).number - 1;
+        const zoomRoot = this.parser.parse(editor, { line: zoomLine, ch: 0 });
+        const zoomedList = zoomRoot?.getListUnderLine(zoomLine);
+        if (zoomedList && isVerticalGuideTargetActionable(zoomedList)) {
+          toggleVerticalGuideTarget(this.view, zoomedList);
+        }
+        event.preventDefault();
+        return true;
+      }
       const roots = this.parser.parseRange(editor, startLine, endLine) ?? [];
       if (roots.length !== 1) {
         event.preventDefault();
@@ -690,7 +723,11 @@ export class GuideFoldingPluginValue implements PluginValue {
       return false;
     }
 
-    const target = resolveVerticalGuideTarget(list, pressedGuide);
+    const hiddenIndent = this.getHiddenIndentForGuide(editor, pressedGuide);
+    if (hiddenIndent === null) {
+      return false;
+    }
+    const target = resolveVerticalGuideTarget(list, pressedGuide, hiddenIndent);
     if (!target) {
       return false;
     }
@@ -825,6 +862,21 @@ export class GuideFoldingPluginValue implements PluginValue {
     return line === null ? null : root.getListUnderLine(line);
   }
 
+  private getHiddenIndentForGuide(editor: Reader, guide: Element) {
+    if (!this.visibleListRange?.(this.view.state)) return "";
+    const line = this.getLineForGuide(guide);
+    const indentContainer = guide.parentElement;
+    if (line === null || !indentContainer?.matches(INDENT_CONTAINER_SELECTOR)) {
+      return null;
+    }
+    const sourceIndent = /^[ \t]*/.exec(editor.getLine(line))?.[0] ?? "";
+    const renderedIndent = Array.from(indentContainer.childNodes)
+      .map((child) => child.textContent ?? "")
+      .join("");
+    if (!sourceIndent.endsWith(renderedIndent)) return null;
+    return sourceIndent.slice(0, sourceIndent.length - renderedIndent.length);
+  }
+
   private readHoveredIndentGuideGroup(): Element[] {
     if (!this.interactionEnabled()) return [];
     const hoveredGuide = this.view.contentDOM.querySelector(
@@ -850,6 +902,7 @@ export class GuideFoldingPluginValue implements PluginValue {
         ),
       ),
       (guide) => this.getListForGuide(root, guide),
+      (guide) => this.getHiddenIndentForGuide(editor, guide),
     );
   }
 
@@ -895,8 +948,13 @@ export class GuideFoldingPluginValue implements PluginValue {
       this.view.contentDOM.querySelectorAll(RENDERED_GUIDE_CANDIDATE_SELECTOR),
     ).filter((guide) => {
       const list = this.getListForGuide(root, guide);
-      const target = list ? resolveVerticalGuideTarget(list, guide) : null;
-      return target ? hasSameListStart(target, targetStart) : false;
+      const hiddenIndent = this.getHiddenIndentForGuide(editor, guide);
+      const target = list
+        ? resolveVerticalGuideTarget(list, guide, hiddenIndent ?? "")
+        : null;
+      return hiddenIndent !== null && target
+        ? hasSameListStart(target, targetStart)
+        : false;
     });
     return { key, valid: true, indentGuides, outerGuides: [] };
   }

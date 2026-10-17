@@ -4,15 +4,19 @@ import { VerticalLines } from "../VerticalLines";
 
 const mockGuideFoldingFactory = jest.fn<
   { decorations: DecorationSet },
-  [unknown, unknown, unknown]
+  [unknown, unknown, unknown, unknown]
 >(() => ({
   decorations: Decoration.none,
 }));
 
 jest.mock("../GuideFolding", () => ({
   GuideFoldingPluginValue: jest.fn(
-    (settings: unknown, parser: unknown, view: unknown) =>
-      mockGuideFoldingFactory(settings, parser, view),
+    (
+      settings: unknown,
+      parser: unknown,
+      view: unknown,
+      visibleListRange: unknown,
+    ) => mockGuideFoldingFactory(settings, parser, view, visibleListRange),
   ),
 }));
 
@@ -279,10 +283,12 @@ describe("VerticalLines", () => {
       define: (...args: unknown[]) => unknown;
     };
     const define = jest.spyOn(viewPluginApi, "define");
+    const visibleListRange = jest.fn();
     const feature = new VerticalLines(
       plugin as never,
       settings as never,
       parser as never,
+      visibleListRange,
     );
 
     await feature.load();
@@ -294,6 +300,11 @@ describe("VerticalLines", () => {
     createPluginValue?.(view);
     define.mockRestore();
     const guideFoldingFactory = mockGuideFoldingFactory;
-    expect(guideFoldingFactory).toHaveBeenCalledWith(settings, parser, view);
+    expect(guideFoldingFactory).toHaveBeenCalledWith(
+      settings,
+      parser,
+      view,
+      visibleListRange,
+    );
   });
 });

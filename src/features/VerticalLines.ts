@@ -1,5 +1,6 @@
 import { Plugin } from "obsidian";
 
+import { EditorState } from "@codemirror/state";
 import { ViewPlugin } from "@codemirror/view";
 
 import { DocumentBodyClass } from "./DocumentBodyClass";
@@ -22,6 +23,9 @@ export class VerticalLines implements Feature {
     private plugin: Plugin,
     private settings: Settings,
     private parser: Parser,
+    private visibleListRange?: (
+      state: EditorState,
+    ) => { from: number; to: number; indent: string } | null,
   ) {
     this.actionBodyClass = new DocumentBodyClass(
       this.plugin,
@@ -38,7 +42,13 @@ export class VerticalLines implements Feature {
   async load() {
     this.plugin.registerEditorExtension([
       ViewPlugin.define(
-        (view) => new GuideFoldingPluginValue(this.settings, this.parser, view),
+        (view) =>
+          new GuideFoldingPluginValue(
+            this.settings,
+            this.parser,
+            view,
+            this.visibleListRange,
+          ),
         { decorations: (value) => value.decorations },
       ),
     ]);

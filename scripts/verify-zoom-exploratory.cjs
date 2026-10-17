@@ -257,6 +257,95 @@ function click(selector, label) {
   });
   settle();
 }
+function clickGuide(kind, label, index = 0) {
+  focus();
+  const point = () =>
+    evaluate(
+      (kind, label, index) => {
+        const cm = window.__zoomExplore.leaf.view.editor.cm;
+        const line = [...cm.contentDOM.querySelectorAll(".cm-line")].find(
+          (element) =>
+            cm.state.doc.lineAt(cm.posAtDOM(element)).text.trim() === label,
+        );
+        if (!line) throw Error(`Missing rendered line ${label}`);
+        const selector =
+          kind === "indent"
+            ? ".cm-hmd-list-indent > .cm-indent"
+            : ".bullet-plugin-outer-list-guide";
+        const candidates = [...line.querySelectorAll(selector)];
+        const guide = candidates[index];
+        if (!guide) {
+          throw Error(
+            `Missing ${kind} guide ${index} on ${label}; found ${candidates.length}`,
+          );
+        }
+        const rect = guide.getBoundingClientRect();
+        const pseudo = getComputedStyle(guide, "::before");
+        const pseudoLeft = Number.parseFloat(pseudo.left);
+        const x = Number.isFinite(pseudoLeft)
+          ? Math.max(
+              rect.left + 1,
+              Math.min(rect.right - 1, rect.left + pseudoLeft),
+            )
+          : rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        if (hit !== guide && !guide.contains(hit)) {
+          throw Error(
+            `Guide target is occluded: ${JSON.stringify({
+              kind,
+              label,
+              index,
+              point: { x, y },
+              candidates: candidates.map((candidate, candidateIndex) => {
+                const bounds = candidate.getBoundingClientRect();
+                return {
+                  candidateIndex,
+                  left: bounds.left,
+                  right: bounds.right,
+                  width: bounds.width,
+                };
+              }),
+              guide: guide.outerHTML.slice(0, 600),
+              hitIndex: candidates.indexOf(hit),
+              hit: hit?.outerHTML.slice(0, 600),
+            })}`,
+          );
+        }
+        return { x, y };
+      },
+      kind,
+      label,
+      index,
+    );
+  cdp("Input.dispatchMouseEvent", { type: "mouseMoved", ...point() });
+  settle();
+  const p = point();
+  cdp("Input.dispatchMouseEvent", {
+    type: "mousePressed",
+    ...p,
+    button: "left",
+    clickCount: 1,
+  });
+  cdp("Input.dispatchMouseEvent", {
+    type: "mouseReleased",
+    ...p,
+    button: "left",
+    clickCount: 1,
+  });
+  settle();
+}
+function foldedLabels() {
+  return evaluate(() => {
+    const cm = window.__zoomExplore.leaf.view.editor.cm;
+    return [...cm.contentDOM.querySelectorAll(".cm-line")]
+      .filter((line) => line.querySelector(".cm-fold-indicator .is-collapsed"))
+      .map((line) => cm.state.doc.lineAt(cm.posAtDOM(line)).text.trim());
+  });
+}
+function rendererErrors() {
+  return evaluate(() => [...window.__zoomExplore.errors]);
+}
 function screenshot(name) {
   fs.writeFileSync(
     path.join(output, `${name}.png`),
@@ -303,7 +392,10 @@ try {
       const file = await app.vault.create(note, fixture);
       const leaf = app.workspace.getLeaf("tab");
       const errors = [];
-      const onError = (e) => errors.push(String(e.message || e.reason));
+      const onError = (event) => {
+        const error = event.error ?? event.reason;
+        errors.push(String(error?.stack ?? error ?? event.message));
+      };
       window.addEventListener("error", onError);
       window.addEventListener("unhandledrejection", onError);
       window.__zoomExplore = {
@@ -358,6 +450,56 @@ try {
     assert.ok(!state().visible.includes("deep"));
     click(".collapse-indicator", "- branch");
     assert.ok(state().visible.includes("deep"));
+  });
+  check("native-indent-guide-within-nested-zoom", () => {
+    const text =
+      "- root\n\t- project\n\t\t- alpha\n\t\t\t- leaf A\n\t\t- beta\n\t\t\t- leaf B\n\t- other\n\t\t- other child";
+    prepare(text, "- project");
+    clickGuide("indent", "- leaf A");
+    const folded = state();
+    assert.ok(folded.range, "Guide click cleared zoom");
+    assert.ok(folded.visible.includes("alpha"), "Guide hid alpha itself");
+    assert.ok(folded.visible.includes("beta"), "Guide hid beta itself");
+    assert.ok(!folded.visible.includes("leaf A"), "Guide left leaf A visible");
+    assert.ok(!folded.visible.includes("leaf B"), "Guide left leaf B visible");
+    command("bullet:zoom-reset");
+    assert.deepEqual(foldedLabels().sort(), ["- alpha", "- beta"]);
+    assert.ok(
+      state().visible.includes("other child"),
+      "Guide folded hidden other",
+    );
+    command("editor:unfold-all");
+  });
+  check("native-mixed-indent-guide-within-zoom", () => {
+    const text =
+      "- root\n    - project\n\t\t- branch\n\t\t\t- child\n\t\t\t\t- leaf";
+    prepare(text, "- project");
+    clickGuide("indent", "- leaf", 1);
+    const folded = state();
+    assert.ok(folded.range, "Guide click cleared zoom");
+    assert.ok(folded.visible.includes("branch"), "Guide hid branch itself");
+    assert.ok(folded.visible.includes("child"), "Guide hid child itself");
+    assert.ok(!folded.visible.includes("leaf"), "Guide left leaf visible");
+    command("bullet:zoom-reset");
+    assert.deepEqual(foldedLabels(), ["- child"]);
+    command("editor:unfold-all");
+  });
+  check("native-outer-guide-keeps-hidden-roots", () => {
+    const text =
+      "- first\n\t- first child\n- project\n\t- alpha\n\t\t- leaf A\n\t- beta\n\t\t- leaf B\n- other\n\t- other child";
+    prepare(text, "- project");
+    assert.deepEqual(rendererErrors(), [], "Fixture setup raised an error");
+    clickGuide("outer", "- alpha");
+    assert.deepEqual(rendererErrors(), [], "Outer guide click raised an error");
+    command("bullet:zoom-reset");
+    assert.deepEqual(rendererErrors(), [], "Zoom reset raised an error");
+    const folded = foldedLabels();
+    assert.ok(!folded.includes("- first"), "Guide folded hidden first root");
+    assert.ok(!folded.includes("- other"), "Guide folded hidden other root");
+    assert.ok(state().visible.includes("first child"));
+    assert.ok(state().visible.includes("other child"));
+    command("editor:unfold-all");
+    assert.deepEqual(rendererErrors(), [], "Unfold all raised an error");
   });
   check("typing-undo-redo", () => {
     prepare();

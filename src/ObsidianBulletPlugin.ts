@@ -173,7 +173,9 @@ export default class ObsidianBulletPlugin extends Plugin {
       new NativeFoldScroll(this),
 
       // vertical-line folding and outer list guides
-      new VerticalLines(this, this.settings, this.parser),
+      new VerticalLines(this, this.settings, this.parser, (state) =>
+        listZoom.range(state),
+      ),
       new BulletThreading(this, this.settings, this.parser, (state) =>
         listZoom.range(state),
       ),

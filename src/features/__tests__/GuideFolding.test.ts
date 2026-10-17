@@ -1870,7 +1870,11 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     };
   }
 
-  function makeInteractionHarness(settings: object, parser: object) {
+  function makeInteractionHarness(
+    settings: object,
+    parser: object,
+    visibleListRange?: { from: number; to: number; indent: string },
+  ) {
     const dispatch = (
       eventName: "mousedown" | "click",
       event: MouseEvent,
@@ -1886,6 +1890,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
         ownedSettings as never,
         parser as never,
         view as never,
+        visibleListRange ? () => visibleListRange : undefined,
       );
       interactionPluginValues.push(pluginValue);
       Object.assign(ownedSettings, settings);
@@ -2243,6 +2248,70 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(views.every((view) => view.dispatch.mock.calls.length === 1)).toBe(
       true,
     );
+  });
+
+  test("restores the hidden zoom indent before resolving a guide", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: [
+          "- root",
+          "\t- project",
+          "\t\t- alpha",
+          "\t\t\t- leaf A",
+          "\t\t- beta",
+          "\t\t\t- leaf B",
+          "\t- other",
+          "\t\t- other child",
+        ].join("\n"),
+        cursor: { line: 3, ch: 3 },
+      }),
+    });
+    const editor = makeFoldEditor();
+    editor.getLine.mockReturnValue("\t\t\t- leaf A");
+    mockGetEditorFromState.mockReturnValue(editor);
+    const pluginValue = makeInteractionHarness(
+      { verticalLinesAction: "toggle-folding" },
+      { parse: jest.fn().mockReturnValue(root) },
+      { from: 7, to: 60, indent: "\t" },
+    );
+    const { guides } = makeGuideLine(["\t", "\t"]);
+
+    expect(pluginValue.click(makeEvent(guides[0]).event, makeView(3))).toBe(
+      true,
+    );
+
+    expect(foldable).toHaveBeenNthCalledWith(1, expect.anything(), 20, 29);
+    expect(foldable).toHaveBeenNthCalledWith(2, expect.anything(), 40, 49);
+  });
+
+  test("restores the clicked row prefix when zoom and descendants mix spaces and tabs", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: [
+          "- root",
+          "    - project",
+          "\t\t- branch",
+          "\t\t\t- child",
+          "\t\t\t\t- leaf",
+        ].join("\n"),
+        cursor: { line: 4, ch: 4 },
+      }),
+    });
+    const editor = makeFoldEditor();
+    editor.getLine.mockReturnValue("\t\t\t\t- leaf");
+    mockGetEditorFromState.mockReturnValue(editor);
+    const pluginValue = makeInteractionHarness(
+      { verticalLinesAction: "toggle-folding" },
+      { parse: jest.fn().mockReturnValue(root) },
+      { from: 7, to: 53, indent: "    " },
+    );
+    const { guides } = makeGuideLine(["\t", "\t", "\t"]);
+
+    expect(pluginValue.click(makeEvent(guides[1]).event, makeView(4))).toBe(
+      true,
+    );
+
+    expect(foldable).toHaveBeenCalledWith(expect.anything(), 30, 39);
   });
 
   test("routes a wrapped mobile indentation lane to its rendered guide", () => {
@@ -3738,6 +3807,50 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     expect(foldable).toHaveBeenCalledWith(expect.anything(), 0, 9);
     expect(view.dispatch).toHaveBeenCalledTimes(1);
     expect(preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  test("scopes an outer guide action to the visible zoom root", () => {
+    const sourceEditor = makeEditor({
+      text: [
+        "- root",
+        "\t- project",
+        "\t\t- alpha",
+        "\t\t\t- leaf A",
+        "\t\t- beta",
+        "\t\t\t- leaf B",
+        "\t- other",
+        "\t\t- other child",
+      ].join("\n"),
+      cursor: { line: 3, ch: 3 },
+    });
+    const root = makeRoot({ editor: sourceEditor });
+    mockGetEditorFromState.mockReturnValue(makeFoldEditor());
+    const parser = {
+      parse: jest.fn().mockReturnValue(root),
+      parseRange: jest.fn(),
+    };
+    const pluginValue = makeInteractionHarness(
+      {
+        outerVerticalLines: true,
+        verticalLinesAction: "toggle-folding",
+      },
+      parser,
+      { from: 7, to: 60, indent: "\t" },
+    );
+    const view = makeView(3);
+    view.state.doc.lineAt.mockReturnValue({ number: 2 });
+
+    expect(
+      pluginValue.click(makeEvent(makeOuterGuideTarget()).event, view),
+    ).toBe(true);
+
+    expect(parser.parse).toHaveBeenCalledWith(expect.anything(), {
+      line: 1,
+      ch: 0,
+    });
+    expect(parser.parseRange).not.toHaveBeenCalled();
+    expect(foldable).toHaveBeenNthCalledWith(1, expect.anything(), 20, 29);
+    expect(foldable).toHaveBeenNthCalledWith(2, expect.anything(), 40, 49);
   });
 
   test("unfolds every foldable top-level item when the current chunk is closed", () => {
