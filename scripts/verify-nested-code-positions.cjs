@@ -76,11 +76,17 @@ function keypress(key) {
       code:
         key === "Escape"
           ? "Escape"
-          : key === "0"
-            ? "Digit0"
-            : `Key${key.toUpperCase()}`,
+          : key === "Backspace"
+            ? "Backspace"
+            : key === "0"
+              ? "Digit0"
+              : `Key${key.toUpperCase()}`,
       windowsVirtualKeyCode:
-        key === "Escape" ? 27 : key.toUpperCase().charCodeAt(0),
+        key === "Escape"
+          ? 27
+          : key === "Backspace"
+            ? 8
+            : key.toUpperCase().charCodeAt(0),
     });
 }
 
@@ -232,6 +238,209 @@ function screenshot(name) {
       "base64",
     ),
   );
+}
+
+function caretSample() {
+  return evaluate(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 160));
+    const editor = app.workspace.activeLeaf.view.editor;
+    const cm = editor.cm;
+    const selection = cm.state.selection.main;
+    const line = cm.state.doc.lineAt(selection.head);
+    const row = [...cm.contentDOM.querySelectorAll(".cm-line")].find(
+      (element) =>
+        cm.state.doc.lineAt(cm.posAtDOM(element)).number === line.number,
+    );
+    if (!row) throw Error("Caret source row must be rendered");
+    const rect = (bounds) =>
+      bounds && {
+        left: bounds.left,
+        right: bounds.right,
+        top: bounds.top,
+        bottom: bounds.bottom,
+        width: bounds.width,
+        height: bounds.height,
+      };
+    const firstGlyph = (element) => {
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        const offset = node.textContent.search(/\S/);
+        if (offset < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, offset);
+        range.setEnd(node, offset + 1);
+        const bounds = range.getBoundingClientRect();
+        if (bounds.width && bounds.height) return rect(bounds);
+      }
+      return null;
+    };
+    const glyph = firstGlyph(row);
+    const referenceRow = glyph
+      ? row
+      : [...cm.contentDOM.querySelectorAll(".HyperMD-codeblock")].find(
+          (element) =>
+            !element.matches(
+              ".HyperMD-codeblock-begin, .HyperMD-codeblock-end",
+            ) && firstGlyph(element),
+        );
+    const referenceGlyph = referenceRow && firstGlyph(referenceRow);
+    const content = referenceRow?.querySelector(
+      ".bullet-plugin-nested-code-block-content",
+    );
+    const rowBounds = row.getBoundingClientRect();
+    const paint = getComputedStyle(row, "::before");
+    const paintLeft = rowBounds.left + parseFloat(paint.left);
+    const paintTop = rowBounds.top + parseFloat(paint.top);
+    const cursor = cm.dom.querySelector(".cm-cursor-primary");
+    const nativeSelection = document.getSelection();
+    const nativeRange = nativeSelection?.rangeCount
+      ? nativeSelection.getRangeAt(0).cloneRange()
+      : null;
+    const nativeBounds = nativeRange?.getBoundingClientRect();
+    const focusNode = nativeSelection?.focusNode;
+    let adjacentFocusEdge = null;
+    if (
+      focusNode?.nodeType === Node.TEXT_NODE &&
+      focusNode.textContent.length
+    ) {
+      const offset = nativeSelection.focusOffset;
+      const adjacent = document.createRange();
+      adjacent.setStart(focusNode, Math.max(0, offset - 1));
+      adjacent.setEnd(focusNode, offset || 1);
+      const bounds = adjacent.getBoundingClientRect();
+      const x = offset ? bounds.right : bounds.left;
+      adjacentFocusEdge = { ...rect(bounds), left: x, right: x, width: 0 };
+    }
+    const actualCursor = cursor
+      ? rect(cursor.getBoundingClientRect())
+      : nativeBounds?.height
+        ? rect(nativeBounds)
+        : adjacentFocusEdge;
+    return {
+      doc: editor.getValue(),
+      cursor: editor.getCursor(),
+      assoc: selection.assoc,
+      head: selection.head,
+      coordsBefore: rect(cm.coordsAtPos(selection.head, -1)),
+      coordsAfter: rect(cm.coordsAtPos(selection.head, 1)),
+      actualCursor,
+      cursorSource: cursor ? "cm-cursor-primary" : "native DOM selection",
+      nativeSelection: {
+        collapsed: nativeSelection?.isCollapsed,
+        bounds: rect(nativeBounds),
+        rects: nativeRange && [...nativeRange.getClientRects()].map(rect),
+        adjacentFocusEdge,
+        anchor: nativeSelection?.anchorNode && {
+          text: nativeSelection.anchorNode.textContent,
+          offset: nativeSelection.anchorOffset,
+        },
+        focus: focusNode && {
+          text: focusNode.textContent,
+          offset: nativeSelection.focusOffset,
+        },
+      },
+      row: rect(rowBounds),
+      firstGlyph: glyph,
+      bodyInsertionEdge: referenceGlyph?.left ?? null,
+      referenceGlyph,
+      card: {
+        left: paintLeft,
+        right: paintLeft + parseFloat(paint.width),
+        top: paintTop,
+        bottom: paintTop + parseFloat(paint.height),
+        color: paint.backgroundColor,
+        content: paint.content,
+      },
+      content: content && {
+        bounds: rect(content.getBoundingClientRect()),
+        paddingInlineStart: getComputedStyle(content).paddingInlineStart,
+      },
+      rowHTML: row.outerHTML,
+    };
+  });
+}
+
+function verifyCarets(mode) {
+  const samples = [];
+  results.push({ kind: "caret", mode, samples });
+  for (const shape of ["backspace-boundary", "blank-first"]) {
+    const text =
+      shape === "backspace-boundary"
+        ? "- parent\n\t- ```yaml\n\t  hello\n\t  ```\n- after"
+        : "- parent\n\t- ```yaml\n\t  \n\t  alpha\n\t  ```\n- after";
+    setup(2, true, text);
+    evaluate(
+      (ch) => {
+        const editor = app.workspace.activeLeaf.view.editor;
+        editor.setCursor({ line: 2, ch });
+        editor.focus();
+      },
+      shape === "backspace-boundary" ? 5 : 3,
+    );
+    const before = caretSample();
+    assert.equal(before.doc, text, "Caret fixture must match literal Markdown");
+    assert.deepEqual(before.cursor, {
+      line: 2,
+      ch: shape === "backspace-boundary" ? 5 : 3,
+    });
+    const beforeScreenshot = `${mode}-${shape}-before`;
+    screenshot(beforeScreenshot);
+    if (shape === "backspace-boundary") {
+      keypress("Backspace");
+      keypress("Backspace");
+    }
+    const after = caretSample();
+    const saved = savedMarkdown();
+    const afterScreenshot = `${mode}-${shape}-after`;
+    screenshot(afterScreenshot);
+    samples.push({
+      shape,
+      before,
+      after,
+      saved,
+      beforeScreenshot,
+      afterScreenshot,
+    });
+    check(`${mode}/${shape} source`, () => {
+      const expected =
+        shape === "backspace-boundary" ? text.replace("hello", "llo") : text;
+      assert.equal(after.doc, expected);
+      assert.equal(saved, expected);
+      assert.deepEqual(after.cursor, { line: 2, ch: 3 });
+      if (shape === "backspace-boundary")
+        assert.equal(
+          after.assoc,
+          -1,
+          "Native Backspace must reach negative affinity",
+        );
+    });
+    check(`${mode}/${shape} visible caret`, () => {
+      assert.ok(
+        after.actualCursor?.height > 0,
+        "Native caret insertion geometry must be measurable",
+      );
+      assert.ok(
+        Number.isFinite(after.bodyInsertionEdge),
+        "Code body insertion edge must be measurable",
+      );
+      assert.ok(
+        Math.abs(after.actualCursor.left - after.bodyInsertionEdge) <= 1,
+        `Actual caret X ${after.actualCursor.left} differs from code insertion edge ${after.bodyInsertionEdge} by ${after.actualCursor.left - after.bodyInsertionEdge}px (assoc ${after.assoc})`,
+      );
+    });
+    check(`${mode}/${shape} caret inside card`, () => {
+      assert.ok(
+        after.card.content !== "none" && after.card.color !== "transparent",
+        "Code card must be painted",
+      );
+      assert.ok(
+        after.actualCursor?.left >= after.card.left &&
+          after.actualCursor.right <= after.card.right,
+        `Actual caret X ${after.actualCursor?.left} is outside painted card ${after.card.left}..${after.card.right}`,
+      );
+    });
+  }
 }
 
 function check(name, predicate) {
@@ -574,6 +783,7 @@ try {
       if (!!app.plugins.plugins[id] !== (mode !== "native"))
         throw Error("Shiki state mismatch");
     }, mode);
+    verifyCarets(mode);
     verifyLayout(mode, "multiline", fixture, phases);
     verifyLayout(mode, "empty", "- parent\n\t- ```yaml\n\t  ```\n- after", [
       { name: "preview", line: 3 },
