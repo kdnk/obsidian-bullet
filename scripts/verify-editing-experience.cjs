@@ -136,6 +136,7 @@ function sample() {
     return {
       doc: view.editor.getValue(),
       cursor: view.editor.getCursor(),
+      selections: view.editor.listSelections(),
       saved: await app.vault.read(view.file),
       zoomed: !!view.containerEl.querySelector(
         '.bullet-zoom-breadcrumbs [aria-current="location"]',
@@ -254,6 +255,123 @@ try {
           ch: fixture.afterCursor.ch + 1,
         });
       });
+    }
+
+    for (const glyph of [
+      { name: "emoji", text: "😀", backspace: "" },
+      { name: "joined-emoji", text: "👩‍💻", backspace: "" },
+      { name: "flag", text: "🇯🇵", backspace: "" },
+      { name: "combining-kana", text: "か\u3099", backspace: "か" },
+    ]) {
+      for (const key of ["Backspace", "Delete"]) {
+        check(
+          `unicode-${glyph.name}-${key.toLowerCase()}-${suffix}`,
+          (result) => {
+            const text = `- a${glyph.text}b`;
+            const remaining = key === "Backspace" ? glyph.backspace : "";
+            const afterCursor = { line: 0, ch: 3 + remaining.length };
+            setup(text, {
+              line: 0,
+              ch: key === "Backspace" ? 3 + glyph.text.length : 3,
+            });
+            result.before = sample();
+            keypress(key);
+            result.after = sample();
+            assert.equal(result.after.doc, `- a${remaining}b`);
+            assert.equal(result.after.saved, `- a${remaining}b`);
+            assert.deepEqual(result.after.cursor, afterCursor);
+            assert.deepEqual(result.after.selections, [
+              { anchor: afterCursor, head: afterCursor },
+            ]);
+            type("追");
+            result.typed = sample();
+            assert.equal(result.typed.doc, `- a${remaining}追b`);
+            assert.equal(result.typed.saved, `- a${remaining}追b`);
+            assert.deepEqual(result.typed.cursor, {
+              line: 0,
+              ch: afterCursor.ch + 1,
+            });
+          },
+        );
+      }
+    }
+
+    for (const backwards of [false, true]) {
+      for (const action of ["Backspace", "insert-text"]) {
+        check(
+          `descendant-range-${action}-${backwards ? "backwards" : "forwards"}-${suffix}`,
+          (result) => {
+            const text =
+              "- parent\n\t- alpha\n\t\t- grandchild\n\t- beta\n\t\t- retained";
+            const start = { line: 1, ch: 5 };
+            const end = { line: 3, ch: 5 };
+            const selection = backwards
+              ? { anchor: end, head: start }
+              : { anchor: start, head: end };
+            const expected =
+              action === "Backspace"
+                ? "- parent\n\t- alta\n\t\t- retained"
+                : "- parent\n\t- alXta\n\t\t- retained";
+            const afterCursor = { line: 1, ch: action === "Backspace" ? 5 : 6 };
+            const collapsed = { anchor: afterCursor, head: afterCursor };
+            for (const history of [false, true]) {
+              setup(text, selection.head);
+              evaluate((selection) => {
+                window.__editingExperienceLeaf.view.editor.setSelection(
+                  selection.anchor,
+                  selection.head,
+                );
+              }, selection);
+              const run = {};
+              result[history ? "history" : "immediate"] = run;
+              run.before = sample();
+              assert.deepEqual(run.before.selections, [selection]);
+              if (action === "Backspace") keypress("Backspace");
+              else type("X");
+              run.after = sample();
+              assert.equal(run.after.doc, expected);
+              assert.equal(run.after.saved, expected);
+              assert.deepEqual(run.after.cursor, afterCursor);
+              assert.deepEqual(run.after.selections, [collapsed]);
+              if (history) {
+                keypress("z", 4);
+                run.undone = sample();
+                assert.equal(run.undone.doc, text);
+                assert.equal(run.undone.saved, text);
+                assert.deepEqual(run.undone.selections, [selection]);
+                keypress("z", 12);
+                run.redone = sample();
+                assert.equal(run.redone.doc, expected);
+                assert.equal(run.redone.saved, expected);
+                const redoneSelection =
+                  action === "Backspace"
+                    ? collapsed
+                    : backwards
+                      ? { anchor: afterCursor, head: start }
+                      : { anchor: start, head: afterCursor };
+                assert.deepEqual(run.redone.cursor, redoneSelection.head);
+                assert.deepEqual(run.redone.selections, [redoneSelection]);
+              }
+              type("追");
+              run.typed = sample();
+              const typed =
+                !history && action === "insert-text"
+                  ? "- parent\n\t- alX追ta\n\t\t- retained"
+                  : "- parent\n\t- al追ta\n\t\t- retained";
+              const typedCursor = {
+                line: 1,
+                ch: !history && action === "insert-text" ? 7 : 6,
+              };
+              assert.equal(run.typed.doc, typed);
+              assert.equal(run.typed.saved, typed);
+              assert.deepEqual(run.typed.cursor, typedCursor);
+              assert.deepEqual(run.typed.selections, [
+                { anchor: typedCursor, head: typedCursor },
+              ]);
+            }
+          },
+        );
+      }
     }
 
     for (const initial of ["", "- "]) {
