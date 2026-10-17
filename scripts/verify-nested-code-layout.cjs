@@ -60,7 +60,9 @@ try {
 
   for (const [phase, cursorLine, offset] of [
     ["preview", 13, 0],
+    ["preview-hover", 13, 0],
     ["editing", 6, 0],
+    ["editing-hover", 6, 0],
     ["preview-again", 13, 0],
     ...(long
       ? [
@@ -70,6 +72,11 @@ try {
         ]
       : []),
   ]) {
+    cdp("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: 1,
+      y: 1,
+    });
     evaluate(
       (line, type) => {
         window.focus();
@@ -85,6 +92,25 @@ try {
     );
     if (phase === "editing")
       expectedText = fixture.replace("const b = 2", "const b = 2 // typed");
+    if (phase.includes("hover")) {
+      const target = evaluate(async (lineNumber) => {
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        const cm = app.workspace.activeLeaf.view.editor.cm;
+        const line = [...cm.contentDOM.querySelectorAll(".cm-line")].find(
+          (element) =>
+            cm.state.doc.lineAt(cm.posAtDOM(element)).number === lineNumber,
+        );
+        const guides = line?.querySelectorAll(".cm-indent") ?? [];
+        const guide = guides[guides.length - 1];
+        if (!guide) throw Error(`Missing hover guide on line ${lineNumber}`);
+        const bounds = guide.getBoundingClientRect();
+        return {
+          x: bounds.left + bounds.width / 2,
+          y: bounds.top + bounds.height / 2,
+        };
+      }, offset + 9);
+      cdp("Input.dispatchMouseEvent", { type: "mouseMoved", ...target });
+    }
     const sample = evaluate(async (offset) => {
       await new Promise((resolve) => setTimeout(resolve, 300));
       const cm = app.workspace.activeLeaf.view.editor.cm;
@@ -140,7 +166,14 @@ try {
             clipValues?.length === 2
               ? clipValues[0]
               : (clipValues?.[2] ?? clipTop);
+          const paintTop =
+            box.top + (Number.parseFloat(paint.insetBlockStart) || 0);
+          const paintHeight = Number.parseFloat(paint.height) || box.height;
+          const backgroundPaint =
+            paint.backgroundColor !== "transparent" &&
+            paint.backgroundColor !== "rgba(0, 0, 0, 0)";
           return {
+            className: e.className,
             x: box.x,
             width: box.width,
             margin: Number.parseFloat(paint.marginInlineStart),
@@ -148,8 +181,12 @@ try {
               box.x +
               Number.parseFloat(paint.marginInlineStart) +
               Number.parseFloat(paint.borderInlineStartWidth || "0") / 2,
-            paintTop: box.top + clipTop,
-            paintBottom: box.bottom - clipBottom,
+            paintTop: paintTop + clipTop,
+            paintBottom: paintTop + paintHeight - clipBottom,
+            paintThickness: Math.max(
+              Number.parseFloat(paint.borderInlineEndWidth) || 0,
+              backgroundPaint ? Number.parseFloat(paint.width) || 0 : 0,
+            ),
             paintVisible:
               paint.content !== "none" &&
               paint.display !== "none" &&
@@ -350,13 +387,31 @@ try {
         for (const siblingGuide of entry.siblingGuides.filter(
           (guide) => guide.paintVisible,
         )) {
+          const openingGuide = entry.guides.find(
+            (guide) =>
+              guide.paintVisible &&
+              Math.abs(guide.paintX - siblingGuide.paintX) < 0.6,
+          );
           check(
-            guides.some(
-              (guide) =>
-                guide.paintVisible &&
-                Math.abs(guide.paintX - siblingGuide.paintX) < 0.6,
-            ),
+            kind === "opening"
+              ? openingGuide
+              : guides.some(
+                  (guide) =>
+                    guide.paintVisible &&
+                    Math.abs(guide.paintX - siblingGuide.paintX) < 0.6,
+                ),
             `${label}: ${kind} ancestor guide at ${siblingGuide.paintX}px`,
+          );
+          if (kind !== "opening" || !openingGuide) continue;
+          check(
+            openingGuide.paintBottom >= siblingGuide.paintTop - 0.6,
+            `${label}: ancestor guide at ${siblingGuide.paintX}px covers the code card through its next sibling`,
+          );
+          check(
+            Math.abs(
+              openingGuide.paintThickness - siblingGuide.paintThickness,
+            ) < 0.1,
+            `${label}: ancestor guide at ${siblingGuide.paintX}px keeps one thickness across the code card`,
           );
         }
       }
@@ -421,9 +476,14 @@ try {
     "",
     "end",
   ].join("\n");
-  evaluate((text) => {
+  evaluate((text, notePath) => {
     window.focus();
-    const editor = app.workspace.activeLeaf.view.editor;
+    const leaf = app.workspace
+      .getLeavesOfType("markdown")
+      .find((leaf) => leaf.view.file?.path === notePath);
+    const editor = leaf?.view.editor;
+    if (!editor) throw Error(`Missing verifier note editor for ${notePath}`);
+    app.workspace.setActiveLeaf(leaf, { focus: true });
     editor.setValue(text);
     editor.focus();
     editor.setCursor({ line: 15, ch: 3 });
@@ -431,10 +491,15 @@ try {
       { from: { line: 0, ch: 0 }, to: { line: 15, ch: 3 } },
       true,
     );
-  }, edgeText);
-  const edges = evaluate(async () => {
+  }, edgeText, notePath);
+  const edges = evaluate(async (notePath) => {
     await new Promise((resolve) => setTimeout(resolve, 500));
-    const cm = app.workspace.activeLeaf.view.editor.cm;
+    const leaf = app.workspace
+      .getLeavesOfType("markdown")
+      .find((leaf) => leaf.view.file?.path === notePath);
+    const editor = leaf?.view.editor;
+    if (!editor) throw Error(`Missing verifier note editor for ${notePath}`);
+    const cm = editor.cm;
     const line = (n) =>
       [...cm.contentDOM.querySelectorAll(".cm-line")].find(
         (e) => cm.state.doc.lineAt(cm.posAtDOM(e)).number === n,
@@ -535,7 +600,7 @@ try {
       plugin.measureLines = original;
     }
     return { entries, idleMeasures, text: cm.state.doc.toString() };
-  });
+  }, notePath);
   results.push({ phase: "empty-and-ordered", ...edges });
   check(edges.text === edgeText, "edge cases: document preserved");
   check(
