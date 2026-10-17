@@ -1274,6 +1274,7 @@ describe("native measurement publication", () => {
             ]
           : [],
     });
+    Object.assign(opening.ownerDocument.defaultView, { devicePixelRatio: 2 });
 
     fixture.measure();
     let openingAttributes = lineAttributes(fixture.plugin, opening.position);
@@ -1281,8 +1282,12 @@ describe("native measurement publication", () => {
       "bullet-plugin-code-guide-continuation",
     );
     expect(openingAttributes.style).toContain(
-      "--bullet-code-guide-height: 97.25px;",
+      "--bullet-code-guide-height: 97.5px;",
     );
+    expect(lineAttributes(fixture.plugin, outside.position)).toEqual({
+      class: "bullet-plugin-code-guide-seam",
+      style: "--bullet-code-guide-seam-clip: 0.25px;",
+    });
 
     const dispatch = drivers.get(fixture.plugin)!.dispatch;
     dispatch({ selection: { anchor: second.position + 3 } });
@@ -1292,7 +1297,7 @@ describe("native measurement publication", () => {
       "bullet-plugin-code-guide-continuation",
     );
     expect(openingAttributes.style).toContain(
-      "--bullet-code-guide-height: 97.25px;",
+      "--bullet-code-guide-height: 97.5px;",
     );
 
     fixture.show([first, second, closing, outside]);
@@ -1302,8 +1307,12 @@ describe("native measurement publication", () => {
       "bullet-plugin-code-guide-continuation",
     );
     expect(openingAttributes.style).toContain(
-      "--bullet-code-guide-height: 97.25px;",
+      "--bullet-code-guide-height: 97.5px;",
     );
+    expect(lineAttributes(fixture.plugin, outside.position)).toEqual({
+      class: "bullet-plugin-code-guide-seam",
+      style: "--bullet-code-guide-seam-clip: 0.25px;",
+    });
     fixture.plugin.destroy();
   });
 

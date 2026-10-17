@@ -231,6 +231,17 @@ body.bullet-plugin-better-lists
 
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-code-guide-seam
+  .cm-indent::before,
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-code-guide-seam
+  .bullet-plugin-outer-list-guide::before {
+  clip-path: inset(var(--bullet-code-guide-seam-clip) 0 0 0);
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-nested-code-block {
   padding-block: 0;
   white-space: pre;

@@ -227,6 +227,16 @@ describe("BetterListsStyles", () => {
     expect(declarations).not.toMatch(
       /\b(?:display|visibility|width|min-width|position|inset-block-start|translate|transform|border-inline-start-width)\s*:/,
     );
+
+    const seam = styles.match(
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-code-guide-seam\s+\.cm-indent::before,\s*body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-code-guide-seam\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+    expect(seam?.replace(/\s+/g, " ").trim()).toBe(
+      "clip-path: inset(var(--bullet-code-guide-seam-clip) 0 0 0);",
+    );
+    expect(seam).not.toMatch(
+      /\b(?:display|visibility|width|min-width|height|position|inset-block-start|translate|transform|border-inline-start-width)\s*:/,
+    );
   });
 
   test("renders a theme-aware bullet as a seven-pixel circle", () => {

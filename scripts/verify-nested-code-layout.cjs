@@ -157,7 +157,8 @@ try {
         [...e.querySelectorAll(".cm-indent")].map((e) => {
           const box = rect(e);
           const paint = getComputedStyle(e, "::before");
-          const clipValues = paint.clipPath.match(/^inset\(([^)]+)\)$/)?.[1]
+          const clipValues = paint.clipPath
+            .match(/^inset\(([^)]+)\)$/)?.[1]
             .trim()
             .split(/\s+/)
             .map((value) => Number.parseFloat(value));
@@ -305,6 +306,7 @@ try {
         });
       return {
         entries,
+        dpr: devicePixelRatio,
         shiki: !!app.plugins.plugins["shiki-highlighter"],
         lineNumbers:
           app.plugins.plugins["shiki-highlighter"]?.loadedSettings
@@ -360,8 +362,8 @@ try {
           `${label}: hover outline fits the code background`,
         );
         check(
-          Math.abs(p.openingTop + p.guideHeight - p.previewBottom) < 1,
-          `${label}: native guide spans preview in indentation area`,
+          p.openingTop + p.guideHeight >= p.previewBottom - 0.6,
+          `${label}: native guide covers preview in indentation area`,
         );
       }
       const shouldPreview = !(
@@ -406,6 +408,21 @@ try {
           check(
             openingGuide.paintBottom >= siblingGuide.paintTop - 0.6,
             `${label}: ancestor guide at ${siblingGuide.paintX}px covers the code card through its next sibling`,
+          );
+          check(
+            openingGuide.paintBottom <= siblingGuide.paintTop + 0.6,
+            `${label}: ancestor guide at ${siblingGuide.paintX}px stops at its next sibling`,
+          );
+          check(
+            Math.abs(openingGuide.paintBottom - siblingGuide.paintTop) < 0.02,
+            `${label}: ancestor guide at ${siblingGuide.paintX}px has a non-overlapping seam`,
+          );
+          check(
+            Math.abs(
+              openingGuide.paintBottom * sample.dpr -
+                Math.round(openingGuide.paintBottom * sample.dpr),
+            ) < 0.02,
+            `${label}: ancestor guide at ${siblingGuide.paintX}px ends on a device-pixel boundary`,
           );
           check(
             Math.abs(
@@ -476,22 +493,26 @@ try {
     "",
     "end",
   ].join("\n");
-  evaluate((text, notePath) => {
-    window.focus();
-    const leaf = app.workspace
-      .getLeavesOfType("markdown")
-      .find((leaf) => leaf.view.file?.path === notePath);
-    const editor = leaf?.view.editor;
-    if (!editor) throw Error(`Missing verifier note editor for ${notePath}`);
-    app.workspace.setActiveLeaf(leaf, { focus: true });
-    editor.setValue(text);
-    editor.focus();
-    editor.setCursor({ line: 15, ch: 3 });
-    editor.scrollIntoView(
-      { from: { line: 0, ch: 0 }, to: { line: 15, ch: 3 } },
-      true,
-    );
-  }, edgeText, notePath);
+  evaluate(
+    (text, notePath) => {
+      window.focus();
+      const leaf = app.workspace
+        .getLeavesOfType("markdown")
+        .find((leaf) => leaf.view.file?.path === notePath);
+      const editor = leaf?.view.editor;
+      if (!editor) throw Error(`Missing verifier note editor for ${notePath}`);
+      app.workspace.setActiveLeaf(leaf, { focus: true });
+      editor.setValue(text);
+      editor.focus();
+      editor.setCursor({ line: 15, ch: 3 });
+      editor.scrollIntoView(
+        { from: { line: 0, ch: 0 }, to: { line: 15, ch: 3 } },
+        true,
+      );
+    },
+    edgeText,
+    notePath,
+  );
   const edges = evaluate(async (notePath) => {
     await new Promise((resolve) => setTimeout(resolve, 500));
     const leaf = app.workspace
@@ -569,6 +590,36 @@ try {
         }
       }
       const r = paintedMarkerBounds(marker);
+      const guidePaint = (guide) => {
+        const box = bounds(guide);
+        const paint = getComputedStyle(guide, "::before");
+        const clipTop =
+          parseFloat(paint.clipPath.match(/^inset\(([^ )]+)/)?.[1]) || 0;
+        const top =
+          box.top + (parseFloat(paint.insetBlockStart) || 0) + clipTop;
+        return {
+          x:
+            box.x +
+            (parseFloat(paint.marginInlineStart) || 0) +
+            (parseFloat(paint.borderInlineStartWidth) || 0) / 2,
+          top,
+          bottom: top + (parseFloat(paint.height) || box.height),
+        };
+      };
+      const siblingGuides = [
+        ...line(sibling).querySelectorAll(".cm-indent"),
+      ].map(guidePaint);
+      const guideSpans = [...opening.querySelectorAll(".cm-indent")].flatMap(
+        (guide) => {
+          const paint = guidePaint(guide);
+          const continuation = siblingGuides.find(
+            (candidate) => Math.abs(candidate.x - paint.x) < 0.6,
+          );
+          return continuation
+            ? [{ bottom: paint.bottom, nextTop: continuation.top }]
+            : [];
+        },
+      );
       return {
         opening: n,
         embedded,
@@ -577,10 +628,7 @@ try {
         nextTop: bounds(line(sibling)).top,
         markerCenter: r.top + r.height / 2,
         codeCenter: first ? first.top + first.height / 2 : null,
-        guideHeight: parseFloat(
-          getComputedStyle(opening.querySelector(".cm-indent"), "::before")
-            .height,
-        ),
+        guideSpans,
         previewBottom: embedded ? bounds(next).bottom : null,
         openingTop: bounds(opening).top,
       };
@@ -599,7 +647,12 @@ try {
     } finally {
       plugin.measureLines = original;
     }
-    return { entries, idleMeasures, text: cm.state.doc.toString() };
+    return {
+      entries,
+      dpr: devicePixelRatio,
+      idleMeasures,
+      text: cm.state.doc.toString(),
+    };
   }, notePath);
   results.push({ phase: "empty-and-ordered", ...edges });
   check(edges.text === edgeText, "edge cases: document preserved");
@@ -617,11 +670,20 @@ try {
         e.codeCenter !== null && Math.abs(e.markerCenter - e.codeCenter) < 1,
         "ordered multiline: marker shares first code line",
       );
-    if (e.embedded)
+    if (e.embedded) {
       check(
-        Math.abs(e.openingTop + e.guideHeight - e.previewBottom) < 1,
-        `edge case ${e.opening}: guide spans whole preview`,
+        e.guideSpans.length > 0 &&
+          e.guideSpans.every(
+            (guide) =>
+              guide.bottom >= e.previewBottom - 0.6 &&
+              Math.abs(guide.bottom - guide.nextTop) < 0.02 &&
+              Math.abs(
+                guide.bottom * edges.dpr - Math.round(guide.bottom * edges.dpr),
+              ) < 0.02,
+          ),
+        `edge case ${e.opening}: guide covers preview through its next sibling`,
       );
+    }
   }
   fs.writeFileSync(
     path.join(output, "empty-and-ordered.png"),

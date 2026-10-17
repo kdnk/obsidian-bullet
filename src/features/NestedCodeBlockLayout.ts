@@ -52,6 +52,8 @@ const CODE_OWNER_GUIDE_CLIPPED_CLASS = "bullet-plugin-code-owner-guide-clipped";
 const CODE_OWNER_GUIDE_CLIP = "--bullet-code-owner-guide-clip";
 const CODE_GUIDE_CONTINUATION_CLASS = "bullet-plugin-code-guide-continuation";
 const CODE_GUIDE_HEIGHT = "--bullet-code-guide-height";
+const CODE_GUIDE_SEAM_CLASS = "bullet-plugin-code-guide-seam";
+const CODE_GUIDE_SEAM_CLIP = "--bullet-code-guide-seam-clip";
 const OPENING_ALIGNED_CLASS = "bullet-plugin-code-opening-aligned";
 const OPENING_MARKER_OFFSET = "--bullet-code-opening-marker-offset";
 const PLAIN_PREVIEW_CLASS = "bullet-plugin-code-preview-plain";
@@ -80,6 +82,7 @@ interface MeasuredLine {
   markerOffset?: string;
   ownerGuideClip?: string;
   guideHeight?: string;
+  guideSeam?: { element: HTMLElement; clip: string };
   preview?: OpeningAlignment;
   previewBlock?: HTMLElement;
   previewEmbed?: boolean;
@@ -123,6 +126,7 @@ interface NativeSnapshot {
   doc: EditorState["doc"];
   epoch: number;
   rows: ReadonlyMap<number, NativeRowLayout>;
+  seams: ReadonlyMap<number, string>;
 }
 
 interface ProcessorLayout {
@@ -449,6 +453,7 @@ export class NestedCodeBlockLayoutPluginValue {
   decorations: DecorationSet;
   prefixRoleDecorations: DecorationSet;
   private nativeRows: ReadonlyMap<number, NativeRowLayout> = new Map();
+  private guideSeams: ReadonlyMap<number, string> = new Map();
   private styledProcessors = new Map<HTMLElement, ProcessorLayout>();
   private layoutReady = StateEffect.define<NativeSnapshot>({
     map: (snapshot, changes) => (changes.empty ? snapshot : undefined),
@@ -593,6 +598,7 @@ export class NestedCodeBlockLayoutPluginValue {
         this.syntaxContext,
         this.nativeRows,
       );
+      if (update.docChanged) this.guideSeams = new Map();
     }
     let presentationChanged = false;
     if (selectionChanged) {
@@ -634,6 +640,7 @@ export class NestedCodeBlockLayoutPluginValue {
       for (const effect of transaction.effects) {
         if (effect.is(this.layoutReady) && this.isCurrent(effect.value)) {
           this.nativeRows = effect.value.rows;
+          this.guideSeams = effect.value.seams;
           published = true;
         }
       }
@@ -706,11 +713,19 @@ export class NestedCodeBlockLayoutPluginValue {
     }
     return {
       layout: sourceDecorations.content.update({
-        add: Array.from(positions, (from) =>
-          Decoration.line(
-            nativeAttributes(this.nativeRows.get(from), cursorLines.has(from)),
-          ).range(from),
-        ),
+        add: [
+          ...Array.from(positions, (from) =>
+            Decoration.line(
+              nativeAttributes(
+                this.nativeRows.get(from),
+                cursorLines.has(from),
+              ),
+            ).range(from),
+          ),
+          ...Array.from(this.guideSeams, ([from, clip]) =>
+            Decoration.line(guideSeamAttributes(clip)).range(from),
+          ),
+        ],
         sort: true,
       }),
       prefixRoles: sourceDecorations.prefixRoles,
@@ -1077,10 +1092,12 @@ export class NestedCodeBlockLayoutPluginValue {
               element,
             );
             preceding.preview = alignment;
-            preceding.guideHeight = measureCodeGuideHeight(
+            const guide = measureCodeGuideContinuation(
               preceding.element,
               element,
             );
+            preceding.guideHeight = guide.height;
+            preceding.guideSeam = guide.seam;
             const emptySource =
               opening.openingLineNumber < this.view.state.doc.lines &&
               hasClassName(
@@ -1196,9 +1213,9 @@ export class NestedCodeBlockLayoutPluginValue {
         }
         visibleInsets.set(opening.openingLineNumber, inset);
         const next = element.nextElementSibling;
-        const guideHeight =
+        const guide =
           isOpening && next && isCodeCardContinuation(next)
-            ? measureCodeGuideHeight(element, next as HTMLElement)
+            ? measureCodeGuideContinuation(element, next as HTMLElement)
             : undefined;
         const alignment =
           isOpening && isCodeBody(next)
@@ -1236,7 +1253,8 @@ export class NestedCodeBlockLayoutPluginValue {
                 ? measureOwnerGuideClip(element, codeContent)
                 : undefined))
             : undefined,
-          guideHeight,
+          guideHeight: guide?.height,
+          guideSeam: guide?.seam,
           previewBlock: nativePreview ? (next as HTMLElement) : undefined,
           preview: nativePreview ? alignment : undefined,
         });
@@ -1283,8 +1301,10 @@ export class NestedCodeBlockLayoutPluginValue {
       doc: this.view.state.doc,
       epoch: this.epoch,
       rows: new Map(),
+      seams: new Map(),
     };
     const rows = new Map<number, NativeRowLayout>();
+    const seams = new Map<number, string>();
     const processors: ProcessorLayout[] = [];
     for (const measurement of this.measureLines()) {
       const {
@@ -1298,6 +1318,13 @@ export class NestedCodeBlockLayoutPluginValue {
       } = measurement;
       const line = documentLineForElement(this.view, element);
       if (!line) continue;
+      if (measurement.guideSeam) {
+        const seamLine = documentLineForElement(
+          this.view,
+          measurement.guideSeam.element,
+        );
+        if (seamLine) seams.set(seamLine.from, measurement.guideSeam.clip);
+      }
       if (element.classList.contains("cm-preview-code-block")) {
         const opening = this.syntaxContext.fenceOpenings.at(line.number);
         if (opening)
@@ -1349,7 +1376,11 @@ export class NestedCodeBlockLayoutPluginValue {
       const source = this.readPreviewSource(element);
       if (source) previewSources.push(source);
     }
-    return { native: { ...native, rows }, processors, previewSources };
+    return {
+      native: { ...native, rows, seams },
+      processors,
+      previewSources,
+    };
   }
 
   private isCurrent(snapshot: NativeSnapshot): boolean {
@@ -1442,9 +1473,15 @@ export class NestedCodeBlockLayoutPluginValue {
       if (ends.has(row.source.openingFrom))
         rows.set(from, { ...row, end: ends.get(row.source.openingFrom) });
     }
-    if (sameNativeRows(this.nativeRows, rows)) return;
+    const seams = new Map(this.guideSeams);
+    for (const [from, clip] of snapshot.seams) seams.set(from, clip);
+    if (
+      sameNativeRows(this.nativeRows, rows) &&
+      sameGuideSeams(this.guideSeams, seams)
+    )
+      return;
     this.view.dispatch({
-      effects: this.layoutReady.of({ ...snapshot, rows }),
+      effects: this.layoutReady.of({ ...snapshot, rows, seams }),
       annotations: Transaction.addToHistory.of(false),
     });
   }
@@ -1712,11 +1749,37 @@ function nativeAttributes(
         .filter(([, value]) => value !== undefined)
         .map(
           ([name, value]) =>
-            `${name}: ${value?.replace(/-?\d+(?:\.\d+)?px\b/g, (pixels) => `${Math.round(Number.parseFloat(pixels) * 100) / 100}px`)};`,
+            `${name}: ${
+              name === CODE_GUIDE_HEIGHT || name === CODE_GUIDE_SEAM_CLIP
+                ? value
+                : value?.replace(
+                    /-?\d+(?:\.\d+)?px\b/g,
+                    (pixels) =>
+                      `${Math.round(Number.parseFloat(pixels) * 100) / 100}px`,
+                  )
+            };`,
         )
         .join(" "),
     },
   };
+}
+
+function guideSeamAttributes(clip: string) {
+  return {
+    class: CODE_GUIDE_SEAM_CLASS,
+    attributes: { style: `${CODE_GUIDE_SEAM_CLIP}: ${clip};` },
+  };
+}
+
+function sameGuideSeams(
+  previous: ReadonlyMap<number, string>,
+  next: ReadonlyMap<number, string>,
+): boolean {
+  if (previous.size !== next.size) return false;
+  for (const [from, clip] of next) {
+    if (previous.get(from) !== clip) return false;
+  }
+  return true;
 }
 
 function sameNativeRows(
@@ -2026,10 +2089,10 @@ function measureOpeningAlignment(
   };
 }
 
-function measureCodeGuideHeight(
+function measureCodeGuideContinuation(
   opening: HTMLElement,
   firstContinuation: HTMLElement,
-): string {
+): { height: string; seam?: { element: HTMLElement; clip: string } } {
   const openingBounds = opening.getBoundingClientRect();
   let paintEnd =
     openingBounds.top +
@@ -2043,11 +2106,21 @@ function measureCodeGuideHeight(
     );
     element = element.nextElementSibling;
   }
+  let seam: { element: HTMLElement; clip: string } | undefined;
   if (element?.classList.contains("cm-line")) {
-    const nextTop = measureNextGuideStart(element as HTMLElement);
-    if (Number.isFinite(nextTop)) paintEnd = Math.max(paintEnd, nextTop);
+    const target = element as HTMLElement;
+    const nextTop = measureNextGuideStart(target);
+    if (Number.isFinite(nextTop)) {
+      const dpr = opening.ownerDocument.defaultView?.devicePixelRatio || 1;
+      const snappedTop = Math.ceil(nextTop * dpr) / dpr;
+      paintEnd = Math.max(paintEnd, snappedTop);
+      seam = { element: target, clip: `${snappedTop - nextTop}px` };
+    }
   }
-  return `${Math.max(0, paintEnd - openingBounds.top)}px`;
+  return {
+    height: `${Math.max(0, paintEnd - openingBounds.top)}px`,
+    seam,
+  };
 }
 
 function measureNextGuideStart(line: HTMLElement): number {
