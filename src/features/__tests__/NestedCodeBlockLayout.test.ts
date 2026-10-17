@@ -1280,6 +1280,22 @@ describe("native measurement publication", () => {
               ]
             : [],
     });
+    Object.assign(opening, {
+      querySelectorAll: (selector: string) =>
+        selector.includes(".bullet-plugin-outer-list-guide")
+          ? [
+              {
+                getBoundingClientRect: () => ({ top: 104 }),
+              },
+            ]
+          : selector.includes(".cm-indent")
+            ? [
+                {
+                  getBoundingClientRect: () => ({ top: 106 }),
+                },
+              ]
+            : [],
+    });
     Object.assign(opening.ownerDocument.defaultView, { devicePixelRatio: 2 });
 
     fixture.measure();
@@ -1288,10 +1304,10 @@ describe("native measurement publication", () => {
       "bullet-plugin-code-guide-continuation",
     );
     expect(openingAttributes.style).toContain(
-      "--bullet-code-indent-guide-height: 97.5px;",
+      "--bullet-code-indent-guide-height: 91.5px;",
     );
     expect(openingAttributes.style).toContain(
-      "--bullet-code-outer-guide-height: 101.5px;",
+      "--bullet-code-outer-guide-height: 97.5px;",
     );
     expect(lineAttributes(fixture.plugin, outside.position)).toEqual({
       class: "bullet-plugin-code-guide-seam",
@@ -1307,10 +1323,10 @@ describe("native measurement publication", () => {
       "bullet-plugin-code-guide-continuation",
     );
     expect(openingAttributes.style).toContain(
-      "--bullet-code-indent-guide-height: 97.5px;",
+      "--bullet-code-indent-guide-height: 91.5px;",
     );
     expect(openingAttributes.style).toContain(
-      "--bullet-code-outer-guide-height: 101.5px;",
+      "--bullet-code-outer-guide-height: 97.5px;",
     );
 
     fixture.show([first, second, closing, outside]);
@@ -1320,10 +1336,10 @@ describe("native measurement publication", () => {
       "bullet-plugin-code-guide-continuation",
     );
     expect(openingAttributes.style).toContain(
-      "--bullet-code-indent-guide-height: 97.5px;",
+      "--bullet-code-indent-guide-height: 91.5px;",
     );
     expect(openingAttributes.style).toContain(
-      "--bullet-code-outer-guide-height: 101.5px;",
+      "--bullet-code-outer-guide-height: 97.5px;",
     );
     expect(lineAttributes(fixture.plugin, outside.position)).toEqual({
       class: "bullet-plugin-code-guide-seam",

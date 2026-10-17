@@ -609,6 +609,17 @@ try {
       const siblingGuides = [
         ...line(sibling).querySelectorAll(".cm-indent"),
       ].map(guidePaint);
+      const indentDiagnostics = (element) =>
+        [...element.querySelectorAll(".cm-indent")].map((guide) => {
+          const rect = bounds(guide);
+          return {
+            x: rect.x,
+            top: rect.top,
+            height: rect.height,
+            className: guide.className,
+            parentClass: guide.parentElement?.className ?? "",
+          };
+        });
       const guideSpans = [...opening.querySelectorAll(".cm-indent")].flatMap(
         (guide) => {
           const paint = guidePaint(guide);
@@ -628,6 +639,24 @@ try {
         nextTop: bounds(line(sibling)).top,
         markerCenter: r.top + r.height / 2,
         codeCenter: first ? first.top + first.height / 2 : null,
+        diagnostics: {
+          openingClass: opening.className,
+          siblingClass: line(sibling).className,
+          openingIndents: indentDiagnostics(opening),
+          siblingIndents: indentDiagnostics(line(sibling)),
+          openingIndentHeight: getComputedStyle(opening).getPropertyValue(
+            "--bullet-code-indent-guide-height",
+          ),
+          openingOuterHeight: getComputedStyle(opening).getPropertyValue(
+            "--bullet-code-outer-guide-height",
+          ),
+          siblingIndentClip: getComputedStyle(line(sibling)).getPropertyValue(
+            "--bullet-code-indent-guide-seam-clip",
+          ),
+          siblingOuterClip: getComputedStyle(line(sibling)).getPropertyValue(
+            "--bullet-code-outer-guide-seam-clip",
+          ),
+        },
         guideSpans,
         previewBottom: embedded ? bounds(next).bottom : null,
         openingTop: bounds(opening).top,

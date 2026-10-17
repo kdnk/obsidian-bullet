@@ -2137,6 +2137,7 @@ function measureCodeGuideContinuation(
   seam?: { element: HTMLElement; indentClip?: string; outerClip?: string };
 } {
   const openingBounds = opening.getBoundingClientRect();
+  const openingStarts = measureGuideStarts(opening);
   let paintEnd =
     openingBounds.top +
     (Number.isFinite(openingBounds.height) ? openingBounds.height : 0);
@@ -2156,7 +2157,7 @@ function measureCodeGuideContinuation(
     | undefined;
   if (element?.classList.contains("cm-line")) {
     const target = element as HTMLElement;
-    const starts = measureNextGuideStarts(target);
+    const starts = measureGuideStarts(target);
     const dpr = opening.ownerDocument.defaultView?.devicePixelRatio || 1;
     const snappedIndent = snapGuideStart(starts.indent, dpr);
     const snappedOuter = snapGuideStart(starts.outer, dpr);
@@ -2177,11 +2178,17 @@ function measureCodeGuideContinuation(
       };
   }
   return {
-    height: `${Math.max(0, indentEnd - openingBounds.top)}px`,
+    height: `${Math.max(
+      0,
+      indentEnd - (openingStarts.indent ?? openingBounds.top),
+    )}px`,
     outerHeight:
       outerEnd === undefined
         ? undefined
-        : `${Math.max(0, outerEnd - openingBounds.top)}px`,
+        : `${Math.max(
+            0,
+            outerEnd - (openingStarts.outer ?? openingBounds.top),
+          )}px`,
     seam,
   };
 }
@@ -2190,7 +2197,7 @@ function snapGuideStart(start: number | undefined, dpr: number) {
   return start === undefined ? undefined : Math.ceil(start * dpr) / dpr;
 }
 
-function measureNextGuideStarts(line: HTMLElement): {
+function measureGuideStarts(line: HTMLElement): {
   indent?: number;
   outer?: number;
 } {
