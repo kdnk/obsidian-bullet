@@ -230,3 +230,60 @@ test("does not reveal a fold for deletion inside visible text", () => {
   expect(root.getCursor()).toEqual({ line: 0, ch: 4 });
   expect(root.getChildren()[0].isFoldRoot()).toBe(true);
 });
+
+test.each([
+  {
+    name: "unordered partial tab",
+    text: "- ```js\n  foo\n\tBAR\n  ```",
+    cursor: { line: 2, ch: 1 },
+    joined: "- ```js\n  foo  BAR\n  ```",
+    joinCursor: { line: 1, ch: 5 },
+  },
+  {
+    name: "unordered equivalent spaces",
+    text: "- ```js\n  foo\n    BAR\n  ```",
+    cursor: { line: 2, ch: 2 },
+    joined: "- ```js\n  foo  BAR\n  ```",
+    joinCursor: { line: 1, ch: 5 },
+  },
+  {
+    name: "ordered partial tab",
+    text: "1. ```js\n   foo\n\tBAR\n   ```",
+    cursor: { line: 2, ch: 1 },
+    joined: "1. ```js\n   foo BAR\n   ```",
+    joinCursor: { line: 1, ch: 6 },
+  },
+  {
+    name: "ordered equivalent spaces",
+    text: "1. ```js\n   foo\n    BAR\n   ```",
+    cursor: { line: 2, ch: 3 },
+    joined: "1. ```js\n   foo BAR\n   ```",
+    joinCursor: { line: 1, ch: 6 },
+  },
+  {
+    name: "nested partial tab",
+    text: "- parent\n\t- ```js\n\t  foo\n\t\tBAR\n\t  ```",
+    cursor: { line: 3, ch: 2 },
+    joined: "- parent\n\t- ```js\n\t  foo  BAR\n\t  ```",
+    joinCursor: { line: 2, ch: 6 },
+  },
+  {
+    name: "nested equivalent spaces",
+    text: "- parent\n\t- ```js\n\t  foo\n\t    BAR\n\t  ```",
+    cursor: { line: 3, ch: 3 },
+    joined: "- parent\n\t- ```js\n\t  foo  BAR\n\t  ```",
+    joinCursor: { line: 2, ch: 6 },
+  },
+])(
+  "preserves literal code indentation when joining $name",
+  ({ text, joined, joinCursor }) => {
+    const root = makeRoot({
+      editor: makeEditor({ text, cursor: joinCursor }),
+    });
+    expect(new DeleteTillNextLineContentStart(root, true).perform()).toEqual(
+      UPDATED_OUTCOME,
+    );
+    expect(root.print()).toBe(joined);
+    expect(root.getCursor()).toEqual(joinCursor);
+  },
+);

@@ -34,6 +34,56 @@ const cases = [
     expected: "- ```js\n\tfooBAR\n  ```",
     typed: "- ```js\n\tfooXBAR\n  ```",
   },
+  ...[
+    {
+      name: "unordered",
+      opener: "- ```js",
+      indent: "  ",
+      partial: "\t",
+      spaces: "    ",
+      literal: "  ",
+    },
+    {
+      name: "ordered",
+      opener: "1. ```js",
+      indent: "   ",
+      partial: "\t",
+      spaces: "    ",
+      literal: " ",
+    },
+    {
+      name: "nested",
+      opener: "- parent\n\t- ```js",
+      indent: "\t  ",
+      partial: "\t\t",
+      spaces: "\t    ",
+      literal: "  ",
+    },
+  ].flatMap(({ name, opener, indent, partial, spaces, literal }) =>
+    [
+      { kind: "partial tab", prefix: partial },
+      { kind: "equivalent spaces", prefix: spaces },
+    ].flatMap(({ kind, prefix }) =>
+      ["Backspace", "Delete"].map((key) => {
+        const codeLine = opener.split("\n").length;
+        return {
+          name: `${name} ${kind} ${key} join`,
+          text: `${opener}\n${indent}foo\n${prefix}BAR\n${indent}\`\`\``,
+          cursor:
+            key === "Backspace"
+              ? {
+                  line: codeLine + 1,
+                  ch: Math.min(prefix.length, indent.length),
+                }
+              : { line: codeLine, ch: indent.length + 3 },
+          key,
+          expected: `${opener}\n${indent}foo${literal}BAR\n${indent}\`\`\``,
+          typed: `${opener}\n${indent}fooX${literal}BAR\n${indent}\`\`\``,
+          joinCursor: { line: codeLine, ch: indent.length + 3 },
+        };
+      }),
+    ),
+  ),
 ];
 function focus() {
   evaluate((expectedVimMode) => {
@@ -63,7 +113,14 @@ function setVimMode(enabled) {
   expectedVimMode = enabled;
 }
 function key(key, modifiers = 0) {
-  const codes = { Enter: 13, Backspace: 8, Escape: 27, i: 73, z: 90 };
+  const codes = {
+    Enter: 13,
+    Backspace: 8,
+    Delete: 46,
+    Escape: 27,
+    i: 73,
+    z: 90,
+  };
   for (const type of ["keyDown", "keyUp"]) {
     focus();
     pendingInput = { key, modifiers, type };
@@ -350,6 +407,10 @@ try {
       check(name, () => {
         assert.equal(before.doc, fixture.text);
         assert.equal(after.doc, fixture.expected);
+        if (fixture.joinCursor) {
+          assert.deepEqual(after.cursor, fixture.joinCursor);
+          assert.deepEqual(redone.cursor, fixture.joinCursor);
+        }
         assert.equal(undone.doc, fixture.text);
         assert.equal(redone.doc, fixture.expected);
         assert.equal(typed.doc, fixture.typed);
