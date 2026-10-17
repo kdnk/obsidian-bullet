@@ -23,6 +23,11 @@ import { MyEditor, getEditorFromState } from "../editor";
 import { getObsidianDomWindow } from "../obsidianDom";
 import { MoveListToDifferentPosition } from "../operations/MoveListToDifferentPosition";
 import { List, Root, cmpPos } from "../root";
+import {
+  MarkdownLineClassifier,
+  isFrontmatterClosing,
+  isFrontmatterOpening,
+} from "../services/MarkdownLineClassifier";
 import { ObsidianSettings } from "../services/ObsidianSettings";
 import { OperationPerformer } from "../services/OperationPerformer";
 import { Parser } from "../services/Parser";
@@ -46,6 +51,7 @@ interface DragAndDropZoomRange {
 type GetZoomRange = (state: EditorState) => DragAndDropZoomRange | null;
 
 export class DragAndDrop implements Feature {
+  private readonly markdownLines = new MarkdownLineClassifier();
   private documents = new Map<Document, DragAndDropDocumentContext>();
   private preStart: DragAndDropPreStartState | null = null;
   private state: DragAndDropState | null = null;
@@ -331,8 +337,9 @@ export class DragAndDrop implements Feature {
       const zoom = this.getZoomRange(target.state);
       if (zoom && (offset < zoom.from || offset > zoom.to)) return;
       const protectedBoundary = getProtectedDropBoundary(
-        target.state.doc,
+        target.state,
         offset,
+        this.markdownLines,
       );
       if (protectedBoundary === null) return;
       const root =
@@ -996,16 +1003,18 @@ function getViewFilePath(view: EditorView): string | undefined {
 
 /** Keep a moved list outside YAML and fenced code, even if code looks like a list. */
 function getProtectedDropBoundary(
-  doc: Text,
+  state: EditorState,
   offset: number,
+  classifier: MarkdownLineClassifier,
 ): number | null | undefined {
+  const doc = state.doc;
   const targetLine = doc.lineAt(offset).number;
   let firstBodyLine = 1;
-  if (/^\uFEFF?---\s*$/.test(doc.line(1).text)) {
+  if (isFrontmatterOpening(doc.line(1).text)) {
     let closingLine = 2;
     while (
       closingLine <= doc.lines &&
-      !/^(---|\.\.\.)\s*$/.test(doc.line(closingLine).text)
+      !isFrontmatterClosing(doc.line(closingLine).text)
     ) {
       closingLine++;
     }
@@ -1013,24 +1022,7 @@ function getProtectedDropBoundary(
     if (targetLine <= closingLine) return doc.line(closingLine).to;
     firstBodyLine = closingLine + 1;
   }
-  let fence: string | undefined;
-  for (let number = firstBodyLine; number <= targetLine; number++) {
-    const text = doc.line(number).text;
-    const marker = /^\s*(`{3,}|~{3,})(.*)$/.exec(text);
-    if (fence) {
-      if (number === targetLine) return null;
-      if (
-        marker &&
-        marker[1][0] === fence[0] &&
-        marker[1].length >= fence.length &&
-        !marker[2].trim()
-      ) {
-        fence = undefined;
-      }
-    } else if (marker) {
-      if (number === targetLine) return null;
-      fence = marker[1];
-    }
-  }
+  if (targetLine >= firstBodyLine && classifier.getCodeFence(state, targetLine))
+    return null;
   return undefined;
 }

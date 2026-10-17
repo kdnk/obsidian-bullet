@@ -181,7 +181,7 @@ describe("CreateNewItem operation", () => {
           root,
           "\t",
           true,
-          true,
+          "split",
           "",
           root.getListUnderCursor(),
         );
@@ -205,7 +205,7 @@ describe("CreateNewItem operation", () => {
           root,
           "\t",
           true,
-          true,
+          "split",
           "",
           root.getListUnderCursor(),
         ).perform(),
@@ -227,7 +227,7 @@ describe("CreateNewItem operation", () => {
           root,
           "\t",
           true,
-          true,
+          "split",
           "",
           root.getListUnderCursor(),
         ).perform(),
@@ -248,7 +248,7 @@ describe("CreateNewItem operation", () => {
           root,
           "\t",
           true,
-          true,
+          "split",
           "",
           root.getListUnderCursor(),
         ).perform(),
@@ -274,7 +274,7 @@ describe("CreateNewItem operation", () => {
       const focused = root.getListUnderLine(1)!;
 
       expect(
-        new CreateNewItem(root, "\t", true, true, "", focused).perform(),
+        new CreateNewItem(root, "\t", true, "split", "", focused).perform(),
       ).toEqual(UPDATED_OUTCOME);
       expect(root.print()).toBe(
         "9. work\n\t8. focus\n\t\t1. one\n\t\t2. two\n\t\t3. three\n\t\t4. four\n\t\t5. five\n\t\t6. six\n\t\t7. seven\n\t\t8. eight\n\t\t9. nine\n\t\t10. \n\t9. other\n10. personal",
@@ -292,7 +292,7 @@ describe("CreateNewItem operation", () => {
       const focused = root.getListUnderLine(1)!;
 
       expect(
-        new CreateNewItem(root, "\t", true, true, "", focused).perform(),
+        new CreateNewItem(root, "\t", true, "split", "", focused).perform(),
       ).toEqual(UPDATED_OUTCOME);
       expect(root.print()).toBe(
         "9. work\n\t8. focus\n\t\t1. ch\n\t\t2. ild\n\t9. other\n10. personal",
@@ -375,7 +375,7 @@ describe("CreateNewItem operation", () => {
       settings: makeSettings(),
     });
 
-    const op = new CreateNewItem(root, "  ", true, false);
+    const op = new CreateNewItem(root, "  ", true, "open-before");
     expect(op.perform()).toEqual(UPDATED_OUTCOME);
 
     expect(root.print()).toBe(
@@ -520,6 +520,112 @@ describe("CreateNewItem operation", () => {
     expect(root.print()).toBe("- item 1\n- [ ] \n- item 3");
   });
 
+  test.each<{
+    name: string;
+    text: string;
+    intent: "open-before" | "open-after";
+    want: string;
+    cursor: { line: number; ch: number };
+  }>([
+    {
+      name: "unordered after",
+      text: "- parent\n\t- ",
+      intent: "open-after",
+      want: "- parent\n\t- \n\t- ",
+      cursor: { line: 2, ch: 3 },
+    },
+    {
+      name: "unordered before",
+      text: "- parent\n\t- ",
+      intent: "open-before",
+      want: "- parent\n\t- \n\t- ",
+      cursor: { line: 1, ch: 3 },
+    },
+    {
+      name: "ordered after",
+      text: "- parent\n\t1. ",
+      intent: "open-after",
+      want: "- parent\n\t1. \n\t2. ",
+      cursor: { line: 2, ch: 4 },
+    },
+    {
+      name: "ordered before",
+      text: "- parent\n\t1. ",
+      intent: "open-before",
+      want: "- parent\n\t1. \n\t2. ",
+      cursor: { line: 1, ch: 4 },
+    },
+    {
+      name: "task after",
+      text: "- parent\n\t- [ ] ",
+      intent: "open-after",
+      want: "- parent\n\t- [ ] \n\t- [ ] ",
+      cursor: { line: 2, ch: 7 },
+    },
+    {
+      name: "task before",
+      text: "- parent\n\t- [ ] ",
+      intent: "open-before",
+      want: "- parent\n\t- [ ] \n\t- [ ] ",
+      cursor: { line: 1, ch: 7 },
+    },
+    {
+      name: "bare unordered after",
+      text: "- parent\n\t-",
+      intent: "open-after",
+      want: "- parent\n\t-\n\t- ",
+      cursor: { line: 2, ch: 3 },
+    },
+    {
+      name: "bare unordered before",
+      text: "- parent\n\t-",
+      intent: "open-before",
+      want: "- parent\n\t- \n\t-",
+      cursor: { line: 1, ch: 3 },
+    },
+    {
+      name: "bare ordered after",
+      text: "- parent\n\t1.",
+      intent: "open-after",
+      want: "- parent\n\t1.\n\t2. ",
+      cursor: { line: 2, ch: 4 },
+    },
+    {
+      name: "bare ordered before",
+      text: "- parent\n\t1.",
+      intent: "open-before",
+      want: "- parent\n\t1. \n\t2.",
+      cursor: { line: 1, ch: 4 },
+    },
+    {
+      name: "empty item with a child after",
+      text: "- parent\n\t- \n\t\t- child",
+      intent: "open-after",
+      want: "- parent\n\t- \n\t\t- child\n\t- ",
+      cursor: { line: 3, ch: 3 },
+    },
+    {
+      name: "empty item with a child before",
+      text: "- parent\n\t- \n\t\t- child",
+      intent: "open-before",
+      want: "- parent\n\t- \n\t- \n\t\t- child",
+      cursor: { line: 1, ch: 3 },
+    },
+  ])("opens a sibling for $name", ({ text, intent, want, cursor }) => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text,
+        cursor: { line: 1, ch: text.split("\n")[1].length },
+      }),
+      settings: makeSettings(),
+    });
+
+    const op = new CreateNewItem(root, "\t", true, intent);
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe(want);
+    expect(root.getCursor()).toEqual(cursor);
+  });
+
   test("should do nothing when cursor is before the bullet", () => {
     const root = makeRoot({
       editor: makeEditor({
@@ -636,7 +742,7 @@ describe("CreateNewItem operation", () => {
 
     expect(root).toBeTruthy();
 
-    const op = new CreateNewItem(root, "  ", true, true, "```\n");
+    const op = new CreateNewItem(root, "  ", true, "split", "```\n");
     expect(op.perform()).toEqual(NO_OP_OUTCOME);
 
     expect(root.print()).toBe("- code line");
@@ -821,7 +927,7 @@ describe("preserving fenced continuation rows when splitting an item", () => {
         root,
         "\t",
         true,
-        true,
+        "split",
         "",
         root.getChildren()[0],
       ).perform(),

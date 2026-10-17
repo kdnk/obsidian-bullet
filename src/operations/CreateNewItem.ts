@@ -14,12 +14,14 @@ import {
 } from "../utils/fencedCode";
 import { isEmptyLineOrEmptyCheckbox } from "../utils/isEmptyLineOrEmptyCheckbox";
 
+type ItemInsertionIntent = "split" | "open-before" | "open-after";
+
 export class CreateNewItem implements Operation {
   constructor(
     private root: Root,
     private defaultIndentChars: string,
     private numericBulletsEnabled: boolean,
-    private after: boolean = true,
+    private intent: ItemInsertionIntent = "split",
     private documentPrefixBeforeRoot: string = "",
     private editingRoot?: List,
   ) {}
@@ -39,9 +41,16 @@ export class CreateNewItem implements Operation {
     const list = root.getListUnderCursor();
     const asChild = list === this.editingRoot;
     const lines = list.getLinesInfo();
+    const opensItem = this.intent !== "split";
+    const preservesEmptyItem =
+      !asChild &&
+      opensItem &&
+      lines.length === 1 &&
+      isEmptyLineOrEmptyCheckbox(lines[0].text);
 
     if (
       !asChild &&
+      !opensItem &&
       lines.length === 1 &&
       isEmptyLineOrEmptyCheckbox(lines[0].text)
     ) {
@@ -93,6 +102,7 @@ export class CreateNewItem implements Operation {
     );
 
     const shouldInsertUncheckedSiblingBeforeCurrentItem =
+      this.intent === "split" &&
       selection.from === selection.to &&
       lineIndex === 0 &&
       checkboxAtContentStart !== null &&
@@ -164,10 +174,16 @@ export class CreateNewItem implements Operation {
     const endPos = list.getLastLineContentEnd();
     const endOfLine = cursor.line === endPos.line && cursor.ch === endPos.ch;
     const insertAfter =
-      this.after && !shouldInsertUncheckedSiblingBeforeCurrentItem;
+      this.intent !== "open-before" &&
+      !shouldInsertUncheckedSiblingBeforeCurrentItem;
 
     const onChildLevel =
-      asChild || (insertAfter && hasChildren && !childIsFolded && endOfLine);
+      asChild ||
+      (!preservesEmptyItem &&
+        insertAfter &&
+        hasChildren &&
+        !childIsFolded &&
+        endOfLine);
 
     const firstChild = list.getChildren()[0] ?? null;
     const indent = onChildLevel
@@ -184,7 +200,9 @@ export class CreateNewItem implements Operation {
       onChildLevel && firstChild
         ? firstChild.getSpaceAfterBullet()
         : list.getSpaceAfterBullet();
-    if (asChild && spaceAfterBullet.length === 0) spaceAfterBullet = " ";
+    if ((asChild || preservesEmptyItem) && spaceAfterBullet.length === 0) {
+      spaceAfterBullet = " ";
+    }
 
     const prefix = hasCheckbox ? "[ ] " : "";
 
@@ -224,7 +242,11 @@ export class CreateNewItem implements Operation {
     if (onChildLevel) {
       list.addBeforeAll(newList);
     } else {
-      if (insertAfter && (!childIsFolded || !endOfLine)) {
+      if (
+        insertAfter &&
+        !preservesEmptyItem &&
+        (!childIsFolded || !endOfLine)
+      ) {
         const children = list.getChildren();
         for (const child of children) {
           list.removeChild(child);

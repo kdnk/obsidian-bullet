@@ -488,6 +488,16 @@ test.each([
     want: "```md\n- code\n```\nBody\n- move\n\t- child",
   },
   {
+    text: "- ```md\n\tcode\n\t```\nBody",
+    y: 72,
+    want: "- ```md\n\tcode\n\t```\nBody\n- move\n\t- child",
+  },
+  {
+    text: "- ```md\n\tcode\nBody",
+    y: 52,
+    want: "- ```md\n\tcode\nBody\n- move\n\t- child",
+  },
+  {
     text: "---\ntags:\n- example\n---",
     y: 40,
     want: "---\ntags:\n- example\n---\n- move\n\t- child",
@@ -513,6 +523,11 @@ test.each([
     y: 60,
     want: "---\ntitle: Example\n---\n- move\n\t- child",
   },
+  {
+    text: "\uFEFF---  \n```\n---\nBody",
+    y: 72,
+    want: "\uFEFF---  \n```\n---\nBody\n- move\n\t- child",
+  },
 ])(
   "moves into a non-list destination at a line boundary: $text / $y",
   ({ text, y, want }) => {
@@ -531,17 +546,30 @@ test.each([
   },
 );
 
-test.each(["```md\n- code\n```", "~~~\nplain\n~~~", "---\ntitle: unfinished"])(
-  "does not drop into fenced code or unclosed frontmatter: %s",
-  (text) => {
-    const { source, target, internals, style } = setup(text);
-    internals.detectAndDrawDropZone(500, 20);
-    expect(style.display).toBe("none");
-    internals.stopDragging();
-    expect(source.state.doc.toString()).toBe("- move\n\t- child\n- keep");
-    expect(target.state.doc.toString()).toBe(text);
-  },
-);
+test.each([
+  "```md\n- code\n```",
+  "~~~\nplain\n~~~",
+  "- ```md\n\tcode\n\t```",
+  "- ~~~\n\tplain\n\t~~~",
+  "---\ntitle: unfinished",
+])("does not drop into fenced code or unclosed frontmatter: %s", (text) => {
+  const { source, target, internals, style } = setup(text);
+  internals.detectAndDrawDropZone(500, 20);
+  expect(style.display).toBe("none");
+  internals.stopDragging();
+  expect(source.state.doc.toString()).toBe("- move\n\t- child\n- keep");
+  expect(target.state.doc.toString()).toBe(text);
+});
+
+test("does not drop into fenced code after frontmatter closed with an ellipsis", () => {
+  const text = "---\ntitle: Example\n...\n```js\ncode\n```";
+  const { source, target, internals, style } = setup(text);
+  internals.detectAndDrawDropZone(500, 92);
+  expect(style.display).toBe("none");
+  internals.stopDragging();
+  expect(source.state.doc.toString()).toBe("- move\n\t- child\n- keep");
+  expect(target.state.doc.toString()).toBe(text);
+});
 
 test("disabling drag cancels a pending cross-note move before mouseup", () => {
   const { source, target, settings, internals, style } = setup("- parent");

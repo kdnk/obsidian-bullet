@@ -15,6 +15,30 @@ function inspect(source: string, lineNumber: number) {
 }
 
 describe("MarkdownLineClassifier", () => {
+  test("recognizes BOM and trailing whitespace on frontmatter delimiters", () => {
+    const classifier = new MarkdownLineClassifier();
+    const state = EditorState.create({
+      doc: "\uFEFF---  \n```\n---\t\nBody",
+      extensions: classifier.extension,
+    });
+
+    expect(classifier.getCodeFence(state, 4)).toBeNull();
+    expect(classifier.classify(state, 4)).toBe("body");
+  });
+
+  test("recognizes an ellipsis frontmatter closer before fenced code", () => {
+    const classifier = new MarkdownLineClassifier();
+    const state = EditorState.create({
+      doc: "---\ntitle: Example\n...\n```js\ncode\n```",
+      extensions: classifier.extension,
+    });
+
+    expect(classifier.getCodeFence(state, 5)).toEqual({
+      openingLineNumber: 4,
+      containerIndent: "",
+    });
+  });
+
   test.each([
     "- parent\n  ```js\n  code\n  ```\n  note",
     "- ```js\n\tcode\n  ```\n  note",

@@ -117,7 +117,7 @@ export class EnterBehaviourOverride implements Feature {
         root,
         defaultIndentChars,
         smartIndentListEnabled,
-        true,
+        "split",
         documentPrefixBeforeRoot,
       );
     }, editor);

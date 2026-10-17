@@ -83,13 +83,11 @@ export class MoveListToDifferentPosition implements Operation {
   }
 
   private changeIndent() {
-    const oldIndent = this.listToMove.getFirstLineIndent();
     const newIndent =
       this.whereToMove === "inside"
         ? this.placeToMove.getFirstLineIndent() + this.defaultIndentChars
         : this.placeToMove.getFirstLineIndent();
-    this.listToMove.unindentContent(0, oldIndent.length);
-    this.listToMove.indentContent(0, newIndent);
+    this.listToMove.reindentSubtree(newIndent);
   }
 
   private restoreCursor(cursorAnchor: CursorAnchor | null) {

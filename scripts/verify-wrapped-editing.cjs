@@ -144,9 +144,10 @@ try {
     afterUp,
   });
 
-  const deleteCh = Math.max(afterDown.cursor.ch, inlineStart + 2);
+  const deleteCh = longInline.indexOf("symbols") + 3;
   setFixture(longInline, { line: 0, ch: deleteCh });
   const beforeBackspace = snapshot("wrapped-backspace-before");
+  assert.deepEqual(beforeBackspace.cursor, { line: 0, ch: deleteCh });
   key("Backspace", "Backspace", 8);
   const afterBackspace = snapshot("wrapped-backspace-after");
   assert.equal(

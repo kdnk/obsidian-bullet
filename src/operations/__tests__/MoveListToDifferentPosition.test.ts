@@ -218,6 +218,86 @@ describe("MoveListToDifferentPosition operation", () => {
     );
   });
 
+  test("preserves child depth when a mixed-indent subtree moves to the root", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- parent\n  - move\n\t- child\n- target",
+        cursor: { line: 1, ch: 4 },
+      }),
+      settings: makeSettings(),
+    });
+
+    const listToMove = root.getListUnderLine(1)!;
+    const placeToMove = root.getListUnderLine(3)!;
+
+    const op = new MoveListToDifferentPosition(
+      root,
+      listToMove,
+      placeToMove,
+      "before",
+      "  ",
+      true,
+    );
+    expect(op.perform()).toEqual(UPDATED_OUTCOME);
+
+    expect(root.print()).toBe("- parent\n- move\n  - child\n- target");
+    expect(root.getCursor()).toEqual({ line: 1, ch: 2 });
+  });
+
+  test("preserves a tab-indented child's depth when its mixed-indent parent moves to the root", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- parent\n \t- move\n\t\t- child\n- target",
+        cursor: { line: 2, ch: 4 },
+      }),
+      settings: makeSettings(),
+    });
+
+    const listToMove = root.getListUnderLine(1)!;
+    const placeToMove = root.getListUnderLine(3)!;
+
+    expect(
+      new MoveListToDifferentPosition(
+        root,
+        listToMove,
+        placeToMove,
+        "before",
+        "\t",
+        true,
+      ).perform(),
+    ).toEqual(UPDATED_OUTCOME);
+
+    expect(root.print()).toBe("- parent\n- move\n\t- child\n- target");
+    expect(root.getCursor()).toEqual({ line: 2, ch: 3 });
+  });
+
+  test("preserves fenced-code columns when a mixed-indent subtree moves to the root", () => {
+    const root = makeRoot({
+      editor: makeEditor({
+        text: "- parent\n  - ```js\n\tcode\n    ```\n- target",
+        cursor: { line: 2, ch: 2 },
+      }),
+      settings: makeSettings(),
+    });
+
+    const listToMove = root.getListUnderLine(1)!;
+    const placeToMove = root.getListUnderLine(4)!;
+
+    expect(
+      new MoveListToDifferentPosition(
+        root,
+        listToMove,
+        placeToMove,
+        "before",
+        "  ",
+        true,
+      ).perform(),
+    ).toEqual(UPDATED_OUTCOME);
+
+    expect(root.print()).toBe("- parent\n- ```js\n  code\n  ```\n- target");
+    expect(root.getCursor()).toEqual({ line: 2, ch: 3 });
+  });
+
   test("should do nothing if attempting to move a list to itself", () => {
     const root = makeRoot({
       editor: makeEditor({

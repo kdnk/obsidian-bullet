@@ -370,6 +370,29 @@ export class List {
     }
   }
 
+  reindentSubtree(newIndent: string) {
+    this.reindentSubtreeFrom(this.indent, newIndent);
+  }
+
+  private reindentSubtreeFrom(oldBaseIndent: string, newBaseIndent: string) {
+    const oldNotesIndent = this.notesIndent;
+    this.indent = reindentListPrefix(this.indent, oldBaseIndent, newBaseIndent);
+    if (this.notesIndent !== null) {
+      this.notesIndent = reindentListPrefix(
+        this.notesIndent,
+        oldBaseIndent,
+        newBaseIndent,
+      );
+    }
+    this.reindentNotes(oldNotesIndent, (indent) =>
+      reindentListPrefix(indent, oldBaseIndent, newBaseIndent),
+    );
+
+    for (const child of this.children) {
+      child.reindentSubtreeFrom(oldBaseIndent, newBaseIndent);
+    }
+  }
+
   getFirstLineIndent() {
     return this.indent;
   }

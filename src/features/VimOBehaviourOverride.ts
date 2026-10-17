@@ -147,7 +147,7 @@ export class VimOBehaviourOverride implements Feature {
             root,
             obsidianSettings.getDefaultIndentChars(),
             obsidianSettings.isSmartIndentListEnabled(),
-            operatorArgs.after,
+            operatorArgs.after ? "open-after" : "open-before",
           );
         }, editor);
 

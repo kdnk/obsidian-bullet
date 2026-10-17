@@ -46,6 +46,14 @@ const horizontalRuleRe =
 const structurePrefixRe = /^(?:#{1,6}|`{1,2}|-{1,2})$/;
 const indentRe = /^[ \t]+/;
 
+export function isFrontmatterOpening(text: string): boolean {
+  return /^\uFEFF?---[ \t]*$/.test(text);
+}
+
+export function isFrontmatterClosing(text: string): boolean {
+  return /^(?:---|\.\.\.)[ \t]*$/.test(text);
+}
+
 interface ListItemMatch {
   indent: string;
   prefix: string;
@@ -356,7 +364,7 @@ function buildStructuralBlockIndex(
     const text = doc.line(lineNumber).text;
 
     if (frontmatterStart !== null) {
-      if (text === "---") {
+      if (isFrontmatterClosing(text)) {
         ranges.push({
           from: frontmatterStart,
           to: lineNumber,
@@ -369,7 +377,7 @@ function buildStructuralBlockIndex(
       continue;
     }
 
-    if (lineNumber === 1 && text === "---") {
+    if (lineNumber === 1 && isFrontmatterOpening(text)) {
       frontmatterStart = lineNumber;
       continue;
     }
@@ -621,7 +629,8 @@ function canReuseStructuralBlockIndex(transaction: Transaction): boolean {
 
 function isStructuralBoundaryCandidate(text: string): boolean {
   return (
-    text === "---" ||
+    isFrontmatterOpening(text) ||
+    isFrontmatterClosing(text) ||
     getFenceOpening(text.trimStart()) !== null ||
     getFenceOpening(matchListItem(text)?.content ?? "") !== null
   );

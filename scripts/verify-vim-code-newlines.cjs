@@ -157,6 +157,85 @@ const fixtures = [
           indent: "\t- ",
         },
         {
+          name: "empty nested list o",
+          text: "- parent\n\t- ",
+          line: 1,
+          key: "o",
+          indent: "\t- ",
+        },
+        {
+          name: "empty nested list O",
+          text: "- parent\n\t- ",
+          line: 1,
+          key: "O",
+          indent: "\t- ",
+        },
+        {
+          name: "empty ordered list o",
+          text: "- parent\n\t1. ",
+          line: 1,
+          key: "o",
+          indent: "\t2. ",
+        },
+        {
+          name: "empty ordered list O",
+          text: "- parent\n\t1. ",
+          line: 1,
+          key: "O",
+          indent: "\t1. ",
+          expectedOpened: {
+            doc: "- parent\n\t1. \n\t2. ",
+            cursor: { line: 1, ch: 4 },
+          },
+          expectedTyped: {
+            doc: "- parent\n\t1. x\n\t2. ",
+            cursor: { line: 1, ch: 5 },
+          },
+        },
+        {
+          name: "empty task list o",
+          text: "- parent\n\t- [ ] ",
+          line: 1,
+          key: "o",
+          indent: "\t- [ ] ",
+        },
+        {
+          name: "empty task list O",
+          text: "- parent\n\t- [ ] ",
+          line: 1,
+          key: "O",
+          indent: "\t- [ ] ",
+        },
+        {
+          name: "bare empty nested list o",
+          text: "- parent\n\t-",
+          line: 1,
+          key: "o",
+          indent: "\t- ",
+        },
+        {
+          name: "bare empty nested list O",
+          text: "- parent\n\t-",
+          line: 1,
+          key: "O",
+          indent: "\t- ",
+        },
+        {
+          name: "empty nested list with child o",
+          text: "- parent\n\t- \n\t\t- child",
+          line: 1,
+          key: "o",
+          indent: "\t- ",
+          expectedOpened: {
+            doc: "- parent\n\t- \n\t\t- child\n\t- ",
+            cursor: { line: 3, ch: 3 },
+          },
+          expectedTyped: {
+            doc: "- parent\n\t- \n\t\t- child\n\t- x",
+            cursor: { line: 3, ch: 4 },
+          },
+        },
+        {
           name: "ordinary list after separated code o",
           text: "- ```js\n  code\n  ```\n\n- item",
           line: 4,
@@ -210,8 +289,13 @@ function keypress(key) {
 function sample() {
   return evaluate(async () => {
     await new Promise((resolve) => setTimeout(resolve, 120));
-    const editor = app.workspace.activeLeaf.view.editor;
-    return { doc: editor.getValue(), cursor: editor.getCursor() };
+    const view = app.workspace.activeLeaf.view;
+    await view.save();
+    return {
+      doc: view.editor.getValue(),
+      cursor: view.editor.getCursor(),
+      saved: await app.vault.read(view.file),
+    };
   });
 }
 try {
@@ -251,15 +335,17 @@ try {
     const line = fixture.line + (fixture.key === "o" ? 1 : 0);
     const lines = fixture.text.split("\n");
     lines.splice(line, 0, fixture.indent);
-    const expectedOpened = {
+    const defaultOpened = {
       doc: lines.join("\n"),
       cursor: { line, ch: fixture.indent.length },
     };
     lines[line] += "x";
-    const expectedTyped = {
+    const defaultTyped = {
       doc: lines.join("\n"),
       cursor: { line, ch: fixture.indent.length + 1 },
     };
+    const expectedOpened = fixture.expectedOpened ?? defaultOpened;
+    const expectedTyped = fixture.expectedTyped ?? defaultTyped;
     results.push({
       name: fixture.name,
       opened,
@@ -268,8 +354,14 @@ try {
       expectedTyped,
     });
     try {
-      assert.deepEqual(opened, expectedOpened);
-      assert.deepEqual(typed, expectedTyped);
+      assert.deepEqual(opened, {
+        ...expectedOpened,
+        saved: expectedOpened.doc,
+      });
+      assert.deepEqual(typed, {
+        ...expectedTyped,
+        saved: expectedTyped.doc,
+      });
     } catch (error) {
       failures.push(`${fixture.name}: ${error.message}`);
     }

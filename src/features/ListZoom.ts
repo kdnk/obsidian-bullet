@@ -420,7 +420,7 @@ export class ListZoomState {
       root,
       defaultIndentChars,
       false,
-      true,
+      "split",
       state.doc.sliceString(0, rootFrom),
       list,
     ).perform();

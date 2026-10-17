@@ -19,6 +19,18 @@ const targetText = "- destination\n\t- sibling\n- target keep";
 const sourceAfter = "- keep";
 const targetAfter =
   "- destination\n\t- [ ] parent\n\t\t- child\n\t- sibling\n- target keep";
+const mixedSourceText = "- parent\n  - move\n\t- child\n- target";
+const mixedSourceAfter = "- parent\n- move\n  - child\n- target";
+const mixedFenceSource = "- parent\n  - ```js\n\tcode\n    ```\n- target";
+const mixedFenceAfter = "- parent\n- ```js\n  code\n  ```\n- target";
+const attachedFenceSource = "- move\n\t- child\n- keep";
+const attachedFenceTarget = "- ```md\n\tcode\n\t```\nBody";
+const attachedFenceSourceAfter = "- keep";
+const attachedFenceTargetAfter =
+  "- ```md\n\tcode\n\t```\nBody\n- move\n\t- child";
+const ellipsisFrontmatterTarget = "---\ntitle: Example\n...\n```js\ncode\n```";
+const spacedFrontmatterTarget = "---  \n```\n---\nBody";
+const spacedFrontmatterTargetAfter = "---  \n```\n---\nBody\n- move\n\t- child";
 fs.writeFileSync(
   path.join(output, "fixture.json"),
   JSON.stringify(
@@ -175,6 +187,75 @@ function destination() {
   }, key);
 }
 
+function replaceDocuments(source, target, sourceCursor, targetCursor) {
+  evaluate(
+    async (key, source, target, sourceCursor, targetCursor) => {
+      const state = window[key];
+      state.source.view.editor.setValue(source);
+      state.target.view.editor.setValue(target);
+      state.source.view.editor.setCursor(sourceCursor);
+      state.target.view.editor.setCursor(targetCursor);
+      await state.source.view.save();
+      await state.target.view.save();
+    },
+    key,
+    source,
+    target,
+    sourceCursor,
+    targetCursor,
+  );
+  settle();
+}
+
+function startLine(side, lineNumber) {
+  const point = evaluate(
+    (key, side, lineNumber) => {
+      const leaf = window[key][side];
+      app.workspace.setActiveLeaf(leaf, { focus: true });
+      leaf.view.editor.focus();
+      const cm = leaf.view.editor.cm;
+      const line = cm.state.doc.line(lineNumber);
+      const dom = cm.domAtPos(line.from).node;
+      const element =
+        dom.nodeType === Node.ELEMENT_NODE ? dom : dom.parentElement;
+      const row = element?.closest?.(".cm-line");
+      const handle = row?.querySelector(".list-bullet, .cm-formatting-list");
+      if (!handle)
+        throw Error(`Missing list handle on ${side} line ${lineNumber}`);
+      const rect = handle.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    },
+    key,
+    side,
+    lineNumber,
+  );
+  mouse("mouseMoved", point, 0, side);
+  mouse("mousePressed", point, 1, side);
+  mouse("mouseMoved", { x: point.x + 12, y: point.y + 2 }, 1, side);
+  settle();
+}
+
+function lineDestination(side, lineNumber, placement) {
+  return evaluate(
+    (key, side, lineNumber, placement) => {
+      const cm = window[key][side].view.editor.cm;
+      const line = cm.state.doc.line(lineNumber);
+      const coords = cm.coordsAtPos(line.from, -1);
+      const first = cm.contentDOM.querySelector(".cm-line");
+      if (!coords || !first) throw Error("Missing line destination geometry");
+      const height = cm.lineBlockAt(line.from).height;
+      return {
+        x: first.getBoundingClientRect().left + 4,
+        y: placement === "after" ? coords.top + height - 2 : coords.top - 8,
+      };
+    },
+    key,
+    side,
+    lineNumber,
+    placement,
+  );
+}
+
 try {
   initial = evaluate(() => {
     for (const cls of ["bullet-plugin-better-lists", "bullet-plugin-dnd"])
@@ -304,6 +385,139 @@ try {
   }, key);
   documents(saved, sourceAfter, targetAfter);
   results.push({ name: "saved-markdown", ...saved });
+
+  replaceDocuments(
+    mixedSourceText,
+    targetText,
+    { line: 3, ch: 8 },
+    { line: 2, ch: 13 },
+  );
+  startLine("source", 2);
+  assert.equal(snapshot("mixed-indent-started").dragging, true);
+  drop = lineDestination("source", 4, "before");
+  mouse("mouseMoved", drop, 1, "source");
+  settle();
+  assert.equal(snapshot("mixed-indent-drop-indicator").dropZone, true);
+  mouse("mouseReleased", drop, 0, "source");
+  settle();
+  documents(snapshot("mixed-indent-drop"), mixedSourceAfter, targetText);
+  keypress("z", "KeyZ", 4, 90);
+  settle();
+  documents(snapshot("mixed-indent-undo"), mixedSourceText, targetText);
+  keypress("z", "KeyZ", 12, 90);
+  settle();
+  documents(snapshot("mixed-indent-redo"), mixedSourceAfter, targetText);
+
+  replaceDocuments(
+    mixedFenceSource,
+    targetText,
+    { line: 4, ch: 8 },
+    { line: 2, ch: 13 },
+  );
+  startLine("source", 2);
+  assert.equal(snapshot("mixed-fence-started").dragging, true);
+  drop = lineDestination("source", 5, "before");
+  mouse("mouseMoved", drop, 1, "source");
+  settle();
+  assert.equal(snapshot("mixed-fence-drop-indicator").dropZone, true);
+  mouse("mouseReleased", drop, 0, "source");
+  settle();
+  documents(snapshot("mixed-fence-drop"), mixedFenceAfter, targetText);
+  keypress("z", "KeyZ", 4, 90);
+  settle();
+  documents(snapshot("mixed-fence-undo"), mixedFenceSource, targetText);
+  keypress("z", "KeyZ", 12, 90);
+  settle();
+  documents(snapshot("mixed-fence-redo"), mixedFenceAfter, targetText);
+
+  replaceDocuments(
+    attachedFenceSource,
+    ellipsisFrontmatterTarget,
+    { line: 2, ch: 6 },
+    { line: 4, ch: 4 },
+  );
+  startLine("source", 1);
+  assert.equal(snapshot("ellipsis-frontmatter-started").dragging, true);
+  drop = lineDestination("target", 5, "before");
+  mouse("mouseMoved", drop, 1, "target");
+  settle();
+  assert.equal(snapshot("ellipsis-frontmatter-code-rejected").dropZone, false);
+  mouse("mouseReleased", drop, 0, "target");
+  settle();
+  documents(
+    snapshot("ellipsis-frontmatter-release"),
+    attachedFenceSource,
+    ellipsisFrontmatterTarget,
+  );
+
+  replaceDocuments(
+    attachedFenceSource,
+    spacedFrontmatterTarget,
+    { line: 2, ch: 6 },
+    { line: 3, ch: 4 },
+  );
+  startLine("source", 1);
+  assert.equal(snapshot("spaced-frontmatter-started").dragging, true);
+  drop = lineDestination("target", 4, "after");
+  mouse("mouseMoved", drop, 1, "target");
+  settle();
+  assert.equal(snapshot("spaced-frontmatter-drop-indicator").dropZone, true);
+  mouse("mouseReleased", drop, 0, "target");
+  settle();
+  documents(
+    snapshot("spaced-frontmatter-drop"),
+    attachedFenceSourceAfter,
+    spacedFrontmatterTargetAfter,
+  );
+  const spacedSaved = evaluate(async (key) => {
+    const state = window[key];
+    await state.source.view.save();
+    await state.target.view.save();
+    return {
+      source: await app.vault.read(state.source.view.file),
+      target: await app.vault.read(state.target.view.file),
+    };
+  }, key);
+  documents(
+    spacedSaved,
+    attachedFenceSourceAfter,
+    spacedFrontmatterTargetAfter,
+  );
+  results.push({
+    name: "spaced-frontmatter-saved-markdown",
+    ...spacedSaved,
+  });
+
+  replaceDocuments(
+    attachedFenceSource,
+    attachedFenceTarget,
+    { line: 2, ch: 6 },
+    { line: 3, ch: 4 },
+  );
+  startLine("source", 1);
+  assert.equal(snapshot("attached-fence-started").dragging, true);
+  drop = lineDestination("target", 4, "after");
+  mouse("mouseMoved", drop, 1, "target");
+  settle();
+  assert.equal(snapshot("attached-fence-drop-indicator").dropZone, true);
+  mouse("mouseReleased", drop, 0, "target");
+  settle();
+  documents(
+    snapshot("attached-fence-drop"),
+    attachedFenceSourceAfter,
+    attachedFenceTargetAfter,
+  );
+  const boundarySaved = evaluate(async (key) => {
+    const state = window[key];
+    await state.source.view.save();
+    await state.target.view.save();
+    return {
+      source: await app.vault.read(state.source.view.file),
+      target: await app.vault.read(state.target.view.file),
+    };
+  }, key);
+  documents(boundarySaved, attachedFenceSourceAfter, attachedFenceTargetAfter);
+  results.push({ name: "editing-boundary-saved-markdown", ...boundarySaved });
 } catch (error) {
   failures.push(error.stack ?? String(error));
   process.exitCode = 1;
