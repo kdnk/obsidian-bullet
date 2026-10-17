@@ -215,6 +215,20 @@ describe("BetterListsStyles", () => {
     );
   });
 
+  test("extends native ancestor guide paint through nested code cards", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const declarations = styles.match(
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.bullet-plugin-code-guide-continuation\s+\.cm-indent::before,\s*body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.bullet-plugin-code-guide-continuation\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(declarations?.replace(/\s+/g, " ").trim()).toBe(
+      "block-size: var(--bullet-code-guide-height); pointer-events: none;",
+    );
+    expect(declarations).not.toMatch(
+      /\b(?:display|visibility|width|min-width|position|inset-block-start|translate|transform|border-inline-start-width)\s*:/,
+    );
+  });
+
   test("renders a theme-aware bullet as a seven-pixel circle", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(

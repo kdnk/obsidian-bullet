@@ -50,7 +50,8 @@ const PREVIEW_BODY_CLASS = "bullet-plugin-code-preview-body";
 const CODE_OWNER_PREFIX_CLASS = "bullet-plugin-code-owner-prefix";
 const CODE_OWNER_GUIDE_CLIPPED_CLASS = "bullet-plugin-code-owner-guide-clipped";
 const CODE_OWNER_GUIDE_CLIP = "--bullet-code-owner-guide-clip";
-const PREVIEW_HEIGHT = "--bullet-code-preview-height";
+const CODE_GUIDE_CONTINUATION_CLASS = "bullet-plugin-code-guide-continuation";
+const CODE_GUIDE_HEIGHT = "--bullet-code-guide-height";
 const OPENING_ALIGNED_CLASS = "bullet-plugin-code-opening-aligned";
 const OPENING_MARKER_OFFSET = "--bullet-code-opening-marker-offset";
 const PLAIN_PREVIEW_CLASS = "bullet-plugin-code-preview-plain";
@@ -60,7 +61,6 @@ const PREVIEW_RADIUS = "--bullet-code-preview-radius";
 const listFenceRe = /^([ \t]*)([-*+]|\d+\.)([ \t]+)(`{3,}|~{3,})/;
 
 interface OpeningAlignment {
-  height: string;
   markerOffset: string;
   ownerGuideClip: string;
 }
@@ -79,6 +79,7 @@ interface MeasuredLine {
   emptyBody?: boolean;
   markerOffset?: string;
   ownerGuideClip?: string;
+  guideHeight?: string;
   preview?: OpeningAlignment;
   previewBlock?: HTMLElement;
   previewEmbed?: boolean;
@@ -114,6 +115,7 @@ interface NativeRowLayout {
   contentPadding: string | undefined;
   markerOffset: string | undefined;
   ownerGuideClip: string | undefined;
+  guideHeight: string | undefined;
   presentation: NativePresentation;
 }
 
@@ -156,6 +158,7 @@ const NATIVE_CLASSES = [
   PREVIEW_LAST_CLASS,
   PREVIEW_BODY_CLASS,
   CODE_OWNER_GUIDE_CLIPPED_CLASS,
+  CODE_GUIDE_CONTINUATION_CLASS,
 ];
 
 function withoutLayoutClasses(value: string): string {
@@ -1074,6 +1077,10 @@ export class NestedCodeBlockLayoutPluginValue {
               element,
             );
             preceding.preview = alignment;
+            preceding.guideHeight = measureCodeGuideHeight(
+              preceding.element,
+              element,
+            );
             const emptySource =
               opening.openingLineNumber < this.view.state.doc.lines &&
               hasClassName(
@@ -1189,6 +1196,10 @@ export class NestedCodeBlockLayoutPluginValue {
         }
         visibleInsets.set(opening.openingLineNumber, inset);
         const next = element.nextElementSibling;
+        const guideHeight =
+          isOpening && next && isCodeCardContinuation(next)
+            ? measureCodeGuideHeight(element, next as HTMLElement)
+            : undefined;
         const alignment =
           isOpening && isCodeBody(next)
             ? measureOpeningAlignment(
@@ -1225,6 +1236,7 @@ export class NestedCodeBlockLayoutPluginValue {
                 ? measureOwnerGuideClip(element, codeContent)
                 : undefined))
             : undefined,
+          guideHeight,
           previewBlock: nativePreview ? (next as HTMLElement) : undefined,
           preview: nativePreview ? alignment : undefined,
         });
@@ -1282,6 +1294,7 @@ export class NestedCodeBlockLayoutPluginValue {
         contentPadding,
         markerOffset,
         ownerGuideClip,
+        guideHeight,
       } = measurement;
       const line = documentLineForElement(this.view, element);
       if (!line) continue;
@@ -1313,6 +1326,8 @@ export class NestedCodeBlockLayoutPluginValue {
           markerOffset,
           ownerGuideClip:
             ownerGuideClip ?? this.nativeRows.get(source.from)?.ownerGuideClip,
+          guideHeight:
+            guideHeight ?? this.nativeRows.get(source.from)?.guideHeight,
           presentation: nativePresentation(
             measurement,
             selectionInBlock(
@@ -1641,6 +1656,10 @@ function nativeAttributes(
       classes.push(OPENING_ALIGNED_CLASS);
       properties.push([OPENING_MARKER_OFFSET, row.markerOffset]);
     }
+    if (row.guideHeight !== undefined) {
+      classes.push(CODE_GUIDE_CONTINUATION_CLASS);
+      properties.push([CODE_GUIDE_HEIGHT, row.guideHeight]);
+    }
     const presentation = row.presentation;
     switch (presentation.kind) {
       case "native-opening":
@@ -1648,7 +1667,6 @@ function nativeAttributes(
         const { alignment } = presentation;
         if (alignment) {
           classes.push(PREVIEW_OPENING_CLASS);
-          properties.push([PREVIEW_HEIGHT, alignment.height]);
         }
         if (presentation.kind === "processor-opening") {
           classes.push(PREVIEW_EMBED_OPENING_CLASS);
@@ -2000,13 +2018,62 @@ function measureOpeningAlignment(
     previousOffset;
   if (!Number.isFinite(markerOffset) || blockBounds.height <= 0) return;
 
-  // Only the native guide spans the opening row and the preview. Keep each
-  // CodeMirror child's own height, including the navigable opening fence.
+  // Move only the marker paint. The source-bearing opening row keeps its
+  // native line box so Vim navigation and editing coordinates stay intact.
   return {
-    height: `${blockBounds.top + blockBounds.height - lineBounds.top}px`,
     markerOffset: `${markerOffset}px`,
     ownerGuideClip: `${Math.max(0, firstLineCenter - blockBounds.top)}px`,
   };
+}
+
+function measureCodeGuideHeight(
+  opening: HTMLElement,
+  firstContinuation: HTMLElement,
+): string {
+  const openingBounds = opening.getBoundingClientRect();
+  let paintEnd =
+    openingBounds.top +
+    (Number.isFinite(openingBounds.height) ? openingBounds.height : 0);
+  let element: Element | null = firstContinuation;
+  while (element && isCodeCardContinuation(element)) {
+    const bounds = element.getBoundingClientRect();
+    paintEnd = Math.max(
+      paintEnd,
+      bounds.top + (Number.isFinite(bounds.height) ? bounds.height : 0),
+    );
+    element = element.nextElementSibling;
+  }
+  if (element?.classList.contains("cm-line")) {
+    const nextTop = measureNextGuideStart(element as HTMLElement);
+    if (Number.isFinite(nextTop)) paintEnd = Math.max(paintEnd, nextTop);
+  }
+  return `${Math.max(0, paintEnd - openingBounds.top)}px`;
+}
+
+function measureNextGuideStart(line: HTMLElement): number {
+  const lineTop = line.getBoundingClientRect().top;
+  const guides =
+    typeof line.querySelectorAll === "function"
+      ? Array.from(
+          line.querySelectorAll<HTMLElement>(
+            ".cm-hmd-list-indent > .cm-indent, .bullet-plugin-outer-list-guide",
+          ),
+        )
+      : [];
+  return Math.max(
+    lineTop,
+    ...guides
+      .map((guide) => guide.getBoundingClientRect().top)
+      .filter((top) => Number.isFinite(top) && top >= lineTop),
+  );
+}
+
+function isCodeCardContinuation(element: Element): boolean {
+  return (
+    element.classList.contains("cm-preview-code-block") ||
+    (element.classList.contains("HyperMD-codeblock") &&
+      !element.classList.contains("HyperMD-codeblock-begin"))
+  );
 }
 
 function measureOwnerGuideClip(

@@ -595,7 +595,7 @@ describe("native preview row roles", () => {
     expect(
       opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
     ).toBe("22.5px");
-    expect(opening.style.getPropertyValue("--bullet-code-preview-height")).toBe(
+    expect(opening.style.getPropertyValue("--bullet-code-guide-height")).toBe(
       "45px",
     );
     expect(opening.style.getPropertyValue("height")).toBe("");
@@ -604,8 +604,8 @@ describe("native preview row roles", () => {
     expect(
       opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
     ).toBe("22.5px");
-    expect(opening.style.getPropertyValue("--bullet-code-preview-height")).toBe(
-      "",
+    expect(opening.style.getPropertyValue("--bullet-code-guide-height")).toBe(
+      "45px",
     );
     fixture.plugin.destroy();
   });
@@ -635,8 +635,8 @@ describe("native preview row roles", () => {
     expect(
       opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
     ).toBe("24px");
-    expect(opening.style.getPropertyValue("--bullet-code-preview-height")).toBe(
-      "",
+    expect(opening.style.getPropertyValue("--bullet-code-guide-height")).toBe(
+      "48px",
     );
     opening.setRaw(false);
     closing.setRaw(false);
@@ -793,8 +793,8 @@ describe("native preview row roles", () => {
     expect(embed.classList.contains("bullet-plugin-code-preview-embed")).toBe(
       false,
     );
-    expect(opening.style.getPropertyValue("--bullet-code-preview-height")).toBe(
-      "",
+    expect(opening.style.getPropertyValue("--bullet-code-guide-height")).toBe(
+      "24px",
     );
     fixture.plugin.destroy();
   });
@@ -1169,9 +1169,9 @@ describe("native measurement publication", () => {
     flushPublications();
     expect(lineAttributes(plugin, 0)).toEqual({
       class:
-        "bullet-plugin-nested-code-block bullet-plugin-code-opening-aligned bullet-plugin-code-preview-opening bullet-plugin-code-preview-hidden-fence",
+        "bullet-plugin-nested-code-block bullet-plugin-code-opening-aligned bullet-plugin-code-guide-continuation bullet-plugin-code-preview-opening bullet-plugin-code-preview-hidden-fence",
       style:
-        "--bullet-nested-code-block-inset: 74px; --bullet-code-opening-marker-offset: 0px; --bullet-code-preview-height: 24px;",
+        "--bullet-nested-code-block-inset: 74px; --bullet-code-opening-marker-offset: 0px; --bullet-code-guide-height: 24px;",
     });
     expect(dispatch).toHaveBeenCalledTimes(1);
     expect(fixture.measurements).toHaveLength(1);
@@ -1208,9 +1208,9 @@ describe("native measurement publication", () => {
     });
     expect(lineAttributes(fixture.plugin, 0)).toEqual({
       class:
-        "bullet-plugin-nested-code-block bullet-plugin-code-opening-aligned",
+        "bullet-plugin-nested-code-block bullet-plugin-code-opening-aligned bullet-plugin-code-guide-continuation",
       style:
-        "--bullet-nested-code-block-inset: 64px; --bullet-code-opening-marker-offset: 0px;",
+        "--bullet-nested-code-block-inset: 64px; --bullet-code-opening-marker-offset: 0px; --bullet-code-guide-height: 24px;",
     });
     fixture.plugin.destroy();
   });
@@ -1248,6 +1248,62 @@ describe("native measurement publication", () => {
     expect(
       lineAttributes(fixture.plugin, opening.position).style,
     ).not.toContain("--bullet-code-owner-guide-clip");
+    fixture.plugin.destroy();
+  });
+
+  test("continues opening ancestor guides through the code card in preview and source", () => {
+    const fixture = makePreviewFixture(false, true);
+    const [opening, first, second, closing, outside] = fixture.lines;
+    for (const [index, line] of fixture.lines.entries()) {
+      line.getBoundingClientRect = () =>
+        ({
+          left: 100,
+          right: 300,
+          top: 100 + index * 24,
+          height: 24,
+          bottom: 124 + index * 24,
+        }) as never;
+    }
+    Object.assign(outside, {
+      querySelectorAll: (selector: string) =>
+        selector.includes(".cm-indent")
+          ? [
+              {
+                getBoundingClientRect: () => ({ top: 197.25 }),
+              },
+            ]
+          : [],
+    });
+
+    fixture.measure();
+    let openingAttributes = lineAttributes(fixture.plugin, opening.position);
+    expect(openingAttributes.class).toContain(
+      "bullet-plugin-code-guide-continuation",
+    );
+    expect(openingAttributes.style).toContain(
+      "--bullet-code-guide-height: 97.25px;",
+    );
+
+    const dispatch = drivers.get(fixture.plugin)!.dispatch;
+    dispatch({ selection: { anchor: second.position + 3 } });
+    fixture.measure();
+    openingAttributes = lineAttributes(fixture.plugin, opening.position);
+    expect(openingAttributes.class).toContain(
+      "bullet-plugin-code-guide-continuation",
+    );
+    expect(openingAttributes.style).toContain(
+      "--bullet-code-guide-height: 97.25px;",
+    );
+
+    fixture.show([first, second, closing, outside]);
+    dispatch({ selection: { anchor: first.position + 3 } });
+    openingAttributes = lineAttributes(fixture.plugin, opening.position);
+    expect(openingAttributes.class).toContain(
+      "bullet-plugin-code-guide-continuation",
+    );
+    expect(openingAttributes.style).toContain(
+      "--bullet-code-guide-height: 97.25px;",
+    );
     fixture.plugin.destroy();
   });
 
@@ -1451,16 +1507,18 @@ describe("plain Shiki preview appearance", () => {
     const fixture = setup();
     expect(lineAttributes(fixture.plugin, 0)).toEqual({
       class:
-        "bullet-plugin-nested-code-block bullet-plugin-code-opening-aligned bullet-plugin-code-preview-opening bullet-plugin-code-preview-embed-opening bullet-plugin-code-preview-plain bullet-plugin-code-preview-hidden-fence",
+        "bullet-plugin-nested-code-block bullet-plugin-code-opening-aligned bullet-plugin-code-guide-continuation bullet-plugin-code-preview-opening bullet-plugin-code-preview-embed-opening bullet-plugin-code-preview-plain bullet-plugin-code-preview-hidden-fence",
       style:
-        "--bullet-nested-code-block-inset: 64px; --bullet-code-opening-marker-offset: 0px; --bullet-code-preview-height: 24px; --bullet-code-preview-background: rgb(31, 31, 40); --bullet-code-preview-end: 248px; --bullet-code-preview-radius: 6px;",
+        "--bullet-nested-code-block-inset: 64px; --bullet-code-opening-marker-offset: 0px; --bullet-code-guide-height: 24px; --bullet-code-preview-background: rgb(31, 31, 40); --bullet-code-preview-end: 248px; --bullet-code-preview-radius: 6px;",
     });
     fixture.opening.setRaw(true);
     fixture.notify(fixture.opening);
     fixture.measure();
     expect(lineAttributes(fixture.plugin, 0)).toEqual({
-      class: "bullet-plugin-nested-code-block",
-      style: "--bullet-nested-code-block-inset: 64px;",
+      class:
+        "bullet-plugin-nested-code-block bullet-plugin-code-guide-continuation",
+      style:
+        "--bullet-nested-code-block-inset: 64px; --bullet-code-guide-height: 24px;",
     });
     fixture.plugin.destroy();
   });
@@ -1833,17 +1891,17 @@ test.each([
       expect(
         opening.style.getPropertyValue("--bullet-code-opening-marker-offset"),
       ).toBe(expectedOffset);
-      expect(
-        opening.style.getPropertyValue("--bullet-code-preview-height"),
-      ).toBe(compact ? "47px" : noLineBox ? "50px" : "71px");
+      expect(opening.style.getPropertyValue("--bullet-code-guide-height")).toBe(
+        compact ? "47px" : noLineBox ? "50px" : "71px",
+      );
       if (compact)
         expect(marker.getBoundingClientRect().top + activeOffset() + 24).toBe(
           147,
         );
       plugin.destroy();
-      expect(
-        opening.style.getPropertyValue("--bullet-code-preview-height"),
-      ).toBe("");
+      expect(opening.style.getPropertyValue("--bullet-code-guide-height")).toBe(
+        "",
+      );
       expect(embed.classList.contains("bullet-plugin-code-preview-embed")).toBe(
         false,
       );

@@ -219,13 +219,14 @@ body.bullet-plugin-better-lists
 
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
-  .bullet-plugin-code-preview-embed-opening
+  .bullet-plugin-code-guide-continuation
   .cm-indent::before,
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
-  .bullet-plugin-code-preview-embed-opening
-  .bullet-plugin-outer-list-guide {
-  block-size: var(--bullet-code-preview-height);
+  .bullet-plugin-code-guide-continuation
+  .bullet-plugin-outer-list-guide::before {
+  block-size: var(--bullet-code-guide-height);
+  pointer-events: none;
 }
 
 body.bullet-plugin-better-lists
