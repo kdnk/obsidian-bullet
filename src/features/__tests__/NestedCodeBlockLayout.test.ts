@@ -1285,6 +1285,33 @@ describe("native measurement publication", () => {
     fixture.plugin.destroy();
   });
 
+  test("removes first-row clipping when a newline moves that body row down", () => {
+    const fixture = makePreviewFixture(false, true);
+    const [opening, first, , closing] = fixture.lines;
+    opening.setRaw(true);
+    closing.setRaw(true);
+    first.getBoundingClientRect = () =>
+      ({ left: 100, right: 300, top: 124, height: 24 }) as never;
+    const dispatch = drivers.get(fixture.plugin)!.dispatch;
+    dispatch({ selection: { anchor: fixture.view.state.doc.line(2).to } });
+    fixture.measure();
+    expect(lineAttributes(fixture.plugin, first.position).style).toContain(
+      "--bullet-code-owner-guide-clip: 12px;",
+    );
+
+    fixture.show([first]);
+    dispatch({ changes: { from: first.position, insert: "\t  \n" } });
+    first.position = fixture.view.state.doc.line(3).from;
+    fixture.measure();
+    const moved = lineAttributes(fixture.plugin, first.position);
+    expect(moved.style).toContain(
+      "--bullet-nested-code-block-inset: calc(64px + var(--list-padding-inline-start));",
+    );
+    expect(moved.style).not.toContain("--bullet-code-owner-guide-clip");
+    expect(fixture.view.state.doc.line(3).text).toBe("\t  one");
+    fixture.plugin.destroy();
+  });
+
   test("continues opening ancestor guides through the code card in preview and source", () => {
     const fixture = makePreviewFixture(false, true);
     const [opening, first, second, closing, outside] = fixture.lines;
@@ -2786,21 +2813,31 @@ test.each(["", "\t", " "])(
     let indentWidth = zoomIndent ? 36 : 72;
     const doc = {
       defaultView: {
-        getComputedStyle: () => ({ marginInlineEnd: "4.8px" }),
+        getComputedStyle: (_element: unknown, pseudo?: string) =>
+          pseudo
+            ? {
+                left: "0.1px",
+                width: "7px",
+                transform: "none",
+                translate: "none",
+              }
+            : { marginInlineEnd: "4.8px", direction: "ltr" },
       },
       createTextNode: (text: string) => ({ textContent: text }),
     };
     const create = () => {
+      const children: unknown[] = [];
       const element = {
         ownerDocument: doc,
         className: "",
         textContent: "",
-        children: [],
+        children,
         style: makeStyle(),
         setAttribute: jest.fn(),
-        appendChild: jest.fn(),
+        appendChild: jest.fn((child: unknown) => children.push(child)),
         remove: jest.fn(),
         getBoundingClientRect: () => ({
+          left: element.className === "list-bullet" ? 8 : 0,
           width:
             element.className === "bullet-plugin-code-indent-measure"
               ? indentWidth
@@ -2839,6 +2876,12 @@ test.each(["", "\t", " "])(
     expect(blank.classList.contains("bullet-plugin-nested-code-block")).toBe(
       true,
     );
+    expect(blank.classList.contains("bullet-plugin-code-owner-guide")).toBe(
+      true,
+    );
+    expect(
+      blank.style.getPropertyValue("--bullet-code-owner-guide-offset"),
+    ).toBe(`calc(${indentWidth + 28.2}px - 16.6px)`);
     const expectedUnits =
       zoomIndent === " " ? ["\t", "\t"] : [zoomIndent ? "\t" : "\t\t"];
     // Both the raw closing fence and the detached list marker retain the
@@ -2853,6 +2896,9 @@ test.each(["", "\t", " "])(
     expect(
       blank.style.getPropertyValue("--bullet-nested-code-block-inset"),
     ).toBe(`${indentWidth + 28.2}px`);
+    expect(
+      blank.style.getPropertyValue("--bullet-code-owner-guide-offset"),
+    ).toBe(`calc(${indentWidth + 28.2}px - 16.6px)`);
     plugin.destroy();
   },
 );

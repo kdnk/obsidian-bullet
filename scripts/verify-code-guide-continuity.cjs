@@ -233,13 +233,13 @@ try {
                     (closing?.bottom ?? Infinity),
               );
               const body = row(test.opening + 1)?.getBoundingClientRect();
-              top = test.editing
-                ? body.top + body.height / 2 + 2
-                : opening.top + 2;
+              top = test.editing ? body.bottom + 2 : opening.top + 2;
               bottom = test.editing ? closing.bottom - 2 : opening.bottom - 2;
               if (!test.owner && !test.editing) {
                 if (!body)
-                  throw Error("First preview code row required below its bullet");
+                  throw Error(
+                    "First preview code row required below its bullet",
+                  );
                 top = body.bottom + 2;
                 bottom = preview
                   ? preview.getBoundingClientRect().bottom - 2
@@ -333,9 +333,13 @@ try {
           shot.data,
           record.geometry,
         );
-        if (test.editing)
+        if (test.editing) {
           assert(record.pixels.minimum >= 12, "Owner guide has a painted gap");
-        else
+          assert(
+            record.pixels.maximum - record.pixels.minimum <= 8,
+            "Owner guide has uneven or doubled paint",
+          );
+        } else
           assert(
             record.pixels.maximum < 12,
             "Owner guide protrudes into preview code card",

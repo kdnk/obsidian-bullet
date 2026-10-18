@@ -153,8 +153,8 @@ try {
         return new DOMRect(x - width / 2, y - height / 2, width, height);
       }
       const rect = (e) => e?.getBoundingClientRect();
-      const guides = (e) =>
-        [...e.querySelectorAll(".cm-indent")].map((e) => {
+      const guides = (element) => {
+        const native = [...element.querySelectorAll(".cm-indent")].map((e) => {
           const box = rect(e);
           const paint = getComputedStyle(e, "::before");
           const clipValues = paint.clipPath
@@ -203,6 +203,36 @@ try {
             owner: !!e.closest(".bullet-plugin-code-owner-prefix"),
           };
         });
+        if (element.classList.contains("bullet-plugin-code-owner-guide")) {
+          const box = rect(element);
+          const style = getComputedStyle(element);
+          const position = style.backgroundPositionX.replace(/\s+/g, "");
+          const pixels = [...position.matchAll(/[-+]?\d+(?:\.\d+)?px/g)].reduce(
+            (sum, match) => sum + parseFloat(match[0]),
+            0,
+          );
+          const width = parseFloat(style.backgroundSize);
+          const fromRight = position.includes("100%");
+          const clip =
+            parseFloat(
+              style.getPropertyValue("--bullet-code-owner-guide-clip"),
+            ) || 0;
+          native.push({
+            className: element.className,
+            paintX:
+              box.left +
+              (fromRight ? box.width - width : 0) +
+              pixels +
+              width / 2,
+            paintTop: box.top + clip,
+            paintBottom: box.bottom,
+            paintThickness: width,
+            paintVisible: style.backgroundImage !== "none",
+            owner: true,
+          });
+        }
+        return native;
+      };
       const entries = [
         [2, 3, 5],
         [6, 7, 9],
