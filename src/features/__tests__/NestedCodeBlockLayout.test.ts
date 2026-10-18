@@ -2795,9 +2795,26 @@ test.each(["-", "123."])(
   },
 );
 
-test.each(["", "\t", " "])(
-  "insets a viewport containing only physical empty rows with zoom indent %j",
-  (zoomIndent) => {
+test.each(
+  ["", "\t", " "].flatMap((zoomIndent) =>
+    [
+      { margin: 13.6, center: 15.1 },
+      { margin: 20.4, center: 21.9 },
+      { margin: 25.5, center: 27 },
+    ].flatMap((geometry) =>
+      ["ltr", "rtl"].flatMap((direction) =>
+        ["content-box", "border-box"].map((boxSizing) => ({
+          zoomIndent,
+          direction,
+          boxSizing,
+          ...geometry,
+        })),
+      ),
+    ),
+  ),
+)(
+  "aligns an empty-viewport owner guide with native paint $direction $margin $boxSizing and zoom $zoomIndent",
+  ({ zoomIndent, direction, boxSizing, margin, center }) => {
     const state = EditorState.create({ doc: "\t\t- ```js\n\n\n\t\t  ```" });
     const blank = makeLine(["HyperMD-codeblock"], {
       position: state.doc.line(3).from,
@@ -2816,12 +2833,23 @@ test.each(["", "\t", " "])(
         getComputedStyle: (_element: unknown, pseudo?: string) =>
           pseudo
             ? {
-                left: "0.1px",
-                width: "7px",
+                left: `${direction === "rtl" ? 62 - margin : 28}px`,
+                width: boxSizing === "border-box" ? "2px" : "1px",
+                marginLeft: `${direction === "rtl" ? 0 : margin}px`,
+                marginRight: `${direction === "rtl" ? margin : 0}px`,
+                borderLeftWidth: direction === "rtl" ? "1px" : "0px",
+                borderRightWidth: direction === "rtl" ? "0px" : "1px",
+                paddingLeft: "0px",
+                paddingRight: "0px",
+                boxSizing,
                 transform: "none",
                 translate: "none",
               }
-            : { marginInlineEnd: "4.8px", direction: "ltr" },
+            : {
+                marginInlineEnd: "4.8px",
+                direction,
+                position: "static",
+              },
       },
       createTextNode: (text: string) => ({ textContent: text }),
     };
@@ -2836,8 +2864,14 @@ test.each(["", "\t", " "])(
         setAttribute: jest.fn(),
         appendChild: jest.fn((child: unknown) => children.push(child)),
         remove: jest.fn(),
+        offsetParent: {
+          clientLeft: 2,
+          clientWidth: 300,
+          getBoundingClientRect: () => ({ left: 200, right: 500 }),
+        },
         getBoundingClientRect: () => ({
-          left: element.className === "list-bullet" ? 8 : 0,
+          left: element.className === "cm-indent" ? 230 : 0,
+          right: element.className === "cm-indent" ? 266 : 23.4,
           width:
             element.className === "bullet-plugin-code-indent-measure"
               ? indentWidth
@@ -2879,9 +2913,17 @@ test.each(["", "\t", " "])(
     expect(blank.classList.contains("bullet-plugin-code-owner-guide")).toBe(
       true,
     );
-    expect(
-      blank.style.getPropertyValue("--bullet-code-owner-guide-offset"),
-    ).toBe(`calc(${indentWidth + 28.2}px - 16.6px)`);
+    const ownerX = () => {
+      const offset = blank.style.getPropertyValue(
+        "--bullet-code-owner-guide-offset",
+      );
+      const values = offset.match(/-?\d+(?:\.\d+)?(?=px)/g)?.map(Number);
+      expect(offset.startsWith("calc(100% - ")).toBe(direction === "rtl");
+      if (!values || values.length !== 2)
+        throw new Error(`Invalid owner-guide offset ${offset}`);
+      return values[0] - values[1];
+    };
+    expect(ownerX()).toBeCloseTo((zoomIndent ? 36 : 72) + center, 8);
     const expectedUnits =
       zoomIndent === " " ? ["\t", "\t"] : [zoomIndent ? "\t" : "\t\t"];
     // Both the raw closing fence and the detached list marker retain the
@@ -2896,9 +2938,7 @@ test.each(["", "\t", " "])(
     expect(
       blank.style.getPropertyValue("--bullet-nested-code-block-inset"),
     ).toBe(`${indentWidth + 28.2}px`);
-    expect(
-      blank.style.getPropertyValue("--bullet-code-owner-guide-offset"),
-    ).toBe(`calc(${indentWidth + 28.2}px - 16.6px)`);
+    expect(ownerX()).toBeCloseTo((zoomIndent ? 40 : 76) + center, 8);
     plugin.destroy();
   },
 );
