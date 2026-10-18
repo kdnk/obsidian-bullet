@@ -89,6 +89,9 @@ function snapshot(text) {
             glyph,
             row: bounds(row),
             wrapper: indicator ? bounds(indicator) : null,
+            wrapperDisplay: indicator
+              ? getComputedStyle(indicator).display
+              : null,
             wrapperTransform: indicator
               ? getComputedStyle(indicator).transform
               : null,
@@ -127,8 +130,8 @@ function screenshot(name) {
   );
 }
 
-function click(line) {
-  const hover = evaluate(
+function hover(line) {
+  const point = evaluate(
     ({ line, note }) => {
       window.focus();
       if (!document.title.includes("vault") || document.title.includes("base"))
@@ -164,7 +167,11 @@ function click(line) {
     },
     { line, note },
   );
-  cdp("Input.dispatchMouseEvent", { type: "mouseMoved", ...hover });
+  cdp("Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
+}
+
+function click(line) {
+  hover(line);
   let pressed;
   for (const type of ["mouseMoved", "mousePressed", "mouseReleased"]) {
     const point = evaluate(
@@ -267,35 +274,36 @@ try {
           record.samples.push({ phase: "before", ...before });
           screenshot(`${name}-before`);
           for (const line of [3, 5]) {
-            const row = before.rows.find((row) => row.line === line);
+            hover(line);
+            const hovered = snapshot(text);
+            record.samples.push({ phase: `body-hover-${line}`, ...hovered });
+            screenshot(`${name}-body-hover-${line}`);
+            const row = hovered.rows.find((row) => row.line === line);
             assert(
               row?.glyph && row.svg,
-              "Native code-indent fold SVG and source glyph required",
+              "Native code-indent fold element and source glyph required",
             );
             assert(
               row.class.includes("bullet-plugin-code-body-fold"),
               "Body control must use source-row layout",
             );
-            const gap = row.glyph.left - (row.svg.left + row.svg.width / 2);
-            assert(
-              Number.isFinite(row.expectedGap) &&
-                Math.abs(gap - row.expectedGap) <= 1,
-              `Fold icon must occupy code gutter, measured gap ${gap}, expected ${row.expectedGap}`,
-            );
-            assert(
-              row.svg.right < row.glyph.left,
-              "Fold SVG must not overlap code text",
+            assert.equal(
+              row.wrapperDisplay,
+              "none",
+              "Code body fold controls must remain hidden on hover",
             );
             assert.equal(
-              row.wrapperTransform,
-              "none",
-              "Native source-bearing fold wrapper must not move",
+              row.svg.width,
+              0,
+              "Body fold SVG must have no paint box",
+            );
+            assert.equal(
+              row.svg.height,
+              0,
+              "Body fold SVG must have no hit box",
             );
           }
-          for (const control of [
-            { name: "body", line: 3, child: 4 },
-            { name: "opener", line: 2, child: 3 },
-          ]) {
+          for (const control of [{ name: "opener", line: 2, child: 3 }]) {
             for (const collapsed of [true, false]) {
               click(control.line);
               const after = snapshot(text);
@@ -323,12 +331,22 @@ try {
                   Math.abs(actual.glyph.left - expected.glyph.left) <= 1,
                   "Folding must preserve code glyph position",
                 );
-                assert(
-                  Math.abs(actual.wrapper.left - expected.wrapper.left) <= 1,
-                  "Folding must preserve native source wrapper position",
-                );
+                assert.equal(actual.wrapperDisplay, "none");
               }
             }
+          }
+          evaluate(() => {
+            const editor = app.workspace.activeLeaf.view.editor;
+            editor.setCursor({ line: 7, ch: 6 });
+          });
+          const preview = snapshot(text);
+          record.samples.push({ phase: "preview", ...preview });
+          screenshot(`${name}-preview`);
+          for (const row of preview.rows.filter((row) =>
+            row.class.includes("bullet-plugin-code-body-fold"),
+          )) {
+            assert.equal(row.wrapperDisplay, "none");
+            assert.equal(row.svg.width, 0);
           }
         } catch (error) {
           record.error = error.stack;
