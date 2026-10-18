@@ -88,19 +88,16 @@ function makeGuideElement(
   };
 }
 
-function makeGuideDOM(elements: Array<ReturnType<typeof makeGuideElement>>) {
+function makeGuideDOM(
+  elements: Array<ReturnType<typeof makeGuideElement>>,
+  containers = elements
+    .filter((element) => element.insideListIndent)
+    .map((element) => ({ children: [element] })),
+) {
   const querySelectorAll = jest.fn((selector: string) => {
-    if (
-      selector === ".cm-hmd-list-indent > .cm-indent-spacing:not(.cm-indent)"
-    ) {
-      return elements.filter(
-        (element) =>
-          element.insideListIndent &&
-          element.classList.contains("cm-indent-spacing") &&
-          !element.classList.contains("cm-indent"),
-      );
+    if (selector === ".cm-hmd-list-indent") {
+      return containers;
     }
-
     if (selector === ".bullet-plugin-persistent-indent-guide") {
       return elements.filter((element) =>
         element.classList.contains("bullet-plugin-persistent-indent-guide"),
@@ -1287,13 +1284,129 @@ describe("GuideFoldingPluginValue decorations", () => {
 });
 
 describe("GuideFoldingPluginValue persistent guides", () => {
+  function makePersistentFixture(
+    containers: Array<{ children: Array<ReturnType<typeof makeGuideElement>> }>,
+  ) {
+    const elements = containers.flatMap((container) => container.children);
+    const { contentDOM } = makeGuideDOM(elements, containers);
+    const requests: Array<{ write?: (measurement: unknown) => void }> = [];
+    const pluginValue = new GuideFoldingPluginValue(
+      {
+        verticalLinesAction: "toggle-folding",
+        onChange: jest.fn(),
+        removeCallback: jest.fn(),
+      } as never,
+      {} as never,
+      {
+        contentDOM,
+        requestMeasure: jest.fn(
+          (request: { write?: (measurement: unknown) => void }) =>
+            requests.push(request),
+        ),
+      } as never,
+    );
+    return {
+      pluginValue,
+      synchronize: () => requests[0]?.write?.(undefined),
+    };
+  }
+
+  function guideClasses(elements: Array<ReturnType<typeof makeGuideElement>>) {
+    return elements.map((element) => ({
+      native: element.classList.contains("cm-indent"),
+      persistent: element.classList.contains(
+        "bullet-plugin-persistent-indent-guide",
+      ),
+    }));
+  }
+
+  test("keeps native guides without promoting their trailing spacing", () => {
+    const native = makeGuideElement(["cm-indent"]);
+    const trailing = makeGuideElement(["cm-indent-spacing"]);
+    const fallback = makeGuideElement(["cm-indent-spacing"]);
+    const fixture = makePersistentFixture([
+      { children: [native, trailing] },
+      { children: [fallback] },
+    ]);
+
+    fixture.synchronize();
+
+    expect(guideClasses([native, trailing, fallback])).toEqual([
+      { native: true, persistent: false },
+      { native: false, persistent: false },
+      { native: true, persistent: true },
+    ]);
+    fixture.pluginValue.destroy();
+  });
+
+  test("promotes only the first spacing in a container without native guides", () => {
+    const first = makeGuideElement(["cm-indent-spacing"]);
+    const second = makeGuideElement(["cm-indent-spacing"]);
+    const fixture = makePersistentFixture([{ children: [first, second] }]);
+
+    fixture.synchronize();
+    fixture.synchronize();
+
+    expect(guideClasses([first, second])).toEqual([
+      { native: true, persistent: true },
+      { native: false, persistent: false },
+    ]);
+    fixture.pluginValue.destroy();
+    expect(guideClasses([first, second])).toEqual([
+      { native: false, persistent: false },
+      { native: false, persistent: false },
+    ]);
+  });
+
+  test("does not treat descendant guides as native children of the container", () => {
+    const descendant = makeGuideElement(["cm-indent"]);
+    const wrapper = { ...makeGuideElement([]), children: [descendant] };
+    const spacing = makeGuideElement(["cm-indent-spacing"]);
+    const fixture = makePersistentFixture([{ children: [wrapper, spacing] }]);
+
+    fixture.synchronize();
+
+    expect(guideClasses([descendant, spacing])).toEqual([
+      { native: true, persistent: false },
+      { native: true, persistent: true },
+    ]);
+    fixture.pluginValue.destroy();
+  });
+
+  test("replaces a fallback with native guides and restores it when they disappear", () => {
+    const native = makeGuideElement([]);
+    const spacing = makeGuideElement(["cm-indent-spacing"]);
+    const fixture = makePersistentFixture([{ children: [native, spacing] }]);
+
+    fixture.synchronize();
+    expect(guideClasses([native, spacing])).toEqual([
+      { native: false, persistent: false },
+      { native: true, persistent: true },
+    ]);
+
+    native.classList.add("cm-indent");
+    fixture.synchronize();
+    expect(guideClasses([native, spacing])).toEqual([
+      { native: true, persistent: false },
+      { native: false, persistent: false },
+    ]);
+
+    native.classList.remove("cm-indent");
+    fixture.synchronize();
+    expect(guideClasses([native, spacing])).toEqual([
+      { native: false, persistent: false },
+      { native: true, persistent: true },
+    ]);
+    fixture.pluginValue.destroy();
+  });
+
   test("promotes only unclaimed list indentation spacing spans", () => {
     const promoted = makeGuideElement(["cm-indent-spacing"]);
     const nativeGuide = makeGuideElement(["cm-indent-spacing", "cm-indent"]);
     const outsideListIndent = makeGuideElement(["cm-indent-spacing"], {
       insideListIndent: false,
     });
-    const { contentDOM: guideDOM, querySelectorAll } = makeGuideDOM([
+    const { contentDOM: guideDOM } = makeGuideDOM([
       promoted,
       nativeGuide,
       outsideListIndent,
@@ -1323,9 +1436,6 @@ describe("GuideFoldingPluginValue persistent guides", () => {
 
     requests[0]?.write?.(undefined);
 
-    expect(querySelectorAll).toHaveBeenCalledWith(
-      ".cm-hmd-list-indent > .cm-indent-spacing:not(.cm-indent)",
-    );
     expect(promoted.classList.contains("cm-indent")).toBe(true);
     expect(
       promoted.classList.contains("bullet-plugin-persistent-indent-guide"),
@@ -3577,7 +3687,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       cursor: { line: 1, ch: 4 },
     });
     const root = makeRoot({ editor });
-    const { guides, line } = makeGuideLine(["    "]);
+    const { guides, line, indentContainer } = makeGuideLine(["    "]);
     const hoveredSpacing = guides[0];
     if (!hoveredSpacing) {
       throw new Error("Expected a spacing guide");
@@ -3591,12 +3701,15 @@ describe("GuideFoldingPluginValue guide interactions", () => {
         : null,
     );
     const querySelectorAll = jest.fn((selector: string) => {
-      if (
-        selector === ".cm-hmd-list-indent > .cm-indent-spacing:not(.cm-indent)"
-      ) {
-        return hoveredSpacing.classList.contains("cm-indent")
-          ? []
-          : [hoveredSpacing];
+      if (selector === ".cm-hmd-list-indent") {
+        return [{ children: indentContainer.childNodes }];
+      }
+      if (selector === ".bullet-plugin-persistent-indent-guide") {
+        return hoveredSpacing.classList.contains(
+          "bullet-plugin-persistent-indent-guide",
+        )
+          ? [hoveredSpacing]
+          : [];
       }
       if (
         selector ===
