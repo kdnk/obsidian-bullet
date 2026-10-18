@@ -46,6 +46,13 @@ const cases = [
     cursor: { line: 2, ch: 4 },
     after: { line: 2, ch: 3 },
   },
+  {
+    name: "root-two-hundred",
+    text: `- \`\`\`js\n  before\n${" ".repeat(202)}hello\n  \`\`\``,
+    expected: `- \`\`\`js\n  before\n${" ".repeat(198)}hello\n  \`\`\``,
+    cursor: { line: 2, ch: 202 },
+    after: { line: 2, ch: 198 },
+  },
 ];
 function key(key, code, modifiers = 0) {
   for (const type of ["keyDown", "keyUp"]) {
@@ -76,8 +83,34 @@ function snapshot() {
     const view = app.workspace.activeLeaf.view;
     await new Promise((resolve) => setTimeout(resolve, 350));
     await view.save();
-    const cursor = view.editor.cm.dom.querySelector(".cm-cursor-primary");
-    const bounds = cursor?.getBoundingClientRect();
+    const cm = view.editor.cm;
+    const cursor = cm.dom.querySelector(".cm-cursor-primary");
+    const selection = document.getSelection();
+    const nativeRange =
+      selection?.isCollapsed &&
+      selection.rangeCount &&
+      cm.contentDOM.contains(selection.focusNode)
+        ? selection.getRangeAt(0)
+        : null;
+    let bounds = cursor?.getBoundingClientRect();
+    if (!bounds && nativeRange) {
+      bounds = nativeRange.getBoundingClientRect();
+      if (!bounds.height && selection.focusNode?.nodeType === Node.TEXT_NODE) {
+        const node = selection.focusNode;
+        const offset = selection.focusOffset;
+        if (node.textContent.length) {
+          const adjacent = document.createRange();
+          adjacent.setStart(node, Math.max(0, offset - 1));
+          adjacent.setEnd(node, offset || 1);
+          const box = adjacent.getBoundingClientRect();
+          bounds = {
+            x: offset ? box.right : box.left,
+            y: box.y,
+            height: box.height,
+          };
+        }
+      }
+    }
     const walker = document.createTreeWalker(
       view.editor.cm.contentDOM,
       NodeFilter.SHOW_TEXT,
@@ -102,9 +135,18 @@ function snapshot() {
       cursor: view.editor.getCursor(),
       selections: view.editor.listSelections(),
       typedGlyph,
-      paintedCursor: bounds
-        ? { x: bounds.x, y: bounds.y, height: bounds.height }
+      caret: bounds?.height
+        ? {
+            x: bounds.x,
+            y: bounds.y,
+            height: bounds.height,
+            source: cursor ? "custom layer" : "native selection",
+            color: cursor
+              ? getComputedStyle(cursor).borderLeftColor
+              : getComputedStyle(cm.contentDOM).caretColor,
+          }
         : null,
+      viewport: { width: innerWidth, height: innerHeight },
     };
   });
 }
@@ -112,6 +154,81 @@ function check(record, text, cursor) {
   assert.equal(record.text, text);
   assert.equal(record.saved, text);
   assert.deepEqual(record.cursor, cursor);
+}
+function captureCaret(record) {
+  assert(record.caret, "The deletion caret must have observable bounds");
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const shot = cdp("Page.captureScreenshot", { format: "png" });
+    const paint = evaluate(
+      async (data, { caret, viewport }) => {
+        const bitmap = await createImageBitmap(
+          new Blob(
+            [
+              Uint8Array.from(atob(data), (character) =>
+                character.charCodeAt(0),
+              ),
+            ],
+            { type: "image/png" },
+          ),
+        );
+        const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+        const context = canvas.getContext("2d");
+        context.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        const scale = canvas.width / viewport.width;
+        const target = caret.color
+          .match(/[\d.]+/g)
+          ?.slice(0, 3)
+          .map(Number);
+        if (!target || target.length !== 3)
+          throw Error(`Expected resolved RGB caret color, got ${caret.color}`);
+        const top = Math.ceil((caret.y + 1) * scale);
+        const bottom = Math.floor((caret.y + caret.height - 1) * scale);
+        const left = Math.floor((caret.x - 1.5) * scale);
+        const right = Math.ceil((caret.x + 1.5) * scale);
+        const pixels = context.getImageData(
+          0,
+          0,
+          canvas.width,
+          canvas.height,
+        ).data;
+        const columns = [];
+        for (let x = left; x <= right; x++) {
+          let matching = 0;
+          for (let y = top; y < bottom; y++) {
+            const offset = (y * canvas.width + x) * 4;
+            if (
+              target.every(
+                (value, channel) =>
+                  Math.abs(pixels[offset + channel] - value) <= 40,
+              )
+            )
+              matching++;
+          }
+          columns.push({
+            x: (x + 0.5) / scale,
+            fraction: matching / (bottom - top),
+          });
+        }
+        const stroke = columns.filter((column) => column.fraction >= 0.8);
+        return {
+          columns,
+          visible: stroke.length > 0,
+          x: stroke.length
+            ? stroke.reduce((sum, column) => sum + column.x, 0) / stroke.length
+            : null,
+        };
+      },
+      shot.data,
+      record,
+    );
+    record.caretPaint = paint;
+    if (paint.visible) return shot;
+    evaluate(async () => new Promise((resolve) => setTimeout(resolve, 100)));
+  }
+  assert.fail(
+    "The deletion caret must paint a vertical stroke at its observed bounds",
+  );
 }
 try {
   cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
@@ -144,6 +261,7 @@ try {
             editor.setValue(text);
             editor.setCursor(cursor);
             editor.focus();
+            editor.scrollIntoView({ from: cursor, to: cursor }, true);
             await new Promise((resolve) => setTimeout(resolve, 350));
           }, test);
           record.before = snapshot();
@@ -166,6 +284,11 @@ try {
           key("z", 90, 12);
           record.redo = snapshot();
           check(record.redo, test.expected, test.after);
+          const caretShot = captureCaret(record.redo);
+          fs.writeFileSync(
+            `${output}/${record.name}-redo-caret.png`,
+            Buffer.from(caretShot.data, "base64"),
+          );
           evaluate(() => {
             window.focus();
             if (
@@ -186,13 +309,16 @@ try {
             ch: test.after.ch + 1,
           });
           assert(
-            record.redo.paintedCursor && record.typed.typedGlyph,
+            record.redo.caret && record.typed.typedGlyph,
             "A painted caret and the following typed glyph are required",
           );
           assert(
-            Math.abs(record.redo.paintedCursor.x - record.typed.typedGlyph.x) <=
-              1,
+            Math.abs(record.redo.caret.x - record.typed.typedGlyph.x) <= 1,
             "Following input must start at the painted deletion caret",
+          );
+          assert(
+            Math.abs(record.redo.caretPaint.x - record.typed.typedGlyph.x) <= 1,
+            "Following input must start at the captured caret stroke",
           );
         } catch (error) {
           record.error = error.stack;

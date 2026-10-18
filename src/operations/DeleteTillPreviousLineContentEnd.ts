@@ -54,7 +54,6 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
       currentIndex > 0 &&
       current &&
       cursor.ch > current.from.ch &&
-      cursor.ch < 200 &&
       /^[ \t]+$/.test(current.text.slice(0, cursor.ch - current.from.ch))
     ) {
       let opening: ReturnType<typeof getFenceOpening> = null;
@@ -71,21 +70,41 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
       const before =
         (row.indentOverride ?? list.getNotesIndentOrThrow()) +
         current.text.slice(0, cursor.ch - current.from.ch);
-      if (opening && before.endsWith(" ")) {
-        const column = countColumn(before, this.indentation.tabSize);
-        const drop =
-          column % this.indentation.indentUnit || this.indentation.indentUnit;
-        let from = cursor.ch;
-        for (let i = 0; i < drop && before[from - 1] === " "; i++) from--;
-        if (from < current.from.ch) {
-          list.replaceLine(
-            currentIndex,
-            current.text.slice(cursor.ch - current.from.ch),
-            before.slice(0, current.from.ch),
-          );
-          root.replaceCursor(current.from);
-          return UPDATED_OUTCOME;
+      if (opening) {
+        const { tabSize, indentUnit } = this.indentation;
+        const containerColumn = countColumn(
+          list.getNotesIndentOrThrow(),
+          tabSize,
+        );
+        const codeColumn = countColumn(before, tabSize) - containerColumn;
+        const target =
+          containerColumn +
+          Math.max(0, codeColumn - (codeColumn % indentUnit || indentUnit));
+        let column = 0;
+        let offset = 0;
+        while (offset < before.length) {
+          const next =
+            column +
+            (before[offset] === "\t" ? tabSize - (column % tabSize) : 1);
+          if (next > target) break;
+          column = next;
+          offset++;
         }
+        const prefix = before.slice(0, offset) + " ".repeat(target - column);
+        let containerOffset = 0;
+        while (
+          countColumn(prefix.slice(0, containerOffset), tabSize) <
+          containerColumn
+        )
+          containerOffset++;
+        list.replaceLine(
+          currentIndex,
+          prefix.slice(containerOffset) +
+            current.text.slice(cursor.ch - current.from.ch),
+          prefix.slice(0, containerOffset),
+        );
+        root.replaceCursor({ line: cursor.line, ch: prefix.length });
+        return UPDATED_OUTCOME;
       }
     }
 
