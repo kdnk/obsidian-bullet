@@ -252,6 +252,9 @@ try {
           persistent: cm.contentDOM.querySelectorAll(
             ".bullet-plugin-persistent-indent-guide",
           ).length,
+          reopeningGuide: !!row(6)?.querySelector(
+            ".cm-hmd-list-indent > .cm-indent",
+          ),
         };
       }, text);
       results.push({ name: `folded-${collapsed}`, state });
@@ -261,11 +264,10 @@ try {
         state.leaf && state.parent,
         "Parent and leaf retain native bullets",
       );
-      if (collapsed)
-        assert(
-          state.persistent > 0,
-          "Folded children retain a persistent reopening guide",
-        );
+      assert(
+        state.reopeningGuide,
+        "Children retain a clickable reopening guide",
+      );
       fs.writeFileSync(
         `${output}/folded-${collapsed}.png`,
         Buffer.from(
