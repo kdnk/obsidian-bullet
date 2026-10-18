@@ -1,11 +1,32 @@
 import { Plugin } from "obsidian";
 
+import { indentUnit } from "@codemirror/language";
+import { EditorState, Extension } from "@codemirror/state";
+import { EditorView, runScopeHandlers } from "@codemirror/view";
+
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
+import * as editorAdapter from "../../editor";
 import { Operation } from "../../operations/Operation";
 import { Root } from "../../root";
 import { OperationPerformer } from "../../services/OperationPerformer";
 import { Settings } from "../../services/Settings";
 import { BackspaceBehaviourOverride } from "../BackspaceBehaviourOverride";
+
+jest.mock("@codemirror/view", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, "platform");
+  Object.defineProperty(navigator, "platform", {
+    configurable: true,
+    value: "MacIntel",
+  });
+  try {
+    return jest.requireActual<typeof import("@codemirror/view")>(
+      "@codemirror/view",
+    );
+  } finally {
+    if (descriptor) Object.defineProperty(navigator, "platform", descriptor);
+    else Reflect.deleteProperty(navigator, "platform");
+  }
+});
 
 jest.mock(
   "obsidian",
@@ -26,6 +47,7 @@ function makeFeature(
   dependencies: {
     imeOpened?: boolean;
     operationPerformer?: OperationPerformer;
+    registerEditorExtension?: (extension: Extension) => void;
   } = {},
 ) {
   const settings = Object.assign(makeSettings(), {
@@ -35,7 +57,10 @@ function makeFeature(
   });
 
   return new BackspaceBehaviourOverride(
-    { registerEditorExtension: jest.fn() } as unknown as Plugin,
+    {
+      registerEditorExtension:
+        dependencies.registerEditorExtension ?? jest.fn(),
+    } as unknown as Plugin,
     settings,
     {
       isOpened: () => dependencies.imeOpened ?? false,
@@ -48,6 +73,127 @@ function makeFeature(
 }
 
 describe("BackspaceBehaviourOverride", () => {
+  test.each(["Backspace", "h"])(
+    "%s caps literal indentation and honors disabled inputs",
+    async (key) => {
+      const text = "- ```\n  before\n    hello\n  ```";
+      for (const mode of [
+        "enabled",
+        "readOnly",
+        "composing",
+        "ime",
+        "disabled",
+        "shift",
+        "alt",
+        "meta",
+      ] as const) {
+        const editor = makeEditor({ text, cursor: { line: 2, ch: 4 } });
+        const root = makeRoot({ editor });
+        let extension: Extension = [];
+        const feature = makeFeature(
+          {
+            keepCursorWithinContent:
+              mode === "disabled" ? "never" : "bullet-and-checkbox",
+          },
+          {
+            imeOpened: mode === "ime",
+            registerEditorExtension: (registered) => {
+              extension = registered;
+            },
+            operationPerformer: {
+              perform: (createOperation: (candidate: Root) => Operation) =>
+                createOperation(root).perform(),
+            } as unknown as OperationPerformer,
+          },
+        );
+        await feature.load();
+        const state = EditorState.create({
+          doc: text,
+          extensions: [
+            extension,
+            indentUnit.of("\t"),
+            EditorState.readOnly.of(mode === "readOnly"),
+          ],
+        });
+        const view = {
+          state,
+          composing: mode === "composing",
+          plugin: () => null,
+        } as unknown as EditorView;
+        const lookup = jest
+          .spyOn(editorAdapter, "getEditorFromState")
+          .mockReturnValue(editor);
+        try {
+          const event = {
+            key: key === "h" && mode === "shift" ? "H" : key,
+            keyCode: key === "h" ? 72 : 8,
+            ctrlKey: key === "h",
+            shiftKey: mode === "shift",
+            altKey: mode === "alt",
+            metaKey: mode === "meta",
+          } as KeyboardEvent;
+          expect({
+            mode,
+            handled: runScopeHandlers(view, event, "editor"),
+          }).toEqual({ mode, handled: mode === "enabled" });
+          expect(root.print()).toBe(
+            mode === "enabled" ? "- ```\n  before\n  hello\n  ```" : text,
+          );
+          expect(root.getCursor()).toEqual({
+            line: 2,
+            ch: mode === "enabled" ? 2 : 4,
+          });
+        } finally {
+          lookup.mockRestore();
+        }
+      }
+    },
+  );
+
+  test.each([
+    ["Backspace", false],
+    ["h", true],
+  ])("%s joins code rows at their container boundary", async (key, ctrlKey) => {
+    const text = "- ```\n  hello\n  world\n  ```";
+    const editor = makeEditor({ text, cursor: { line: 2, ch: 2 } });
+    const root = makeRoot({ editor });
+    let extension: Extension = [];
+    const feature = makeFeature(
+      {},
+      {
+        registerEditorExtension: (registered) => {
+          extension = registered;
+        },
+        operationPerformer: {
+          perform: (createOperation: (candidate: Root) => Operation) =>
+            createOperation(root).perform(),
+        } as unknown as OperationPerformer,
+      },
+    );
+    await feature.load();
+    const state = EditorState.create({ doc: text, extensions: [extension] });
+    const view = {
+      state,
+      composing: false,
+      plugin: () => null,
+    } as unknown as EditorView;
+    const lookup = jest
+      .spyOn(editorAdapter, "getEditorFromState")
+      .mockReturnValue(editor);
+    try {
+      const event = {
+        key,
+        ctrlKey,
+        keyCode: key === "h" ? 72 : 8,
+      } as KeyboardEvent;
+      expect(runScopeHandlers(view, event, "editor")).toBe(true);
+      expect(root.print()).toBe("- ```\n  helloworld\n  ```");
+      expect(root.getCursor()).toEqual({ line: 1, ch: 7 });
+    } finally {
+      lookup.mockRestore();
+    }
+  });
+
   test.each([
     ["never", false, false],
     ["bullet-only", false, true],

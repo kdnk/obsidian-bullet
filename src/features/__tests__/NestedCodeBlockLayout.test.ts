@@ -800,6 +800,40 @@ describe("native preview row roles", () => {
   });
 });
 
+test.each([" ", "  ", "\t", "\t  "])(
+  "paints the blank code caret after literal indentation %j",
+  (indent) => {
+    const state = EditorState.create({
+      doc: `\t\t- \`\`\`\n\t\t  ${indent}\n\t\t  \`\`\``,
+    });
+    const cursor = state.doc.line(2).to;
+    const view = {
+      state: state.update({ selection: { anchor: cursor } }).state,
+      visibleRanges: [{ from: 0, to: state.doc.length }],
+      contentDOM: { querySelectorAll: () => [] },
+      dom: { ownerDocument: { defaultView: {} } },
+      requestMeasure: jest.fn(),
+    };
+    const plugin = new NestedCodeBlockLayoutPluginValue(
+      view as never,
+      names(BEGIN, CONTENT, END),
+    );
+    const cursorLines: number[] = [];
+    plugin.decorations.between(0, state.doc.length, (from, to, decoration) => {
+      if (
+        from === to &&
+        decorationAttributes(decoration).class.includes(
+          "bullet-plugin-nested-code-cursor-line",
+        )
+      )
+        cursorLines.push(state.doc.lineAt(from).number);
+    });
+    expect(cursorLines).toEqual([2]);
+    expect(view.state.doc.toString()).toBe(state.doc.toString());
+    plugin.destroy();
+  },
+);
+
 function lineAttributes(
   plugin: NestedCodeBlockLayoutPluginValue,
   position: number,
@@ -1364,6 +1398,96 @@ describe("native measurement publication", () => {
     fixture.plugin.destroy();
   });
 
+  test.each([false, true])(
+    "continues the opening outer guide to the final code-card edge with a following blank row %s",
+    (blankAfter) => {
+      const fixture = makePreviewFixture(false, blankAfter);
+      const [opening, first, second, closing, outside] = fixture.lines;
+      fixture.lines.forEach((line, index) => {
+        line.getBoundingClientRect = () =>
+          ({
+            top: 100 + index * 24,
+            height: 24,
+            left: 100,
+            right: 300,
+          }) as never;
+      });
+      Object.assign(opening, {
+        querySelectorAll: (selector: string) =>
+          selector.includes(".bullet-plugin-outer-list-guide")
+            ? [{ getBoundingClientRect: () => ({ top: 104 }) }]
+            : [],
+      });
+      if (outside) {
+        drivers.get(fixture.plugin)!.dispatch({
+          changes: {
+            from: outside.position,
+            to: fixture.view.state.doc.length,
+            insert: "",
+          },
+        });
+      }
+
+      fixture.measure();
+
+      expect(lineAttributes(fixture.plugin, opening.position).style).toContain(
+        "--bullet-code-outer-guide-height: 92px;",
+      );
+      for (const row of [first, second, closing]) {
+        expect(lineAttributes(fixture.plugin, row.position).class).toContain(
+          "bullet-plugin-code-outer-guide-covered",
+        );
+      }
+      fixture.plugin.destroy();
+    },
+  );
+
+  test("replaces the previous outer guide height after deleting the post-card list item", () => {
+    const fixture = makePreviewFixture(false, true);
+    const [opening, first, second, closing, outside] = fixture.lines;
+    fixture.lines.forEach((line, index) => {
+      line.getBoundingClientRect = () =>
+        ({ top: 100 + index * 24, height: 24, left: 100, right: 300 }) as never;
+    });
+    Object.assign(opening, {
+      querySelectorAll: (selector: string) =>
+        selector.includes(".bullet-plugin-outer-list-guide")
+          ? [{ getBoundingClientRect: () => ({ top: 104 }) }]
+          : [],
+    });
+    Object.assign(outside, {
+      querySelectorAll: (selector: string) =>
+        selector.includes(".bullet-plugin-outer-list-guide")
+          ? [{ getBoundingClientRect: () => ({ top: 201 }) }]
+          : [],
+    });
+    fixture.measure();
+    expect(lineAttributes(fixture.plugin, opening.position).style).toContain(
+      "--bullet-code-outer-guide-height: 97px;",
+    );
+
+    drivers.get(fixture.plugin)!.dispatch({
+      changes: {
+        from: outside.position,
+        to: fixture.view.state.doc.length,
+        insert: "",
+      },
+    });
+    Object.assign(outside, { querySelectorAll: () => [] });
+    fixture.measure();
+
+    expect(fixture.view.state.doc.line(5).text).toBe("");
+    expect(lineAttributes(fixture.plugin, opening.position).style).toContain(
+      "--bullet-code-outer-guide-height: 92px;",
+    );
+    for (const row of [first, second, closing]) {
+      expect(lineAttributes(fixture.plugin, row.position).class).toContain(
+        "bullet-plugin-code-outer-guide-covered",
+      );
+    }
+    fixture.plugin.destroy();
+  });
+
   test("joins guides at their painted containing-block origin instead of the inline box", () => {
     const fixture = makePreviewFixture(false, true);
     const [opening, , , , outside] = fixture.lines;
@@ -1498,6 +1622,12 @@ describe("native measurement publication", () => {
     expect(lineAttributes(fixture.plugin, first.position).class).toContain(
       "bullet-plugin-code-indent-guide-covered",
     );
+    expect(lineAttributes(fixture.plugin, first.position).class).not.toContain(
+      "bullet-plugin-code-outer-guide-covered",
+    );
+    expect(
+      lineAttributes(fixture.plugin, opening.position).style,
+    ).not.toContain("--bullet-code-outer-guide-height");
     fixture.plugin.destroy();
   });
 

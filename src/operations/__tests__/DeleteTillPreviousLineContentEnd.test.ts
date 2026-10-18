@@ -1,3 +1,8 @@
+import { deleteCharBackward } from "@codemirror/commands";
+import { indentUnit } from "@codemirror/language";
+import { EditorSelection, EditorState, Transaction } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
+
 import { makeEditor, makeRoot, makeSettings } from "../../__mocks__";
 import { DeleteTillPreviousLineContentEnd } from "../DeleteTillPreviousLineContentEnd";
 import {
@@ -5,6 +10,114 @@ import {
   STOP_ONLY_OUTCOME,
   UPDATED_OUTCOME,
 } from "../Operation";
+
+const deepCode = [
+  "- root",
+  "\t- second",
+  "\t\t- third",
+  "\t\t\t- fourth",
+  "\t\t\t\t- fifth",
+  "\t\t\t\t\t- ```",
+  "\t\t\t\t\t  before",
+  "\t\t\t\t\t    hello",
+  "\t\t\t\t\t  ```",
+].join("\n");
+
+test("caps native indentation-unit deletion at the raw fenced-code container", () => {
+  let state = EditorState.create({
+    doc: deepCode,
+    extensions: [EditorState.tabSize.of(4), indentUnit.of("\t")],
+  });
+  state = state.update({
+    selection: EditorSelection.cursor(state.doc.line(8).from + 9),
+  }).state;
+  expect(
+    deleteCharBackward({
+      get state() {
+        return state;
+      },
+      dispatch(transaction: Transaction) {
+        state = transaction.state;
+      },
+    } as unknown as EditorView),
+  ).toBe(true);
+  expect(state.doc.line(8).text).toBe("\t\t\t\t\thello");
+
+  const root = makeRoot({
+    editor: makeEditor({ text: deepCode, cursor: { line: 7, ch: 9 } }),
+  });
+  expect(
+    new DeleteTillPreviousLineContentEnd(root, true, false).perform(),
+  ).toEqual(UPDATED_OUTCOME);
+  expect(root.print()).toBe(deepCode.replace("    hello", "  hello"));
+  expect(root.getCursor()).toEqual({ line: 7, ch: 7 });
+});
+
+test.each([
+  {
+    name: "two-column indentation unit",
+    text: "1. ```\n   before\n    hello\n   ```",
+    cursor: { line: 2, ch: 4 },
+    indentation: { tabSize: 4, indentUnit: 2 },
+    expected: "1. ```\n   before\n   hello\n   ```",
+    expectedCursor: { line: 2, ch: 3 },
+  },
+  {
+    name: "eight-column tabs",
+    text: "- parent\n\t- ```\n\t  before\n\t        hello\n\t  ```",
+    cursor: { line: 3, ch: 9 },
+    indentation: { tabSize: 8, indentUnit: 8 },
+    expected: "- parent\n\t- ```\n\t  before\n\t  hello\n\t  ```",
+    expectedCursor: { line: 3, ch: 3 },
+  },
+  {
+    name: "blank code row",
+    text: "- ```\n  before\n    \n  ```",
+    cursor: { line: 2, ch: 4 },
+    indentation: { tabSize: 4, indentUnit: 4 },
+    expected: "- ```\n  before\n  \n  ```",
+    expectedCursor: { line: 2, ch: 2 },
+  },
+])(
+  "caps $name at the container and then joins at the boundary",
+  ({ text, cursor, indentation, expected, expectedCursor }) => {
+    const root = makeRoot({ editor: makeEditor({ text, cursor }) });
+    const operation = new DeleteTillPreviousLineContentEnd(
+      root,
+      true,
+      false,
+      indentation,
+    );
+    expect(operation.perform()).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe(expected);
+    expect(root.getCursor()).toEqual(expectedCursor);
+    expect(operation.perform()).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe(expected.replace(/before\n[ \t]+/, "before"));
+  },
+);
+
+test.each([
+  {
+    name: "native indentation within code",
+    text: "- ```\n  before\n      hello\n  ```",
+    ch: 6,
+  },
+  {
+    name: "ordinary list continuation",
+    text: "- item\n  before\n    hello",
+    ch: 4,
+  },
+  { name: "ordinary code text", text: "- ```\n  hello\n  ```", ch: 4 },
+  { name: "literal tab in code", text: "- ```\n  \thello\n  ```", ch: 3 },
+])("leaves $name to native deletion", ({ text, ch }) => {
+  const line = text.includes("before") ? 2 : 1;
+  const root = makeRoot({ editor: makeEditor({ text, cursor: { line, ch } }) });
+  expect(
+    new DeleteTillPreviousLineContentEnd(root, true, false).perform(),
+  ).toEqual(NO_OP_OUTCOME);
+  expect(root.print()).toBe(text);
+  expect(root.getCursor()).toEqual({ line, ch });
+});
 
 test("should merge current line with previous line when cursor is at start of line content", () => {
   const root = makeRoot({
