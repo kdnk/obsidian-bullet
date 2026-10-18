@@ -65,6 +65,8 @@ const CODE_INDENT_GUIDE_SEAM_CLIP = "--bullet-code-indent-guide-seam-clip";
 const CODE_OUTER_GUIDE_SEAM_CLIP = "--bullet-code-outer-guide-seam-clip";
 const OPENING_ALIGNED_CLASS = "bullet-plugin-code-opening-aligned";
 const OPENING_MARKER_OFFSET = "--bullet-code-opening-marker-offset";
+const BODY_FOLD_CLASS = "bullet-plugin-code-body-fold";
+const BODY_FOLD_OFFSET = "--bullet-code-body-fold-offset";
 const PLAIN_PREVIEW_CLASS = "bullet-plugin-code-preview-plain";
 const PREVIEW_BACKGROUND = "--bullet-code-preview-background";
 const PREVIEW_END = "--bullet-code-preview-end";
@@ -89,6 +91,7 @@ interface MeasuredLine {
   contentPadding?: string;
   emptyBody?: boolean;
   markerOffset?: string;
+  bodyFoldOffset?: string;
   ownerGuideClip?: string;
   ownerGuideOffset?: string;
   guideHeight?: string;
@@ -130,6 +133,7 @@ interface NativeRowLayout {
   end: string | undefined;
   contentPadding: string | undefined;
   markerOffset: string | undefined;
+  bodyFoldOffset: string | undefined;
   ownerGuideClip: string | undefined;
   ownerGuideOffset: string | undefined;
   guideHeight: string | undefined;
@@ -1311,6 +1315,12 @@ export class NestedCodeBlockLayoutPluginValue {
             nativePreview || element.querySelector(".list-bullet")
               ? alignment?.markerOffset
               : undefined,
+          bodyFoldOffset:
+            isCodeBody(element) && element.querySelector(".cm-fold-indicator")
+              ? line.text.search(/\S/) === boundary.offset
+                ? "calc(var(--bullet-code-content-padding, 0px) - var(--size-4-4) / 2)"
+                : "calc(0px - var(--size-4-4) / 2)"
+              : undefined,
           ownerGuideClip: firstBody
             ? (firstBodyGuideClips.get(element) ??
               measureOwnerGuideClip(element, codeContent ?? element))
@@ -1445,6 +1455,7 @@ export class NestedCodeBlockLayoutPluginValue {
         end,
         contentPadding,
         markerOffset,
+        bodyFoldOffset,
         ownerGuideClip,
         ownerGuideOffset,
         guideHeight,
@@ -1491,6 +1502,7 @@ export class NestedCodeBlockLayoutPluginValue {
           end,
           contentPadding,
           markerOffset,
+          bodyFoldOffset,
           ownerGuideClip,
           ownerGuideOffset,
           guideHeight:
@@ -1851,6 +1863,13 @@ function nativeAttributes(
     if (row.indentGuideCovered) classes.push(CODE_INDENT_GUIDE_COVERED_CLASS);
     if (row.outerGuideCovered) classes.push(CODE_OUTER_GUIDE_COVERED_CLASS);
     const presentation = row.presentation;
+    if (
+      row.bodyFoldOffset !== undefined &&
+      (presentation.kind === "source" || presentation.kind === "native-body")
+    ) {
+      classes.push(BODY_FOLD_CLASS);
+      properties.push([BODY_FOLD_OFFSET, row.bodyFoldOffset]);
+    }
     switch (presentation.kind) {
       case "native-opening":
       case "processor-opening": {
