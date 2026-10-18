@@ -98,17 +98,11 @@ test.each([
 
 test.each([
   {
-    name: "native indentation within code",
-    text: "- ```\n  before\n      hello\n  ```",
-    ch: 6,
-  },
-  {
     name: "ordinary list continuation",
     text: "- item\n  before\n    hello",
     ch: 4,
   },
   { name: "ordinary code text", text: "- ```\n  hello\n  ```", ch: 4 },
-  { name: "literal tab in code", text: "- ```\n  \thello\n  ```", ch: 3 },
 ])("leaves $name to native deletion", ({ text, ch }) => {
   const line = text.includes("before") ? 2 : 1;
   const root = makeRoot({ editor: makeEditor({ text, cursor: { line, ch } }) });
@@ -118,6 +112,167 @@ test.each([
   expect(root.print()).toBe(text);
   expect(root.getCursor()).toEqual({ line, ch });
 });
+
+test.each([
+  {
+    name: "four code columns",
+    prefix: "      ",
+    ch: 6,
+    after: "  ",
+    afterCh: 2,
+  },
+  {
+    name: "eight code columns",
+    prefix: "          ",
+    ch: 10,
+    after: "      ",
+    afterCh: 6,
+  },
+  {
+    name: "partial code indentation",
+    prefix: "        ",
+    ch: 8,
+    after: "      ",
+    afterCh: 6,
+  },
+  {
+    name: "code tab crossing the stop",
+    prefix: "  \t\t",
+    ch: 4,
+    after: "  \t  ",
+    afterCh: 5,
+  },
+  {
+    name: "first literal code tab",
+    prefix: "  \t",
+    ch: 3,
+    after: "  ",
+    afterCh: 2,
+  },
+])(
+  "deletes $name from the code origin on blank and populated rows",
+  ({ prefix, ch, after, afterCh }) => {
+    for (const content of ["", "hello"]) {
+      const text = `- \`\`\`\n  before\n${prefix}${content}\n  \`\`\``;
+      const root = makeRoot({
+        editor: makeEditor({ text, cursor: { line: 2, ch } }),
+      });
+      expect(
+        new DeleteTillPreviousLineContentEnd(root, true, false).perform(),
+      ).toEqual(UPDATED_OUTCOME);
+      expect(root.print()).toBe(
+        `- \`\`\`\n  before\n${after}${content}\n  \`\`\``,
+      );
+      expect(root.getCursor()).toEqual({ line: 2, ch: afterCh });
+    }
+  },
+);
+
+test.each([
+  {
+    name: "deep list",
+    container: "\t\t\t  ",
+    indentation: "        ",
+    expected: "    ",
+    tabSize: 4,
+    indentUnit: 4,
+  },
+  {
+    name: "two-column unit",
+    container: "  ",
+    indentation: "    ",
+    expected: "  ",
+    tabSize: 4,
+    indentUnit: 2,
+  },
+  {
+    name: "eight-column unit",
+    container: "\t  ",
+    indentation: "                ",
+    expected: "        ",
+    tabSize: 8,
+    indentUnit: 8,
+  },
+])(
+  "uses the configured code-relative stop for $name",
+  ({ container, indentation, expected, tabSize, indentUnit }) => {
+    const parents =
+      container === "\t\t\t  "
+        ? "- root\n\t- second\n\t\t- third\n"
+        : container === "\t  "
+          ? "- root\n"
+          : "";
+    const opener = container.slice(0, -2) + "- ```";
+    const line = parents.split("\n").length + 1;
+    const text = `${parents}${opener}\n${container}before\n${container}${indentation}hello\n${container}\`\`\``;
+    const root = makeRoot({
+      editor: makeEditor({
+        text,
+        cursor: { line, ch: container.length + indentation.length },
+      }),
+    });
+    expect(
+      new DeleteTillPreviousLineContentEnd(root, true, false, {
+        tabSize,
+        indentUnit,
+      }).perform(),
+    ).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe(
+      `${parents}${opener}\n${container}before\n${container}${expected}hello\n${container}\`\`\``,
+    );
+    expect(root.getCursor()).toEqual({
+      line,
+      ch: container.length + expected.length,
+    });
+  },
+);
+
+test("splits only the tab crossing a code-relative stop without deleting the container", () => {
+  const root = makeRoot({
+    editor: makeEditor({
+      text: "- ```\n  before\n\t\t  hello\n  ```",
+      cursor: { line: 2, ch: 4 },
+    }),
+  });
+  const operation = new DeleteTillPreviousLineContentEnd(root, true, false);
+  expect(operation.perform()).toEqual(UPDATED_OUTCOME);
+  expect(root.print()).toBe("- ```\n  before\n\t  hello\n  ```");
+  expect(root.getCursor()).toEqual({ line: 2, ch: 3 });
+  expect(operation.perform()).toEqual(UPDATED_OUTCOME);
+  expect(root.print()).toBe("- ```\n  before\n  hello\n  ```");
+  expect(root.getCursor()).toEqual({ line: 2, ch: 2 });
+});
+
+test("uses code-relative stops inside a continuation fence without changing whitespace after the cursor", () => {
+  const root = makeRoot({
+    editor: makeEditor({
+      text: "- parent\n  ```\n          hello\n  ```",
+      cursor: { line: 2, ch: 6 },
+    }),
+  });
+  expect(
+    new DeleteTillPreviousLineContentEnd(root, true, false).perform(),
+  ).toEqual(UPDATED_OUTCOME);
+  expect(root.print()).toBe("- parent\n  ```\n      hello\n  ```");
+  expect(root.getCursor()).toEqual({ line: 2, ch: 2 });
+});
+
+test.each(["", " ", "  ", "\t", "\t "])(
+  "does not add indentation while deleting an incomplete deep code container %j",
+  (blank) => {
+    const text = `- root\n\t- second\n\t\t- third\n\t\t\t- \`\`\`\n\t\t\t  before\n${blank}\n\t\t\t  \`\`\``;
+    const root = makeRoot({
+      editor: makeEditor({ text, cursor: { line: 5, ch: blank.length } }),
+    });
+    expect(
+      new DeleteTillPreviousLineContentEnd(root, true, false).perform(),
+    ).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe(
+      "- root\n\t- second\n\t\t- third\n\t\t\t- ```\n\t\t\t  before\n\t\t\t  ```",
+    );
+    expect(root.getCursor()).toEqual({ line: 4, ch: 11 });
+  },
+);
 
 test("should merge current line with previous line when cursor is at start of line content", () => {
   const root = makeRoot({
