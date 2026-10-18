@@ -51,6 +51,7 @@
     - フルテストは `vault/test.md` をfixtureとして上書きします。手動検証用の内容がある場合は、フルテスト前にvault外へbackupしてください。テストcommandの終了直後はtest rendererの遅延終了処理がfixtureを再保存する場合があるため、`vault=vault` のrendererが終了したことを確認してからrestoreしてください。rendererが30秒を超えて残る場合があるため、固定timeout到達を終了確認の代わりにしないでください。restore時点でrendererが残っていた場合は、実際の終了後にもfile sizeまたはhashを再確認してください。restore後は少し待ってfile sizeまたはhashがbackupと一致することを再確認してから実Obsidianの検証を続けてください。Obsidianのfile historyだけをbackupとして使わないでください。
     - フルテスト用の一時backup directoryを片づけるときは、fixture restore後のhash確認を終えてから、agent自身が作成した正確な`/tmp/obsidian-bullet-*` directoryであることを検証し、`rm -rf`ではなく`/usr/bin/trash <exact-path>`でTrashへ移してください。
     - `dist/main.js` は生成物としてgitignoreされています。検証用にbuildしても、`git add -f` で追跡対象へ追加しないでください。
+    - 管理された実機検証の前に開発用symlinkを退避する場合は、退避したリンクから通常ファイルをplugin配置先へコピーしてからsessionを開始してください。有効なruntimeだけが残り、元のassetが存在しない状態で開始すると、cleanupで有効状態を復元できません。cleanup後に元のリンクを戻し、pluginを再読込してください。
     - 実 Obsidian で手動検証するときは、リポジトリ内の `vault` をテスト用 vault として使ってください。個人用の `/Users/kodai/base` vault へテスト bundle やテストノートを配置しないでください。
     - 手動検証用のplugin IDは `bullet` です。build artifactは `vault/.obsidian/plugins/bullet/` へ配置し、別のpluginディレクトリを作らないでください。
     - テスト用 vault を開く操作と plugin の再読込は、Obsidian CLI で `vault=vault` を明示してください。UI 操作前にウィンドウタイトルが `vault` を示すことを確認し、`base` が表示された場合は操作を止めてください。
