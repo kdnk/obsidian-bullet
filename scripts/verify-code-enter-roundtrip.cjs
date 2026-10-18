@@ -69,7 +69,15 @@ function focus() {
 }
 
 function key(key, modifiers = 0) {
-  const codes = { Enter: 13, Backspace: 8, Escape: 27, i: 73, z: 90 };
+  const codes = {
+    Enter: 13,
+    Backspace: 8,
+    Escape: 27,
+    ArrowLeft: 37,
+    ArrowRight: 39,
+    i: 73,
+    z: 90,
+  };
   focus();
   evaluate(() => {
     window.__codeEnterReceived = [];
@@ -204,6 +212,60 @@ try {
           record.typed = state();
           assert.equal(record.typed.doc, fixture.typed);
           assert.equal(record.typed.saved, fixture.typed);
+          console.log(`PASS ${name}`);
+        } catch (error) {
+          failures.push({ name, error: error.message });
+          console.log(`FAIL ${name}: ${error.message}`);
+        }
+        results.push(record);
+      }
+      for (const safeguard of ["manual indent", "navigation", "typed text"]) {
+        const name = `${safeguard}-${vim ? "vim" : "default"}-${shiki ? "shiki" : "native"}`;
+        const record = { name };
+        try {
+          if (vim) key("Escape");
+          const setup =
+            safeguard === "manual indent"
+              ? {
+                  text: "```\n     llo\n     \n```",
+                  cursor: { line: 2, ch: 5 },
+                }
+              : {
+                  text: "```\n     llo\n```",
+                  cursor: { line: 1, ch: 8 },
+                };
+          evaluate((setup) => {
+            const editor = app.workspace.activeLeaf.view.editor;
+            editor.setValue(setup.text);
+            editor.setCursor(setup.cursor);
+          }, setup);
+          if (vim) {
+            key("i");
+            evaluate(
+              (cursor) =>
+                app.workspace.activeLeaf.view.editor.setCursor(cursor),
+              setup.cursor,
+            );
+          }
+          if (safeguard !== "manual indent") key("Enter");
+          if (safeguard === "navigation") {
+            key("ArrowLeft");
+            key("ArrowRight");
+          } else if (safeguard === "typed text") {
+            focus();
+            cdp("Input.insertText", { text: "X" });
+            key("Backspace");
+          }
+          key("Backspace");
+          record.deleted = state();
+          assert.equal(record.deleted.doc, "```\n     llo\n    \n```");
+          assert.equal(record.deleted.saved, record.deleted.doc);
+          assert.deepEqual(record.deleted.cursor, { line: 2, ch: 4 });
+          focus();
+          cdp("Input.insertText", { text: "X" });
+          record.typed = state();
+          assert.equal(record.typed.doc, "```\n     llo\n    X\n```");
+          assert.equal(record.typed.saved, record.typed.doc);
           console.log(`PASS ${name}`);
         } catch (error) {
           failures.push({ name, error: error.message });

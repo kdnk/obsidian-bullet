@@ -2,6 +2,7 @@ import { Plugin } from "obsidian";
 
 import { keymap } from "@codemirror/view";
 
+import { codeEnterBackspace } from "./CodeEnterBackspace";
 import { Feature } from "./Feature";
 
 import { MyEditor } from "../editor";
@@ -22,7 +23,8 @@ export class BackspaceBehaviourOverride implements Feature {
   ) {}
 
   async load() {
-    this.plugin.registerEditorExtension(
+    this.plugin.registerEditorExtension([
+      codeEnterBackspace(this.check),
       keymap.of([
         {
           key: "Backspace",
@@ -32,7 +34,7 @@ export class BackspaceBehaviourOverride implements Feature {
           }),
         },
       ]),
-    );
+    ]);
   }
 
   async unload() {}
