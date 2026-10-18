@@ -227,6 +227,27 @@ test.each([
   },
 );
 
+test.each([199, 200, 201, 202])(
+  "uses the code-relative stop at raw column %i",
+  (column) => {
+    for (const content of ["", "hello"]) {
+      const root = makeRoot({
+        editor: makeEditor({
+          text: `- \`\`\`\n  before\n${" ".repeat(column)}${content}\n  \`\`\``,
+          cursor: { line: 2, ch: column },
+        }),
+      });
+      expect(
+        new DeleteTillPreviousLineContentEnd(root, true, false).perform(),
+      ).toEqual(UPDATED_OUTCOME);
+      expect(root.print()).toBe(
+        `- \`\`\`\n  before\n${" ".repeat(198)}${content}\n  \`\`\``,
+      );
+      expect(root.getCursor()).toEqual({ line: 2, ch: 198 });
+    }
+  },
+);
+
 test("splits only the tab crossing a code-relative stop without deleting the container", () => {
   const root = makeRoot({
     editor: makeEditor({
