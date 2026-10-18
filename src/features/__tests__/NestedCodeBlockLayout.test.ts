@@ -3110,6 +3110,87 @@ test.each([
   plugin.destroy();
 });
 
+test.each([
+  [
+    "root continuation",
+    "- parent\n  ```js\n  code\n  ```\n  note",
+    ["  ", "  ", "  "],
+  ],
+  [
+    "nested continuation",
+    "- root\n\t- parent\n\t  ```js\n\t  code\n\t  ```\n\t  note",
+    ["  ", "  ", "  "],
+  ],
+  ["attached fence", "- ```js\n  code\n  ```\n- note", []],
+  ["unowned fence", "```js\ncode\n```\nnote", []],
+])(
+  "isolates only the owning guide in a previewed %s",
+  (_label, source, expected) => {
+    const state = EditorState.create({
+      doc: source,
+      selection: { anchor: source.length },
+    });
+    const plugin = new NestedCodeBlockLayoutPluginValue(
+      {
+        state,
+        visibleRanges: [{ from: 0, to: state.doc.length }],
+        contentDOM: { querySelectorAll: () => [] },
+        dom: { ownerDocument: { defaultView: {} } },
+        requestMeasure: jest.fn(),
+      } as never,
+      () => null,
+    );
+    const prefixes: string[] = [];
+    plugin.prefixRoleDecorations.between(
+      0,
+      state.doc.length,
+      (from, to, decoration) => {
+        if (
+          decorationClass(decoration) ===
+          "bullet-plugin-code-continuation-preview-prefix"
+        )
+          prefixes.push(state.doc.sliceString(from, to));
+        expect(widgetDecoration(decoration)).toBeNull();
+      },
+    );
+    expect(prefixes).toEqual(expected);
+    expect(state.doc.toString()).toBe(source);
+    plugin.destroy();
+  },
+);
+
+test.each([2, 3, 4])(
+  "preserves continuation editing guides with the cursor on row %s",
+  (row) => {
+    const source = "- parent\n  ```js\n  code\n  ```\n  note";
+    const doc = EditorState.create({ doc: source }).doc;
+    const state = EditorState.create({
+      doc,
+      selection: { anchor: doc.line(row).to },
+    });
+    const plugin = new NestedCodeBlockLayoutPluginValue(
+      {
+        state,
+        visibleRanges: [{ from: 0, to: state.doc.length }],
+        contentDOM: { querySelectorAll: () => [] },
+        dom: { ownerDocument: { defaultView: {} } },
+        requestMeasure: jest.fn(),
+      } as never,
+      () => null,
+    );
+    const roles: Array<string | null> = [];
+    plugin.prefixRoleDecorations.between(
+      0,
+      state.doc.length,
+      (_from, _to, decoration) => {
+        roles.push(decorationClass(decoration));
+      },
+    );
+    expect(roles).toEqual([]);
+    plugin.destroy();
+  },
+);
+
 test("does not synthesize an owning-prefix role for a physical blank row", () => {
   const state = EditorState.create({ doc: "\t\t- ```\n\n\t\t  ```" });
   const view = {
