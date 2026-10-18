@@ -2258,7 +2258,20 @@ function measureGuideStarts(line: HTMLElement): {
   const starts = (selector: string) => {
     if (typeof line.querySelectorAll !== "function") return;
     const tops = Array.from(line.querySelectorAll<HTMLElement>(selector))
-      .map((guide) => guide.getBoundingClientRect().top)
+      .map((guide) => {
+        const win = line.ownerDocument.defaultView;
+        const paint = win?.getComputedStyle(guide, "::before");
+        const top = Number.parseFloat(paint?.top ?? "");
+        if (paint?.position !== "absolute" || !Number.isFinite(top))
+          return guide.getBoundingClientRect().top;
+        const container =
+          win?.getComputedStyle(guide).position === "static"
+            ? guide.offsetParent
+            : guide;
+        return container
+          ? container.getBoundingClientRect().top + container.clientTop + top
+          : guide.getBoundingClientRect().top;
+      })
       .filter((top) => Number.isFinite(top) && top >= lineTop);
     return tops.length ? Math.max(...tops) : undefined;
   };

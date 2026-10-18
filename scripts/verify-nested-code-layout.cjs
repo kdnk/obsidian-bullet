@@ -167,8 +167,15 @@ try {
             clipValues?.length === 2
               ? clipValues[0]
               : (clipValues?.[2] ?? clipTop);
+          const container =
+            paint.position === "absolute" &&
+            getComputedStyle(e).position === "static"
+              ? e.offsetParent
+              : e;
           const paintTop =
-            box.top + (Number.parseFloat(paint.insetBlockStart) || 0);
+            rect(container).top +
+            container.clientTop +
+            (Number.parseFloat(paint.insetBlockStart) || 0);
           const paintHeight = Number.parseFloat(paint.height) || box.height;
           const backgroundPaint =
             paint.backgroundColor !== "transparent" &&
@@ -391,8 +398,7 @@ try {
         );
         const bodyGuide = entry.bodyGuides?.find(
           (guide) =>
-            !guide.owner &&
-            Math.abs(guide.paintX - siblingGuide.paintX) < 0.6,
+            !guide.owner && Math.abs(guide.paintX - siblingGuide.paintX) < 0.6,
         );
         check(
           openingGuide,
@@ -608,15 +614,22 @@ try {
         const paint = getComputedStyle(guide, "::before");
         const clipTop =
           parseFloat(paint.clipPath.match(/^inset\(([^ )]+)/)?.[1]) || 0;
-        const top =
-          box.top + (parseFloat(paint.insetBlockStart) || 0) + clipTop;
+        const container =
+          paint.position === "absolute" &&
+          getComputedStyle(guide).position === "static"
+            ? guide.offsetParent
+            : guide;
+        const origin =
+          bounds(container).top +
+          container.clientTop +
+          (parseFloat(paint.insetBlockStart) || 0);
         return {
           x:
             box.x +
             (parseFloat(paint.marginInlineStart) || 0) +
             (parseFloat(paint.borderInlineStartWidth) || 0) / 2,
-          top,
-          bottom: top + (parseFloat(paint.height) || box.height),
+          top: origin + clipTop,
+          bottom: origin + (parseFloat(paint.height) || box.height),
         };
       };
       const siblingGuides = [

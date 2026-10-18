@@ -128,6 +128,7 @@ try {
           const lower = Math.floor(height * 0.85);
           const background = value(0, upper);
           const columns = [];
+          const groups = [];
           for (let x = 1; x < width - 1; x++) {
             const reference = Math.max(value(x, upper), value(x, lower));
             if (reference < background + 18) continue;
@@ -141,7 +142,30 @@ try {
               minimum: Math.min(...seam),
             });
           }
-          return { width, height, background, columns };
+          for (const column of columns) {
+            const previous = groups.at(-1);
+            if (previous && previous.to === column.x - 1)
+              previous.to = column.x;
+            else groups.push({ from: column.x, to: column.x });
+          }
+          const guides = groups.map(({ from, to }) => {
+            const peak = (y) => {
+              let maximum = 0;
+              for (let x = from; x <= to; x++)
+                maximum = Math.max(maximum, value(x, y));
+              return maximum;
+            };
+            const rowPeaks = [];
+            for (let y = Math.floor(height * 0.3); y < height * 0.7; y++)
+              rowPeaks.push(peak(y));
+            return {
+              from,
+              to,
+              reference: Math.max(peak(upper), peak(lower)),
+              minimum: Math.min(...rowPeaks),
+            };
+          });
+          return { width, height, background, columns, guides };
         }, shot.data);
         assert.ok(
           record.pixels.columns.length >= 3,
@@ -152,11 +176,16 @@ try {
             column.maximum <= column.reference + 2,
             `${name}: bright guide seam at pixel ${column.x}: ${column.maximum} > ${column.reference}`,
           );
-          assert.ok(
-            column.minimum >= column.reference - 2,
-            `${name}: dark guide gap at pixel ${column.x}: ${column.minimum} < ${column.reference}`,
-          );
         }
+        assert.ok(
+          record.pixels.guides.length >= 3,
+          "Missing ancestor guide columns",
+        );
+        for (const guide of record.pixels.guides)
+          assert.ok(
+            guide.minimum >= guide.reference - 2,
+            `${name}: dark guide gap at pixels ${guide.from}-${guide.to}: ${guide.minimum} < ${guide.reference}`,
+          );
         console.log(`PASS ${name}`);
       } catch (error) {
         failures.push({ name, error: error.message });

@@ -1386,7 +1386,7 @@ describe("native measurement publication", () => {
         parentElement: line,
         getBoundingClientRect: () => ({
           top:
-            line.getBoundingClientRect().top +
+            (line === outside ? 305.3359375 : 234.3359375) +
             (line === outside ? 1.1953125 : 0),
         }),
       };
@@ -1422,6 +1422,63 @@ describe("native measurement publication", () => {
     expect(lineAttributes(fixture.plugin, outside.position)).toEqual({
       class: "bullet-plugin-code-guide-seam",
       style: "--bullet-code-indent-guide-seam-clip: 0.1640625px;",
+    });
+    fixture.plugin.destroy();
+  });
+
+  test("preserves positioned outer-guide origins and static-guide containing wrappers", () => {
+    const fixture = makePreviewFixture(false, true);
+    const [opening, , , , outside] = fixture.lines;
+    fixture.lines.forEach((line, index) => {
+      line.getBoundingClientRect = () =>
+        ({ left: 100, right: 300, top: 100 + index * 24, height: 24 }) as never;
+    });
+    for (const line of [opening, outside]) {
+      const indent = {
+        offsetParent: {
+          clientTop: 1,
+          getBoundingClientRect: () => ({
+            top: line === opening ? 105 : 196.25,
+          }),
+        },
+        getBoundingClientRect: () => ({ top: line === opening ? 114 : 199 }),
+      };
+      const outer = {
+        offsetParent: line,
+        clientTop: 0,
+        getBoundingClientRect: () => ({
+          top: line === opening ? 104 : 201.25,
+        }),
+      };
+      Object.assign(line, {
+        querySelectorAll: (selector: string) =>
+          selector.includes(".cm-indent")
+            ? [indent]
+            : selector.includes(".bullet-plugin-outer-list-guide")
+              ? [outer]
+              : [],
+      });
+      Object.assign(line.ownerDocument.defaultView, {
+        devicePixelRatio: 2,
+        getComputedStyle: (element: unknown, pseudo?: string) => ({
+          direction: "ltr",
+          marginInlineEnd: "0px",
+          lineHeight: "24px",
+          position: pseudo || element === outer ? "absolute" : "static",
+          top: "0px",
+        }),
+      });
+    }
+
+    fixture.measure();
+
+    const style = lineAttributes(fixture.plugin, opening.position).style;
+    expect(style).toContain("--bullet-code-indent-guide-height: 91.5px;");
+    expect(style).toContain("--bullet-code-outer-guide-height: 97.5px;");
+    expect(lineAttributes(fixture.plugin, outside.position)).toEqual({
+      class: "bullet-plugin-code-guide-seam",
+      style:
+        "--bullet-code-indent-guide-seam-clip: 0.25px; --bullet-code-outer-guide-seam-clip: 0.25px;",
     });
     fixture.plugin.destroy();
   });
