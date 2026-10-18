@@ -424,6 +424,15 @@ try {
         (n, e) => n + e.querySelectorAll(".cm-indent").length,
         0,
       ),
+      guideSamples: probes.flatMap((probe) =>
+        [...probe.querySelectorAll(".cm-indent")].map((guide) => ({
+          outsideContent: !guide.closest(".cm-content"),
+          visibility: getComputedStyle(guide).visibility,
+          pseudoVisibility: getComputedStyle(guide, "::before").visibility,
+          pointerEvents: getComputedStyle(guide).pointerEvents,
+          clipped: getComputedStyle(probe).overflow === "hidden",
+        })),
+      ),
       dimensions: probes.map((e) => ({
         width: e.getBoundingClientRect().width,
         height: e.getBoundingClientRect().height,
@@ -470,8 +479,16 @@ try {
     "probe lifecycle: at most one container per editor",
   );
   check(
-    lifecycle.before.guideCount === 0,
-    "probe lifecycle: no synthetic indent guides",
+    lifecycle.before.guideCount === lifecycle.before.dimensions.length &&
+      lifecycle.before.guideSamples.every(
+        (sample) =>
+          sample.outsideContent &&
+          sample.visibility === "hidden" &&
+          sample.pseudoVisibility === "hidden" &&
+          sample.pointerEvents === "none" &&
+          sample.clipped,
+      ),
+    "probe lifecycle: one nonpainted, noninteractive native style sample per container",
   );
   check(
     lifecycle.before.dimensions.every(
