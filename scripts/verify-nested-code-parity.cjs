@@ -254,6 +254,8 @@ try {
                 const firstVisible = sourceFence ? glyph(sourceFence) : text;
                 return {
                   topBlank: firstVisible.top - top,
+                  sourceFenceVisible: !!sourceFence,
+                  codeTopOffset: text.top - top,
                   embedded: !!embed,
                   lineNumbers,
                   openingHeight: start.height,
@@ -363,10 +365,32 @@ try {
               block.previewBackground,
               "Opening and Shiki card backgrounds must match",
             );
+          const reservedFence = block.sourceFenceVisible
+            ? 0
+            : block.openingHeight;
+          const topPadding = block.topBlank - reservedFence;
           assert.ok(
-            block.topBlank >= -2.1 && block.topBlank <= sample.expectedGap,
-            `Block ${i}: blank top space ${block.topBlank}px exceeds normal padding ${sample.expectedGap}px`,
+            topPadding >= -2.1 && topPadding <= sample.expectedGap,
+            `Block ${i}: top space ${block.topBlank}px must contain only the reserved fence ${reservedFence}px and normal padding`,
           );
+          const preview = results.find(
+            (entry) => entry.mode === mode && entry.phase === "preview",
+          );
+          if (preview) {
+            assert.ok(
+              Math.abs(
+                block.bottom -
+                  block.top -
+                  (preview.blocks[i].bottom - preview.blocks[i].top),
+              ) < 1,
+              `Block ${i}: painted height changed while focusing code`,
+            );
+            assert.ok(
+              Math.abs(block.codeTopOffset - preview.blocks[i].codeTopOffset) <
+                1,
+              `Block ${i}: code glyph moved within its painted background while focusing code`,
+            );
+          }
           const baseline = results.find(
             (entry) => entry.mode === "native" && entry.phase === phase,
           );

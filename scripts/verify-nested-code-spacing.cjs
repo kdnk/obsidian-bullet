@@ -152,11 +152,9 @@ try {
                 "Native guide hit boxes must remain usable",
               );
           }
-          const sourceExpansion =
-            sample.openingHeight - samples[0].openingHeight;
           assert.ok(
-            Math.abs(sample.span - samples[0].span - sourceExpansion) < 1,
-            `Block height changed beyond the visible source fence by ${sample.span - samples[0].span - sourceExpansion}px`,
+            Math.abs(sample.span - samples[0].span) < 1,
+            `Block height changed while focusing code by ${sample.span - samples[0].span}px`,
           );
           assert.ok(
             Math.abs(sample.openingHeight - sample.openingLineHeight) < 0.1,
