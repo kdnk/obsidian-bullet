@@ -73,6 +73,13 @@ test.each([
     joined: "- title\n  ```\n\tllo\n  ```",
     joinCursor: { line: 2, ch: 4 },
   },
+  {
+    name: "continuation fence with existing trailing spaces",
+    text: "- title\n  ```\n\tllo\n\t  \n  ```",
+    cursor: { line: 3, ch: 1 },
+    joined: "- title\n  ```\n\tllo  \n  ```",
+    joinCursor: { line: 2, ch: 4 },
+  },
 ])(
   "joins an autoindented blank code row without appending partial-tab spaces in a $name",
   ({ text, cursor, joined, joinCursor }) => {
