@@ -2220,7 +2220,7 @@ function measureCodeGuideContinuation(
     element = element.nextElementSibling;
   }
   let indentEnd = paintEnd;
-  let outerEnd: number | undefined;
+  let outerEnd = paintEnd;
   let seam:
     | { element: HTMLElement; indentClip?: string; outerClip?: string }
     | undefined;
@@ -2251,18 +2251,17 @@ function measureCodeGuideContinuation(
       0,
       indentEnd - (openingStarts.indent ?? openingBounds.top),
     )}px`,
-    outerHeight:
-      outerEnd === undefined
-        ? undefined
-        : `${Math.max(
-            0,
-            outerEnd - (openingStarts.outer ?? openingBounds.top),
-          )}px`,
+    outerHeight: coversOuter
+      ? `${Math.max(
+          0,
+          outerEnd - (openingStarts.outer ?? openingBounds.top),
+        )}px`
+      : undefined,
     // The continuation selector paints every matching guide on the opening.
     // Its geometric start can be unavailable when CodeMirror wraps the same
     // guide differently, so paint ownership must follow selector membership.
     coversIndent,
-    coversOuter: coversOuter && outerEnd !== undefined,
+    coversOuter,
     seam,
   };
 }
