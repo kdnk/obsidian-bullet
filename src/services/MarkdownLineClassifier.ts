@@ -131,6 +131,10 @@ export class MarkdownLineClassifier {
     return this.getStructuralBlockIndex(state).getCodeFence(lineNumber);
   }
 
+  getListOwner(state: EditorState, lineNumber: number): number | null {
+    return this.getStructuralBlockIndex(state).getListOwner(lineNumber);
+  }
+
   classify(state: EditorState, lineNumber: number): MarkdownLineKind {
     return this.classifyLine(
       state.doc,

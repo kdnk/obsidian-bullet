@@ -262,6 +262,39 @@ body.bullet-plugin-better-lists
 
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-code-owner-guide {
+  background-image: linear-gradient(
+    var(--indentation-guide-color),
+    var(--indentation-guide-color)
+  );
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  background-size: var(--indentation-guide-width)
+    calc(100% - var(--bullet-code-owner-guide-clip, 0px));
+  background-position: left
+    calc(
+      var(--bullet-code-owner-guide-offset) - var(--indentation-guide-width) / 2
+    )
+    top var(--bullet-code-owner-guide-clip, 0px);
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-code-owner-guide
+  .bullet-plugin-code-owner-prefix
+  .cm-indent::before {
+  visibility: hidden;
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .bullet-plugin-code-continuation-preview-prefix
+  .cm-indent::before {
+  visibility: hidden;
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-code-guide-seam
   .cm-indent::before {
   clip-path: inset(var(--bullet-code-indent-guide-seam-clip) 0 0 0);

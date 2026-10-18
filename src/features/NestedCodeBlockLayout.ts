@@ -48,8 +48,12 @@ const PREVIEW_FIRST_CLASS = "bullet-plugin-code-preview-first";
 const PREVIEW_LAST_CLASS = "bullet-plugin-code-preview-last";
 const PREVIEW_BODY_CLASS = "bullet-plugin-code-preview-body";
 const CODE_OWNER_PREFIX_CLASS = "bullet-plugin-code-owner-prefix";
+const CODE_CONTINUATION_PREVIEW_PREFIX_CLASS =
+  "bullet-plugin-code-continuation-preview-prefix";
 const CODE_OWNER_GUIDE_CLIPPED_CLASS = "bullet-plugin-code-owner-guide-clipped";
 const CODE_OWNER_GUIDE_CLIP = "--bullet-code-owner-guide-clip";
+const CODE_OWNER_GUIDE_CLASS = "bullet-plugin-code-owner-guide";
+const CODE_OWNER_GUIDE_OFFSET = "--bullet-code-owner-guide-offset";
 const CODE_GUIDE_CONTINUATION_CLASS = "bullet-plugin-code-guide-continuation";
 const CODE_INDENT_GUIDE_COVERED_CLASS =
   "bullet-plugin-code-indent-guide-covered";
@@ -86,6 +90,7 @@ interface MeasuredLine {
   emptyBody?: boolean;
   markerOffset?: string;
   ownerGuideClip?: string;
+  ownerGuideOffset?: string;
   guideHeight?: string;
   outerGuideHeight?: string;
   indentGuideCovered?: boolean;
@@ -126,6 +131,7 @@ interface NativeRowLayout {
   contentPadding: string | undefined;
   markerOffset: string | undefined;
   ownerGuideClip: string | undefined;
+  ownerGuideOffset: string | undefined;
   guideHeight: string | undefined;
   outerGuideHeight: string | undefined;
   indentGuideCovered: boolean;
@@ -178,6 +184,7 @@ const NATIVE_CLASSES = [
   PREVIEW_LAST_CLASS,
   PREVIEW_BODY_CLASS,
   CODE_OWNER_GUIDE_CLIPPED_CLASS,
+  CODE_OWNER_GUIDE_CLASS,
   CODE_GUIDE_CONTINUATION_CLASS,
   CODE_INDENT_GUIDE_COVERED_CLASS,
   CODE_OUTER_GUIDE_COVERED_CLASS,
@@ -209,6 +216,9 @@ interface CodeContentBoundary {
 const contentGlyph = Decoration.mark({ class: CODE_CONTENT_CLASS });
 const owningListContinuation = Decoration.mark({
   class: CODE_OWNER_PREFIX_CLASS,
+});
+const continuationPreviewPrefix = Decoration.mark({
+  class: CODE_CONTINUATION_PREVIEW_PREFIX_CLASS,
 });
 
 interface CodeSourceDecorations {
@@ -725,6 +735,7 @@ export class NestedCodeBlockLayoutPluginValue {
       visibleRanges,
       this.syntaxContext.lineNameAt,
       this.syntaxContext.fenceOpenings.at,
+      this.classifier,
     );
     const positions = new Set(this.nativeRows.keys());
     const cursor = singleCursor(state);
@@ -1302,9 +1313,10 @@ export class NestedCodeBlockLayoutPluginValue {
               : undefined,
           ownerGuideClip: firstBody
             ? (firstBodyGuideClips.get(element) ??
-              (codeContent
-                ? measureOwnerGuideClip(element, codeContent)
-                : undefined))
+              measureOwnerGuideClip(element, codeContent ?? element))
+            : undefined,
+          ownerGuideOffset: !isOpening
+            ? this.measureOwnerGuideOffset(opening, inset)
             : undefined,
           guideHeight: guide?.height,
           outerGuideHeight: guide?.outerHeight,
@@ -1351,12 +1363,69 @@ export class NestedCodeBlockLayoutPluginValue {
             inset,
           ),
           emptyBody: true,
+          ownerGuideOffset: this.measureOwnerGuideOffset(opening, inset),
+          ownerGuideClip:
+            documentLineForElement(this.view, element)?.number ===
+            openingLineNumber + 1
+              ? measureOwnerGuideClip(element, element)
+              : undefined,
           indentGuideCovered:
             renderedGuideOwners.get(openingLineNumber)?.indent,
           outerGuideCovered: renderedGuideOwners.get(openingLineNumber)?.outer,
         });
     }
     return measured;
+  }
+
+  private measureOwnerGuideOffset(
+    opening: FenceOpening,
+    inset: string,
+  ): string | undefined {
+    const hidden = this.zoomRange?.(this.view.state)?.indent ?? "";
+    if (countColumn(hidden, this.view.state.tabSize) > opening.indentColumn)
+      return;
+    const marker = this.markerMeasurements.get(
+      opening.openingLineNumber,
+    )?.marker;
+    const bullet =
+      marker &&
+      Array.from(marker.children).find(
+        (child) => child.className === "list-bullet",
+      );
+    if (!marker || !bullet) return;
+    const win = marker.ownerDocument.defaultView;
+    if (!win) return;
+    const markerBounds = marker.getBoundingClientRect();
+    const bulletBounds = bullet.getBoundingClientRect();
+    const style = win.getComputedStyle(bullet, "::after");
+    const width = Number.parseFloat(style.width);
+    if (!Number.isFinite(width) || width <= 0) return;
+    const length = (value: string, size: number) =>
+      value.endsWith("%")
+        ? (Number.parseFloat(value) * size) / 100
+        : Number.parseFloat(value);
+    const translate =
+      style.translate === "none" ? "0px" : style.translate.split(/\s+/)[0];
+    const transform =
+      style.transform === "none" ? 0 : new DOMMatrixReadOnly(style.transform).e;
+    const center =
+      bulletBounds.left +
+      (style.left === "auto"
+        ? bulletBounds.width / 2
+        : length(style.left, bulletBounds.width) + width / 2) +
+      length(translate, width) +
+      transform;
+    const markerStyle = win.getComputedStyle(marker);
+    const rtl = markerStyle.direction === "rtl";
+    const offset = rtl
+      ? markerBounds.right - center
+      : center - markerBounds.left;
+    const margin = Number.parseFloat(markerStyle.marginInlineEnd) || 0;
+    const distance = markerBounds.width + margin - offset;
+    if (!Number.isFinite(distance)) return;
+    return rtl
+      ? `calc(100% - ${inset} + ${distance}px)`
+      : `calc(${inset} - ${distance}px)`;
   }
 
   private measureLayout(): MeasuredFrame {
@@ -1377,6 +1446,7 @@ export class NestedCodeBlockLayoutPluginValue {
         contentPadding,
         markerOffset,
         ownerGuideClip,
+        ownerGuideOffset,
         guideHeight,
         outerGuideHeight,
         indentGuideCovered,
@@ -1421,8 +1491,8 @@ export class NestedCodeBlockLayoutPluginValue {
           end,
           contentPadding,
           markerOffset,
-          ownerGuideClip:
-            ownerGuideClip ?? this.nativeRows.get(source.from)?.ownerGuideClip,
+          ownerGuideClip,
+          ownerGuideOffset,
           guideHeight:
             guideHeight ?? this.nativeRows.get(source.from)?.guideHeight,
           outerGuideHeight:
@@ -1814,6 +1884,10 @@ function nativeAttributes(
         classes.push(PREVIEW_LAST_CLASS);
         break;
       case "source":
+        if (row.ownerGuideOffset !== undefined) {
+          classes.push(CODE_OWNER_GUIDE_CLASS);
+          properties.push([CODE_OWNER_GUIDE_OFFSET, row.ownerGuideOffset]);
+        }
         if (row.ownerGuideClip !== undefined) {
           classes.push(CODE_OWNER_GUIDE_CLIPPED_CLASS);
           properties.push([CODE_OWNER_GUIDE_CLIP, row.ownerGuideClip]);
@@ -1976,6 +2050,7 @@ export function nestedCodeBlockContentDecorations(
     visibleRanges,
     lineNameAt,
     new FenceOpeningIndex(state, lineNameAt).at,
+    new MarkdownLineClassifier(),
   ).content;
 }
 
@@ -1984,6 +2059,7 @@ function codeBlockSourceDecorations(
   visibleRanges: readonly { from: number; to: number }[],
   lineNameAt: LineNameAt,
   fenceOpeningAt: FenceOpeningAt,
+  classifier: MarkdownLineClassifier,
 ): CodeSourceDecorations {
   const contentDecorations = [];
   const prefixRoleDecorations = [];
@@ -2000,6 +2076,45 @@ function codeBlockSourceDecorations(
         continue;
       }
       visitedLines.add(line.number);
+      const fence = classifier.getCodeFence(state, line.number);
+      const owner = fence && classifier.getListOwner(state, line.number);
+      if (
+        fence &&
+        owner !== null &&
+        owner !== fence.openingLineNumber &&
+        !state.selection.ranges.some((range) => {
+          const openingFrom = state.doc.line(fence.openingLineNumber).from;
+          return (
+            (range.from <= openingFrom && range.to >= openingFrom) ||
+            classifier.getCodeFence(state, state.doc.lineAt(range.from).number)
+              ?.openingLineNumber === fence.openingLineNumber ||
+            classifier.getCodeFence(state, state.doc.lineAt(range.to).number)
+              ?.openingLineNumber === fence.openingLineNumber
+          );
+        })
+      ) {
+        const ownerIndent = /^[ \t]*/.exec(state.doc.line(owner).text)![0];
+        const prefixStart = offsetAtColumn(
+          line.text,
+          countColumn(ownerIndent, state.tabSize),
+          state.tabSize,
+        );
+        const prefixEnd = getFenceContent(
+          line.text,
+          fence.containerIndent,
+        )?.offset;
+        if (
+          prefixStart !== null &&
+          prefixEnd !== undefined &&
+          prefixStart < prefixEnd
+        )
+          prefixRoleDecorations.push(
+            continuationPreviewPrefix.range(
+              line.from + prefixStart,
+              line.from + prefixEnd,
+            ),
+          );
+      }
       const name = lineNameAt(line.number);
       if (
         (name !== null && isNestedCodeBlockName(name)) ||
