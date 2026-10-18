@@ -3118,6 +3118,81 @@ test("measures each source row against the same content edge, including both fen
 });
 
 test.each([
+  ["base container", "\t  hello", true],
+  ["literal code spaces", "\t    hello", false],
+  ["partial container tab", "\t\thello", true],
+  ["literal code tab", "\t\t\thello", false],
+])(
+  "aligns native body fold controls for %s",
+  (_name, bodyText, beforePadding) => {
+    const source = `\t- \`\`\`js\n${bodyText}\n\t  \`\`\``;
+    const state = EditorState.create({ doc: source });
+    const rows = [BEGIN, CONTENT, END].map((name, index) => {
+      const row = makeLine(name.split("_"), {
+        position: state.doc.line(index + 1).from,
+        markerEnd: 164,
+      });
+      const query = row.querySelector;
+      row.querySelector = ((selector: string) =>
+        selector === ".cm-fold-indicator" ? {} : query(selector)) as never;
+      return row;
+    });
+    const measurements: Measurement[] = [];
+    const view = {
+      state,
+      visibleRanges: [{ from: 0, to: state.doc.length }],
+      contentDOM: { querySelectorAll: () => rows },
+      posAtDOM: (element: { position: number }) => element.position,
+      coordsAtPos: () => ({ left: 164, right: 164 }),
+      dom: { ownerDocument: { defaultView: {} } },
+      requestMeasure: (measurement: Measurement) =>
+        measurements.push(measurement),
+    };
+    const plugin = mountLayout(view as never, names(BEGIN, CONTENT, END));
+    runMeasurement(measurements[0]);
+    expect(
+      rows[1].style.getPropertyValue("--bullet-code-body-fold-offset"),
+    ).toBe(
+      beforePadding
+        ? "calc(var(--bullet-code-content-padding, 0px) - var(--size-4-4) / 2)"
+        : "calc(0px - var(--size-4-4) / 2)",
+    );
+    expect(
+      rows.map((row) => row.classList.contains("bullet-plugin-code-body-fold")),
+    ).toEqual([false, true, false]);
+    expect(view.state.doc.toString()).toBe(source);
+    expect(rows.map((row) => row.getBoundingClientRect().left)).toEqual([
+      100, 100, 100,
+    ]);
+    plugin.destroy();
+    expect(
+      rows[1].style.getPropertyValue("--bullet-code-body-fold-offset"),
+    ).toBe("");
+  },
+);
+
+test("keeps body fold controls aligned in native preview", () => {
+  const fixture = makePreviewFixture(false, true);
+  const body = fixture.lines[1];
+  const query = body.querySelector;
+  body.querySelector = ((selector: string) =>
+    selector === ".cm-fold-indicator" ? {} : query(selector)) as never;
+  drivers.get(fixture.plugin)!.dispatch({
+    selection: { anchor: fixture.view.state.doc.length },
+  });
+  fixture.measure();
+  expect(body.classList.contains("bullet-plugin-code-preview-body")).toBe(true);
+  expect(body.classList.contains("bullet-plugin-code-body-fold")).toBe(true);
+  expect(body.style.getPropertyValue("--bullet-code-body-fold-offset")).toBe(
+    "calc(var(--bullet-code-content-padding, 0px) - var(--size-4-4) / 2)",
+  );
+  expect(
+    fixture.lines[0].classList.contains("bullet-plugin-code-body-fold"),
+  ).toBe(false);
+  fixture.plugin.destroy();
+});
+
+test.each([
   ["a tab that crosses the content boundary", "\t\t\tllo", "\t"],
   ["equivalent spaces", "\t\t  llo", "  "],
   ["literal code indentation after the boundary", "\t\t\t\tllo", "\t"],
