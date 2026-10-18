@@ -354,6 +354,15 @@ async function start() {
     !fs.existsSync(proof),
     "Use a fresh proof directory for each lifecycle",
   );
+  for (const name of assets)
+    assert.ok(
+      !fs
+        .lstatSync(path.join(vault, ".obsidian/plugins/bullet", name), {
+          throwIfNoEntry: false,
+        })
+        ?.isSymbolicLink(),
+      `Preserve and detach development symlinks before managed verification: ${name}`,
+    );
   const config = JSON.parse(
     fs.readFileSync(path.join(vault, ".obsidian/app.json"), "utf8"),
   );
