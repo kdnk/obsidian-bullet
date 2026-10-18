@@ -519,6 +519,7 @@ export class NestedCodeBlockLayoutPluginValue {
   private correctedProcessors = new Set<HTMLElement>();
   private classifier = new MarkdownLineClassifier();
   private markerMeasureContainer: HTMLElement | null = null;
+  private ownerGuideMeasure: HTMLElement | null = null;
   private markerMeasurements = new Map<
     number,
     { marker: HTMLElement; indent: HTMLElement; signature: string }
@@ -725,6 +726,7 @@ export class NestedCodeBlockLayoutPluginValue {
     this.correctedProcessors.clear();
     this.markerMeasureContainer?.remove();
     this.markerMeasureContainer = null;
+    this.ownerGuideMeasure = null;
     this.markerMeasurements.clear();
     this.codeMeasurements.clear();
   }
@@ -850,11 +852,16 @@ export class NestedCodeBlockLayoutPluginValue {
       container.className =
         "bullet-plugin-code-marker-measure cm-line HyperMD-codeblock HyperMD-list-line";
       container.setAttribute("aria-hidden", "true");
-      // Native marker typography differs from code typography. Keep only this
-      // nonpainted intrinsic-size probe outside CodeMirror's managed content;
-      // it contains no indentation guides and cannot change scroll dimensions.
       this.view.dom.appendChild(container);
       this.markerMeasureContainer = container;
+      const indent = win.createSpan();
+      indent.className = "cm-hmd-list-indent";
+      const guide = win.createSpan();
+      guide.className = "cm-indent";
+      guide.textContent = "\t";
+      indent.appendChild(guide);
+      container.appendChild(indent);
+      this.ownerGuideMeasure = guide;
     }
     for (const n of visible) {
       const match = listFenceRe.exec(this.view.state.doc.line(n).text);
@@ -1397,39 +1404,72 @@ export class NestedCodeBlockLayoutPluginValue {
     const marker = this.markerMeasurements.get(
       opening.openingLineNumber,
     )?.marker;
-    const bullet =
-      marker &&
-      Array.from(marker.children).find(
+    const guide = this.ownerGuideMeasure;
+    if (
+      !marker ||
+      !guide ||
+      !Array.from(marker.children).some(
         (child) => child.className === "list-bullet",
-      );
-    if (!marker || !bullet) return;
+      )
+    )
+      return;
     const win = marker.ownerDocument.defaultView;
     if (!win) return;
     const markerBounds = marker.getBoundingClientRect();
-    const bulletBounds = bullet.getBoundingClientRect();
-    const style = win.getComputedStyle(bullet, "::after");
+    const guideBounds = guide.getBoundingClientRect();
+    const style = win.getComputedStyle(guide, "::before");
+    if (style.transform !== "none" || style.translate !== "none") return;
+    const container =
+      win.getComputedStyle(guide).position === "static"
+        ? guide.offsetParent
+        : guide;
+    if (!container) return;
     const width = Number.parseFloat(style.width);
     if (!Number.isFinite(width) || width <= 0) return;
     const length = (value: string, size: number) =>
       value.endsWith("%")
         ? (Number.parseFloat(value) * size) / 100
         : Number.parseFloat(value);
-    const translate =
-      style.translate === "none" ? "0px" : style.translate.split(/\s+/)[0];
-    const transform =
-      style.transform === "none" ? 0 : new DOMMatrixReadOnly(style.transform).e;
+    const borderLeft = Number.parseFloat(style.borderLeftWidth);
+    const borderRight = Number.parseFloat(style.borderRightWidth);
+    const paddingLeft = Number.parseFloat(style.paddingLeft);
+    const paddingRight = Number.parseFloat(style.paddingRight);
+    if (
+      ![borderLeft, borderRight, paddingLeft, paddingRight].every(
+        Number.isFinite,
+      )
+    )
+      return;
+    if (borderLeft > 0 && borderRight > 0) return;
+    const boxWidth =
+      style.boxSizing === "border-box"
+        ? width
+        : width + paddingLeft + paddingRight + borderLeft + borderRight;
+    const paintCenter =
+      borderRight > 0
+        ? boxWidth - borderRight / 2
+        : borderLeft > 0
+          ? borderLeft / 2
+          : boxWidth / 2;
+    const marginLeft = length(style.marginLeft, container.clientWidth);
+    const marginRight = length(style.marginRight, container.clientWidth);
+    const left =
+      style.left === "auto"
+        ? container.clientWidth -
+          length(style.right, container.clientWidth) -
+          marginLeft -
+          marginRight -
+          boxWidth
+        : length(style.left, container.clientWidth);
     const center =
-      bulletBounds.left +
-      (style.left === "auto"
-        ? bulletBounds.width / 2
-        : length(style.left, bulletBounds.width) + width / 2) +
-      length(translate, width) +
-      transform;
+      container.getBoundingClientRect().left +
+      container.clientLeft +
+      left +
+      marginLeft +
+      paintCenter;
     const markerStyle = win.getComputedStyle(marker);
     const rtl = markerStyle.direction === "rtl";
-    const offset = rtl
-      ? markerBounds.right - center
-      : center - markerBounds.left;
+    const offset = rtl ? guideBounds.right - center : center - guideBounds.left;
     const margin = Number.parseFloat(markerStyle.marginInlineEnd) || 0;
     const distance = markerBounds.width + margin - offset;
     if (!Number.isFinite(distance)) return;
