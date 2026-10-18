@@ -26,7 +26,9 @@ try {
       await app.vault.create(note, ""),
     );
   }, note);
-  for (const mode of ["native", "shiki", "numbers"]) {
+  for (const mode of process.argv.includes("--fold-only")
+    ? []
+    : ["native", "shiki", "numbers"]) {
     evaluate(async (mode) => {
       if (mode === "native")
         await app.plugins.disablePlugin("shiki-highlighter");
@@ -181,100 +183,115 @@ try {
     }
   }
   if (!process.argv.includes("--color-only")) {
-    const text =
-      "- parent\n\t- branch A\n\t\t- grandchild A\n\t- branch B\n\t\t- grandchild B\n\t- leaf";
-    evaluate(async (text) => {
-      await app.plugins.disablePlugin("shiki-highlighter");
-      const e = app.workspace.activeLeaf.view.editor;
-      e.setValue(text);
-      e.setCursor({ line: 0, ch: 8 });
-      window.focus();
-      e.focus();
-      await new Promise((r) => setTimeout(r, 350));
-    }, text);
-    for (const collapsed of [true, false]) {
-      const point = evaluate(() => {
-        const cm = app.workspace.activeLeaf.view.editor.cm;
-        const row = [...cm.contentDOM.querySelectorAll(".cm-line")].find(
-          (e) => cm.state.doc.lineAt(cm.posAtDOM(e)).number === 6,
-        );
-        const guide = row?.querySelector(".cm-hmd-list-indent > .cm-indent");
-        if (!guide) throw Error("Guide needed to reopen folded children");
-        const b = row.getBoundingClientRect(),
-          p = getComputedStyle(guide, "::before");
-        const point = {
-          x: b.left + parseFloat(p.left) + parseFloat(p.marginInlineStart) + 1,
-          y: b.top + b.height / 2,
-        };
-        window.__persistentPaintTarget = guide;
-        return point;
-      });
-      for (const type of ["mouseMoved", "mousePressed", "mouseReleased"]) {
-        evaluate((point) => {
-          window.focus();
-          if (
-            !document.title.includes("vault") ||
-            document.title.includes("base")
-          )
-            throw Error("Wrong focused vault");
-          if (
-            document
-              .elementFromPoint(point.x, point.y)
-              ?.closest(".cm-indent") !== window.__persistentPaintTarget
-          )
-            throw Error("Guide hit target changed");
-        }, point);
-        cdp("Input.dispatchMouseEvent", {
-          type,
-          ...point,
-          button: type === "mouseMoved" ? "none" : "left",
-          clickCount: type === "mouseMoved" ? 0 : 1,
-        });
-      }
-      const state = evaluate(async (text) => {
+    for (const withLeaf of [true, false]) {
+      const text =
+        "- parent\n\t- branch A\n\t\t- grandchild A\n\t- branch B\n\t\t- grandchild B" +
+        (withLeaf ? "\n\t- leaf" : "");
+      const targetLine = withLeaf ? 6 : 4;
+      evaluate(async (text) => {
+        await app.plugins.disablePlugin("shiki-highlighter");
+        const e = app.workspace.activeLeaf.view.editor;
+        e.setValue(text);
+        e.setCursor({ line: 0, ch: 8 });
+        window.focus();
+        e.focus();
         await new Promise((r) => setTimeout(r, 350));
-        const view = app.workspace.activeLeaf.view,
-          e = view.editor,
-          cm = e.cm;
-        await view.save();
-        const rows = [...cm.contentDOM.querySelectorAll(".cm-line")];
-        const row = (n) =>
-          rows.find((r) => cm.state.doc.lineAt(cm.posAtDOM(r)).number === n);
-        if (e.getValue() !== text || (await app.vault.read(view.file)) !== text)
-          throw Error("Folding changed Markdown");
-        return {
-          collapsed: [2, 4].map(
-            (n) => !!row(n)?.querySelector(".cm-fold-indicator.is-collapsed"),
-          ),
-          grandchildren: [3, 5].filter((n) => !!row(n)),
-          leaf: !!row(6)?.querySelector(".list-bullet"),
-          parent: !!row(1)?.querySelector(".list-bullet"),
-          persistent: cm.contentDOM.querySelectorAll(
-            ".bullet-plugin-persistent-indent-guide",
-          ).length,
-          reopeningGuide: !!row(6)?.querySelector(
-            ".cm-hmd-list-indent > .cm-indent",
-          ),
-        };
       }, text);
-      results.push({ name: `folded-${collapsed}`, state });
-      assert.deepEqual(state.collapsed, [collapsed, collapsed]);
-      assert.deepEqual(state.grandchildren, collapsed ? [] : [3, 5]);
-      assert(
-        state.leaf && state.parent,
-        "Parent and leaf retain native bullets",
-      );
-      assert(
-        state.reopeningGuide,
-        "Children retain a clickable reopening guide",
-      );
-      fs.writeFileSync(
-        `${output}/folded-${collapsed}.png`,
-        Buffer.from(
-          cdp("Page.captureScreenshot", { format: "png" }).data,
-          "base64",
-        ),
-      );
+      for (const collapsed of [true, false]) {
+        const point = evaluate((targetLine) => {
+          const cm = app.workspace.activeLeaf.view.editor.cm;
+          const row = [...cm.contentDOM.querySelectorAll(".cm-line")].find(
+            (e) => cm.state.doc.lineAt(cm.posAtDOM(e)).number === targetLine,
+          );
+          const guide = row?.querySelector(".cm-hmd-list-indent > .cm-indent");
+          if (!guide) throw Error("Guide needed to reopen folded children");
+          const b = row.getBoundingClientRect(),
+            p = getComputedStyle(guide, "::before");
+          const point = {
+            x:
+              b.left + parseFloat(p.left) + parseFloat(p.marginInlineStart) + 1,
+            y: b.top + b.height / 2,
+          };
+          window.__persistentPaintTarget = guide;
+          return point;
+        }, targetLine);
+        for (const type of ["mouseMoved", "mousePressed", "mouseReleased"]) {
+          evaluate((point) => {
+            window.focus();
+            if (
+              !document.title.includes("vault") ||
+              document.title.includes("base")
+            )
+              throw Error("Wrong focused vault");
+            if (
+              document
+                .elementFromPoint(point.x, point.y)
+                ?.closest(".cm-indent") !== window.__persistentPaintTarget
+            )
+              throw Error("Guide hit target changed");
+          }, point);
+          cdp("Input.dispatchMouseEvent", {
+            type,
+            ...point,
+            button: type === "mouseMoved" ? "none" : "left",
+            clickCount: type === "mouseMoved" ? 0 : 1,
+          });
+        }
+        const state = evaluate(
+          async (text, targetLine) => {
+            await new Promise((r) => setTimeout(r, 350));
+            const view = app.workspace.activeLeaf.view,
+              e = view.editor,
+              cm = e.cm;
+            await view.save();
+            const rows = [...cm.contentDOM.querySelectorAll(".cm-line")];
+            const row = (n) =>
+              rows.find(
+                (r) => cm.state.doc.lineAt(cm.posAtDOM(r)).number === n,
+              );
+            if (
+              e.getValue() !== text ||
+              (await app.vault.read(view.file)) !== text
+            )
+              throw Error("Folding changed Markdown");
+            return {
+              collapsed: [2, 4].map(
+                (n) =>
+                  !!row(n)?.querySelector(".cm-fold-indicator.is-collapsed"),
+              ),
+              grandchildren: [3, 5].filter((n) => !!row(n)),
+              leaf: !!row(6)?.querySelector(".list-bullet"),
+              parent: !!row(1)?.querySelector(".list-bullet"),
+              persistent: cm.contentDOM.querySelectorAll(
+                ".bullet-plugin-persistent-indent-guide",
+              ).length,
+              reopeningGuide: !!row(targetLine)?.querySelector(
+                ".cm-hmd-list-indent > .cm-indent",
+              ),
+            };
+          },
+          text,
+          targetLine,
+        );
+        results.push({ name: `leaf-${withLeaf}-folded-${collapsed}`, state });
+        assert.deepEqual(state.collapsed, [collapsed, collapsed]);
+        assert.deepEqual(state.grandchildren, collapsed ? [] : [3, 5]);
+        assert(
+          (!withLeaf || state.leaf) && state.parent,
+          "Parent and leaf retain native bullets",
+        );
+        assert(
+          state.reopeningGuide,
+          "Children retain a clickable reopening guide",
+        );
+        fs.writeFileSync(
+          `${output}/leaf-${withLeaf}-folded-${collapsed}.png`,
+          Buffer.from(
+            cdp("Page.captureScreenshot", { format: "png" }).data,
+            "base64",
+          ),
+        );
+      }
     }
   }
 } finally {
