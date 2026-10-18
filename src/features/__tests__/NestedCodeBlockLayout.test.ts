@@ -1364,6 +1364,68 @@ describe("native measurement publication", () => {
     fixture.plugin.destroy();
   });
 
+  test("joins guides at their painted containing-block origin instead of the inline box", () => {
+    const fixture = makePreviewFixture(false, true);
+    const [opening, , , , outside] = fixture.lines;
+    const tops = [
+      234.3359375, 242.3359375, 263.3359375, 284.3359375, 305.3359375,
+    ];
+    const heights = [8, 21, 21, 21, 26.390625];
+    for (const [index, line] of fixture.lines.entries()) {
+      line.getBoundingClientRect = () =>
+        ({
+          left: 100,
+          right: 300,
+          top: tops[index],
+          height: heights[index],
+        }) as never;
+    }
+    const guides = [opening, outside].map((line) => {
+      const guide = {
+        offsetParent: line,
+        parentElement: line,
+        getBoundingClientRect: () => ({
+          top:
+            line.getBoundingClientRect().top +
+            (line === outside ? 1.1953125 : 0),
+        }),
+      };
+      Object.assign(line, {
+        clientTop: 0,
+        querySelectorAll: (selector: string) =>
+          selector.includes(".cm-indent") ? [guide] : [],
+      });
+      return guide;
+    });
+    for (const line of [opening, outside]) {
+      Object.assign(line.ownerDocument.defaultView, {
+        devicePixelRatio: 2,
+        getComputedStyle: (element: unknown, pseudo?: string) => ({
+          direction: "ltr",
+          marginInlineEnd: "0px",
+          lineHeight: "24px",
+          position: pseudo
+            ? "absolute"
+            : guides.some((guide) => element === guide)
+              ? "static"
+              : "relative",
+          top: "0px",
+        }),
+      });
+    }
+
+    fixture.measure();
+
+    expect(lineAttributes(fixture.plugin, opening.position).style).toContain(
+      "--bullet-code-indent-guide-height: 71.1640625px;",
+    );
+    expect(lineAttributes(fixture.plugin, outside.position)).toEqual({
+      class: "bullet-plugin-code-guide-seam",
+      style: "--bullet-code-indent-guide-seam-clip: 0.1640625px;",
+    });
+    fixture.plugin.destroy();
+  });
+
   test("covers body guides when an opening guide has no direct-child geometry", () => {
     const fixture = makePreviewFixture();
     const [opening, first] = fixture.lines;
