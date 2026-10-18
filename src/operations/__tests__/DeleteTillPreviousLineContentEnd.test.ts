@@ -58,6 +58,34 @@ test.each(["", " ", "\t", "\t "])(
   },
 );
 
+test.each([
+  {
+    name: "list-attached fence",
+    text: "- parent\n\t- child\n\t\t- ```\n\t\t\tllo\n\t\t\t\n\t\t\t```",
+    cursor: { line: 4, ch: 3 },
+    joined: "- parent\n\t- child\n\t\t- ```\n\t\t\tllo\n\t\t\t```",
+    joinCursor: { line: 3, ch: 6 },
+  },
+  {
+    name: "continuation fence",
+    text: "- title\n  ```\n\tllo\n\t\n  ```",
+    cursor: { line: 3, ch: 1 },
+    joined: "- title\n  ```\n\tllo\n  ```",
+    joinCursor: { line: 2, ch: 4 },
+  },
+])(
+  "joins an autoindented blank code row without appending partial-tab spaces in a $name",
+  ({ text, cursor, joined, joinCursor }) => {
+    const root = makeRoot({ editor: makeEditor({ text, cursor }) });
+
+    expect(
+      new DeleteTillPreviousLineContentEnd(root, true, false).perform(),
+    ).toEqual(UPDATED_OUTCOME);
+    expect(root.print()).toBe(joined);
+    expect(root.getCursor()).toEqual(joinCursor);
+  },
+);
+
 test("should merge empty bullets with previous bullet", () => {
   const root = makeRoot({
     editor: makeEditor({
