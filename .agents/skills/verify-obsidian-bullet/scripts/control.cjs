@@ -301,6 +301,12 @@ async function cleanup(state) {
         require("electron").remote.getCurrentWindow().setBounds(bounds),
       state.initial.bounds,
     );
+    if (!state.initial.enabled && reopened.enabled) {
+      await evaluate(async () => {
+        await app.plugins.disablePlugin("bullet");
+      });
+      reopened = inspect();
+    }
     assert.equal(
       reopened.enabled,
       state.initial.enabled,
