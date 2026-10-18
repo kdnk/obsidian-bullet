@@ -16,6 +16,22 @@ import {
 
 import { codeEnterBackspace } from "../CodeEnterBackspace";
 
+jest.mock("@codemirror/view", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, "platform");
+  Object.defineProperty(navigator, "platform", {
+    configurable: true,
+    value: "MacIntel",
+  });
+  try {
+    return jest.requireActual<typeof import("@codemirror/view")>(
+      "@codemirror/view",
+    );
+  } finally {
+    if (descriptor) Object.defineProperty(navigator, "platform", descriptor);
+    else Reflect.deleteProperty(navigator, "platform");
+  }
+});
+
 const source =
   "- a- Threading test \n  - Parent \n    - Selected item\n    -  \n```\n     llo  \n\n```\n      -";
 
@@ -64,7 +80,7 @@ function editor(doc = source, offset = doc.indexOf("llo") + 3) {
   ) {
     const observer = spec?.eventObservers?.[name];
     const input = { key, ...extra } as KeyboardEvent;
-    observer?.call(value, input, view);
+    observer?.call(value, input as never, view);
     return input;
   }
   return {
@@ -119,6 +135,16 @@ function editor(doc = source, offset = doc.indexOf("llo") + 3) {
 }
 
 describe("immediate native code Enter reversal", () => {
+  test("Caps Lock Ctrl+h uses the native base-key alias", () => {
+    const current = editor();
+    current.enter();
+    expect(current.controlH({ key: "H" })).toBe(true);
+    expect(current.view.state.doc.toString()).toBe(source);
+    expect(current.view.state.selection.main.head).toBe(
+      source.indexOf("llo") + 3,
+    );
+  });
+
   test.each([false, true])(
     "Ctrl+h restores exact Markdown and cursor before continued typing, replacement=%s",
     (replacement) => {
@@ -149,18 +175,21 @@ describe("immediate native code Enter reversal", () => {
     },
   );
 
-  test("does not reverse Enter after the editor becomes read-only", () => {
-    const current = editor();
-    current.enter();
-    const split = current.view.state.doc.toString();
-    const selection = current.view.state.selection;
-    current.view.dispatch({
-      effects: StateEffect.appendConfig.of(EditorState.readOnly.of(true)),
-    });
-    expect(current.backspace()).toBe(false);
-    expect(current.view.state.doc.toString()).toBe(split);
-    expect(current.view.state.selection.eq(selection)).toBe(true);
-  });
+  test.each(["backspace", "controlH"] as const)(
+    "%s does not reverse Enter after the editor becomes read-only",
+    (deletion) => {
+      const current = editor();
+      current.enter();
+      const split = current.view.state.doc.toString();
+      const selection = current.view.state.selection;
+      current.view.dispatch({
+        effects: StateEffect.appendConfig.of(EditorState.readOnly.of(true)),
+      });
+      expect(current[deletion]()).toBe(false);
+      expect(current.view.state.doc.toString()).toBe(split);
+      expect(current.view.state.selection.eq(selection)).toBe(true);
+    },
+  );
 
   test.each([false, true])(
     "restores exact supplied Markdown and original trailing spaces, replacement=%s",
@@ -244,15 +273,21 @@ describe("immediate native code Enter reversal", () => {
     expect(current.backspace()).toBe(false);
   });
 
-  test("does not intercept manually indented whitespace or programmatic newline insertion", () => {
-    const current = editor();
-    const at = current.view.state.selection.main.head;
-    current.view.dispatch({
-      changes: { from: at, insert: "\n     " },
-      selection: EditorSelection.cursor(at + 6),
-    });
-    expect(current.backspace()).toBe(false);
-  });
+  test.each(["backspace", "controlH"] as const)(
+    "%s does not intercept manually indented whitespace or programmatic newline insertion",
+    (deletion) => {
+      const current = editor();
+      const at = current.view.state.selection.main.head;
+      current.view.dispatch({
+        changes: { from: at, insert: "\n     " },
+        selection: EditorSelection.cursor(at + 6),
+      });
+      expect(current[deletion]()).toBe(false);
+      expect(current.view.state.doc.toString()).toBe(
+        "- a- Threading test \n  - Parent \n    - Selected item\n    -  \n```\n     llo\n       \n\n```\n      -",
+      );
+    },
+  );
 
   test.each([
     "input.paste",
@@ -369,12 +404,17 @@ describe("immediate native code Enter reversal", () => {
     expect(first.backspace()).toBe(true);
   });
 
-  test.each(["disabled", "composing"])("obeys the %s gate", (gate) => {
-    const current = editor();
-    current.enter();
-    if (gate === "disabled") current.enable(false);
-    else Object.defineProperty(current.view, "composing", { value: true });
-    expect(current.backspace()).toBe(false);
+  describe.each(["backspace", "controlH"] as const)("%s", (deletion) => {
+    test.each(["disabled", "composing"])("obeys the %s gate", (gate) => {
+      const current = editor();
+      current.enter();
+      if (gate === "disabled") current.enable(false);
+      else Object.defineProperty(current.view, "composing", { value: true });
+      expect(current[deletion]()).toBe(false);
+      expect(current.view.state.doc.toString()).toBe(
+        "- a- Threading test \n  - Parent \n    - Selected item\n    -  \n```\n     llo\n       \n\n```\n      -",
+      );
+    });
   });
 
   test("Undo and Redo restore the split and joined documents without reviving a receipt", () => {

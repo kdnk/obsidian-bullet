@@ -4,6 +4,7 @@ const { randomUUID } = require("node:crypto");
 const { evaluate, cdp } = require("./obsidian-scroll-driver.cjs");
 
 const output = process.argv[2];
+const ctrlH = process.argv.includes("--ctrl-h");
 fs.mkdirSync(output);
 const note = `pages/code-enter-roundtrip-${randomUUID()}.md`;
 const original = evaluate(() => ({
@@ -69,6 +70,10 @@ function focus() {
 }
 
 function key(key, modifiers = 0) {
+  if (ctrlH && key === "Backspace") {
+    key = "h";
+    modifiers = 2;
+  }
   const codes = {
     Enter: 13,
     Backspace: 8,
@@ -76,6 +81,7 @@ function key(key, modifiers = 0) {
     ArrowLeft: 37,
     ArrowRight: 39,
     i: 73,
+    h: 72,
     z: 90,
   };
   focus();
@@ -142,6 +148,7 @@ function screenshot(name) {
 }
 
 try {
+  cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
   evaluate(async (note) => {
     window.__codeEnterLeaf = app.workspace.getLeaf("tab");
     await window.__codeEnterLeaf.openFile(await app.vault.create(note, ""));
@@ -193,7 +200,7 @@ try {
             assert.equal(
               restored.doc,
               fixture.text,
-              "One Backspace must reverse Enter exactly",
+              `One ${ctrlH ? "Ctrl+H" : "Backspace"} must reverse Enter exactly`,
             );
             assert.equal(restored.saved, fixture.text);
             assert.deepEqual(restored.cursor, fixture.cursor);
@@ -278,7 +285,7 @@ try {
 } finally {
   fs.writeFileSync(
     `${output}/results.json`,
-    JSON.stringify({ results, failures, inputs }, null, 2),
+    JSON.stringify({ ctrlH, results, failures, inputs }, null, 2),
   );
   evaluate(
     async (original, note) => {
@@ -300,6 +307,7 @@ try {
     original,
     note,
   );
+  cdp("Emulation.setFocusEmulationEnabled", { enabled: false });
 }
 assert.equal(
   failures.length,

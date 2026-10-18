@@ -55,6 +55,8 @@ Preconditions: use the parent lifecycle and index guards. Start with default Bul
 
 - **Immediate native code Enter reversal:** `n exec 22.23.1 node scripts/verify-code-enter-roundtrip.cjs "$PROOF_DIR/code-enter-roundtrip"` covers the reported five-space body with two trailing spaces, root fences, and attached/continuation list fences with partial tabs. Require 28 results with zero failures across Vim insert mode off/on and Shiki off/on. Two consecutive Enter/Backspace cycles must restore the exact original document and cursor with a single Backspace, preserve existing whitespace, support native Undo/Redo, and save the next typed character in place. Separate safeguards require ordinary indentation deletion for pre-existing blank rows and after intervening navigation or typing. Setup uses editor APIs; input uses native keys/text and received-key assertions. This recipe does not cover mobile keyboards or normal-mode Vim `o`/`O`.
 
+Run the immediate code Enter reversal recipe a second time with `--ctrl-h` and a fresh output directory. Require the same 28 results for Ctrl+H, including Vim insert mode, manual-indent safeguards, Undo/Redo, following input, and saved Markdown.
+
 ## Gotchas
 
 - Disable Vim for ordinary editing recipes and verify the live editor mode before sending input. In Vim normal mode, Backspace consumption is native behavior; a deletion recipe must enter insert mode or disable Vim before treating unchanged text as a Bullet failure.

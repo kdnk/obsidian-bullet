@@ -39,9 +39,9 @@ export function codeEnterBackspace(enabled: () => boolean): Extension {
     keydown(event: KeyboardEvent) {
       if (["Shift", "Control", "Alt", "Meta"].includes(event.key)) return;
       if (
-        event.key === "Backspace" &&
+        ((event.key === "Backspace" && !event.ctrlKey) ||
+          (event.key.toLowerCase() === "h" && event.ctrlKey)) &&
         !event.altKey &&
-        !event.ctrlKey &&
         !event.metaKey &&
         !event.shiftKey
       )
@@ -224,12 +224,12 @@ export function codeEnterBackspace(enabled: () => boolean): Extension {
     classifier.extension,
     plugin,
     Prec.highest(
-      keymap.of([
-        {
-          key: "Backspace",
+      keymap.of(
+        [{ key: "Backspace" }, { mac: "Ctrl-h" }].map((binding) => ({
+          ...binding,
           run: (view) => view.plugin(plugin)?.reverse() ?? false,
-        },
-      ]),
+        })),
+      ),
     ),
   ];
 }
