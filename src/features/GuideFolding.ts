@@ -30,8 +30,6 @@ const LIVE_PREVIEW_EDITOR_SELECTOR =
   ".markdown-source-view.mod-cm6.is-live-preview";
 const PERSISTENT_GUIDE_MARKER = "bullet-plugin-persistent-indent-guide";
 const PERSISTENT_GUIDE_SELECTOR = `.${PERSISTENT_GUIDE_MARKER}`;
-const PERSISTENT_GUIDE_CANDIDATE_SELECTOR =
-  ".cm-hmd-list-indent > .cm-indent-spacing:not(.cm-indent)";
 const HOVERED_GUIDE_MARKER = "bullet-plugin-hovered-indent-guide";
 const HOVERED_GUIDE_SELECTOR = `.${HOVERED_GUIDE_MARKER}`;
 const HOVERED_GUIDE_START_MARKER = "bullet-plugin-hovered-indent-guide-start";
@@ -378,19 +376,25 @@ function synchronizePersistentIndentGuides(
   contentDOM: ParentNode,
   enabled: boolean,
 ) {
-  if (enabled) {
-    for (const element of Array.from(
-      contentDOM.querySelectorAll(PERSISTENT_GUIDE_CANDIDATE_SELECTOR),
-    )) {
-      element.classList.add("cm-indent", PERSISTENT_GUIDE_MARKER);
-    }
-    return;
-  }
-
   for (const element of Array.from(
     contentDOM.querySelectorAll(PERSISTENT_GUIDE_SELECTOR),
   )) {
     element.classList.remove("cm-indent", PERSISTENT_GUIDE_MARKER);
+  }
+  if (!enabled) {
+    return;
+  }
+
+  for (const container of Array.from(
+    contentDOM.querySelectorAll(INDENT_CONTAINER_SELECTOR),
+  )) {
+    const children = Array.from(container.children);
+    if (children.some((child) => child.classList.contains("cm-indent"))) {
+      continue;
+    }
+    children
+      .find((child) => child.classList.contains("cm-indent-spacing"))
+      ?.classList.add("cm-indent", PERSISTENT_GUIDE_MARKER);
   }
 }
 
