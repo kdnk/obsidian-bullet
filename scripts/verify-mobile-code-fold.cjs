@@ -11,7 +11,7 @@ fs.mkdirSync(output);
 const vault = path.resolve(__dirname, "../vault");
 const note = `mobile-code-fold-${randomUUID()}.md`;
 const fixture =
-  "- ordinary\n\t- child\n- ```js\n  one\n  two\n  ```\n\t- child\n- after";
+  "- ordinary\n\t- child\n- ```js\n  one\n      two\n  ```\n\t- child\n- after";
 const phases = [
   { name: "preview", line: 7, ch: 7 },
   { name: "opening-edit", line: 2, ch: 7 },
@@ -87,6 +87,8 @@ function sample(name) {
         }
         return {
           line: cm.state.doc.lineAt(cm.posAtDOM(row)).number,
+          bodyFold: row.classList.contains("bullet-plugin-code-body-fold"),
+          wrapperDisplay: getComputedStyle(parent).display,
           row: row.getBoundingClientRect().toJSON(),
           control: bounds.toJSON(),
           svg: control.querySelector("svg").getBoundingClientRect().toJSON(),
@@ -148,6 +150,11 @@ function sample(name) {
   return state;
 }
 function assertControls(state) {
+  for (const row of state.rows.filter((row) => row.bodyFold)) {
+    assert.equal(row.wrapperDisplay, "none", "Code body controls stay hidden");
+    assert.equal(row.svg.width, 0, "Code body SVG has no paint box");
+    assert.equal(row.svg.height, 0, "Code body SVG has no hit box");
+  }
   const ordinary = state.rows.find((row) => row.line === 1);
   const code = state.rows.find((row) => row.line === 3);
   assert.ok(ordinary && code, "Both native fold controls exist");
@@ -280,6 +287,10 @@ try {
       assert.equal(assertControls(sample(`${name}-unfolded`)).collapsed, false);
     }
   }
+  assert(
+    results.some((state) => state.rows.some((row) => row.bodyFold)),
+    "The fixture must exercise native code-body fold controls",
+  );
 } finally {
   cdp("Emulation.setTouchEmulationEnabled", { enabled: false });
   cdp("Emulation.clearDeviceMetricsOverride");
