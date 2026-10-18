@@ -6,7 +6,13 @@ import {
   Transaction,
   TransactionSpec,
 } from "@codemirror/state";
-import { EditorView, ViewPlugin, ViewUpdate, keymap } from "@codemirror/view";
+import {
+  EditorView,
+  ViewPlugin,
+  ViewUpdate,
+  keymap,
+  runScopeHandlers,
+} from "@codemirror/view";
 
 import { codeEnterBackspace } from "../CodeEnterBackspace";
 
@@ -54,10 +60,12 @@ function editor(doc = source, offset = doc.indexOf("llo") + 3) {
   function event(
     name: "keydown" | "pointerdown" | "compositionstart" | "blur" | "paste",
     key = "",
-    extra = {},
+    extra: Partial<KeyboardEvent> = {},
   ) {
     const observer = spec?.eventObservers?.[name];
-    observer?.call(value, { key, ...extra } as never, view);
+    const input = { key, ...extra } as KeyboardEvent;
+    observer?.call(value, input, view);
+    return input;
   }
   return {
     view,
@@ -90,6 +98,14 @@ function editor(doc = source, offset = doc.indexOf("llo") + 3) {
           ),
         );
     },
+    controlH(extra: Partial<KeyboardEvent> = {}) {
+      const input = event("keydown", "h", {
+        ctrlKey: true,
+        keyCode: 72,
+        ...extra,
+      });
+      return runScopeHandlers(view, input, "editor");
+    },
     type(text: string) {
       event("keydown", text);
       const at = state.selection.main.head;
@@ -103,6 +119,36 @@ function editor(doc = source, offset = doc.indexOf("llo") + 3) {
 }
 
 describe("immediate native code Enter reversal", () => {
+  test.each([false, true])(
+    "Ctrl+h restores exact Markdown and cursor before continued typing, replacement=%s",
+    (replacement) => {
+      const current = editor();
+      current.enter("     ", replacement);
+      expect(current.controlH()).toBe(true);
+      expect(current.view.state.doc.toString()).toBe(source);
+      expect(current.view.state.selection.main.head).toBe(
+        source.indexOf("llo") + 3,
+      );
+      current.type("X");
+      expect(current.view.state.doc.toString()).toBe(
+        "- a- Threading test \n  - Parent \n    - Selected item\n    -  \n```\n     lloX  \n\n```\n      -",
+      );
+    },
+  );
+
+  test.each([{ altKey: true }, { metaKey: true }, { shiftKey: true }])(
+    "unrelated modified Ctrl+h cancels the receipt %j",
+    (extra) => {
+      const current = editor();
+      current.enter();
+      expect(current.controlH(extra)).toBe(false);
+      expect(current.backspace()).toBe(false);
+      expect(current.view.state.doc.toString()).toBe(
+        "- a- Threading test \n  - Parent \n    - Selected item\n    -  \n```\n     llo\n       \n\n```\n      -",
+      );
+    },
+  );
+
   test("does not reverse Enter after the editor becomes read-only", () => {
     const current = editor();
     current.enter();
