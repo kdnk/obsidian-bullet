@@ -1,12 +1,16 @@
 import { Plugin } from "obsidian";
 
+import { getIndentUnit } from "@codemirror/language";
 import { keymap } from "@codemirror/view";
 
 import { codeEnterBackspace } from "./CodeEnterBackspace";
 import { Feature } from "./Feature";
 
 import { MyEditor } from "../editor";
-import { DeleteTillPreviousLineContentEnd } from "../operations/DeleteTillPreviousLineContentEnd";
+import {
+  BackspaceIndentation,
+  DeleteTillPreviousLineContentEnd,
+} from "../operations/DeleteTillPreviousLineContentEnd";
 import { IMEDetector } from "../services/IMEDetector";
 import { ObsidianSettings } from "../services/ObsidianSettings";
 import { OperationPerformer } from "../services/OperationPerformer";
@@ -25,15 +29,22 @@ export class BackspaceBehaviourOverride implements Feature {
   async load() {
     this.plugin.registerEditorExtension([
       codeEnterBackspace(this.check),
-      keymap.of([
-        {
-          key: "Backspace",
-          run: createKeymapRunCallback({
-            check: this.check,
-            run: this.run,
-          }),
-        },
-      ]),
+      keymap.of(
+        [{ key: "Backspace" }, { mac: "Ctrl-h" }].map((binding) => ({
+          ...binding,
+          run: (view) => {
+            if (view.state.readOnly || view.composing) return false;
+            return createKeymapRunCallback({
+              check: this.check,
+              run: (editor) =>
+                this.run(editor, {
+                  tabSize: view.state.tabSize,
+                  indentUnit: getIndentUnit(view.state),
+                }),
+            })(view);
+          },
+        })),
+      ),
     ]);
   }
 
@@ -47,13 +58,14 @@ export class BackspaceBehaviourOverride implements Feature {
     );
   };
 
-  private run = (editor: MyEditor) => {
+  private run = (editor: MyEditor, indentation?: BackspaceIndentation) => {
     return this.operationPerformer.perform(
       (root) =>
         new DeleteTillPreviousLineContentEnd(
           root,
           this.obsidianSettings.isSmartIndentListEnabled(),
           this.settings.keepBodyTextInBullets,
+          indentation,
         ),
       editor,
     );

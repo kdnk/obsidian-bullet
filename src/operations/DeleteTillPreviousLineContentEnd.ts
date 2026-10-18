@@ -1,3 +1,5 @@
+import { countColumn } from "@codemirror/state";
+
 import {
   NO_OP_OUTCOME,
   Operation,
@@ -12,14 +14,25 @@ import {
   Root,
   recalculateNumericBullets,
 } from "../root";
-import { getFenceContent, reindentListPrefix } from "../utils/fencedCode";
+import {
+  getFenceContent,
+  getFenceOpening,
+  isFenceClosing,
+  reindentListPrefix,
+} from "../utils/fencedCode";
 import { isEmptyLineOrEmptyCheckbox } from "../utils/isEmptyLineOrEmptyCheckbox";
+
+export interface BackspaceIndentation {
+  tabSize: number;
+  indentUnit: number;
+}
 
 export class DeleteTillPreviousLineContentEnd implements Operation {
   constructor(
     private root: Root,
     private numericBulletsEnabled: boolean,
     private removeEmptyLeafItem: boolean,
+    private indentation: BackspaceIndentation = { tabSize: 4, indentUnit: 4 },
   ) {}
 
   perform() {
@@ -32,6 +45,49 @@ export class DeleteTillPreviousLineContentEnd implements Operation {
     const list = root.getListUnderCursor();
     const cursor = root.getCursor();
     const lines = list.getLinesInfo();
+
+    const currentIndex = lines.findIndex(
+      (line) => line.from.line === cursor.line,
+    );
+    const current = lines[currentIndex];
+    if (
+      currentIndex > 0 &&
+      current &&
+      cursor.ch > current.from.ch &&
+      cursor.ch < 200 &&
+      /^[ \t]+$/.test(current.text.slice(0, cursor.ch - current.from.ch))
+    ) {
+      let opening: ReturnType<typeof getFenceOpening> = null;
+      for (const line of list
+        .getLinesForFenceParsing()
+        .slice(0, currentIndex)) {
+        if (opening) {
+          if (isFenceClosing(line, opening)) opening = null;
+        } else {
+          opening = getFenceOpening(line);
+        }
+      }
+      const row = list.getRow(currentIndex);
+      const before =
+        (row.indentOverride ?? list.getNotesIndentOrThrow()) +
+        current.text.slice(0, cursor.ch - current.from.ch);
+      if (opening && before.endsWith(" ")) {
+        const column = countColumn(before, this.indentation.tabSize);
+        const drop =
+          column % this.indentation.indentUnit || this.indentation.indentUnit;
+        let from = cursor.ch;
+        for (let i = 0; i < drop && before[from - 1] === " "; i++) from--;
+        if (from < current.from.ch) {
+          list.replaceLine(
+            currentIndex,
+            current.text.slice(cursor.ch - current.from.ch),
+            before.slice(0, current.from.ch),
+          );
+          root.replaceCursor(current.from);
+          return UPDATED_OUTCOME;
+        }
+      }
+    }
 
     const lineNo = lines.findIndex(
       (line) => cursor.line === line.from.line && cursor.ch === line.from.ch,

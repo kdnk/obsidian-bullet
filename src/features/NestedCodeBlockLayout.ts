@@ -305,6 +305,24 @@ function blankCodeBoundaryScreenLeft(
 ): number | null {
   const line = view.state.doc.lineAt(position);
   if (line.text.trim() !== "" || position !== line.to) return null;
+  if (lineElement.querySelector(`.${CODE_CONTENT_CLASS}`)) {
+    const { node } = view.domAtPos(position);
+    const element =
+      node.nodeType === 1 ? (node as Element) : node.parentElement;
+    const indent = element?.closest<HTMLElement>(".cm-indent");
+    if (
+      indent &&
+      view.posAtDOM(indent, indent.childNodes.length) === position
+    ) {
+      const bounds = indent.getBoundingClientRect();
+      return lineElement.ownerDocument.defaultView?.getComputedStyle(
+        lineElement,
+      ).direction === "rtl"
+        ? bounds.left
+        : bounds.right;
+    }
+    return view.coordsAtPos(position, 1)?.left ?? null;
+  }
   const inset = Number.parseFloat(
     lineElement.style.getPropertyValue(CODE_BLOCK_INSET),
   );
@@ -716,9 +734,12 @@ export class NestedCodeBlockLayoutPluginValue {
         ? sourceRowAt(state, this.syntaxContext, cursorLine)
         : null;
     const cursorLines = new Set(
-      cursorLine !== null &&
+      cursor !== null &&
+        cursorLine !== null &&
         cursorSource &&
-        cursor?.head === cursorSource.from + cursorSource.prefix.length
+        (cursor?.head === cursorSource.from + cursorSource.prefix.length ||
+          (state.doc.lineAt(cursor.head).text.trim() === "" &&
+            cursor.head === state.doc.lineAt(cursor.head).to))
         ? [cursorLine]
         : [],
     );
