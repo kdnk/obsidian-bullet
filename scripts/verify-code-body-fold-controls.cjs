@@ -140,14 +140,27 @@ function click(line) {
         (row) => cm.state.doc.lineAt(cm.posAtDOM(row)).number === line,
       );
       if (!row) throw Error(`Missing source row ${line}`);
-      const b = row.getBoundingClientRect();
-      const point = {
-        x: b.left + Math.min(80, b.width / 2),
-        y: b.top + b.height / 2,
-      };
-      if (!row.contains(document.elementFromPoint(point.x, point.y)))
-        throw Error("Covered source row");
-      return point;
+      const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+      let node;
+      while ((node = walker.nextNode())) {
+        if (
+          node.parentElement.closest(".cm-fold-indicator,.cm-hmd-list-indent")
+        )
+          continue;
+        const offset = node.textContent.search(/\S/);
+        if (offset < 0) continue;
+        const range = document.createRange();
+        range.setStart(node, offset);
+        range.setEnd(node, offset + 1);
+        const b = range.getBoundingClientRect();
+        const point = { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+        if (
+          b.width > 0 &&
+          row.contains(document.elementFromPoint(point.x, point.y))
+        )
+          return point;
+      }
+      throw Error("No visible source glyph to hover");
     },
     { line, note },
   );
