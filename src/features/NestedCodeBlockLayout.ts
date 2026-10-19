@@ -1458,14 +1458,16 @@ export class NestedCodeBlockLayoutPluginValue {
       )
         next++;
     }
-    while (next <= state.doc.lines && !state.doc.line(next).text.trim()) next++;
-    if (
-      next > state.doc.lines ||
-      this.classifier.classify(state, next) !== "list-item"
-    )
-      return false;
-    const indent = /^[ \t]*/.exec(state.doc.line(next).text)![0];
-    return countColumn(indent, state.tabSize) > opening.indentColumn;
+    for (; next <= state.doc.lines; next++) {
+      const text = state.doc.line(next).text;
+      if (!text.trim()) continue;
+      const indent = /^[ \t]*/.exec(text)![0];
+      const column = countColumn(indent, state.tabSize);
+      if (column <= opening.indentColumn) return false;
+      if (this.classifier.classify(state, next) === "list-item") return true;
+      if (column < opening.contentColumn) return false;
+    }
+    return false;
   }
 
   private measureNativeChildGuide(

@@ -2867,7 +2867,7 @@ test.each(
     ].flatMap((geometry) =>
       ["ltr", "rtl"].flatMap((direction) =>
         ["content-box", "border-box"].flatMap((boxSizing) =>
-          [false, true].map((previewChild) => ({
+          [false, "direct", "continuation"].map((previewChild) => ({
             zoomIndent,
             direction,
             boxSizing,
@@ -2883,6 +2883,7 @@ test.each(
   ({ zoomIndent, direction, boxSizing, margin, center, previewChild }) => {
     const text =
       "\t\t- ```js\n\n\n\t\t  ```" +
+      (previewChild === "continuation" ? "\n\t\t  note" : "") +
       (previewChild ? "\n\t\t\t- child\n- outside" : "");
     const state = EditorState.create({
       doc: text,
@@ -3012,7 +3013,9 @@ test.each(
     ).toBe(`${indentWidth + 28.2}px`);
     expect(ownerX()).toBeCloseTo((zoomIndent ? 40 : 76) + center, 8);
     if (previewChild) {
-      const child = view.state.doc.line(5);
+      const child = view.state.doc.line(
+        previewChild === "continuation" ? 6 : 5,
+      );
       drivers.get(plugin)!.dispatch({
         changes: { from: child.from, to: child.to, insert: "\t\t- sibling" },
       });

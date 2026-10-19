@@ -99,6 +99,15 @@ const cases = longChild
           childGuide: true,
         },
         {
+          name: "continuation-before-child-preview",
+          text: "- parent\n\t- ```js\n\t  code\n\t  second\n\t  ```\n\t  note\n\t\t- child\n- tail",
+          opening: 2,
+          closing: 5,
+          cursor: 8,
+          editing: false,
+          childGuide: true,
+        },
+        {
           name: "attached-editing",
           text: attached,
           opening: 9,
@@ -330,6 +339,8 @@ try {
                   bottom = Math.min(bottom, viewport.bottom - 4);
               }
             }
+            top = Math.max(top, viewport.top + 4);
+            bottom = Math.min(bottom, viewport.bottom - 4);
             if (
               !(bottom > top) ||
               top < viewport.top ||
