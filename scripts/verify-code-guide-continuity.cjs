@@ -6,6 +6,7 @@ const { evaluate, cdp } = require("./obsidian-scroll-driver.cjs");
 const output = process.argv[2];
 fs.mkdirSync(output);
 const blankViewport = process.argv.includes("--blank-viewport");
+const longChild = process.argv.includes("--long-child");
 const fontArgument = process.argv.find((arg) => arg.startsWith("--font="));
 const font = fontArgument ? Number(fontArgument.split("=")[1]) : 16;
 assert(Number.isFinite(font) && font >= 12, "Valid font size required");
@@ -30,59 +31,108 @@ const attached = [
   `${prefix}  \`\`\``,
   "- tail",
 ].join("\n");
-const cases = blankViewport
+const cases = longChild
   ? [
       {
-        name: "attached-blank-viewport",
+        name: "virtualized-child-preview",
         text: [
-          ...attached.split("\n").slice(0, 9),
-          `${prefix}  hello`,
+          "- parent",
+          "\t- ```js",
+          "\t  start",
           ...Array(400).fill(""),
-          `${prefix}  \`\`\``,
+          "\t  end",
+          "\t  ```",
+          "\t\t- child",
           "- tail",
         ].join("\n"),
-        opening: 9,
-        closing: 411,
-        cursor: 200,
-        editing: true,
+        opening: 2,
+        closing: 405,
+        cursor: 407,
+        editing: false,
+        childGuide: true,
       },
     ]
-  : [
-      {
-        name: "attached-editing",
-        text: attached,
-        opening: 9,
-        closing: 16,
-        cursor: 13,
-        editing: true,
-      },
-      {
-        name: "attached-preview",
-        text: attached,
-        opening: 9,
-        closing: 16,
-        cursor: 17,
-        editing: false,
-      },
-      {
-        name: "root-continuation",
-        text: "- parent\n  ```js\n  code\n  ```\n  note",
-        opening: 2,
-        closing: 4,
-        cursor: 5,
-        owner: 1,
-        editing: false,
-      },
-      {
-        name: "nested-continuation",
-        text: "- ancestor\n\t- parent\n\t  ```js\n\t  code\n\t  ```\n\t  note",
-        opening: 3,
-        closing: 5,
-        cursor: 6,
-        owner: 2,
-        editing: false,
-      },
-    ];
+  : blankViewport
+    ? [
+        {
+          name: "attached-blank-viewport",
+          text: [
+            ...attached.split("\n").slice(0, 9),
+            `${prefix}  hello`,
+            ...Array(400).fill(""),
+            `${prefix}  \`\`\``,
+            "- tail",
+          ].join("\n"),
+          opening: 9,
+          closing: 411,
+          cursor: 200,
+          editing: true,
+        },
+      ]
+    : [
+        {
+          name: "attached-child-preview",
+          text: attached,
+          opening: 4,
+          closing: 7,
+          cursor: 17,
+          editing: false,
+          childGuide: true,
+        },
+        {
+          name: "long-attached-child-preview",
+          text: [
+            "- parent",
+            "\t- ```js",
+            ...Array.from(
+              { length: 20 },
+              (_, i) => `\t  const row${i} = ${i};`,
+            ),
+            "\t  ```",
+            "\t\t- child",
+            "- tail",
+          ].join("\n"),
+          opening: 2,
+          closing: 23,
+          cursor: 25,
+          editing: false,
+          childGuide: true,
+        },
+        {
+          name: "attached-editing",
+          text: attached,
+          opening: 9,
+          closing: 16,
+          cursor: 13,
+          editing: true,
+        },
+        {
+          name: "attached-preview",
+          text: attached,
+          opening: 9,
+          closing: 16,
+          cursor: 17,
+          editing: false,
+        },
+        {
+          name: "root-continuation",
+          text: "- parent\n  ```js\n  code\n  ```\n  note",
+          opening: 2,
+          closing: 4,
+          cursor: 5,
+          owner: 1,
+          editing: false,
+        },
+        {
+          name: "nested-continuation",
+          text: "- ancestor\n\t- parent\n\t  ```js\n\t  code\n\t  ```\n\t  note",
+          opening: 3,
+          closing: 5,
+          cursor: 6,
+          owner: 2,
+          editing: false,
+        },
+      ];
 const original = evaluate(() => ({
   leaf: app.workspace.activeLeaf.id,
   font: app.getBaseFontSize(),
@@ -121,7 +171,7 @@ try {
       const record = { name: `${mode}-${test.name}-${font}`, fixture: test };
       try {
         record.geometry = evaluate(
-          async (test, blankViewport) => {
+          async (test, blankViewport, longChild) => {
             const view = app.workspace.activeLeaf.view;
             const editor = view.editor;
             editor.setValue(test.text);
@@ -183,11 +233,34 @@ try {
               line: test.cursor - 1,
               ch: editor.getLine(test.cursor - 1).length,
             });
+            const scrollTarget =
+              test.childGuide && !longChild
+                ? { line: test.opening - 1, ch: 0 }
+                : editor.getCursor();
             editor.scrollIntoView(
-              { from: editor.getCursor(), to: editor.getCursor() },
+              { from: scrollTarget, to: scrollTarget },
               blankViewport,
             );
             await new Promise((resolve) => setTimeout(resolve, 350));
+            if (longChild) {
+              const preview = cm.contentDOM.querySelector(
+                ".cm-preview-code-block",
+              );
+              if (preview) {
+                const middle = preview.querySelectorAll(".ec-line")[200];
+                if (!middle) throw Error("Long processor preview required");
+                cm.scrollDOM.scrollTop +=
+                  middle.getBoundingClientRect().top -
+                  cm.scrollDOM.getBoundingClientRect().top -
+                  cm.scrollDOM.clientHeight / 2;
+              } else {
+                editor.scrollIntoView(
+                  { from: { line: 200, ch: 0 }, to: { line: 200, ch: 0 } },
+                  true,
+                );
+              }
+              await new Promise((resolve) => setTimeout(resolve, 350));
+            }
             await view.save();
             if (
               editor.getValue() !== test.text ||
@@ -204,7 +277,13 @@ try {
               bottom: el.getBoundingClientRect().bottom,
             }));
             let top, bottom;
-            if (blankViewport) {
+            if (longChild) {
+              const opening = row(test.opening)?.getBoundingClientRect();
+              if (opening && opening.bottom >= viewport.top)
+                throw Error("Opening fence must be outside visible viewport");
+              top = viewport.top + 4;
+              bottom = viewport.bottom - 4;
+            } else if (blankViewport) {
               if (row(test.opening))
                 throw Error("Opening fence must be virtualized out of DOM");
               const visible = sourceRows.filter(
@@ -236,14 +315,19 @@ try {
               top = test.editing ? body.bottom + 2 : opening.top + 2;
               bottom = test.editing ? closing.bottom - 2 : opening.bottom - 2;
               if (!test.owner && !test.editing) {
-                if (!body)
+                const first =
+                  body ??
+                  preview?.querySelector(".ec-line")?.getBoundingClientRect();
+                if (!first)
                   throw Error(
                     "First preview code row required below its bullet",
                   );
-                top = body.bottom + 2;
+                top = first.bottom + 2;
                 bottom = preview
                   ? preview.getBoundingClientRect().bottom - 2
                   : closing.bottom - 2;
+                if (test.childGuide)
+                  bottom = Math.min(bottom, viewport.bottom - 4);
               }
             }
             if (
@@ -265,6 +349,7 @@ try {
           },
           test,
           blankViewport,
+          longChild,
         );
         const shot = cdp("Page.captureScreenshot", { format: "png" });
         fs.writeFileSync(
@@ -333,7 +418,7 @@ try {
           shot.data,
           record.geometry,
         );
-        if (test.editing) {
+        if (test.editing || test.childGuide) {
           assert(record.pixels.minimum >= 12, "Owner guide has a painted gap");
           assert(
             record.pixels.maximum - record.pixels.minimum <= 8,
