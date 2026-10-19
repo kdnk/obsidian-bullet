@@ -386,6 +386,7 @@ body.bullet-plugin-better-lists
   body.bullet-plugin-better-lists
     .markdown-source-view.mod-cm6.is-live-preview
     .cm-preview-code-block.bullet-plugin-code-preview-header {
+    overflow: clip;
     overflow-clip-margin: var(--bullet-code-preview-opening-height);
   }
 
