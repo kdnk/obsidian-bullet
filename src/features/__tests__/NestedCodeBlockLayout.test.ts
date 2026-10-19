@@ -2866,19 +2866,28 @@ test.each(
       { margin: 25.5, center: 27 },
     ].flatMap((geometry) =>
       ["ltr", "rtl"].flatMap((direction) =>
-        ["content-box", "border-box"].map((boxSizing) => ({
-          zoomIndent,
-          direction,
-          boxSizing,
-          ...geometry,
-        })),
+        ["content-box", "border-box"].flatMap((boxSizing) =>
+          [false, true].map((previewChild) => ({
+            zoomIndent,
+            direction,
+            boxSizing,
+            previewChild,
+            ...geometry,
+          })),
+        ),
       ),
     ),
   ),
 )(
-  "aligns an empty-viewport owner guide with native paint $direction $margin $boxSizing and zoom $zoomIndent",
-  ({ zoomIndent, direction, boxSizing, margin, center }) => {
-    const state = EditorState.create({ doc: "\t\t- ```js\n\n\n\t\t  ```" });
+  "aligns an empty-viewport owner guide with native paint $direction $margin $boxSizing and zoom $zoomIndent, preview child $previewChild",
+  ({ zoomIndent, direction, boxSizing, margin, center, previewChild }) => {
+    const text =
+      "\t\t- ```js\n\n\n\t\t  ```" +
+      (previewChild ? "\n\t\t\t- child\n- outside" : "");
+    const state = EditorState.create({
+      doc: text,
+      selection: { anchor: previewChild ? text.length : 0 },
+    });
     const blank = makeLine(["HyperMD-codeblock"], {
       position: state.doc.line(3).from,
     });
@@ -3002,6 +3011,22 @@ test.each(
       blank.style.getPropertyValue("--bullet-nested-code-block-inset"),
     ).toBe(`${indentWidth + 28.2}px`);
     expect(ownerX()).toBeCloseTo((zoomIndent ? 40 : 76) + center, 8);
+    if (previewChild) {
+      const child = view.state.doc.line(5);
+      drivers.get(plugin)!.dispatch({
+        changes: { from: child.from, to: child.to, insert: "\t\t- sibling" },
+      });
+      measure();
+      expect(blank.classList.contains("bullet-plugin-code-preview-body")).toBe(
+        true,
+      );
+      expect(blank.classList.contains("bullet-plugin-code-owner-guide")).toBe(
+        false,
+      );
+      expect(
+        blank.style.getPropertyValue("--bullet-code-owner-guide-offset"),
+      ).toBe("");
+    }
     plugin.destroy();
   },
 );
