@@ -1,6 +1,7 @@
 - version controlの書き込み操作には、このリポジトリでは`but`（GitButler）を使ってください。通常の`git`はread-onlyの調査だけに使えます。
     - 作業ごとにGitButler上で`codex/` prefixの新しいbranchを作成し、変更はそのbranchへcommitしてください。
     - 作業開始時、release作業前、長めの作業の区切りでは`but pull --check`を実行し、問題がなければ`but pull`でupstreamを取り込んでください。
+    - After `but apply` restores an unapplied branch, run `but pull --check` again and, if safe, `but pull` before release verification. A check from before the apply does not cover the restored branch's older base. Compare workspace metadata with the fetched target after updating.
     - 必要な検証がすべて通った後、pull requestを作らずにdefault branchへ反映するときは`but land <branch-id> --yes`を使ってください。
     - `git add`、`git commit`、`git push`、`git checkout`、`git merge`、`git rebase`、`git stash`、`git cherry-pick`は使わないでください。
 - github の URL に直接アクセス禁止。必要な GitHub 操作は `gh` CLI を使ってください。
