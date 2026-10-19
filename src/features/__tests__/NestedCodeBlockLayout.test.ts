@@ -1763,8 +1763,8 @@ describe("native measurement publication", () => {
   });
 });
 
-describe("plain Shiki preview appearance", () => {
-  const plainClass = "bullet-plugin-code-preview-plain";
+describe("compact Shiki preview appearance", () => {
+  const compactClass = "bullet-plugin-code-preview-compact";
   const appearanceProperties = [
     "--bullet-code-preview-background",
     "--bullet-code-preview-end",
@@ -1831,8 +1831,8 @@ describe("plain Shiki preview appearance", () => {
           fixture.opening.style.getPropertyValue(property),
         ),
       ).toEqual(["rgb(31, 31, 40)", "248px", "6px"]);
-      expect(fixture.opening.classList.contains(plainClass)).toBe(true);
-      expect(fixture.embed.classList.contains(plainClass)).toBe(true);
+      expect(fixture.opening.classList.contains(compactClass)).toBe(true);
+      expect(fixture.embed.classList.contains(compactClass)).toBe(true);
       expect(fixture.opening.style.getPropertyValue("height")).toBe("");
       expect(fixture.opening.style.getPropertyValue("block-size")).toBe("");
       fixture.appearance.end = 402;
@@ -1848,7 +1848,7 @@ describe("plain Shiki preview appearance", () => {
       fixture.plugin.destroy();
     }
     for (const element of [fixture.opening, fixture.embed]) {
-      expect(element.classList.contains(plainClass)).toBe(false);
+      expect(element.classList.contains(compactClass)).toBe(false);
       for (const property of appearanceProperties)
         expect(element.style.getPropertyValue(property)).toBe("");
     }
@@ -1858,7 +1858,7 @@ describe("plain Shiki preview appearance", () => {
     const fixture = setup();
     expect(lineAttributes(fixture.plugin, 0)).toEqual({
       class:
-        "bullet-plugin-nested-code-block bullet-plugin-code-opening-aligned bullet-plugin-code-guide-continuation bullet-plugin-code-preview-opening bullet-plugin-code-preview-embed-opening bullet-plugin-code-preview-plain bullet-plugin-code-preview-hidden-fence",
+        "bullet-plugin-nested-code-block bullet-plugin-code-opening-aligned bullet-plugin-code-guide-continuation bullet-plugin-code-preview-opening bullet-plugin-code-preview-embed-opening bullet-plugin-code-preview-compact bullet-plugin-code-preview-hidden-fence",
       style:
         "--bullet-nested-code-block-inset: 64px; --bullet-code-opening-marker-offset: 0px; --bullet-code-indent-guide-height: 24px; --bullet-code-preview-background: rgb(31, 31, 40); --bullet-code-preview-end: 248px; --bullet-code-preview-radius: 6px;",
     });
@@ -1875,17 +1875,26 @@ describe("plain Shiki preview appearance", () => {
   });
 
   test.each(["has-title", "is-terminal"])(
-    "leaves a visible %s header under the processor's own layout",
+    "fits a visible %s header into the preserved source opening row",
     (kind) => {
       const fixture = setup();
       try {
         fixture.frame.classList.add(kind);
         fixture.appearance.headerHeight = 28;
         fixture.measure();
-        for (const element of [fixture.opening, fixture.embed])
-          expect(element.classList.contains(plainClass)).toBe(false);
-        for (const property of appearanceProperties)
-          expect(fixture.opening.style.getPropertyValue(property)).toBe("");
+        for (const element of [fixture.opening, fixture.embed]) {
+          expect(element.classList.contains(compactClass)).toBe(true);
+          expect(
+            element.classList.contains("bullet-plugin-code-preview-header"),
+          ).toBe(true);
+          expect(
+            element.style.getPropertyValue(
+              "--bullet-code-preview-opening-height",
+            ),
+          ).toBe("24px");
+        }
+        expect(fixture.opening.style.getPropertyValue("height")).toBe("");
+        expect(fixture.opening.style.getPropertyValue("block-size")).toBe("");
         expect(
           fixture.opening.classList.contains(
             "bullet-plugin-code-preview-hidden-fence",
@@ -1894,11 +1903,65 @@ describe("plain Shiki preview appearance", () => {
         expect(
           fixture.embed.classList.contains("bullet-plugin-code-preview-embed"),
         ).toBe(true);
+        fixture.appearance.headerHeight = 0;
+        fixture.measure();
+        for (const element of [fixture.opening, fixture.embed]) {
+          expect(element.classList.contains(compactClass)).toBe(true);
+          expect(
+            element.classList.contains("bullet-plugin-code-preview-header"),
+          ).toBe(false);
+          expect(
+            element.style.getPropertyValue(
+              "--bullet-code-preview-opening-height",
+            ),
+          ).toBe("");
+        }
       } finally {
         fixture.plugin.destroy();
       }
     },
   );
+
+  test("measures header height in local CSS pixels and clears it on renderer replacement and teardown", () => {
+    const fixture = setup();
+    Object.assign(fixture.view, { scaleY: 2 });
+    fixture.appearance.headerHeight = 28;
+    fixture.measure();
+    for (const element of [fixture.opening, fixture.embed]) {
+      expect(
+        element.classList.contains("bullet-plugin-code-preview-header"),
+      ).toBe(true);
+      expect(
+        element.style.getPropertyValue("--bullet-code-preview-opening-height"),
+      ).toBe("12px");
+    }
+    fixture.appearance.preAvailable = false;
+    fixture.measure();
+    for (const element of [fixture.opening, fixture.embed]) {
+      expect(
+        element.classList.contains("bullet-plugin-code-preview-header"),
+      ).toBe(false);
+      expect(
+        element.style.getPropertyValue("--bullet-code-preview-opening-height"),
+      ).toBe("");
+    }
+    fixture.appearance.preAvailable = true;
+    fixture.measure();
+    expect(
+      fixture.embed.style.getPropertyValue(
+        "--bullet-code-preview-opening-height",
+      ),
+    ).toBe("12px");
+    fixture.plugin.destroy();
+    for (const element of [fixture.opening, fixture.embed]) {
+      expect(
+        element.classList.contains("bullet-plugin-code-preview-header"),
+      ).toBe(false);
+      expect(
+        element.style.getPropertyValue("--bullet-code-preview-opening-height"),
+      ).toBe("");
+    }
+  });
 
   test("clears appearance while an asynchronous renderer has no code card", () => {
     const fixture = setup();
@@ -1907,21 +1970,21 @@ describe("plain Shiki preview appearance", () => {
       fixture.measure();
       for (const property of appearanceProperties)
         expect(fixture.opening.style.getPropertyValue(property)).toBe("");
-      expect(fixture.opening.classList.contains(plainClass)).toBe(false);
-      expect(fixture.embed.classList.contains(plainClass)).toBe(false);
+      expect(fixture.opening.classList.contains(compactClass)).toBe(false);
+      expect(fixture.embed.classList.contains(compactClass)).toBe(false);
     } finally {
       fixture.plugin.destroy();
     }
   });
 
-  test("retains plain opening paint through redraw and removes it when the source fence returns", () => {
+  test("retains compact opening paint through redraw and removes it when the source fence returns", () => {
     const fixture = setup();
     try {
-      fixture.opening.classList.remove(plainClass);
+      fixture.opening.classList.remove(compactClass);
       fixture.redraw();
       fixture.notify(fixture.opening, "attributes");
-      expect(fixture.opening.classList.contains(plainClass)).toBe(true);
-      expect(fixture.embed.classList.contains(plainClass)).toBe(true);
+      expect(fixture.opening.classList.contains(compactClass)).toBe(true);
+      expect(fixture.embed.classList.contains(compactClass)).toBe(true);
       const pending = fixture.measurements.length;
       fixture.measure();
       fixture.notify(fixture.opening, "attributes");
@@ -1930,11 +1993,11 @@ describe("plain Shiki preview appearance", () => {
       fixture.opening.setRaw(true);
       fixture.notify(fixture.opening);
       fixture.measure();
-      expect(fixture.opening.classList.contains(plainClass)).toBe(false);
+      expect(fixture.opening.classList.contains(compactClass)).toBe(false);
       fixture.show([fixture.opening]);
       fixture.measure();
       for (const element of [fixture.opening, fixture.embed]) {
-        expect(element.classList.contains(plainClass)).toBe(false);
+        expect(element.classList.contains(compactClass)).toBe(false);
         for (const property of appearanceProperties)
           expect(element.style.getPropertyValue(property)).toBe("");
       }

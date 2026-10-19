@@ -67,7 +67,9 @@ const OPENING_ALIGNED_CLASS = "bullet-plugin-code-opening-aligned";
 const OPENING_MARKER_OFFSET = "--bullet-code-opening-marker-offset";
 const BODY_FOLD_CLASS = "bullet-plugin-code-body-fold";
 const BODY_FOLD_OFFSET = "--bullet-code-body-fold-offset";
-const PLAIN_PREVIEW_CLASS = "bullet-plugin-code-preview-plain";
+const COMPACT_PREVIEW_CLASS = "bullet-plugin-code-preview-compact";
+const HEADER_PREVIEW_CLASS = "bullet-plugin-code-preview-header";
+const PREVIEW_OPENING_HEIGHT = "--bullet-code-preview-opening-height";
 const PREVIEW_BACKGROUND = "--bullet-code-preview-background";
 const PREVIEW_END = "--bullet-code-preview-end";
 const PREVIEW_RADIUS = "--bullet-code-preview-radius";
@@ -83,6 +85,12 @@ interface FirstCodeLineGeometry {
   firstLine: { top: number; height: number };
   hasLineBox: boolean;
 }
+
+type PreviewAppearance = {
+  background: string;
+  end: string;
+  radius: string;
+} & ({ kind: "plain" } | { kind: "header"; openingHeight: string });
 
 interface MeasuredLine {
   element: HTMLElement;
@@ -102,8 +110,7 @@ interface MeasuredLine {
   preview?: OpeningAlignment;
   previewBlock?: HTMLElement;
   previewEmbed?: boolean;
-  plainPreview?: boolean;
-  previewAppearance?: { background: string; end: string; radius: string };
+  previewAppearance?: PreviewAppearance;
 }
 
 interface SourceRow {
@@ -160,7 +167,7 @@ interface ProcessorLayout {
   openingFrom: number;
   inset: string;
   previewEmbed: boolean;
-  plainPreview: boolean;
+  appearance: PreviewAppearance | undefined;
 }
 
 interface ProcessorCodeSource {
@@ -182,7 +189,8 @@ const NATIVE_CLASSES = [
   OPENING_ALIGNED_CLASS,
   PREVIEW_OPENING_CLASS,
   PREVIEW_EMBED_OPENING_CLASS,
-  PLAIN_PREVIEW_CLASS,
+  COMPACT_PREVIEW_CLASS,
+  HEADER_PREVIEW_CLASS,
   HIDDEN_FENCE_CLASS,
   PREVIEW_FIRST_CLASS,
   PREVIEW_LAST_CLASS,
@@ -1185,9 +1193,10 @@ export class NestedCodeBlockLayoutPluginValue {
             preceding.previewAppearance = measurePreviewAppearance(
               preceding.element,
               element,
+              this.view.scaleY,
             );
-            measured[measured.length - 1].plainPreview =
-              !!preceding.previewAppearance;
+            measured[measured.length - 1].previewAppearance =
+              preceding.previewAppearance;
           }
         }
         currentInset = null;
@@ -1525,7 +1534,7 @@ export class NestedCodeBlockLayoutPluginValue {
               .from,
             inset,
             previewEmbed: !!measurement.previewEmbed,
-            plainPreview: !!measurement.plainPreview,
+            appearance: measurement.previewAppearance,
           });
         continue;
       }
@@ -1598,7 +1607,7 @@ export class NestedCodeBlockLayoutPluginValue {
     }
     const current = new Map<HTMLElement, ProcessorLayout>();
     for (const processor of frame.processors) {
-      const { element, openingFrom, inset, previewEmbed, plainPreview } =
+      const { element, openingFrom, inset, previewEmbed, appearance } =
         processor;
       const line = documentLineForElement(this.view, element);
       if (
@@ -1610,7 +1619,15 @@ export class NestedCodeBlockLayoutPluginValue {
       setStyleProperty(element, CODE_BLOCK_INSET, inset);
       setClass(element, CODE_BLOCK_CLASS, true);
       setClass(element, PREVIEW_EMBED_CLASS, previewEmbed);
-      setClass(element, PLAIN_PREVIEW_CLASS, plainPreview);
+      setClass(element, COMPACT_PREVIEW_CLASS, !!appearance);
+      setClass(element, HEADER_PREVIEW_CLASS, appearance?.kind === "header");
+      if (appearance?.kind === "header")
+        setStyleProperty(
+          element,
+          PREVIEW_OPENING_HEIGHT,
+          appearance.openingHeight,
+        );
+      else element.style.removeProperty(PREVIEW_OPENING_HEIGHT);
       current.set(element, processor);
     }
     for (const element of this.styledProcessors.keys()) {
@@ -1728,7 +1745,9 @@ export class NestedCodeBlockLayoutPluginValue {
     if (!element.classList.contains("cm-preview-code-block")) return;
     element.classList.remove(CODE_BLOCK_CLASS);
     element.classList.remove(PREVIEW_EMBED_CLASS);
-    element.classList.remove(PLAIN_PREVIEW_CLASS);
+    element.classList.remove(COMPACT_PREVIEW_CLASS);
+    element.classList.remove(HEADER_PREVIEW_CLASS);
+    element.style.removeProperty(PREVIEW_OPENING_HEIGHT);
     element.style.removeProperty(CODE_BLOCK_INSET);
   }
 }
@@ -1920,7 +1939,14 @@ function nativeAttributes(
         if (presentation.kind === "processor-opening") {
           classes.push(PREVIEW_EMBED_OPENING_CLASS);
           if (presentation.appearance) {
-            classes.push(PLAIN_PREVIEW_CLASS);
+            classes.push(COMPACT_PREVIEW_CLASS);
+            if (presentation.appearance.kind === "header") {
+              classes.push(HEADER_PREVIEW_CLASS);
+              properties.push([
+                PREVIEW_OPENING_HEIGHT,
+                presentation.appearance.openingHeight,
+              ]);
+            }
             properties.push(
               [PREVIEW_BACKGROUND, presentation.appearance.background],
               [PREVIEW_END, presentation.appearance.end],
@@ -2037,26 +2063,25 @@ function sameNativeRows(
 function measurePreviewAppearance(
   opening: HTMLElement,
   embed: HTMLElement,
-): MeasuredLine["previewAppearance"] {
+  scaleY = 1,
+): PreviewAppearance | undefined {
   const pre = embed.querySelector<HTMLElement>(".expressive-code pre");
   const frame = embed.querySelector<HTMLElement>(".expressive-code .frame");
   const header = embed.querySelector<HTMLElement>(".expressive-code .header");
   const win = embed.ownerDocument.defaultView;
-  // Terminal and titled frames own their headers and keep their native layout.
-  if (
-    !pre ||
-    !frame ||
-    !win ||
-    (header && header.getBoundingClientRect().height > 0)
-  )
-    return;
+  if (!pre || !frame || !win) return;
   const end = logicalInset(opening, pre.getBoundingClientRect(), false, true);
   if (end === null) return;
-  return {
+  const appearance = {
     background: win.getComputedStyle(pre).backgroundColor,
     end,
     radius: win.getComputedStyle(frame).borderStartStartRadius,
   };
+  if (!header || header.getBoundingClientRect().height <= 0)
+    return { kind: "plain", ...appearance };
+  const openingHeight = opening.getBoundingClientRect().height / scaleY;
+  if (!Number.isFinite(openingHeight) || openingHeight <= 0) return;
+  return { kind: "header", openingHeight: `${openingHeight}px`, ...appearance };
 }
 
 function setStyleProperty(element: HTMLElement, name: string, value: string) {
