@@ -263,7 +263,25 @@ function getUnderIndentedClosingFenceEdit(
   const previousLineStart =
     Math.max(text.lastIndexOf("\n", end - 1), text.lastIndexOf("\r", end - 1)) +
     1;
-  if (/^[ \t]*$/.test(text.slice(previousLineStart, end))) {
+  const finalBlankLineBreak = /^[ \t]*$/.test(
+    text.slice(previousLineStart, end),
+  )
+    ? /(?:\r\n|\r|\n)$/.exec(
+        text.slice(previousLineStart - 2, previousLineStart),
+      )?.[0]
+    : undefined;
+  const candidateClosingFence = text
+    .slice(candidateStart, candidatePosition.end.offset)
+    .match(/(?:\r\n|\r|\n)[ \t]*(`{3,}|~{3,})[ \t]*$/);
+  if (
+    finalBlankLineBreak !== undefined &&
+    candidateClosingFence &&
+    candidateClosingFence[1][0] === closer[2][0] &&
+    candidateClosingFence[1].length >= closer[2].length &&
+    (candidate.value === "" ||
+      candidate.value.split(/\r\n|\r|\n/).length <
+        candidatePosition.end.line - candidatePosition.start.line)
+  ) {
     return;
   }
   const prefix = openerPrefix.replace(/[-+*]|\d{1,9}[.)]/g, (marker) =>
@@ -283,7 +301,9 @@ function getUnderIndentedClosingFenceEdit(
   )?.code;
   if (
     repaired?.position?.end.line !== candidatePosition.start.line ||
-    repaired.value !== code.value ||
+    (repaired.value !== code.value &&
+      (finalBlankLineBreak === undefined ||
+        repaired.value !== code.value + finalBlankLineBreak)) ||
     repaired.lang !== code.lang ||
     repaired.meta !== code.meta
   ) {
