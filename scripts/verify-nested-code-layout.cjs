@@ -483,12 +483,13 @@ try {
       }
       if (entry.opening === offset + 6 && entry.nativePreview) {
         check(
-          !entry.bodyGuides?.some(
+          entry.bodyGuides?.some(
             (guide) =>
+              guide.owner &&
               guide.paintVisible &&
               Math.abs(guide.paintX - entry.bulletCenter) < 3,
           ),
-          `${label}: code continuation guide paint is hidden in preview`,
+          `${label}: code owner guide continues through preview`,
         );
       }
       if (entry.opening === offset + 6 && phase.includes("editing")) {
