@@ -61,7 +61,10 @@ export class PrettierCodeBlockCompatibility implements Feature {
   private patch: FormatterPatch | null = null;
   private pending = new WeakMap<EditorView, object>();
 
-  constructor(private plugin: Plugin) {}
+  constructor(
+    private plugin: Plugin,
+    private isEnabled = () => true,
+  ) {}
 
   async load() {
     this.active = true;
@@ -124,6 +127,7 @@ export class PrettierCodeBlockCompatibility implements Feature {
     const file = owner?.file;
     if (
       !this.active ||
+      !this.isEnabled() ||
       patch?.formatter !== formatter ||
       !view ||
       !file ||

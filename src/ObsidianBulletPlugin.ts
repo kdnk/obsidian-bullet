@@ -12,6 +12,7 @@ import { EditorSelectionsBehaviourOverride } from "./features/EditorSelectionsBe
 import { EnterBehaviourOverride } from "./features/EnterBehaviourOverride";
 import { Feature } from "./features/Feature";
 import { FoldScrollReserve } from "./features/FoldScrollReserve";
+import { Formatting } from "./features/Formatting";
 import { ListZoom } from "./features/ListZoom";
 import { ListsFoldingCommands } from "./features/ListsFoldingCommands";
 import { ListsMovementCommands } from "./features/ListsMovementCommands";
@@ -42,6 +43,15 @@ export default class ObsidianBulletPlugin extends Plugin {
   private changesApplicator!: ChangesApplicator;
   protected operationPerformer!: OperationPerformer;
   private imeDetector!: IMEDetector;
+  private formatting?: Formatting;
+
+  ownsExplicitSaveFormatting(): boolean {
+    return this.formatting?.ownsExplicitSaveFormatting() ?? false;
+  }
+
+  async formatActiveEditor(): Promise<void> {
+    await this.formatting?.formatActiveEditor();
+  }
 
   async onload() {
     await this.prepareSettings();
@@ -69,11 +79,17 @@ export default class ObsidianBulletPlugin extends Plugin {
         this.settings.keepBodyTextInBullets,
     );
 
+    this.formatting = new Formatting(this, this.settings);
+
     this.features = [
       // service features
       new SettingsTab(this, this.settings),
       new SystemInfo(this, this.settings),
-      new PrettierCodeBlockCompatibility(this),
+      new PrettierCodeBlockCompatibility(
+        this,
+        () => !this.settings.formatting.onSave,
+      ),
+      this.formatting,
 
       // general features
       new ListsMovementCommands(

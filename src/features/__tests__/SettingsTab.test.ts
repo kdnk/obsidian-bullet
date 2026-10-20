@@ -1,3 +1,4 @@
+import { defaultFormattingSettings } from "../../formatting/settings";
 import { SettingsTab } from "../SettingsTab";
 
 const mockSettingsRecords: FakeSetting[] = [];
@@ -81,6 +82,16 @@ jest.mock(
         };
         configure(toggle);
         this.toggle = record;
+        return this;
+      }
+
+      addButton() {
+        return this;
+      }
+      addTextArea() {
+        return this;
+      }
+      addText() {
         return this;
       }
 
@@ -181,6 +192,7 @@ interface TestableSettingsTab {
 
 function makeSettings() {
   return {
+    formatting: defaultFormattingSettings(),
     keepCursorWithinContent: "bullet-and-checkbox",
     keepBodyTextInBullets: false,
     overrideTabBehaviour: true,
@@ -231,9 +243,12 @@ describe("SettingsTab", () => {
       "Appearance",
       "Folding",
       "Advanced",
+      "Formatting",
     ]);
     expect(
-      groups.map((group) => group.items.map((definition) => definition.name)),
+      groups
+        .slice(0, 4)
+        .map((group) => group.items.map((definition) => definition.name)),
     ).toEqual([
       [
         "Keep typed text in lists",
@@ -359,10 +374,12 @@ describe("SettingsTab", () => {
     tab.display();
 
     expect(
-      mockSettingsRecords.map(
-        (setting) =>
-          `${setting.heading ? "heading" : "setting"}:${setting.name}`,
-      ),
+      mockSettingsRecords
+        .slice(0, 19)
+        .map(
+          (setting) =>
+            `${setting.heading ? "heading" : "setting"}:${setting.name}`,
+        ),
     ).toEqual([
       "heading:Editing",
       "setting:Keep typed text in lists",

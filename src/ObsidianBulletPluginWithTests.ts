@@ -3,6 +3,7 @@ import { App, MarkdownView, Vault } from "obsidian";
 import ObsidianBulletPlugin from "./ObsidianBulletPlugin";
 import { MyEditor, MyEditorPosition, MyEditorSelection } from "./editor";
 import { EditorSelectionsBehaviourOverride } from "./features/EditorSelectionsBehaviourOverride";
+import { parseFormattingSettings } from "./formatting/settings";
 import { KeepCursorWithinListContent } from "./operations/KeepCursorWithinListContent";
 import { SettingsObject, isBulletThreadingColor } from "./services/Settings";
 import {
@@ -93,6 +94,10 @@ type SettingCommandDecoders = {
 };
 
 const settingCommandDecoders = {
+  formatting: (value) => ({
+    k: "formatting",
+    v: parseFormattingSettings(value),
+  }),
   styleLists: (value) => ({
     k: "styleLists",
     v: decodeBooleanSetting("styleLists", value),

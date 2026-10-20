@@ -9,6 +9,7 @@ import {
 } from "obsidian";
 
 import { Feature } from "./Feature";
+import { formattingSettingDefinitions } from "./FormattingSettings";
 
 import {
   KeepCursorWithinContent,
@@ -226,7 +227,14 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
   }
 
   getSettingDefinitions(): SettingDefinitionItem<SettingsControlKey>[] {
-    return SETTING_GROUPS;
+    return [
+      ...SETTING_GROUPS,
+      formattingSettingDefinitions(
+        this.app,
+        this.settings,
+        this.refreshFormatting,
+      ),
+    ];
   }
 
   getControlValue(key: string): unknown {
@@ -346,7 +354,29 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
         this.renderSetting(definition);
       }
     }
+    const formatting = formattingSettingDefinitions(
+      this.app,
+      this.settings,
+      this.refreshFormatting,
+    );
+    new Setting(this.containerEl)
+      .setName(formatting.heading ?? "Formatting")
+      .setHeading();
+    for (const definition of formatting.items) {
+      if (definition.visible && !definition.visible()) continue;
+      if ("render" in definition && definition.render) {
+        const row = new Setting(this.containerEl)
+          .setName(definition.name)
+          .setDesc(definition.desc ?? "");
+        definition.render(row);
+      }
+    }
   }
+
+  private refreshFormatting = (): void => {
+    if (typeof this.update === "function") this.update();
+    else this.display();
+  };
 
   private renderSetting(definition: BulletSettingDefinition): void {
     const setting = new Setting(this.containerEl)

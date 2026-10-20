@@ -1,3 +1,9 @@
+import {
+  defaultFormattingSettings,
+  parseFormattingSettings,
+} from "../formatting/settings";
+import { FormattingSettings } from "../formatting/types";
+
 export type VerticalLinesAction = "none" | "toggle-folding";
 export type KeepCursorWithinContent =
   | "never"
@@ -5,6 +11,7 @@ export type KeepCursorWithinContent =
   | "bullet-and-checkbox";
 
 export interface SettingsObject {
+  formatting: FormattingSettings;
   styleLists: boolean;
   enhanceVerticalLineHover: boolean;
   bulletThreading: boolean;
@@ -29,6 +36,7 @@ export interface SettingsChange {
 }
 
 const DEFAULT_SETTINGS: SettingsObject = {
+  formatting: defaultFormattingSettings(),
   styleLists: true,
   enhanceVerticalLineHover: true,
   bulletThreading: false,
@@ -68,12 +76,23 @@ interface Subscription {
 
 export class Settings {
   private storage: Storage;
-  private values: SettingsObject = { ...DEFAULT_SETTINGS };
+  private values: SettingsObject = {
+    ...DEFAULT_SETTINGS,
+    formatting: defaultFormattingSettings(),
+  };
   private subscriptions: Map<Callback, Subscription>;
 
   constructor(storage: Storage) {
     this.storage = storage;
     this.subscriptions = new Map();
+  }
+
+  get formatting(): FormattingSettings {
+    return this.values.formatting;
+  }
+
+  set formatting(value: FormattingSettings) {
+    this.update({ formatting: value });
   }
 
   get keepCursorWithinContent() {
@@ -215,12 +234,20 @@ export class Settings {
   }
 
   reset() {
-    this.update(DEFAULT_SETTINGS);
+    const defaults = defaultFormattingSettings();
+    this.update({
+      ...DEFAULT_SETTINGS,
+      formatting:
+        JSON.stringify(this.values.formatting) === JSON.stringify(defaults)
+          ? this.values.formatting
+          : defaults,
+    });
   }
 
   async load() {
     const { listLines, ...saved } = (await this.storage.loadData()) ?? {};
     this.values = Object.assign({}, DEFAULT_SETTINGS, saved);
+    this.values.formatting = parseFormattingSettings(saved.formatting);
     if (typeof this.values.bulletThreading !== "boolean") {
       this.values.bulletThreading = DEFAULT_SETTINGS.bulletThreading;
     }
