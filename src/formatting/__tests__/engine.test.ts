@@ -343,9 +343,116 @@ test("safe Prettier keeps nested fenced content and is idempotent", async () => 
 
 test.each([
   {
+    description: "a whitespace-bearing final code row",
+    input: "- ```\n  hello\n      hello\n\t  \n```",
+    expected: "- ```\n  hello\n      hello\n\t  \n  ```",
+  },
+  {
+    description: "a physically empty final code row",
+    input: "- ```\n  hello\n      hello\n\n```",
+    expected: "- ```\n  hello\n      hello\n\n  ```",
+  },
+  {
+    description: "multiple blank code rows",
+    input: "- ```\n  hello\n\t  \n\n  \n```",
+    expected: "- ```\n  hello\n\t  \n\n  \n  ```",
+  },
+  {
+    description: "an empty code block",
+    input: "- ```\n\n```",
+    expected: "- ```\n\n  ```",
+  },
+  {
+    description: "a nested tab-indented code block",
+    input: "- parent\n\t- ```\n\t  hello\n\t      hello\n\t  \n```",
+    expected: "- parent\n\t- ```\n\t  hello\n\t      hello\n\t  \n\t  ```",
+  },
+  {
+    description: "a longer tilde delimiter and CRLF rows",
+    input: "- ~~~txt\r\n  hello\r\n\r\n~~~~",
+    expected: "- ~~~txt\r\n  hello\r\n\r\n  ~~~~",
+  },
+  {
+    description: "a blank row with a different following line ending",
+    input: "- ```\n  hello\r\n\n```",
+    expected: "- ```\n  hello\r\n\n  ```",
+  },
+  {
+    description: "a malformed closer before a following list item",
+    input: "- ```\n  body\n\n```\n- tail",
+    expected: "- ```\n  body\n\n  ```\n- tail",
+  },
+  {
+    description: "a malformed closer before prose with a final newline",
+    input: "- ~~~txt meta\r\n  body\r\n\r\n~~~~\r\nprose\r\n",
+    expected: "- ~~~txt meta\r\n  body\r\n\r\n  ~~~~\r\nprose\r\n",
+  },
+  {
+    description: "an unclosed candidate ending in a literal indented fence",
+    input: "- ```\n  body\n\n```\n    ```",
+    expected: "- ```\n  body\n\n  ```\n    ```",
+  },
+])(
+  "repairs the closing fence after $description without changing code rows",
+  ({ input, expected }) => {
+    const example = {
+      alias: "correct-closing-fence-indentation",
+      description: "blank code rows before a dedented closing fence",
+      before: input,
+      after: expected,
+      options: {},
+    };
+    expect(engine.applyExample(example)).toBe(expected);
+    expect(engine.applyExample({ ...example, before: expected })).toBe(
+      expected,
+    );
+  },
+);
+
+test.each([
+  "- ```\n  hello\n\n  ```\n```",
+  "- ```\n  hello\n\nprose\n```",
+  "- ```\n  hello\n\n~~~",
+  "- ````\n  hello\n\n```",
+  "- ````markdown\n  ```\n\n          ```\n  ````",
+  "- ```\n  body\n\n```\nroot code\n```",
+  "- ```\n  body\n\t  \n```\nroot code\n```",
+  "- ```\n  body\n\n  \n\n```\nroot code\n```",
+  "- ```\n  body\n\n```\n```",
+  "- ```\n  body\n\n```\n\n```",
+  "- ~~~txt meta\r\n  body\r\n\r\n~~~~\r\nroot code\r\n~~~~~",
+])("preserves unrelated or literal fences in %j", (input) => {
+  expect(
+    engine.applyExample({
+      alias: "correct-closing-fence-indentation",
+      description: "a fence that cannot safely close the list code block",
+      before: input,
+      after: input,
+      options: {},
+    }),
+  ).toBe(input);
+});
+
+test.each([
+  {
     description: "a list-attached malformed closing fence",
     input: "- ```txt\n  日本語ABC  \n  - literal marker\n```\n- tail",
     expected: "- ```txt\n  日本語ABC  \n  - literal marker\n  ```\n- tail\n",
+  },
+  {
+    description: "a malformed closing fence after a whitespace-bearing row",
+    input: "- ```\n  hello\n      hello\n\t  \n```",
+    expected: "- ```\n  hello\n      hello\n\t  \n  ```\n",
+  },
+  {
+    description: "a malformed closing fence after physically empty rows",
+    input: "- ```\n  hello\n      hello\n\n\n```",
+    expected: "- ```\n  hello\n      hello\n\n\n  ```\n",
+  },
+  {
+    description: "a nested malformed closing fence after a blank row",
+    input: "- parent\n\t- ```\n\t  hello\n\t      hello\n\t  \n```",
+    expected: "- parent\n\t- ```\n\t  hello\n\t      hello\n\t  \n\t  ```\n",
   },
   {
     description: "a compact empty ancestor around a code fence",

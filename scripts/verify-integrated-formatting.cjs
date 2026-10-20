@@ -34,6 +34,7 @@ function snapshot() {
       text: editor.getValue(),
       saved: await app.vault.adapter.read(state.file.path),
       selection: editor.listSelections(),
+      received: state.received,
       breadcrumb:
         editor.cm.dom.querySelector(
           '.bullet-zoom-breadcrumbs [aria-current="location"]',
@@ -241,6 +242,55 @@ try {
   assert.equal(snapshot().text, codeSource);
   proof("one Undo restores the compact code source", snapshot());
 
+  for (const [index, test] of [
+    {
+      name: "empty line before a root list closer",
+      source: "- ```\n  hello\n      hello\n\n```",
+      expected: "- ```\n  hello\n      hello\n\n  ```\n",
+    },
+    {
+      name: "mixed whitespace before a nested list closer",
+      source:
+        "- parent\n\t- child\n\t\t- ```\n\t\t  hello\n\t\t      hello\n\t  \n      ```",
+      expected:
+        "- parent\n\t- child\n\t\t- ```\n\t\t  hello\n\t\t      hello\n\t  \n\t\t  ```\n",
+    },
+    {
+      name: "multiple blank lines before a tilde closer",
+      source: "- ~~~txt\n  hello\n\n\n~~~",
+      expected: "- ~~~txt\n  hello\n\n\n  ~~~\n",
+    },
+  ].entries()) {
+    configure(null, test.source);
+    evaluate(() => {
+      const settings = app.plugins.plugins.bullet.settings.formatting;
+      settings.markdown = true;
+      settings.correctClosingFences = true;
+    });
+    key("s", "KeyS", 83, 4);
+    waitFor(() => snapshot().saved === test.expected, test.name);
+    waitForFormatting();
+    assert.equal(snapshot().text, test.expected);
+    assert.ok(snapshot().received.some((event) => event.save === true));
+    key("s", "KeyS", 83, 4);
+    waitForFormatting();
+    assert.equal(snapshot().text, test.expected);
+    assert.equal(snapshot().saved, test.expected);
+    proof(`native Save preserves code rows for ${test.name}`, snapshot());
+    fs.writeFileSync(
+      path.join(output, `blank-fence-${index}.png`),
+      Buffer.from(
+        cdp("Page.captureScreenshot", { format: "png" }).data,
+        "base64",
+      ),
+    );
+    key("z", "KeyZ", 90, 4);
+    assert.equal(snapshot().text, test.source);
+    key("Z", "KeyZ", 90, 12);
+    assert.equal(snapshot().text, test.expected);
+    proof(`Undo and Redo preserve code rows for ${test.name}`, snapshot());
+  }
+
   configure(
     'export default async (text, {file, app, signal}) => { if (!file.path || !app || signal.aborted) throw Error("context"); return text.replace("TOKEN", "DONE"); };',
   );
@@ -298,13 +348,16 @@ try {
   proof("JavaScript extension and relative imports", snapshot());
 
   configure('export default () => { throw Error("expected proof failure"); };');
-  evaluate((key) => {
-    const editor = window[key].leaf.view.editor;
+  const unsaved = evaluate(async (key) => {
+    const state = window[key];
+    const editor = state.leaf.view.editor;
+    const saved = await app.vault.adapter.read(state.file.path);
     editor.setValue("- UNSAVED");
     editor.setCursor({ line: 0, ch: 9 });
+    return { saved, text: editor.getValue() };
   }, stateKey);
-  assert.equal(snapshot().saved, "- TOKEN");
-  assert.equal(snapshot().text, "- UNSAVED");
+  assert.equal(unsaved.saved, "- TOKEN");
+  assert.equal(unsaved.text, "- UNSAVED");
   key("s", "KeyS", 83, 4);
   waitForFormatting();
   waitFor(() => snapshot().saved === "- UNSAVED", "failed script saves source");
