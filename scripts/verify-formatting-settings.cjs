@@ -101,6 +101,7 @@ try {
     structuredClone(app.plugins.plugins.bullet.settings.formatting),
   );
   assert.equal(defaults.onSave, true);
+  assert.equal(defaults.automaticLinker, true);
   assert.equal(defaults.cjkSpacing, true);
   assert.equal(defaults.footnotes, true);
   assert.equal(defaults.listCleanup, true);
@@ -117,6 +118,9 @@ try {
         (row) => row.querySelector(".setting-item-name")?.textContent === name,
       );
     return {
+      automaticLinker: row("Integrate with Automatic Linker")
+        ?.querySelector(".checkbox-container")
+        ?.classList.contains("is-enabled"),
       cjk: row("Space Japanese, Chinese, and Korean text")
         ?.querySelector(".checkbox-container")
         ?.classList.contains("is-enabled"),
@@ -125,7 +129,51 @@ try {
         ?.classList.contains("is-enabled"),
     };
   });
-  assert.deepEqual(controls, { cjk: true, timestamps: true });
+  assert.deepEqual(controls, {
+    automaticLinker: true,
+    cjk: true,
+    timestamps: true,
+  });
+  clickSetting("Integrate with Automatic Linker", ".checkbox-container");
+  assert.equal(
+    evaluate(
+      () => app.plugins.plugins.bullet.settings.formatting.automaticLinker,
+    ),
+    false,
+  );
+  assert.equal(
+    evaluate(() => app.plugins.plugins.bullet.ownsExplicitSaveFormatting()),
+    true,
+  );
+  assert.equal(
+    evaluate(
+      async () =>
+        JSON.parse(
+          await app.vault.adapter.read(
+            `${app.vault.configDir}/plugins/bullet/data.json`,
+          ),
+        ).formatting.automaticLinker,
+    ),
+    false,
+  );
+  clickSetting("Integrate with Automatic Linker", ".checkbox-container");
+  assert.equal(
+    evaluate(
+      () => app.plugins.plugins.bullet.settings.formatting.automaticLinker,
+    ),
+    true,
+  );
+  assert.equal(
+    evaluate(
+      async () =>
+        JSON.parse(
+          await app.vault.adapter.read(
+            `${app.vault.configDir}/plugins/bullet/data.json`,
+          ),
+        ).formatting.automaticLinker,
+    ),
+    true,
+  );
   clickSetting("File timestamps", ".checkbox-container");
   assert.equal(
     evaluate(
@@ -158,6 +206,7 @@ try {
       {
         defaults,
         controls,
+        nativeLinkerToggle: true,
         nativeTimestampToggle: true,
         nativeSaveToggle: true,
       },
@@ -172,7 +221,9 @@ try {
       "base64",
     ),
   );
-  console.log("PASS native default settings, timestamps, and save toggle");
+  console.log(
+    "PASS native default settings, linker toggle, timestamps, and save toggle",
+  );
 } finally {
   if (previous)
     evaluate(async (previous) => {

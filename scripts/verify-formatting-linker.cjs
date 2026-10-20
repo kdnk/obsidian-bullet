@@ -72,14 +72,18 @@ function sample() {
   });
 }
 
-function configure(input, onSave) {
+function configure(
+  input,
+  { onSave = true, automaticLinker = true, linkerOnSave = true } = {},
+) {
   evaluate(
-    async (input, onSave) => {
+    async (input, onSave, automaticLinker, linkerOnSave) => {
       const state = window.__linkerFormattingProof;
       const bullet = app.plugins.plugins.bullet;
       bullet.settings.formatting = {
         ...bullet.settings.formatting,
         onSave,
+        automaticLinker,
         markdown: false,
         footnotes: false,
         listCleanup: false,
@@ -92,18 +96,29 @@ function configure(input, onSave) {
         script: { kind: "disabled" },
         profile: { ...bullet.settings.formatting.profile, disabledRules: [] },
       };
+      app.plugins.plugins["automatic-linker"].settings.formatOnSave =
+        linkerOnSave;
+      state.leaf.view.editor.setValue("- setup source");
+      await state.leaf.view.save();
       state.leaf.view.editor.setValue(input);
       state.leaf.view.editor.setCursor({ line: 0, ch: input.length });
-      await state.leaf.view.save();
       state.runs = 0;
     },
     input,
     onSave,
+    automaticLinker,
+    linkerOnSave,
   );
 }
 
-function run(name, onSave = true, expectedOutput = expected) {
-  configure(input, onSave);
+function run(name, options = {}, expectedOutput = expected) {
+  const {
+    onSave = true,
+    automaticLinker = true,
+    linkerOnSave = true,
+  } = options;
+  configure(input, options);
+  assert.equal(sample().saved, "- setup source");
   key("s", "KeyS", 83);
   for (
     let attempt = 0;
@@ -114,7 +129,12 @@ function run(name, onSave = true, expectedOutput = expected) {
   const result = sample();
   assert.equal(result.saved, expectedOutput);
   assert.equal(result.text, expectedOutput);
-  assert.equal(result.runs, 1, "One save runs linking once");
+  const expectedRuns = onSave ? Number(automaticLinker) : Number(linkerOnSave);
+  assert.equal(
+    result.runs,
+    expectedRuns,
+    "Only the selected save owner runs linking",
+  );
   if (onSave) {
     key("z", "KeyZ", 90);
     assert.equal(
@@ -123,12 +143,26 @@ function run(name, onSave = true, expectedOutput = expected) {
       "One Undo restores linking and cleanup together",
     );
   }
-  results.push({ name, ...result });
+  results.push({ name, onSave, automaticLinker, linkerOnSave, ...result });
   fs.writeFileSync(
     path.join(output, "results.json"),
     JSON.stringify(results, null, 2),
   );
   console.log(`PASS ${name}`);
+}
+
+function runIntegrationMatrix(loadOrder) {
+  for (const automaticLinker of [true, false]) {
+    for (const linkerOnSave of [true, false]) {
+      run(
+        `${loadOrder}; Bullet integration ${automaticLinker}; Automatic Linker save ${linkerOnSave}`,
+        { automaticLinker, linkerOnSave },
+        automaticLinker
+          ? expected
+          : "- 日本語 ABC https://github.com/a/b/issues/1",
+      );
+    }
+  }
 }
 
 try {
@@ -170,19 +204,29 @@ try {
     };
   }, note);
   initialized = true;
-  run("Bullet loaded before Automatic Linker");
+  runIntegrationMatrix("Bullet loaded before Automatic Linker");
   evaluate(async () => {
     await app.plugins.disablePlugin("bullet");
     await app.plugins.loadManifest(".obsidian/plugins/bullet");
     await app.plugins.enablePlugin("bullet");
   });
-  run("Automatic Linker loaded before Bullet");
-  run(
-    "Automatic Linker standalone save",
-    false,
-    "- 日本語ABC [[github/a/b/issues/1]] [🔗](https://github.com/a/b/issues/1)",
-  );
-  configure(input, false);
+  runIntegrationMatrix("Automatic Linker loaded before Bullet");
+  for (const automaticLinker of [true, false]) {
+    for (const linkerOnSave of [true, false]) {
+      run(
+        `Bullet save disabled; integration ${automaticLinker}; Automatic Linker save ${linkerOnSave}`,
+        { onSave: false, automaticLinker, linkerOnSave },
+        linkerOnSave
+          ? "- 日本語ABC [[github/a/b/issues/1]] [🔗](https://github.com/a/b/issues/1)"
+          : input,
+      );
+    }
+  }
+  configure(input, {
+    onSave: false,
+    automaticLinker: false,
+    linkerOnSave: false,
+  });
   assert.equal(
     evaluate(() =>
       app.commands.executeCommandById("automatic-linker:format-file"),
