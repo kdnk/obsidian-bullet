@@ -125,6 +125,21 @@ body.bullet-plugin-better-lists
 
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
+  :is(.bullet-plugin-code-owner-prefix, .bullet-plugin-code-content-indent)
+  .cm-indent {
+  min-width: 0;
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-nested-code-block
+  .bullet-plugin-code-content-indent
+  .cm-indent {
+  font-size: inherit;
+}
+
+body.bullet-plugin-better-lists
+  .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-code-preview-body
   .bullet-plugin-code-owner-prefix
   .cm-indent::before {

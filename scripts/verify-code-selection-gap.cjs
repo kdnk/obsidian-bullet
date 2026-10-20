@@ -234,10 +234,12 @@ try {
               !child.html.includes("bullet-plugin-code-content-indent"),
               "Ordinary list indentation must not receive code-content roles",
             );
+            const ancestors = child.guides.filter((guide) =>
+              guide.className.split(" ").includes("cm-indent"),
+            );
+            assert.equal(ancestors.length, 3, "Three ancestor guides required");
             assert.ok(
-              child.guides
-                .filter((guide) => guide.className === "cm-indent")
-                .every((guide) => guide.visibility === "visible"),
+              ancestors.every((guide) => guide.visibility === "visible"),
               "Ordinary child ancestor guides must remain visible",
             );
           }

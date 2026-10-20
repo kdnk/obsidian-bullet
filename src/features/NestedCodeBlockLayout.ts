@@ -2240,7 +2240,13 @@ function codeBlockSourceDecorations(
         continue;
       }
       visitedLines.add(line.number);
-      const fence = classifier.getCodeFence(state, line.number);
+      const name = lineNameAt(line.number);
+      const fence =
+        name === null ||
+        hasClassName(name, "HyperMD-codeblock") ||
+        line.text.trim() === ""
+          ? classifier.getCodeFence(state, line.number)
+          : null;
       if (fence && line.number !== fence.openingLineNumber) {
         const content = getFenceContent(line.text, fence.containerIndent);
         const indentEnd = /^[ \t]*/.exec(line.text)![0].length;
@@ -2299,7 +2305,6 @@ function codeBlockSourceDecorations(
             ),
           );
       }
-      const name = lineNameAt(line.number);
       if (
         (name !== null && isNestedCodeBlockName(name)) ||
         line.text.trim() === ""
