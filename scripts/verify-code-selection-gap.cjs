@@ -24,9 +24,14 @@ const fixture = [
   "\t\t- hello",
   "\t\t- ",
 ].join("\n");
-const text = process.argv.includes("--spaces")
+let text = process.argv.includes("--spaces")
   ? fixture.replace(/\t/g, "    ")
   : fixture;
+if (process.argv.includes("--shallow-close")) {
+  const lines = text.split("\n");
+  lines[5] = "        ```";
+  text = lines.join("\n");
+}
 const original = evaluate(() => ({
   leaf: app.workspace.activeLeaf.id,
   font: app.getBaseFontSize(),
@@ -222,6 +227,20 @@ try {
             ),
           );
           assert.equal(record.geometry.saved, text, "Saved Markdown changed");
+          if (process.argv.includes("--shallow-close")) {
+            const child = record.geometry.rows.find((row) => row.line === 8);
+            assert.ok(child, "Ordinary child row must be mounted");
+            assert.ok(
+              !child.html.includes("bullet-plugin-code-content-indent"),
+              "Ordinary list indentation must not receive code-content roles",
+            );
+            assert.ok(
+              child.guides
+                .filter((guide) => guide.className === "cm-indent")
+                .every((guide) => guide.visibility === "visible"),
+              "Ordinary child ancestor guides must remain visible",
+            );
+          }
           if (phase === "selection") {
             assert.deepEqual(record.geometry.selection, [
               { anchor: { line: 4, ch: 0 }, head: { line: 5, ch: 0 } },

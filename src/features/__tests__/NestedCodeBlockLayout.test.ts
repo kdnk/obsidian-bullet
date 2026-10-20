@@ -3497,6 +3497,57 @@ test.each([
   plugin.destroy();
 });
 
+test("keeps ordinary descendant guides after a native underindented closing fence", () => {
+  const source = [
+    "- hello",
+    "\t- hello",
+    "\t\t- ```",
+    "\t\t  hello",
+    "\t\t  \thello",
+    "\t\t```",
+    "\t\t- hello",
+    "\t\t\t- hello",
+    "\t\t- hello",
+  ].join("\n");
+  const state = EditorState.create({ doc: source });
+  const plugin = new NestedCodeBlockLayoutPluginValue(
+    {
+      state,
+      visibleRanges: [{ from: 0, to: state.doc.length }],
+      contentDOM: { querySelectorAll: () => [] },
+      dom: { ownerDocument: { defaultView: {} } },
+      requestMeasure: jest.fn(),
+    } as never,
+    names(
+      "HyperMD-list-line",
+      "HyperMD-list-line",
+      BEGIN,
+      CONTENT,
+      CONTENT,
+      END,
+      "HyperMD-list-line",
+      "HyperMD-list-line",
+      "HyperMD-list-line",
+    ),
+  );
+  const literalIndentation: Array<{ line: number; source: string }> = [];
+  plugin.prefixRoleDecorations.between(
+    0,
+    state.doc.length,
+    (from, to, decoration) => {
+      if (decorationClass(decoration) === "bullet-plugin-code-content-indent")
+        literalIndentation.push({
+          line: state.doc.lineAt(from).number,
+          source: state.doc.sliceString(from, to),
+        });
+    },
+  );
+
+  expect(literalIndentation).toEqual([{ line: 5, source: "\t" }]);
+  expect(state.doc.toString()).toBe(source);
+  plugin.destroy();
+});
+
 test.each([2, 3, 4])(
   "preserves continuation editing guides with the cursor on row %s",
   (row) => {
