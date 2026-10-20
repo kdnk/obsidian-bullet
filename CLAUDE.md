@@ -16,6 +16,8 @@ For fenced-code editing guard changes, follow the typing and deletion verificati
 
 For Vim newline changes, follow the real-key verification rule under “リスト内のコードブロックについて” in [AGENTS.md](AGENTS.md).
 
+Before changing Bullet's Vim handler for an `o`/`O` report, inspect active Vimrc mappings. A mapping to another plugin's line-insertion command bypasses Bullet. Compare `scripts/verify-vim-code-newlines.cjs <fresh-output-directory> --root-opening --full-note` with `--editor-shortcuts` when Code Editor Shortcuts is installed in the test vault; the latter deliberately retains code-indent assertions to expose the conflicting mapping.
+
 For code-preview fence layout changes, follow the native fence height and Vim navigation verification rule under “リスト内のコードブロックについて” in [AGENTS.md](AGENTS.md).
 
 For code-row spacing changes, follow the preview/editing geometry verification rule under “リスト内のコードブロックについて” in [AGENTS.md](AGENTS.md).
