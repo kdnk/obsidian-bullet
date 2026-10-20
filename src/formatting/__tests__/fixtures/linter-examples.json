@@ -1,0 +1,688 @@
+[
+  {
+    "alias": "yaml-timestamp",
+    "description": "Adds a header with the date.",
+    "before": "# H1",
+    "after": "---\ndate created: Wednesday, January 1st 2020, 12:00:00 am\ndate modified: Thursday, January 2nd 2020, 12:00:05 am\n---\n# H1",
+    "options": {
+      "dateCreatedKey": "date created",
+      "dateCreated": true,
+      "dateCreatedSourceOfTruth": "file system",
+      "dateModifiedSourceOfTruth": "file system",
+      "format": "dddd, MMMM Do YYYY, h:mm:ss a",
+      "dateModified": true,
+      "dateModifiedKey": "date modified",
+      "convertToUTC": false,
+      "timestampUpdateOnFileContentUpdated": "never",
+      "locale": "en",
+      "fileCreatedTime": "2020-01-01T00:00:00-00:00",
+      "fileModifiedTime": "2020-01-02T00:00:00-00:00",
+      "currentTime": {
+        "$moment": [
+          "Thursday, January 2nd 2020, 12:00:05 am",
+          "dddd, MMMM Do YYYY, h:mm:ss a"
+        ]
+      },
+      "alreadyModified": false
+    }
+  },
+  {
+    "alias": "yaml-timestamp",
+    "description": "dateCreated option is false",
+    "before": "# H1",
+    "after": "---\ndate modified: Thursday, January 2nd 2020, 12:00:05 am\n---\n# H1",
+    "options": {
+      "dateCreatedKey": "date created",
+      "dateCreated": false,
+      "dateCreatedSourceOfTruth": "file system",
+      "dateModifiedSourceOfTruth": "file system",
+      "format": "dddd, MMMM Do YYYY, h:mm:ss a",
+      "dateModified": true,
+      "dateModifiedKey": "date modified",
+      "convertToUTC": false,
+      "timestampUpdateOnFileContentUpdated": "never",
+      "locale": "en",
+      "fileCreatedTime": "2020-01-01T00:00:00-00:00",
+      "fileModifiedTime": "2020-01-01T00:00:00-00:00",
+      "currentTime": {
+        "$moment": [
+          "Thursday, January 2nd 2020, 12:00:05 am",
+          "dddd, MMMM Do YYYY, h:mm:ss a"
+        ]
+      },
+      "alreadyModified": false
+    }
+  },
+  {
+    "alias": "yaml-timestamp",
+    "description": "Date created key is set",
+    "before": "# H1",
+    "after": "---\ncreated: Wednesday, January 1st 2020, 12:00:00 am\n---\n# H1",
+    "options": {
+      "dateCreatedKey": "created",
+      "dateCreated": true,
+      "dateCreatedSourceOfTruth": "file system",
+      "dateModifiedSourceOfTruth": "file system",
+      "format": "dddd, MMMM Do YYYY, h:mm:ss a",
+      "dateModified": false,
+      "dateModifiedKey": "date modified",
+      "convertToUTC": false,
+      "timestampUpdateOnFileContentUpdated": "never",
+      "locale": "en",
+      "fileCreatedTime": "2020-01-01T00:00:00-00:00",
+      "currentTime": {
+        "$moment": [
+          "Thursday, January 2nd 2020, 12:00:03 am",
+          "dddd, MMMM Do YYYY, h:mm:ss a"
+        ]
+      },
+      "alreadyModified": false
+    }
+  },
+  {
+    "alias": "yaml-timestamp",
+    "description": "Date modified key is set",
+    "before": "# H1",
+    "after": "---\nmodified: Wednesday, January 1st 2020, 4:00:00 pm\n---\n# H1",
+    "options": {
+      "dateCreatedKey": "date created",
+      "dateCreated": false,
+      "dateCreatedSourceOfTruth": "file system",
+      "dateModifiedSourceOfTruth": "file system",
+      "format": "dddd, MMMM Do YYYY, h:mm:ss a",
+      "dateModified": true,
+      "dateModifiedKey": "modified",
+      "convertToUTC": false,
+      "timestampUpdateOnFileContentUpdated": "never",
+      "locale": "en",
+      "fileModifiedTime": "2020-01-01T00:00:00-00:00",
+      "currentTime": {
+        "$moment": [
+          "Wednesday, January 1st 2020, 4:00:00 pm",
+          "dddd, MMMM Do YYYY, h:mm:ss a"
+        ]
+      },
+      "alreadyModified": false
+    }
+  },
+  {
+    "alias": "yaml-timestamp",
+    "description": "Header is set with convert to UTC option true",
+    "before": "# H1",
+    "after": "---\ndate created: 2020-01-01T14:00:00+00:00\ndate modified: 2020-01-02T02:00:05+00:00\n---\n# H1",
+    "options": {
+      "dateCreatedKey": "date created",
+      "dateCreated": true,
+      "dateCreatedSourceOfTruth": "file system",
+      "dateModifiedSourceOfTruth": "file system",
+      "format": "YYYY-MM-DDTHH:mm:ssZ",
+      "dateModified": true,
+      "dateModifiedKey": "date modified",
+      "convertToUTC": true,
+      "timestampUpdateOnFileContentUpdated": "never",
+      "locale": "en",
+      "fileCreatedTime": "2020-01-01T09:00:00-05:00",
+      "fileModifiedTime": "2020-01-01T21:00:00-05:00",
+      "currentTime": {
+        "$moment": ["2020-01-01T21:00:05-05:00", "YYYY-MM-DDTHH:mm:ssZ"]
+      },
+      "alreadyModified": false
+    }
+  },
+  {
+    "alias": "yaml-timestamp",
+    "description": "dateCreated option is false with convert to UTC option true",
+    "before": "# H1",
+    "after": "---\ndate modified: 2020-01-02T02:00:05+00:00\n---\n# H1",
+    "options": {
+      "dateCreatedKey": "date created",
+      "dateCreated": false,
+      "dateCreatedSourceOfTruth": "file system",
+      "dateModifiedSourceOfTruth": "file system",
+      "format": "YYYY-MM-DDTHH:mm:ssZ",
+      "dateModified": true,
+      "dateModifiedKey": "date modified",
+      "convertToUTC": true,
+      "timestampUpdateOnFileContentUpdated": "never",
+      "locale": "en",
+      "fileCreatedTime": "2020-01-01T09:00:00-05:00",
+      "fileModifiedTime": "2020-01-01T21:00:00-05:00",
+      "currentTime": {
+        "$moment": ["2020-01-01T21:00:05-05:00", "YYYY-MM-DDTHH:mm:ssZ"]
+      },
+      "alreadyModified": false
+    }
+  },
+  {
+    "alias": "yaml-timestamp",
+    "description": "Date created key is set with convert to UTC option true",
+    "before": "# H1",
+    "after": "---\ncreated: 2020-01-01T14:00:00+00:00\n---\n# H1",
+    "options": {
+      "dateCreatedKey": "created",
+      "dateCreated": true,
+      "dateCreatedSourceOfTruth": "file system",
+      "dateModifiedSourceOfTruth": "file system",
+      "format": "YYYY-MM-DDTHH:mm:ssZ",
+      "dateModified": false,
+      "dateModifiedKey": "date modified",
+      "convertToUTC": true,
+      "timestampUpdateOnFileContentUpdated": "never",
+      "locale": "en",
+      "fileCreatedTime": "2020-01-01T09:00:00-05:00",
+      "currentTime": {
+        "$moment": ["2020-01-01T21:00:05-05:00", "YYYY-MM-DDTHH:mm:ssZ"]
+      },
+      "alreadyModified": false
+    }
+  },
+  {
+    "alias": "yaml-timestamp",
+    "description": "Date modified key is set with convert to UTC option true",
+    "before": "# H1",
+    "after": "---\nmodified: 2020-01-02T02:00:05+00:00\n---\n# H1",
+    "options": {
+      "dateCreatedKey": "date created",
+      "dateCreated": false,
+      "dateCreatedSourceOfTruth": "file system",
+      "dateModifiedSourceOfTruth": "file system",
+      "format": "YYYY-MM-DDTHH:mm:ssZ",
+      "dateModified": true,
+      "dateModifiedKey": "modified",
+      "convertToUTC": true,
+      "timestampUpdateOnFileContentUpdated": "never",
+      "locale": "en",
+      "fileModifiedTime": "2020-01-01T21:00:00-05:00",
+      "currentTime": {
+        "$moment": ["2020-01-01T21:00:05-05:00", "YYYY-MM-DDTHH:mm:ssZ"]
+      },
+      "alreadyModified": false
+    }
+  },
+  {
+    "alias": "compact-yaml",
+    "description": "Remove blank lines at the start and end of the YAML",
+    "before": "---\n\ndate: today\n\ntitle: unchanged without inner new lines turned on\n\n---",
+    "after": "---\ndate: today\n\ntitle: unchanged without inner new lines turned on\n---",
+    "options": {
+      "innerNewLines": false
+    }
+  },
+  {
+    "alias": "compact-yaml",
+    "description": "Remove blank lines anywhere in YAML with inner new lines set to true",
+    "before": "---\n\ndate: today\n\n\ntitle: remove inner new lines\n\n---\n\n# Header 1\n\n\nBody content here.",
+    "after": "---\ndate: today\ntitle: remove inner new lines\n---\n\n# Header 1\n\n\nBody content here.",
+    "options": {
+      "innerNewLines": true
+    }
+  },
+  {
+    "alias": "footnote-after-punctuation",
+    "description": "Placing footnotes after punctuation.",
+    "before": "Lorem[^1]. Ipsum[^2], doletes.",
+    "after": "Lorem.[^1] Ipsum,[^2] doletes.",
+    "options": {}
+  },
+  {
+    "alias": "footnote-after-punctuation",
+    "description": "A footnote at the start of a task is not moved to after the punctuation",
+    "before": "- [ ] [^1]: This is a footnote and a task.\n- [ ] This is a footnote and a task that gets swapped with the punctuation[^2]!\n[^2]: This footnote got modified",
+    "after": "- [ ] [^1]: This is a footnote and a task.\n- [ ] This is a footnote and a task that gets swapped with the punctuation![^2]\n[^2]: This footnote got modified",
+    "options": {}
+  },
+  {
+    "alias": "move-footnotes-to-the-bottom",
+    "description": "Moving footnotes to the bottom",
+    "before": "Lorem ipsum, consectetur adipiscing elit. [^1] Donec dictum turpis quis ipsum pellentesque.\n\n[^1]: first footnote\n\nQuisque lorem est, fringilla sed enim at, sollicitudin lacinia nisi.[^2]\n[^2]: second footnote\n\nMaecenas malesuada dignissim purus ac volutpat.",
+    "after": "Lorem ipsum, consectetur adipiscing elit. [^1] Donec dictum turpis quis ipsum pellentesque.\n\nQuisque lorem est, fringilla sed enim at, sollicitudin lacinia nisi.[^2]\nMaecenas malesuada dignissim purus ac volutpat.\n\n[^1]: first footnote\n[^2]: second footnote",
+    "options": {
+      "includeBlankLineBetweenFootnotes": false
+    }
+  },
+  {
+    "alias": "move-footnotes-to-the-bottom",
+    "description": "Moving footnotes to the bottom with including a blank line between footnotes",
+    "before": "Lorem ipsum, consectetur adipiscing elit. [^1] Donec dictum turpis quis ipsum pellentesque.\n\n[^1]: first footnote\n\nQuisque lorem est, fringilla sed enim at, sollicitudin lacinia nisi.[^2]\n[^2]: second footnote\n\nMaecenas malesuada dignissim purus ac volutpat.",
+    "after": "Lorem ipsum, consectetur adipiscing elit. [^1] Donec dictum turpis quis ipsum pellentesque.\n\nQuisque lorem est, fringilla sed enim at, sollicitudin lacinia nisi.[^2]\nMaecenas malesuada dignissim purus ac volutpat.\n\n[^1]: first footnote\n\n[^2]: second footnote",
+    "options": {
+      "includeBlankLineBetweenFootnotes": true
+    }
+  },
+  {
+    "alias": "re-index-footnotes",
+    "description": "Re-indexing footnotes after having deleted previous footnotes",
+    "before": "Lorem ipsum at aliquet felis.[^3] Donec dictum turpis quis pellentesque,[^5] et iaculis tortor condimentum.\n\n[^3]: first footnote\n[^5]: second footnote",
+    "after": "Lorem ipsum at aliquet felis.[^1] Donec dictum turpis quis pellentesque,[^2] et iaculis tortor condimentum.\n\n[^1]: first footnote\n[^2]: second footnote",
+    "options": {}
+  },
+  {
+    "alias": "re-index-footnotes",
+    "description": "Re-indexing footnotes after inserting a footnote between",
+    "before": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.[^1] Aenean at aliquet felis. Donec dictum turpis quis ipsum pellentesque, et iaculis tortor condimentum.[^1a] Vestibulum nec blandit felis, vulputate finibus purus.[^2] Praesent quis iaculis diam.\n\n[^1]: first footnote\n[^1a]: third footnote, inserted later\n[^2]: second footnotes",
+    "after": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.[^1] Aenean at aliquet felis. Donec dictum turpis quis ipsum pellentesque, et iaculis tortor condimentum.[^2] Vestibulum nec blandit felis, vulputate finibus purus.[^3] Praesent quis iaculis diam.\n\n[^1]: first footnote\n[^2]: third footnote, inserted later\n[^3]: second footnotes",
+    "options": {}
+  },
+  {
+    "alias": "re-index-footnotes",
+    "description": "Re-indexing footnotes preserves multiple references to the same footnote index",
+    "before": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.[^1] Aenean at aliquet felis. Donec dictum turpis quis ipsum pellentesque, et iaculis tortor condimentum.[^1a] Vestibulum nec blandit felis, vulputate finibus purus.[^2] Praesent quis iaculis diam.[^1]\n\n[^1]: first footnote\n[^1a]: third footnote, inserted later\n[^2]: second footnotes",
+    "after": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.[^1] Aenean at aliquet felis. Donec dictum turpis quis ipsum pellentesque, et iaculis tortor condimentum.[^2] Vestibulum nec blandit felis, vulputate finibus purus.[^3] Praesent quis iaculis diam.[^1]\n\n[^1]: first footnote\n[^2]: third footnote, inserted later\n[^3]: second footnotes",
+    "options": {}
+  },
+  {
+    "alias": "re-index-footnotes",
+    "description": "Re-indexing footnotes condense duplicate footnotes into 1 when key and footnote are the same",
+    "before": "bla[^1], bla[^1], bla[^2]\n[^1]: bla\n[^1]: bla\n[^2]: bla",
+    "after": "bla[^1], bla[^1], bla[^2]\n[^1]: bla\n[^2]: bla",
+    "options": {}
+  },
+  {
+    "alias": "remove-consecutive-list-markers",
+    "description": "Removing consecutive list markers.",
+    "before": "- item 1\n- - copypasted item A\n- item 2\n  - indented item\n  - - copypasted item B",
+    "after": "- item 1\n- copypasted item A\n- item 2\n  - indented item\n  - copypasted item B",
+    "options": {}
+  },
+  {
+    "alias": "remove-empty-list-markers",
+    "description": "Removes empty list markers.",
+    "before": "- item 1\n-\n- item 2\n\n* list 2 item 1\n    *\n* list 2 item 2\n\n+ list 3 item 1\n+\n+ list 3 item 2",
+    "after": "- item 1\n- item 2\n\n* list 2 item 1\n* list 2 item 2\n\n+ list 3 item 1\n+ list 3 item 2",
+    "options": {}
+  },
+  {
+    "alias": "remove-empty-list-markers",
+    "description": "Removes empty ordered list markers.",
+    "before": "1. item 1\n2.\n3. item 2\n\n1. list 2 item 1\n2. list 2 item 2\n3. \n\n_Note that this rule does not make sure that the ordered list is sequential after removal_",
+    "after": "1. item 1\n3. item 2\n\n1. list 2 item 1\n2. list 2 item 2\n\n_Note that this rule does not make sure that the ordered list is sequential after removal_",
+    "options": {}
+  },
+  {
+    "alias": "remove-empty-list-markers",
+    "description": "Removes empty checklist markers.",
+    "before": "- [ ]  item 1\n- [x]\n- [ ] item 2\n- [ ]   \n\n_Note that this will affect checked and uncheck checked list items_",
+    "after": "- [ ]  item 1\n- [ ] item 2\n\n_Note that this will affect checked and uncheck checked list items_",
+    "options": {}
+  },
+  {
+    "alias": "remove-empty-list-markers",
+    "description": "Removes empty list, checklist, and ordered list markers in callouts/blockquotes",
+    "before": "> Checklist in blockquote\n> - [ ]  item 1\n> - [x]\n> - [ ] item 2\n> - [ ]   \n\n> Ordered List in blockquote\n> > 1. item 1\n> > 2.\n> > 3. item 2\n> > 4.  \n\n> Regular lists in blockquote\n>\n> - item 1\n> -\n> - item 2\n>\n> List 2\n>\n> * item 1\n>     *\n> * list 2 item 2\n>\n> List 3\n>\n> + item 1\n> + \n> + item 2",
+    "after": "> Checklist in blockquote\n> - [ ]  item 1\n> - [ ] item 2\n\n> Ordered List in blockquote\n> > 1. item 1\n> > 3. item 2\n\n> Regular lists in blockquote\n>\n> - item 1\n> - item 2\n>\n> List 2\n>\n> * item 1\n> * list 2 item 2\n>\n> List 3\n>\n> + item 1\n> + item 2",
+    "options": {}
+  },
+  {
+    "alias": "remove-empty-lines-between-list-markers-and-checklists",
+    "description": "Blank lines are removed between ordered list items",
+    "before": "1. Item 1\n\n2. Item 2",
+    "after": "1. Item 1\n2. Item 2",
+    "options": {}
+  },
+  {
+    "alias": "remove-empty-lines-between-list-markers-and-checklists",
+    "description": "Blank lines are removed between list items when the list marker is '-'",
+    "before": "- Item 1\n\n\t- Subitem 1\n\n- Item 2",
+    "after": "- Item 1\n\t- Subitem 1\n- Item 2",
+    "options": {}
+  },
+  {
+    "alias": "remove-empty-lines-between-list-markers-and-checklists",
+    "description": "Blank lines are removed between checklist items",
+    "before": "- [x] Item 1\n\n\t- [!] Subitem 1\n\n- [ ] Item 2",
+    "after": "- [x] Item 1\n\t- [!] Subitem 1\n- [ ] Item 2",
+    "options": {}
+  },
+  {
+    "alias": "remove-empty-lines-between-list-markers-and-checklists",
+    "description": "Blank lines are removed between list items when the list marker is '+'",
+    "before": "+ Item 1\n\n\t+ Subitem 1\n\n+ Item 2",
+    "after": "+ Item 1\n\t+ Subitem 1\n+ Item 2",
+    "options": {}
+  },
+  {
+    "alias": "remove-empty-lines-between-list-markers-and-checklists",
+    "description": "Blank lines are removed between list items when the list marker is '*'",
+    "before": "* Item 1\n\n\t* Subitem 1\n\n* Item 2",
+    "after": "* Item 1\n\t* Subitem 1\n* Item 2",
+    "options": {}
+  },
+  {
+    "alias": "remove-empty-lines-between-list-markers-and-checklists",
+    "description": "Blank lines are removed between unordered list items and checklists, while ordered lists remain separate",
+    "before": "1. Item 1\n\n2. Item 2\n\n- Item 1\n\n\t- Subitem 1\n\n- Item 2\n\n- [x] Item 1\n\n\t- [f] Subitem 1\n\n- [ ] Item 2\n\n+ Item 1\n\n\t+ Subitem 1\n\n+ Item 2\n\n* Item 1\n\n\t* Subitem 1\n\n* Item 2",
+    "after": "1. Item 1\n2. Item 2\n\n- Item 1\n\t- Subitem 1\n- Item 2\n- [x] Item 1\n\t- [f] Subitem 1\n- [ ] Item 2\n+ Item 1\n\t+ Subitem 1\n+ Item 2\n* Item 1\n\t* Subitem 1\n* Item 2",
+    "options": {}
+  },
+  {
+    "alias": "space-after-list-markers",
+    "description": "A single space is left between the list marker and the text of the list item",
+    "before": "1.   Item 1\n2.  Item 2\n\n-   [ ] Item 1\n- [x]    Item 2\n\t-  [ ] Item 3",
+    "after": "1. Item 1\n2. Item 2\n\n- [ ] Item 1\n- [x] Item 2\n\t- [ ] Item 3",
+    "options": {}
+  },
+  {
+    "alias": "remove-hyphenated-line-breaks",
+    "description": "Removing hyphenated line breaks.",
+    "before": "This text has a linebr‐ eak.",
+    "after": "This text has a linebreak.",
+    "options": {}
+  },
+  {
+    "alias": "correct-closing-fence-indentation",
+    "description": "Aligns the closing fence with the list content",
+    "before": "- ```sh\n  git remote add upstream <upstream-repository-url>\n  git remote set-url upstream --push NO-PUSH\n  but pull --check\n  but config target upstream/main --push-remote origin # but config target upstream/master --push-remote origin\n          ```",
+    "after": "- ```sh\n  git remote add upstream <upstream-repository-url>\n  git remote set-url upstream --push NO-PUSH\n  but pull --check\n  but config target upstream/main --push-remote origin # but config target upstream/master --push-remote origin\n  ```",
+    "options": {}
+  },
+  {
+    "alias": "correct-closing-fence-indentation",
+    "description": "Indents a closing fence that falls outside the list",
+    "before": "- ```sh\n  command\n```",
+    "after": "- ```sh\n  command\n  ```",
+    "options": {}
+  },
+  {
+    "alias": "correct-closing-fence-indentation",
+    "description": "Preserves fence examples inside an already closed code block",
+    "before": "- ````markdown\n  ```sh\n          ```\n  ````",
+    "after": "- ````markdown\n  ```sh\n          ```\n  ````",
+    "options": {}
+  },
+  {
+    "alias": "consecutive-blank-lines",
+    "description": "Consecutive blank lines are removed",
+    "before": "Some text\n\n\nSome more text",
+    "after": "Some text\n\nSome more text",
+    "options": {}
+  },
+  {
+    "alias": "empty-line-around-code-fences",
+    "description": "Fenced code blocks that start a document do not get an empty line before them.",
+    "before": "``` js\nvar temp = 'text';\n// this is a code block\n```\nText after code block.",
+    "after": "``` js\nvar temp = 'text';\n// this is a code block\n```\n\nText after code block.",
+    "options": {}
+  },
+  {
+    "alias": "empty-line-around-code-fences",
+    "description": "Fenced code blocks that end a document do not get an empty line after them.",
+    "before": "# Heading 1\n```\nHere is a code block\n```",
+    "after": "# Heading 1\n\n```\nHere is a code block\n```",
+    "options": {}
+  },
+  {
+    "alias": "empty-line-around-code-fences",
+    "description": "Fenced code blocks that are in a blockquote have the proper empty line added",
+    "before": "# Make sure that code blocks in blockquotes are accounted for correctly\n> ```js\n> var text = 'this is some text';\n> ```\n>\n> ```js\n> var other text = 'this is more text';\n> ```\n\n**Note that the blanks blockquote lines added do not have whitespace after them**\n\n# Doubly nested code block\n\n> > ```js\n> > var other text = 'this is more text';\n> > ```",
+    "after": "# Make sure that code blocks in blockquotes are accounted for correctly\n\n> ```js\n> var text = 'this is some text';\n> ```\n>\n> ```js\n> var other text = 'this is more text';\n> ```\n\n**Note that the blanks blockquote lines added do not have whitespace after them**\n\n# Doubly nested code block\n\n> > ```js\n> > var other text = 'this is more text';\n> > ```",
+    "options": {}
+  },
+  {
+    "alias": "empty-line-around-code-fences",
+    "description": "Nested fenced code blocks get empty lines added around them",
+    "before": "```markdown\n# Header\n\n````JavaScript\nvar text = 'some string';\n````\n```",
+    "after": "```markdown\n# Header\n\n````JavaScript\nvar text = 'some string';\n````\n\n```",
+    "options": {}
+  },
+  {
+    "alias": "empty-line-around-math-blocks",
+    "description": "Math blocks that start a document do not get an empty line before them.",
+    "before": "$$\n\\boldsymbol{a}=\\begin{bmatrix}a_x \\\\ a_y\\end{bmatrix}\n$$\nsome more text",
+    "after": "$$\n\\boldsymbol{a}=\\begin{bmatrix}a_x \\\\ a_y\\end{bmatrix}\n$$\n\nsome more text",
+    "options": {
+      "minimumNumberOfDollarSignsToBeAMathBlock": 2
+    }
+  },
+  {
+    "alias": "empty-line-around-math-blocks",
+    "description": "Math blocks that are singe-line are updated based on the value of `Number of dollar signs to indicate a math block` (in this case its value is 2)",
+    "before": "$$\\boldsymbol{a}=\\begin{bmatrix}a_x \\\\ a_y\\end{bmatrix}$$\nsome more text",
+    "after": "$$\\boldsymbol{a}=\\begin{bmatrix}a_x \\\\ a_y\\end{bmatrix}$$\n\nsome more text",
+    "options": {
+      "minimumNumberOfDollarSignsToBeAMathBlock": 2
+    }
+  },
+  {
+    "alias": "empty-line-around-math-blocks",
+    "description": "Math blocks that end a document do not get an empty line after them.",
+    "before": "Some text\n$$\n\\boldsymbol{a}=\\begin{bmatrix}a_x \\\\ a_y\\end{bmatrix}\n$$",
+    "after": "Some text\n\n$$\n\\boldsymbol{a}=\\begin{bmatrix}a_x \\\\ a_y\\end{bmatrix}\n$$",
+    "options": {
+      "minimumNumberOfDollarSignsToBeAMathBlock": 2
+    }
+  },
+  {
+    "alias": "empty-line-around-math-blocks",
+    "description": "Math blocks that are not at the start or the end of the document will have an empty line added before and after them",
+    "before": "Some text\n$$\n\\boldsymbol{a}=\\begin{bmatrix}a_x \\\\ a_y\\end{bmatrix}\n$$\nsome more text",
+    "after": "Some text\n\n$$\n\\boldsymbol{a}=\\begin{bmatrix}a_x \\\\ a_y\\end{bmatrix}\n$$\n\nsome more text",
+    "options": {
+      "minimumNumberOfDollarSignsToBeAMathBlock": 2
+    }
+  },
+  {
+    "alias": "empty-line-around-math-blocks",
+    "description": "Math blocks in callouts or blockquotes have the appropriately formatted blank lines added",
+    "before": "> Math block in blockquote\n> $$\n> \\boldsymbol{a}=\\begin{bmatrix}a_x \\\\ a_y\\end{bmatrix}\n> $$\n\nMore content here\n\n> Math block doubly nested in blockquote\n> > $$\n> > \\boldsymbol{a}=\\begin{bmatrix}a_x \\\\ a_y\\end{bmatrix}\n> > $$",
+    "after": "> Math block in blockquote\n>\n> $$\n> \\boldsymbol{a}=\\begin{bmatrix}a_x \\\\ a_y\\end{bmatrix}\n> $$\n\nMore content here\n\n> Math block doubly nested in blockquote\n>\n> > $$\n> > \\boldsymbol{a}=\\begin{bmatrix}a_x \\\\ a_y\\end{bmatrix}\n> > $$",
+    "options": {
+      "minimumNumberOfDollarSignsToBeAMathBlock": 2
+    }
+  },
+  {
+    "alias": "empty-line-around-tables",
+    "description": "Tables that start a document do not get an empty line before them.",
+    "before": "| Column 1 | Column 2 |\n|----------|----------|\n| foo      | bar      |\n| baz      | qux      |\n| quux     | quuz     |\nMore text.\n# Heading\n\n**Note that text directly following a table is considered part of a table according to github markdown**",
+    "after": "| Column 1 | Column 2 |\n|----------|----------|\n| foo      | bar      |\n| baz      | qux      |\n| quux     | quuz     |\n\nMore text.\n# Heading\n\n**Note that text directly following a table is considered part of a table according to github markdown**",
+    "options": {}
+  },
+  {
+    "alias": "empty-line-around-tables",
+    "description": "Tables that end a document do not get an empty line after them.",
+    "before": "# Heading 1\n| Column 1 | Column 2 |\n|----------|----------|\n| foo      | bar      |\n| baz      | qux      |\n| quux     | quuz     |",
+    "after": "# Heading 1\n\n| Column 1 | Column 2 |\n|----------|----------|\n| foo      | bar      |\n| baz      | qux      |\n| quux     | quuz     |",
+    "options": {}
+  },
+  {
+    "alias": "empty-line-around-tables",
+    "description": "Tables that are not at the start or the end of the document will have an empty line added before and after them",
+    "before": "# Table 1\n| Column 1 | Column 2 | Column 3 |\n|----------|----------|----------|\n| foo      | bar      | blob     |\n| baz      | qux      | trust    |\n| quux     | quuz     | glob     |\n# Table 2 without Pipe at Start and End\n| Column 1 | Column 2 |\n:-: | -----------:\nbar | baz\nfoo | bar\n# Header for more content\nNew paragraph.",
+    "after": "# Table 1\n\n| Column 1 | Column 2 | Column 3 |\n|----------|----------|----------|\n| foo      | bar      | blob     |\n| baz      | qux      | trust    |\n| quux     | quuz     | glob     |\n\n# Table 2 without Pipe at Start and End\n\n| Column 1 | Column 2 |\n:-: | -----------:\nbar | baz\nfoo | bar\n\n# Header for more content\nNew paragraph.",
+    "options": {}
+  },
+  {
+    "alias": "empty-line-around-tables",
+    "description": "Tables in callouts or blockquotes have the appropriately formatted blank lines added",
+    "before": "> Table in blockquote\n> | Column 1 | Column 2 | Column 3 |\n> |----------|----------|----------|\n> | foo      | bar      | blob     |\n> | baz      | qux      | trust    |\n> | quux     | quuz     | glob     |\n\nMore content here\n\n> Table doubly nested in blockquote\n> > | Column 1 | Column 2 | Column 3 |\n> > |----------|----------|----------|\n> > | foo      | bar      | blob     |\n> > | baz      | qux      | trust    |\n> > | quux     | quuz     | glob     |",
+    "after": "> Table in blockquote\n>\n> | Column 1 | Column 2 | Column 3 |\n> |----------|----------|----------|\n> | foo      | bar      | blob     |\n> | baz      | qux      | trust    |\n> | quux     | quuz     | glob     |\n\nMore content here\n\n> Table doubly nested in blockquote\n>\n> > | Column 1 | Column 2 | Column 3 |\n> > |----------|----------|----------|\n> > | foo      | bar      | blob     |\n> > | baz      | qux      | trust    |\n> > | quux     | quuz     | glob     |",
+    "options": {}
+  },
+  {
+    "alias": "empty-line-around-horizontal-rules",
+    "description": "Horizontal rules that start a document do not get an empty line before them.",
+    "before": "***\n\n\nContent",
+    "after": "***\n\nContent",
+    "options": {}
+  },
+  {
+    "alias": "empty-line-around-horizontal-rules",
+    "description": "Horizontal rules that end a document do not get an empty line after them.",
+    "before": "***\nContent\n***",
+    "after": "***\n\nContent\n\n***",
+    "options": {}
+  },
+  {
+    "alias": "empty-line-around-horizontal-rules",
+    "description": "All types of horizontal rules are affected by this rule",
+    "before": "- Content 1\n***\n- Content 2\n---\n- Content 3\n___\n- Content 4",
+    "after": "- Content 1\n\n***\n\n- Content 2\n\n---\n\n- Content 3\n\n___\n\n- Content 4",
+    "options": {}
+  },
+  {
+    "alias": "empty-line-around-horizontal-rules",
+    "description": "YAML frontmatter is not affected by this rule",
+    "before": "---\nprop: value\n---\n\nContent",
+    "after": "---\nprop: value\n---\n\nContent",
+    "options": {}
+  },
+  {
+    "alias": "empty-line-around-horizontal-rules",
+    "description": "Paragraphs above `---` are treated as a heading and not spaced apart",
+    "before": "Content\n---",
+    "after": "Content\n---",
+    "options": {}
+  },
+  {
+    "alias": "heading-blank-lines",
+    "description": "Headings should be surrounded by blank lines",
+    "before": "# H1\n## H2\n\n\n# H1\nline\n## H2\n",
+    "after": "# H1\n\n## H2\n\n# H1\n\nline\n\n## H2",
+    "options": {
+      "bottom": true,
+      "emptyLineAfterYaml": true
+    }
+  },
+  {
+    "alias": "heading-blank-lines",
+    "description": "With `Bottom=false`",
+    "before": "# H1\nline\n## H2\n# H1\nline",
+    "after": "# H1\nline\n\n## H2\n# H1\nline",
+    "options": {
+      "bottom": false,
+      "emptyLineAfterYaml": true
+    }
+  },
+  {
+    "alias": "heading-blank-lines",
+    "description": "Empty line before header and after YAML is removed with `Empty line between YAML and header=false`",
+    "before": "---\nkey: value\n---\n\n# Header\nParagraph here...",
+    "after": "---\nkey: value\n---\n# Header\n\nParagraph here...",
+    "options": {
+      "bottom": true,
+      "emptyLineAfterYaml": false
+    }
+  },
+  {
+    "alias": "line-break-at-document-end",
+    "description": "Appending a line break to the end of the document.",
+    "before": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+    "after": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.\n",
+    "options": {}
+  },
+  {
+    "alias": "line-break-at-document-end",
+    "description": "Removing trailing line breaks to the end of the document, except one.",
+    "before": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.\n\n\n",
+    "after": "Lorem ipsum dolor sit amet, consectetur adipiscing elit.\n",
+    "options": {}
+  },
+  {
+    "alias": "line-break-at-document-end",
+    "description": "Empty files will not have a blank line added",
+    "before": "",
+    "after": "",
+    "options": {}
+  },
+  {
+    "alias": "trailing-spaces",
+    "description": "Removes trailing spaces and tabs.",
+    "before": "# H1\nLine with trailing spaces and tabs.\t        ",
+    "after": "# H1\nLine with trailing spaces and tabs.",
+    "options": {
+      "twoSpaceLineBreak": false
+    }
+  },
+  {
+    "alias": "trailing-spaces",
+    "description": "With `Two space linebreak = true`",
+    "before": "# H1\nLine with trailing spaces and tabs.  ",
+    "after": "# H1\nLine with trailing spaces and tabs.  ",
+    "options": {
+      "twoSpaceLineBreak": true
+    }
+  },
+  {
+    "alias": "space-between-chinese-japanese-or-korean-and-english-or-numbers",
+    "description": "Space between Chinese and English",
+    "before": "中文字符串english中文字符串。",
+    "after": "中文字符串 english 中文字符串。",
+    "options": {
+      "englishNonLetterCharactersAfterCJKCharacters": "-+'\"([¥$",
+      "englishNonLetterCharactersBeforeCJKCharacters": "-+;:'\"°%$)]"
+    }
+  },
+  {
+    "alias": "space-between-chinese-japanese-or-korean-and-english-or-numbers",
+    "description": "Space between Chinese and link",
+    "before": "中文字符串[english](http://example.com)中文字符串。",
+    "after": "中文字符串 [english](http://example.com) 中文字符串。",
+    "options": {
+      "englishNonLetterCharactersAfterCJKCharacters": "-+'\"([¥$",
+      "englishNonLetterCharactersBeforeCJKCharacters": "-+;:'\"°%$)]"
+    }
+  },
+  {
+    "alias": "space-between-chinese-japanese-or-korean-and-english-or-numbers",
+    "description": "Space between Chinese and inline code block",
+    "before": "中文字符串`code`中文字符串。",
+    "after": "中文字符串 `code` 中文字符串。",
+    "options": {
+      "englishNonLetterCharactersAfterCJKCharacters": "-+'\"([¥$",
+      "englishNonLetterCharactersBeforeCJKCharacters": "-+;:'\"°%$)]"
+    }
+  },
+  {
+    "alias": "space-between-chinese-japanese-or-korean-and-english-or-numbers",
+    "description": "No space between Chinese and English in tag",
+    "before": "#标签A #标签2标签",
+    "after": "#标签A #标签2标签",
+    "options": {
+      "englishNonLetterCharactersAfterCJKCharacters": "-+'\"([¥$",
+      "englishNonLetterCharactersBeforeCJKCharacters": "-+;:'\"°%$)]"
+    }
+  },
+  {
+    "alias": "space-between-chinese-japanese-or-korean-and-english-or-numbers",
+    "description": "Make sure that spaces are not added between italics and Chinese characters to preserve markdown syntax",
+    "before": "_这是一个数学公式_\n*这是一个数学公式english*\n\n# Handling bold and italics nested in each other is not supported at this time\n\n**_这是一_个数学公式**\n*这是一hello__个数学world公式__*",
+    "after": "_这是一个数学公式_\n*这是一个数学公式 english*\n\n# Handling bold and italics nested in each other is not supported at this time\n\n**_ 这是一 _ 个数学公式**\n*这是一 hello__ 个数学 world 公式 __*",
+    "options": {
+      "englishNonLetterCharactersAfterCJKCharacters": "-+'\"([¥$",
+      "englishNonLetterCharactersBeforeCJKCharacters": "-+;:'\"°%$)]"
+    }
+  },
+  {
+    "alias": "space-between-chinese-japanese-or-korean-and-english-or-numbers",
+    "description": "Images and links are ignored",
+    "before": "[[这是一个数学公式english]]\n![[这是一个数学公式english.jpg]]\n[这是一个数学公式english](这是一个数学公式english.md)\n![这是一个数学公式english](这是一个数学公式english.jpg)",
+    "after": "[[这是一个数学公式english]]\n![[这是一个数学公式english.jpg]]\n[这是一个数学公式english](这是一个数学公式english.md)\n![这是一个数学公式english](这是一个数学公式english.jpg)",
+    "options": {
+      "englishNonLetterCharactersAfterCJKCharacters": "-+'\"([¥$",
+      "englishNonLetterCharactersBeforeCJKCharacters": "-+;:'\"°%$)]"
+    }
+  },
+  {
+    "alias": "space-between-chinese-japanese-or-korean-and-english-or-numbers",
+    "description": "Space between CJK and English",
+    "before": "日本語englishひらがな\nカタカナenglishカタカナ\nﾊﾝｶｸｶﾀｶﾅenglish１２３全角数字\n한글english한글",
+    "after": "日本語 english ひらがな\nカタカナ english カタカナ\nﾊﾝｶｸｶﾀｶﾅ english１２３全角数字\n한글 english 한글",
+    "options": {
+      "englishNonLetterCharactersAfterCJKCharacters": "-+'\"([¥$",
+      "englishNonLetterCharactersBeforeCJKCharacters": "-+;:'\"°%$)]"
+    }
+  },
+  {
+    "alias": "remove-leftover-footnotes-from-quote-on-paste",
+    "description": "Footnote reference removed",
+    "before": "He was sure that he would get off without doing any time, but the cops had other plans.50\n\n_Note that the format for footnote references to remove is a dot or comma followed by any number of digits_",
+    "after": "He was sure that he would get off without doing any time, but the cops had other plans\n\n_Note that the format for footnote references to remove is a dot or comma followed by any number of digits_",
+    "options": {}
+  },
+  {
+    "alias": "remove-leftover-footnotes-from-quote-on-paste",
+    "description": "Footnote reference removal does not affect links",
+    "before": "[[Half is .5]]\n[Half is .5](HalfIs.5.md)\n![](HalfIs.5.jpg)\n![[Half is .5.jpg]]",
+    "after": "[[Half is .5]]\n[Half is .5](HalfIs.5.md)\n![](HalfIs.5.jpg)\n![[Half is .5.jpg]]",
+    "options": {}
+  }
+]
