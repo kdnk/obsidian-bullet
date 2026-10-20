@@ -1,36 +1,14 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { execFileSync } = require("node:child_process");
 const { cdp, evaluate } = require("./obsidian-scroll-driver.cjs");
 
-if (!process.argv[2] || !process.argv[3])
+if (!process.argv[2])
   throw Error(
-    "Usage: node scripts/verify-formatting-settings.cjs <fresh-output-directory> <linter-data.json>",
+    "Usage: node scripts/verify-formatting-settings.cjs <fresh-output-directory>",
   );
 const output = path.resolve(process.argv[2]);
 fs.mkdirSync(output, { recursive: false });
-const legacy = JSON.parse(
-  fs.readFileSync(path.resolve(process.argv[3]), "utf8"),
-);
-const target = path.resolve(
-  __dirname,
-  "../vault/.obsidian/plugins/obsidian-linter-plus",
-);
-assert.ok(
-  !fs.existsSync(target),
-  "Do not replace an installed Linter Plus configuration",
-);
-const fixture = {
-  ruleConfigs: Object.fromEntries(
-    Object.entries(legacy.ruleConfigs).filter(
-      ([, rule]) => rule.enabled === true,
-    ),
-  ),
-  commonStyles: legacy.commonStyles,
-  foldersToIgnore: legacy.foldersToIgnore,
-  filesToIgnore: legacy.filesToIgnore,
-};
 let previous;
 
 function clickSetting(name, control) {
@@ -81,36 +59,58 @@ function clickSetting(name, control) {
 }
 
 try {
-  fs.mkdirSync(target);
-  fs.writeFileSync(path.join(target, "data.json"), JSON.stringify(fixture));
   cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
-  previous = evaluate(() => {
+  previous = evaluate(async () => {
     const plugin = app.plugins.plugins.bullet;
     const previous = {
       formatting: JSON.stringify(plugin.settings.formatting),
       popout: app.vault.config.settingsPopoutWindow,
     };
+    const defaults = new plugin.settings.constructor({
+      loadData: async () => null,
+      saveData: async () => undefined,
+    });
+    await defaults.load();
+    plugin.settings.formatting = defaults.formatting;
     app.vault.setConfig("settingsPopoutWindow", false);
     app.setting.open();
     app.setting.openTabById("bullet");
     return previous;
   });
-  clickSetting("Import current formatter settings", "button");
-  evaluate(() => new Promise((resolve) => setTimeout(resolve, 300)));
-  const imported = evaluate(() =>
+  for (let attempt = 0; attempt < 50; attempt++) {
+    if (
+      evaluate(() =>
+        [...document.querySelectorAll(".setting-item-name")].some(
+          (element) => element.textContent === "File timestamps",
+        ),
+      )
+    )
+      break;
+    evaluate(() => new Promise((resolve) => setTimeout(resolve, 100)));
+  }
+  assert.equal(
+    evaluate(() =>
+      [...document.querySelectorAll(".setting-item-name")].some(
+        (element) =>
+          element.textContent === "Import current formatter settings",
+      ),
+    ),
+    false,
+  );
+  const defaults = evaluate(() =>
     structuredClone(app.plugins.plugins.bullet.settings.formatting),
   );
-  assert.equal(imported.onSave, false);
-  assert.equal(imported.cjkSpacing, true);
-  assert.equal(imported.footnotes, true);
-  assert.equal(imported.listCleanup, true);
-  assert.equal(imported.pasteFootnoteCleanup, true);
-  assert.equal(imported.timestamps.kind, "enabled");
-  assert.equal(imported.timestamps.createdKey, "created");
-  assert.equal(imported.timestamps.modifiedKey, "modified");
-  assert.equal(imported.timestamps.format, "YYYY-MM-DD-HHmmss");
-  assert.deepEqual(imported.linterIgnoredFolders, ["templates"]);
-  assert.deepEqual(imported.ignoredFolders, []);
+  assert.equal(defaults.onSave, true);
+  assert.equal(defaults.cjkSpacing, true);
+  assert.equal(defaults.footnotes, true);
+  assert.equal(defaults.listCleanup, true);
+  assert.equal(defaults.pasteFootnoteCleanup, true);
+  assert.equal(defaults.timestamps.kind, "enabled");
+  assert.equal(defaults.timestamps.createdKey, "created");
+  assert.equal(defaults.timestamps.modifiedKey, "modified");
+  assert.equal(defaults.timestamps.format, "YYYY-MM-DD-HHmmss");
+  assert.deepEqual(defaults.linterIgnoredFolders, ["templates"]);
+  assert.deepEqual(defaults.ignoredFolders, []);
   const controls = evaluate(() => {
     const row = (name) =>
       [...document.querySelectorAll(".setting-item")].find(
@@ -140,7 +140,12 @@ try {
         app.plugins.plugins.bullet.settings.formatting.timestamps,
       ),
     ),
-    imported.timestamps,
+    defaults.timestamps,
+  );
+  clickSetting("Format on explicit save", ".checkbox-container");
+  assert.equal(
+    evaluate(() => app.plugins.plugins.bullet.ownsExplicitSaveFormatting()),
+    false,
   );
   clickSetting("Format on explicit save", ".checkbox-container");
   assert.equal(
@@ -151,7 +156,7 @@ try {
     path.join(output, "results.json"),
     JSON.stringify(
       {
-        imported,
+        defaults,
         controls,
         nativeTimestampToggle: true,
         nativeSaveToggle: true,
@@ -167,9 +172,7 @@ try {
       "base64",
     ),
   );
-  console.log(
-    "PASS native settings import, refreshed controls, timestamps, and save toggle",
-  );
+  console.log("PASS native default settings, timestamps, and save toggle");
 } finally {
   if (previous)
     evaluate(async (previous) => {
@@ -180,5 +183,4 @@ try {
       app.vault.setConfig("settingsPopoutWindow", previous.popout);
     }, previous);
   cdp("Emulation.setFocusEmulationEnabled", { enabled: false });
-  if (fs.existsSync(target)) execFileSync("/usr/bin/trash", [target]);
 }

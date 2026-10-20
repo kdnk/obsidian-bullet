@@ -1,9 +1,6 @@
-import { App, Notice, Setting } from "obsidian";
+import { Setting } from "obsidian";
 
-import {
-  formattingRuleGroups,
-  importLegacyFormattingSettings,
-} from "../formatting/settings";
+import { formattingRuleGroups } from "../formatting/settings";
 import { FormattingSettings } from "../formatting/types";
 import { validateScriptPath } from "../formatting/userScript";
 import { Settings } from "../services/Settings";
@@ -68,7 +65,6 @@ const TOGGLES: { key: ToggleKey; name: string; desc: string }[] = [
 ];
 
 export function formattingSettingDefinitions(
-  app: App,
   settings: Settings,
   refresh: () => void = () => undefined,
 ): {
@@ -120,61 +116,10 @@ export function formattingSettingDefinitions(
     type: "group",
     heading: "Formatting",
     items: [
-      {
-        name: "Import current formatter settings",
-        desc: "Read Linter Plus, or Linter, and Automatic Linker settings once. Only Bullet settings change. Review the imported controls before enabling save formatting.",
-        render: (setting: Setting) => {
-          setting.addButton((button) =>
-            button.setButtonText("Import settings").onClick(async () => {
-              try {
-                const read = async (id: string): Promise<unknown> => {
-                  const path = `${app.vault.configDir}/plugins/${id}/data.json`;
-                  if (!(await app.vault.adapter.exists(path))) return undefined;
-                  return JSON.parse(await app.vault.adapter.read(path));
-                };
-                const plugins = "plugins" in app ? app.plugins : undefined;
-                const enabled =
-                  plugins &&
-                  typeof plugins === "object" &&
-                  "enabledPlugins" in plugins &&
-                  plugins.enabledPlugins instanceof Set
-                    ? plugins.enabledPlugins
-                    : undefined;
-                const preferLinter =
-                  enabled?.has("obsidian-linter") &&
-                  !enabled.has("obsidian-linter-plus");
-                const linter = preferLinter
-                  ? ((await read("obsidian-linter")) ??
-                    (await read("obsidian-linter-plus")))
-                  : ((await read("obsidian-linter-plus")) ??
-                    (await read("obsidian-linter")));
-                if (!linter)
-                  throw new Error("No saved Linter settings were found.");
-                const result = importLegacyFormattingSettings(
-                  linter,
-                  await read("automatic-linker"),
-                );
-                settings.formatting = { ...result.settings, onSave: false };
-                await settings.save();
-                refresh();
-                new Notice(
-                  result.unsupported.length
-                    ? `Imported formatter settings. Unsupported settings were left out. ${result.unsupported.join(", ")}`
-                    : "Imported formatter settings. Review the imported values before enabling format on save.",
-                );
-              } catch (error) {
-                new Notice(
-                  `Formatter settings import failed. ${error instanceof Error ? error.message : String(error)}`,
-                );
-              }
-            }),
-          );
-        },
-      },
       ...items,
       {
         name: "File timestamps",
-        desc: "Maintain created and modified frontmatter values. Imported settings preserve field names, date format, and source selection.",
+        desc: "Maintain created and modified frontmatter values using filesystem timestamps by default.",
         render: (setting: Setting) => {
           setting.addToggle((toggle) =>
             toggle

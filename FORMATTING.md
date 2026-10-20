@@ -2,17 +2,15 @@
 
 Bullet can format a note when you explicitly save it with Cmd/Ctrl+S. The **Bullet: Format current note** command runs the same formatting pipeline. Background autosaves do not trigger formatting.
 
-Save formatting starts disabled. Existing Bullet installations keep their editing behavior until you enable formatting.
+Save formatting starts enabled. The default profile uses the enabled Prettier and Linter settings inspected for this integration. Saved Bullet preferences take precedence over these defaults.
 
-## Import an existing configuration
+## Configure formatting
 
-Open **Settings → Bullet → Formatting** and select **Import settings**. Bullet reads the installed Linter Plus configuration, or Linter when Linter Plus is unavailable. It also reads Automatic Linker's formatter preferences. The import writes only Bullet settings.
-
-Review the imported settings and enable **Format on explicit save**. The import leaves save formatting disabled and never imports executable scripts. Enabled legacy rules outside Bullet's supported set are reported. Existing custom regular expressions and Linter commands are not executed by Bullet.
+Open **Settings → Bullet → Formatting** to adjust the default profile. No import step is needed. Bullet does not read another plugin's configuration at runtime.
 
 Use the updated Automatic Linker with Bullet's formatting integration. Automatic Linker supplies an awaited link transformation. Bullet manages the complete save sequence. Automatic Linker's own commands perform linking only.
 
-Neither the import nor enabling Bullet changes another plugin's saved settings. Standalone Linter or Prettier save hooks must remain disabled when Bullet manages formatting.
+Enabling Bullet does not change another plugin's saved settings. Standalone Linter or Prettier save hooks must remain disabled when Bullet manages formatting.
 
 ## Supported Linter rules
 
@@ -30,9 +28,9 @@ The initial rule set follows the enabled Linter Plus configuration inspected for
 | File timestamps                           | `yaml-timestamp`                                                                                                                                                                                                                      |
 | Remove quotation footnotes on paste       | `remove-leftover-footnotes-from-quote-on-paste`, applied only to pasted text                                                                                                                                                          |
 
-These are 20 save rules and one paste rule. The import preserves disabled individual rules inside a partially enabled group. Per-note Linter `disabled rules` directives remain effective for the cleanup stage.
+All 20 save rules and the paste rule start enabled. Per-note Linter `disabled rules` directives remain effective for the cleanup stage.
 
-The inspected timestamp configuration uses `created` and `modified`, local time, `YYYY-MM-DD-HHmmss`, and filesystem timestamps. The import preserves those values. Timestamp handling retains Linter's distinction between filesystem changes and changes made by formatting.
+The inspected timestamp configuration uses `created` and `modified`, local time, `YYYY-MM-DD-HHmmss`, and filesystem timestamps. Bullet uses those values by default. Timestamp handling retains Linter's distinction between filesystem changes and changes made by formatting.
 
 Prettier formats Markdown structure with the vault's **Indent using tabs** and **Tab size** preferences. Bullet does not add competing indentation settings. Embedded code-language formatting remains disabled, so code contents retain their literal indentation.
 
@@ -56,7 +54,7 @@ On a formatting error, Bullet shows a notice and leaves the original editor text
 
 **Excluded folders** and **Excluded files** skip the entire pipeline. **Cleanup excluded folders** and **Cleanup excluded files** skip only the Linter stage. Enter vault-relative paths, one per line.
 
-The inspected configuration excludes `templates` from Linter cleanup and independently from Automatic Linker. Prettier still formats templates. The import preserves that distinction instead of turning the Linter exclusion into a pipeline-wide exclusion.
+The inspected configuration excludes `templates` from Linter cleanup and independently from Automatic Linker. Prettier still formats templates. The default exclusions preserve that distinction.
 
 Automatic Linker's frontmatter opt-outs control linking and URL-title fetching. They do not disable the rest of Bullet's formatting.
 
@@ -92,4 +90,4 @@ The output directory must be fresh. The script checks native Save, a real module
 
 Use `scripts/verify-formatting-linker.cjs <fresh-output-directory> <built-automatic-linker-directory>` for both plugin load orders, standalone link-on-save, and the existing Format file command. The command entry is invoked through Obsidian's command API; save and Undo use native keyboard input. The verifier temporarily installs the built Automatic Linker only in the test vault and removes that installation afterward.
 
-Use `scripts/verify-formatting-settings.cjs <fresh-output-directory> <linter-data.json>` to reproduce this migration's enabled profile through native settings controls. The verifier copies the enabled rule configuration, common style preferences, and exclusion paths to the test vault. It checks the import, refreshed controls, timestamp options, and save toggle, then restores the settings.
+Use `scripts/verify-formatting-settings.cjs <fresh-output-directory>` to check fresh default settings through native settings controls. The verifier checks the default profile, timestamp options, save toggle, and absence of an import control, then restores the settings.

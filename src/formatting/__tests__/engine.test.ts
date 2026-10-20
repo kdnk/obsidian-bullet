@@ -8,7 +8,6 @@ import { dirname, join, resolve } from "node:path";
 import { rollup } from "rollup";
 import * as ts from "typescript";
 
-import { selectedLinterRules } from "../settings";
 import type { FormattingSettings } from "../types";
 
 interface Example {
@@ -23,7 +22,6 @@ interface Engine {
   lintMarkdown: typeof import("../lintMarkdown").lintMarkdown;
   formatPastedText: typeof import("../lintMarkdown").formatPastedText;
   defaultFormattingSettings: typeof import("../settings").defaultFormattingSettings;
-  importLegacyFormattingSettings: typeof import("../settings").importLegacyFormattingSettings;
   prettierMarkdown: typeof import("../prettier").formatMarkdown;
   parseFormattingSettings: typeof import("../settings").parseFormattingSettings;
   formatChanges: typeof import("../editorChanges").formatChanges;
@@ -38,7 +36,6 @@ function isEngine(value: unknown): value is Engine {
       "lintMarkdown",
       "formatPastedText",
       "defaultFormattingSettings",
-      "importLegacyFormattingSettings",
       "prettierMarkdown",
       "parseFormattingSettings",
       "formatChanges",
@@ -191,8 +188,7 @@ for (const [index, example] of examples.entries())
 
 function settings(): FormattingSettings {
   const result = engine.defaultFormattingSettings();
-  result.cjkSpacing = true;
-  result.joinHyphenatedWords = true;
+  result.timestamps = { kind: "disabled" };
   return result;
 }
 
@@ -345,39 +341,6 @@ test("safe Prettier keeps nested fenced content and is idempotent", async () => 
   ).toBe(expected);
 });
 
-function importedActiveCodeProfile(): FormattingSettings {
-  const ruleConfigs = Object.fromEntries(
-    selectedLinterRules.map((name) => [name, { enabled: true }]),
-  );
-  Object.assign(ruleConfigs, {
-    "yaml-timestamp": { enabled: false },
-    "compact-yaml": { enabled: true, "inner-new-lines": true },
-    "move-footnotes-to-the-bottom": {
-      enabled: true,
-      "include-blank-line-between-footnotes": false,
-    },
-    "heading-blank-lines": {
-      enabled: true,
-      bottom: true,
-      "empty-line-after-yaml": true,
-    },
-    "trailing-spaces": { enabled: true, "two-space-line-break": true },
-    "space-between-chinese-japanese-or-korean-and-english-or-numbers": {
-      enabled: true,
-      "english-symbols-punctuation-before": "-+;:°%$)]",
-      "english-symbols-punctuation-after": "-+([¥$",
-    },
-  });
-  return engine.importLegacyFormattingSettings(
-    {
-      ruleConfigs,
-      commonStyles: { minimumNumberOfDollarSignsToBeAMathBlock: 2 },
-      foldersToIgnore: ["templates"],
-    },
-    { formatOnSave: true, runPrettierAfterFormatting: true },
-  ).settings;
-}
-
 test.each([
   {
     description: "a list-attached malformed closing fence",
@@ -420,12 +383,12 @@ test.each([
     expected: "- \n\t- ```txt\n\t  \n\t    日本語ABC  \n\t  ```\n",
   },
 ])(
-  "the imported active profile preserves literal code across repeated full passes for $description",
+  "the default rule profile preserves literal code across repeated full passes for $description",
   async ({ input, expected }) => {
     const request = {
       file,
       indent: { useTabs: true, tabWidth: 4 },
-      settings: importedActiveCodeProfile(),
+      settings: settings(),
       signal: new AbortController().signal,
     };
     expect(await engine.formatMarkdown({ ...request, text: input })).toBe(
@@ -446,7 +409,7 @@ test("keeps ordinary formatting and literal token text beside protected code anc
   const request = {
     file,
     indent: { useTabs: true, tabWidth: 4 },
-    settings: importedActiveCodeProfile(),
+    settings: settings(),
     signal: new AbortController().signal,
     linker: transform,
     script: transform,
@@ -465,7 +428,7 @@ test("keeps ordinary formatting and literal token text beside protected code anc
 });
 
 test("does not remove timestamp values that match the internal ancestor marker", async () => {
-  const s = importedActiveCodeProfile();
+  const s = settings();
   s.profile.disabledRules = s.profile.disabledRules.filter(
     (rule) => rule !== "yaml-timestamp",
   );
@@ -495,46 +458,4 @@ test("does not remove timestamp values that match the internal ancestor marker",
   ).toBe(
     "---\ncreated: BULLETEMPTYCODEANCESTOR\n---\n- \n\t- ```txt\n\t  日本語ABC  \n\t  ```\n",
   );
-});
-
-test("imports a selected Linter profile without executable custom code", () => {
-  const result = engine.importLegacyFormattingSettings(
-    {
-      ruleConfigs: {
-        "yaml-timestamp": {
-          enabled: true,
-          "date-created-key": "birth",
-          "date-modified-key": "change",
-          format: "YYYY",
-          "convert-to-utc": true,
-        },
-        "trailing-spaces": { enabled: true, "two-space-line-break": false },
-        "space-between-chinese-japanese-or-korean-and-english-or-numbers": {
-          enabled: true,
-          "english-symbols-punctuation-before": "!",
-          "english-symbols-punctuation-after": "?",
-        },
-        "proper-ellipsis": { enabled: true },
-      },
-      foldersToIgnore: ["templates"],
-      customRegexes: [{ enabled: false, label: "inactive" }],
-    },
-    { formatOnSave: true, runPrettierAfterFormatting: true },
-  );
-  expect(result.settings.timestamps).toEqual({
-    kind: "enabled",
-    created: true,
-    modified: true,
-    createdKey: "birth",
-    modifiedKey: "change",
-    format: "YYYY",
-    createdSource: "filesystem",
-    modifiedSource: "filesystem",
-    utc: true,
-  });
-  expect(result.settings.linterIgnoredFolders).toEqual(["templates"]);
-  expect(result.settings.profile.preserveHardBreaks).toBe(false);
-  expect(result.settings.profile.cjkPunctuationBefore).toBe("!");
-  expect(result.settings.script).toEqual({ kind: "disabled" });
-  expect(result.unsupported).toEqual(["proper-ellipsis"]);
 });

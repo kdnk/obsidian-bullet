@@ -229,11 +229,7 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
   getSettingDefinitions(): SettingDefinitionItem<SettingsControlKey>[] {
     return [
       ...SETTING_GROUPS,
-      formattingSettingDefinitions(
-        this.app,
-        this.settings,
-        this.refreshFormatting,
-      ),
+      formattingSettingDefinitions(this.settings, this.refreshFormatting),
     ];
   }
 
@@ -355,7 +351,6 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
       }
     }
     const formatting = formattingSettingDefinitions(
-      this.app,
       this.settings,
       this.refreshFormatting,
     );
