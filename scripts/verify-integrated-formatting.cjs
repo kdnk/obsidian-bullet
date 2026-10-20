@@ -298,10 +298,17 @@ try {
   proof("JavaScript extension and relative imports", snapshot());
 
   configure('export default () => { throw Error("expected proof failure"); };');
-  key("s", "KeyS", 83, 4);
-  evaluate(() => new Promise((resolve) => setTimeout(resolve, 300)));
-  assert.equal(snapshot().text, "- TOKEN");
+  evaluate((key) => {
+    const editor = window[key].leaf.view.editor;
+    editor.setValue("- UNSAVED");
+    editor.setCursor({ line: 0, ch: 9 });
+  }, stateKey);
   assert.equal(snapshot().saved, "- TOKEN");
+  assert.equal(snapshot().text, "- UNSAVED");
+  key("s", "KeyS", 83, 4);
+  waitForFormatting();
+  waitFor(() => snapshot().saved === "- UNSAVED", "failed script saves source");
+  assert.equal(snapshot().text, "- UNSAVED");
   proof("script failure preserves and saves source", snapshot());
 
   configure(
