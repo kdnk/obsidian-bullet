@@ -73,17 +73,18 @@ async function setup(options: { command?: boolean; onSave?: boolean } = {}) {
     basename: "note",
     stat: { ctime: 1, mtime: 2 },
   };
-  const owner = { editor: initial.editor, file };
   const saved: string[] = [];
-  const original = jest.fn((checking: boolean) => {
-    if (!checking) saved.push(initial.editor.getValue());
-    return true;
-  });
-  const command: { checkCallback: (checking: boolean) => boolean | void } = {
-    checkCallback: original,
+  const persisted = new Map<string, string>();
+  const owner = {
+    editor: initial.editor,
+    file,
+    save: jest.fn(async () => {
+      const text = owner.editor.getValue();
+      saved.push(text);
+      persisted.set(owner.file.path, text);
+    }),
   };
-  const commands =
-    options.command === false ? {} : { "editor:save-file": command };
+
   const events = new Map<string, (...args: unknown[]) => void>();
   const settings = new Settings({
     loadData: async () => null,
@@ -102,6 +103,15 @@ async function setup(options: { command?: boolean; onSave?: boolean } = {}) {
       return {};
     },
   };
+  const original = jest.fn((checking: boolean) => {
+    if (!checking) void workspace.activeEditor.save();
+    return true;
+  });
+  const command: { checkCallback: (checking: boolean) => boolean | void } = {
+    checkCallback: original,
+  };
+  const commands =
+    options.command === false ? {} : { "editor:save-file": command };
   const plugins: Record<string, unknown> = {};
   const plugin = {
     app: {
@@ -124,6 +134,7 @@ async function setup(options: { command?: boolean; onSave?: boolean } = {}) {
     workspace,
     events,
     saved,
+    persisted,
     original,
     command,
     plugins,
@@ -168,7 +179,7 @@ test("formats explicit saves in one undoable edit and maps the latest backward s
 });
 
 test.each(["typing", "switch", "rename", "detach", "settings", "unload"])(
-  "discards stale output after %s and still saves once",
+  "discards stale output after %s and saves only a retained target",
   async (action) => {
     const gate = deferred();
     mockFormat.mockReturnValue(gate.promise);
@@ -187,10 +198,100 @@ test.each(["typing", "switch", "rename", "detach", "settings", "unload"])(
     await settle();
     const expected = action === "typing" ? "- hello typed" : "- hello";
     expect(test.editor.getValue()).toBe(expected);
-    expect(test.saved).toEqual([expected]);
+    expect(test.saved).toEqual(
+      action === "switch" || action === "detach" ? [] : [expected],
+    );
     await test.feature.unload();
   },
 );
+
+test("a delayed save persists its source pane while another note is active", async () => {
+  const gate = deferred();
+  mockFormat.mockReturnValue(gate.promise);
+  const test = await setup();
+  const destination = target("- destination unsaved");
+  const destinationFile = { ...test.file, path: "destination.md" };
+  const saveDestination = jest.fn(async () => {
+    test.persisted.set(destinationFile.path, destination.editor.getValue());
+  });
+  test.command.checkCallback(false);
+  test.workspace.activeEditor = {
+    editor: destination.editor,
+    file: destinationFile,
+    save: saveDestination,
+  };
+  gate.resolve("- source formatted");
+  await settle();
+  expect([...test.persisted]).toEqual([["note.md", "- source formatted"]]);
+  expect(destination.editor.getValue()).toBe("- destination unsaved");
+  expect(test.original).not.toHaveBeenCalled();
+  await test.feature.unload();
+});
+
+test("queued save intents retain their note after the same view navigates", async () => {
+  const gate = deferred();
+  mockFormat.mockReturnValueOnce(gate.promise);
+  const test = await setup();
+  test.command.checkCallback(false);
+  test.command.checkCallback(false);
+  // Obsidian flushes the departing note before reusing its view.
+  await test.owner.save();
+  test.owner.file = { ...test.file, path: "destination.md" };
+  test.cm.dispatch({
+    changes: { from: 0, to: 7, insert: "- destination unsaved" },
+  });
+  test.command.checkCallback(false);
+  gate.resolve("- stale source output");
+  await settle();
+  expect([...test.persisted]).toEqual([
+    ["note.md", "- hello"],
+    ["destination.md", "- destination unsaved"],
+  ]);
+  expect(test.saved).toEqual(["- hello", "- destination unsaved"]);
+  await test.feature.unload();
+});
+
+test.each(["failure", "unload"])(
+  "retains source save ownership after %s",
+  async (action) => {
+    const gate = deferred();
+    mockFormat.mockReturnValueOnce(gate.promise);
+    const test = await setup();
+    test.command.checkCallback(false);
+    const destination = target("- destination unsaved");
+    test.workspace.activeEditor = {
+      editor: destination.editor,
+      file: { ...test.file, path: "destination.md" },
+      save: jest.fn(async () => undefined),
+    };
+    if (action === "unload") await test.feature.unload();
+    else gate.reject(new Error("script failed"));
+    await settle();
+    expect([...test.persisted]).toEqual([["note.md", "- hello"]]);
+    expect(destination.editor.getValue()).toBe("- destination unsaved");
+    await test.feature.unload();
+  },
+);
+
+test("reports a failed background source save and drains queued intents", async () => {
+  const gate = deferred();
+  mockFormat.mockReturnValueOnce(gate.promise);
+  const test = await setup();
+  test.owner.save.mockRejectedValueOnce(new Error("disk full"));
+  test.command.checkCallback(false);
+  test.command.checkCallback(false);
+  const destination = target("- destination unsaved");
+  test.workspace.activeEditor = {
+    editor: destination.editor,
+    file: { ...test.file, path: "destination.md" },
+    save: jest.fn(async () => undefined),
+  };
+  gate.resolve("- source formatted");
+  await settle();
+  expect([...test.persisted]).toEqual([["note.md", "- source formatted\n"]]);
+  expect(mockNotices).toEqual(["Bullet could not save note.md. disk full"]);
+  await test.feature.unload();
+});
 
 test("a failing stage keeps the original document and reaches native save", async () => {
   mockFormat.mockRejectedValue(new Error("Save script failed"));
@@ -258,6 +359,7 @@ test("different panes format independently and keep their own captured editor", 
   test.workspace.activeEditor = {
     editor: other.editor,
     file: { ...test.file, path: "second.md" },
+    save: jest.fn(async () => undefined),
   };
   const two = test.feature.formatActiveEditor();
   second.resolve("- second done");
@@ -325,7 +427,9 @@ test.each(["switch", "disable"])(
       test.settings.formatting = { ...test.settings.formatting, onSave: false };
     gate.resolve("stale output");
     await settle();
-    expect(test.saved).toEqual(["- hello", "- hello"]);
+    expect(test.saved).toEqual(
+      action === "switch" ? [] : ["- hello", "- hello"],
+    );
     expect(mockFormat.mock.calls.map(([request]) => request.text)).toEqual([
       "- hello",
     ]);

@@ -20,6 +20,7 @@ interface FormattingEditor extends Editor {
 interface FormattingOwner {
   editor: FormattingEditor;
   file: TFile | null;
+  save?: () => void | Promise<void>;
 }
 
 type SaveCallback = (checking: boolean) => boolean | void;
@@ -40,7 +41,7 @@ interface Linker {
 }
 
 interface SaveIntent {
-  finish(): void;
+  finish(): void | Promise<void>;
 }
 
 interface PendingRun {
@@ -147,8 +148,30 @@ export class Formatting implements Feature {
         return original.call(this, checking);
       }
       const context = this;
+      const file = owner.file;
+      const editor = owner.editor;
+      const view = editor.cm;
       void feature.enqueue(owner, {
-        finish: () => original.call(context, false),
+        finish: async () => {
+          if (
+            owner.file !== file ||
+            owner.editor !== editor ||
+            editor.cm !== view ||
+            !view.dom.isConnected
+          )
+            return;
+          try {
+            if (feature.host.workspace.activeEditor === owner) {
+              original.call(context, false);
+            } else if (typeof owner.save === "function") {
+              await owner.save();
+            }
+          } catch (error) {
+            new Notice(
+              `Bullet could not save ${file.path}. ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        },
       });
       return true;
     };
@@ -171,9 +194,9 @@ export class Formatting implements Feature {
       completion: Promise.resolve(),
     };
     this.runs.set(view, run);
-    run.completion = this.execute(owner, view, run).finally(() => {
+    run.completion = this.execute(owner, view, run).finally(async () => {
       try {
-        intent.finish();
+        await intent.finish();
       } finally {
         if (this.runs.get(view) === run) this.runs.delete(view);
         const queued = run.queued;
@@ -187,10 +210,12 @@ export class Formatting implements Feature {
             view.dom.isConnected
           ) {
             void this.enqueue(owner, {
-              finish: () => queued.forEach((next) => next.finish()),
+              finish: async () => {
+                for (const next of queued) await next.finish();
+              },
             });
           } else {
-            queued.forEach((next) => next.finish());
+            for (const next of queued) await next.finish();
           }
         }
       }
