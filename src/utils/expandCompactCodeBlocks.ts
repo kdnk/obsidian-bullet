@@ -18,7 +18,7 @@ interface ListFence {
   from: number;
   text: string;
   prefixes: ListPrefix[];
-  hasEmptyAncestor: boolean;
+  emptyAncestors: { from: number; spacing: string }[];
 }
 
 const markdownTabSize = 4;
@@ -69,7 +69,11 @@ function htmlBlockEnd(text: string): RegExp | null {
 }
 
 function* listFences(doc: Text): Generator<ListFence> {
-  const ancestors: { indent: string; width: number; empty: boolean }[] = [];
+  const ancestors: {
+    indent: string;
+    width: number;
+    empty: { from: number; spacing: string } | null;
+  }[] = [];
   let fence: { marker: FenceMarker; indent: string } | null = null;
   let html: { end: RegExp; indent: string } | null = null;
   let frontmatter = false;
@@ -121,8 +125,6 @@ function* listFences(doc: Text): Generator<ListFence> {
     if (prefixes.length) {
       const last = prefixes[prefixes.length - 1];
       const content = text.slice(last.contentOffset);
-      const hasEmptyAncestor =
-        prefixes.length > 1 || ancestors.some((ancestor) => ancestor.empty);
       for (const prefix of prefixes) {
         const indent =
           text.slice(0, prefix.contentOffset).replace(/\S/g, " ") +
@@ -130,7 +132,13 @@ function* listFences(doc: Text): Generator<ListFence> {
         ancestors.push({
           indent,
           width: columns(indent),
-          empty: prefix !== last || content.length === 0,
+          empty:
+            prefix !== last || content.trim().length === 0
+              ? {
+                  from: line.from + prefix.contentOffset,
+                  spacing: prefix.spacing,
+                }
+              : null,
         });
       }
       const end = htmlBlockEnd(content);
@@ -143,7 +151,14 @@ function* listFences(doc: Text): Generator<ListFence> {
       const marker = getFenceOpening(content);
       if (marker) {
         fence = { marker, indent: ancestors[ancestors.length - 1].indent };
-        yield { from: line.from, text, prefixes, hasEmptyAncestor };
+        yield {
+          from: line.from,
+          text,
+          prefixes,
+          emptyAncestors: ancestors.flatMap(({ empty }) =>
+            empty ? [empty] : [],
+          ),
+        };
       }
       continue;
     }
@@ -156,7 +171,18 @@ function* listFences(doc: Text): Generator<ListFence> {
       continue;
     }
     const marker = getFenceOpening(content);
-    if (marker) fence = { marker, indent: parent?.indent ?? "" };
+    if (marker) {
+      fence = { marker, indent: parent?.indent ?? "" };
+      const emptyAncestors = ancestors.flatMap(({ empty }) =>
+        empty ? [empty] : [],
+      );
+      yield {
+        from: line.from,
+        text,
+        prefixes: [],
+        emptyAncestors,
+      };
+    }
   }
 }
 
@@ -185,7 +211,20 @@ export function expandCompactCodeBlocks(doc: Text): ChangeSpec[] {
 
 export function hasExpandableCodeBlockAncestor(source: string): boolean {
   for (const opening of listFences(Text.of(source.split("\n")))) {
-    if (opening.hasEmptyAncestor) return true;
+    if (opening.emptyAncestors.length > 0) return true;
   }
   return false;
+}
+
+export function fillEmptyCodeBlockAncestors(
+  doc: Text,
+  content: string,
+): ChangeSpec[] {
+  const boundaries = new Map<number, string>();
+  for (const opening of listFences(doc)) {
+    for (const ancestor of opening.emptyAncestors) {
+      boundaries.set(ancestor.from, ancestor.spacing ? content : " " + content);
+    }
+  }
+  return [...boundaries].map(([from, insert]) => ({ from, insert }));
 }

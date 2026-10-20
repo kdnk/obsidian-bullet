@@ -2,8 +2,41 @@ import { ChangeSet, Text } from "@codemirror/state";
 
 import {
   expandCompactCodeBlocks,
+  fillEmptyCodeBlockAncestors,
   hasExpandableCodeBlockAncestor,
 } from "../expandCompactCodeBlocks";
+
+function fill(source: string) {
+  const doc = Text.of(source.split("\n"));
+  return ChangeSet.of(fillEmptyCodeBlockAncestors(doc, "content"), doc.length)
+    .apply(doc)
+    .toString();
+}
+
+test("fills only empty rows that own fenced code, once per ancestor", () => {
+  expect(
+    fill(
+      "-\n\t- \n\t\t- ```txt\n\t\t  literal\n\t\t  ```\n\t\t- ~~~\n\t\t  other\n\t\t  ~~~\n- \n- prose",
+    ),
+  ).toBe(
+    "- content\n\t- content\n\t\t- ```txt\n\t\t  literal\n\t\t  ```\n\t\t- ~~~\n\t\t  other\n\t\t  ~~~\n- \n- prose",
+  );
+});
+
+test("fills an empty list row with a continuation fence", () => {
+  expect(fill("- \n  ```txt\n  literal\n  ```")).toBe(
+    "- content\n  ```txt\n  literal\n  ```",
+  );
+});
+
+test.each([
+  "---\nexample: |\n  - \n    - ```txt\n      code\n      ```\n---",
+  "<pre>\n- \n  - ```txt\n    code\n    ```\n</pre>",
+  "````md\n- \n  - ```txt\n    code\n    ```\n````",
+  "    - \n      - ```txt\n        code\n        ```",
+])("does not fill literal list rows in %j", (source) => {
+  expect(fill(source)).toBe(source);
+});
 
 function expand(source: string) {
   const doc = Text.of(source.split("\n"));

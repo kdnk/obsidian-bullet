@@ -8,7 +8,10 @@ import {
 import { formatMarkdown as prettierMarkdown } from "./prettier";
 import type { FormatMarkdownRequest } from "./types";
 
-import { expandCompactCodeBlocks } from "../utils/expandCompactCodeBlocks";
+import {
+  expandCompactCodeBlocks,
+  fillEmptyCodeBlockAncestors,
+} from "../utils/expandCompactCodeBlocks";
 
 export { formatPastedText } from "./lintMarkdown";
 
@@ -49,6 +52,19 @@ export async function formatMarkdown(
   const script = request.script;
   if (script)
     await stage("Save script", (value) => script(value, { file, signal }));
+  const source = Text.of(text.split("\n"));
+  const expanded = ChangeSet.of(
+    expandCompactCodeBlocks(source),
+    source.length,
+  ).apply(source);
+  let emptyAncestorToken = "BULLETEMPTYCODEANCESTOR";
+  while (text.includes(emptyAncestorToken)) emptyAncestorToken += "X";
+  text = ChangeSet.of(
+    fillEmptyCodeBlockAncestors(expanded, emptyAncestorToken),
+    expanded.length,
+  )
+    .apply(expanded)
+    .toString();
   const lintIgnored = isIgnoredPath(
     file.path,
     settings.linterIgnoredFolders,
@@ -62,7 +78,11 @@ export async function formatMarkdown(
     lintMarkdown(value, file, settings, request.now),
   );
   await stage("Bullet", (value) => {
-    const doc = Text.of(value.split("\n"));
+    const emptyAncestor = new RegExp(
+      `^([ \\t]*(?:[-*+]|\\d+\\.)[ \\t]+)${emptyAncestorToken}$`,
+      "gm",
+    );
+    const doc = Text.of(value.replace(emptyAncestor, "$1").split("\n"));
     return ChangeSet.of(expandCompactCodeBlocks(doc), doc.length)
       .apply(doc)
       .toString();
