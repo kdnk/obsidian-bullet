@@ -36,7 +36,6 @@ interface FormattingHost {
 }
 
 interface Linker {
-  isFormatOnSaveEnabled(): boolean;
   formatText(text: string, file: TFile): Promise<string>;
 }
 
@@ -247,7 +246,7 @@ export class Formatting implements Feature {
       view.state.doc === originalDoc;
     const candidate = this.host.plugins?.plugins["automatic-linker"];
     const linker =
-      isLinker(candidate) && candidate.isFormatOnSaveEnabled()
+      settings.automaticLinker && isLinker(candidate)
         ? (text: string) => candidate.formatText(text, file)
         : undefined;
     const tabSize = this.host.vault.getConfig("tabSize");
@@ -376,8 +375,6 @@ function isLinker(value: unknown): value is Linker {
   return (
     !!value &&
     typeof value === "object" &&
-    "isFormatOnSaveEnabled" in value &&
-    typeof value.isFormatOnSaveEnabled === "function" &&
     "formatText" in value &&
     typeof value.formatText === "function"
   );

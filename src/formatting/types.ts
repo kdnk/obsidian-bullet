@@ -37,6 +37,7 @@ export interface LinterProfile {
 
 export interface FormattingSettings {
   onSave: boolean;
+  automaticLinker: boolean;
   markdown: boolean;
   footnotes: boolean;
   listCleanup: boolean;

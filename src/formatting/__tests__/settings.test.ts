@@ -6,6 +6,7 @@ import {
 test("fresh formatting uses the active Prettier and Linter profile", () => {
   expect(parseFormattingSettings(undefined)).toEqual({
     onSave: true,
+    automaticLinker: true,
     markdown: true,
     footnotes: true,
     listCleanup: true,
@@ -49,6 +50,7 @@ test("stored opt-outs and explicitly empty exclusions survive new defaults", () 
   const saved = {
     ...defaultFormattingSettings(),
     onSave: false,
+    automaticLinker: false,
     cjkSpacing: false,
     joinHyphenatedWords: false,
     pasteFootnoteCleanup: false,
@@ -59,6 +61,13 @@ test("stored opt-outs and explicitly empty exclusions survive new defaults", () 
     saved,
   );
 });
+
+test.each([{}, { automaticLinker: null }, { automaticLinker: "false" }])(
+  "settings without a valid Automatic Linker toggle enable integration",
+  (saved) => {
+    expect(parseFormattingSettings(saved).automaticLinker).toBe(true);
+  },
+);
 
 test("independent settings loads do not share the default exclusion list", () => {
   const first = parseFormattingSettings({});

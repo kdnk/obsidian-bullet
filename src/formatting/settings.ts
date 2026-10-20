@@ -3,6 +3,7 @@ import type { FormattingSettings, TimestampSettings } from "./types";
 export function defaultFormattingSettings(): FormattingSettings {
   return {
     onSave: true,
+    automaticLinker: true,
     markdown: true,
     footnotes: true,
     listCleanup: true,
@@ -92,6 +93,7 @@ export function parseFormattingSettings(value: unknown): FormattingSettings {
   const script = record(input.script);
   return {
     onSave: bool(input.onSave, defaults.onSave),
+    automaticLinker: bool(input.automaticLinker, defaults.automaticLinker),
     markdown: bool(input.markdown, defaults.markdown),
     footnotes: bool(input.footnotes, defaults.footnotes),
     listCleanup: bool(input.listCleanup, defaults.listCleanup),

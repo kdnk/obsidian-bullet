@@ -99,6 +99,51 @@ test("enabling a group activates its disabled rules without enabling other group
   );
 });
 
+test("the Automatic Linker toggle persists without changing unrelated formatting rules", async () => {
+  const current = await settings();
+  current.result.formatting = {
+    ...current.result.formatting,
+    footnotes: false,
+    profile: {
+      ...current.result.formatting.profile,
+      disabledRules: ["re-index-footnotes", "compact-yaml"],
+    },
+  };
+  const original = current.result.formatting;
+  const definitions = formattingSettingDefinitions(current.result);
+  const input = control(
+    definitions.items.find(
+      (item) => item.name === "Integrate with Automatic Linker",
+    )!,
+  );
+
+  await input.toggle(false);
+  expect(current.result.formatting).toEqual({
+    ...original,
+    automaticLinker: false,
+  });
+  expect(current.storage.saveData).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      formatting: { ...original, automaticLinker: false },
+    }),
+  );
+  const reloaded = new Settings({
+    loadData: async () => current.result.getValues(),
+    saveData: async () => undefined,
+  });
+  await reloaded.load();
+  expect(reloaded.formatting).toEqual({
+    ...original,
+    automaticLinker: false,
+  });
+
+  await input.toggle(true);
+  expect(current.result.formatting).toEqual(original);
+  expect(current.storage.saveData).toHaveBeenLastCalledWith(
+    expect.objectContaining({ formatting: original }),
+  );
+});
+
 test("timestamp options survive disabling, persistence parsing, and re-enabling", async () => {
   const current = await settings();
   const timestamp = {

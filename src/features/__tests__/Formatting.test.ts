@@ -437,7 +437,67 @@ test.each(["switch", "disable"])(
   },
 );
 
-test("awaits the upgraded linker only when its existing save setting is enabled", async () => {
+describe.each(["explicit save", "manual format"])(
+  "%s linking",
+  (entrypoint) => {
+    test.each([
+      { automaticLinker: true, linkerOnSave: true },
+      { automaticLinker: true, linkerOnSave: false },
+      { automaticLinker: false, linkerOnSave: true },
+      { automaticLinker: false, linkerOnSave: false },
+    ])(
+      "Bullet integration $automaticLinker controls linking with Linker save setting $linkerOnSave",
+      async ({ automaticLinker, linkerOnSave }) => {
+        mockFormat.mockImplementation(async (request) => {
+          const linked = request.linker
+            ? await request.linker(request.text, {
+                file: request.file,
+                signal: request.signal,
+              })
+            : request.text;
+          return `${linked} formatted`;
+        });
+        const test = await setup();
+        test.settings.formatting = {
+          ...test.settings.formatting,
+          automaticLinker,
+        };
+        const linker = {
+          isFormatOnSaveEnabled: jest.fn(() => linkerOnSave),
+          formatText: jest.fn(async (text: string) => `${text} linked`),
+        };
+        test.plugins["automatic-linker"] = linker;
+
+        expect(test.feature.ownsExplicitSaveFormatting()).toBe(true);
+        if (entrypoint === "explicit save") {
+          test.command.checkCallback(false);
+          await settle();
+        } else {
+          await test.feature.formatActiveEditor();
+        }
+
+        const expected = automaticLinker
+          ? "- hello linked formatted"
+          : "- hello formatted";
+        expect(test.editor.getValue()).toBe(expected);
+        expect(test.saved).toEqual(
+          entrypoint === "explicit save" ? [expected] : [],
+        );
+        expect(mockFormat).toHaveBeenCalledTimes(1);
+        expect(linker.formatText).toHaveBeenCalledTimes(
+          automaticLinker ? 1 : 0,
+        );
+        if (automaticLinker) {
+          expect(linker.formatText).toHaveBeenCalledWith("- hello", test.file);
+        }
+        expect(linker.isFormatOnSaveEnabled).not.toHaveBeenCalled();
+        await test.feature.unload();
+      },
+    );
+  },
+);
+
+test("supports a Linker API with only formatText while explicit save formatting is disabled", async () => {
   mockFormat.mockImplementation(async (request) =>
     request.linker
       ? await request.linker(request.text, {
@@ -446,21 +506,16 @@ test("awaits the upgraded linker only when its existing save setting is enabled"
         })
       : request.text,
   );
-  const test = await setup();
-  const linker = {
-    isFormatOnSaveEnabled: () => true,
+  const test = await setup({ onSave: false });
+  test.plugins["automatic-linker"] = {
     formatText: async (text: string) => `${text} linked`,
   };
-  test.plugins["automatic-linker"] = linker;
+  expect(test.feature.ownsExplicitSaveFormatting()).toBe(false);
+  test.command.checkCallback(false);
+  expect(test.saved).toEqual(["- hello"]);
   await test.feature.formatActiveEditor();
   expect(test.editor.getValue()).toBe("- hello linked");
-  linker.isFormatOnSaveEnabled = () => false;
-  await test.feature.formatActiveEditor();
-  expect(test.editor.getValue()).toBe("- hello linked");
-  expect(mockFormat.mock.calls.map(([request]) => !!request.linker)).toEqual([
-    true,
-    false,
-  ]);
+  expect(test.saved).toEqual(["- hello"]);
   await test.feature.unload();
 });
 

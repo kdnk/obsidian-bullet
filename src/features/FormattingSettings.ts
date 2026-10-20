@@ -18,6 +18,11 @@ const TOGGLES: { key: ToggleKey; name: string; desc: string }[] = [
     desc: "Run linking, the selected script, Prettier, and enabled cleanup when pressing Cmd/Ctrl+S. Automatic background saves do not run formatting.",
   },
   {
+    key: "automaticLinker",
+    name: "Integrate with Automatic Linker",
+    desc: "Run linking when Automatic Linker is enabled, regardless of its Format on save setting.",
+  },
+  {
     key: "markdown",
     name: "Format Markdown",
     desc: "Use Prettier with the vault's tab and indentation settings.",
