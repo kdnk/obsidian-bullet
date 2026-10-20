@@ -17,6 +17,7 @@ Requires Obsidian 1.12.7 or later. Bullet supports desktop and mobile.
 - **Focused navigation:** keep the caret in editable content and away from hidden bullet or checkbox markup.
 - **[Guide folding](#fold-from-indentation-guides):** connect nested items with indentation guides and fold or unfold their child branches together with one click.
 - **Mobile-friendly folding:** move native list and heading fold controls to the right edge in Live Preview.
+- **[Save formatting](FORMATTING.md):** combine Prettier, selected Linter rules, Automatic Linker, and an optional JavaScript module in one undoable edit. Enable formatting from Bullet settings or use **Bullet: Format current note**.
 
 Automatic editing, appearance, folding, and drag-and-drop behavior can be adjusted from **Settings → Bullet**.
 
