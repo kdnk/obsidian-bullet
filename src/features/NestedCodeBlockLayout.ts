@@ -54,9 +54,10 @@ const CODE_OWNER_GUIDE_CLIPPED_CLASS = "bullet-plugin-code-owner-guide-clipped";
 const CODE_OWNER_GUIDE_CLIP = "--bullet-code-owner-guide-clip";
 const CODE_OWNER_GUIDE_CLASS = "bullet-plugin-code-owner-guide";
 const CODE_OWNER_GUIDE_OFFSET = "--bullet-code-owner-guide-offset";
-const CODE_CHILD_GUIDE_CLASS = "bullet-plugin-code-child-guide";
-const CODE_CHILD_GUIDE_TOP = "--bullet-code-child-guide-top";
-const CODE_CHILD_GUIDE_HEIGHT = "--bullet-code-child-guide-height";
+const CODE_PREVIEW_OWNER_GUIDE_CLASS = "bullet-plugin-code-preview-owner-guide";
+const CODE_PREVIEW_OWNER_GUIDE_TOP = "--bullet-code-preview-owner-guide-top";
+const CODE_PREVIEW_OWNER_GUIDE_HEIGHT =
+  "--bullet-code-preview-owner-guide-height";
 const CODE_GUIDE_CONTINUATION_CLASS = "bullet-plugin-code-guide-continuation";
 const CODE_INDENT_GUIDE_COVERED_CLASS =
   "bullet-plugin-code-indent-guide-covered";
@@ -95,7 +96,7 @@ type PreviewAppearance = {
   radius: string;
 } & ({ kind: "plain" } | { kind: "header"; openingHeight: string });
 
-type PreviewChildGuide =
+type PreviewOwnerGuide =
   | { kind: "row"; offset: string; clip?: string }
   | { kind: "opening"; offset: string; top: string; height: string };
 
@@ -109,7 +110,7 @@ interface MeasuredLine {
   bodyFoldOffset?: string;
   ownerGuideClip?: string;
   ownerGuideOffset?: string;
-  childGuide?: PreviewChildGuide;
+  previewOwnerGuide?: PreviewOwnerGuide;
   guideHeight?: string;
   outerGuideHeight?: string;
   indentGuideCovered?: boolean;
@@ -151,7 +152,7 @@ interface NativeRowLayout {
   bodyFoldOffset: string | undefined;
   ownerGuideClip: string | undefined;
   ownerGuideOffset: string | undefined;
-  childGuide: PreviewChildGuide | undefined;
+  previewOwnerGuide: PreviewOwnerGuide | undefined;
   guideHeight: string | undefined;
   outerGuideHeight: string | undefined;
   indentGuideCovered: boolean;
@@ -206,7 +207,7 @@ const NATIVE_CLASSES = [
   PREVIEW_BODY_CLASS,
   CODE_OWNER_GUIDE_CLIPPED_CLASS,
   CODE_OWNER_GUIDE_CLASS,
-  CODE_CHILD_GUIDE_CLASS,
+  CODE_PREVIEW_OWNER_GUIDE_CLASS,
   CODE_GUIDE_CONTINUATION_CLASS,
   CODE_INDENT_GUIDE_COVERED_CLASS,
   CODE_OUTER_GUIDE_COVERED_CLASS,
@@ -1141,13 +1142,6 @@ export class NestedCodeBlockLayoutPluginValue {
         codeEnds.set(key, this.measureCodeEnd(opening, inset));
       return codeEnds.get(key);
     };
-    const childBlocks = new Map<number, boolean>();
-    const hasChildFor = (opening: FenceOpening) => {
-      const n = opening.openingLineNumber;
-      if (!childBlocks.has(n))
-        childBlocks.set(n, this.hasFollowingChild(opening));
-      return childBlocks.get(n) ?? false;
-    };
     const visibleInsets = new Map<number, string>();
     const renderedGuideOwners = new Map<
       number,
@@ -1183,8 +1177,8 @@ export class NestedCodeBlockLayoutPluginValue {
             );
             preceding.preview = alignment;
             const offset = this.measureOwnerGuideOffset(opening, currentInset);
-            if (offset !== undefined && hasChildFor(opening))
-              preceding.childGuide = measureOpeningChildGuide(
+            if (offset !== undefined)
+              preceding.previewOwnerGuide = measureOpeningPreviewOwnerGuide(
                 preceding.element,
                 element,
                 offset,
@@ -1367,14 +1361,12 @@ export class NestedCodeBlockLayoutPluginValue {
               measureOwnerGuideClip(element, codeContent ?? element))
             : undefined,
           ownerGuideOffset: isOpening ? undefined : ownerGuideOffset,
-          childGuide: hasChildFor(opening)
-            ? this.measureNativeChildGuide(
-                element,
-                opening,
-                ownerGuideOffset,
-                isOpening,
-              )
-            : undefined,
+          previewOwnerGuide: this.measureNativePreviewOwnerGuide(
+            element,
+            opening,
+            ownerGuideOffset,
+            isOpening,
+          ),
           guideHeight: guide?.height,
           outerGuideHeight: guide?.outerHeight,
           indentGuideCovered:
@@ -1421,14 +1413,12 @@ export class NestedCodeBlockLayoutPluginValue {
             inset,
           ),
           emptyBody: true,
-          childGuide: hasChildFor(opening)
-            ? this.measureNativeChildGuide(
-                element,
-                opening,
-                ownerGuideOffset,
-                false,
-              )
-            : undefined,
+          previewOwnerGuide: this.measureNativePreviewOwnerGuide(
+            element,
+            opening,
+            ownerGuideOffset,
+            false,
+          ),
           ownerGuideOffset,
           ownerGuideClip:
             documentLineForElement(this.view, element)?.number ===
@@ -1444,42 +1434,16 @@ export class NestedCodeBlockLayoutPluginValue {
     return measured;
   }
 
-  private hasFollowingChild(opening: FenceOpening): boolean {
-    const state = this.view.state;
-    const probe = this.codeMeasurements.get(opening.openingLineNumber);
-    let next = probe?.closingSource
-      ? state.doc.lineAt(probe.to).number + 1
-      : opening.openingLineNumber + 1;
-    if (!probe?.closingSource) {
-      while (
-        next <= state.doc.lines &&
-        this.classifier.getCodeFence(state, next)?.openingLineNumber ===
-          opening.openingLineNumber
-      )
-        next++;
-    }
-    for (; next <= state.doc.lines; next++) {
-      const text = state.doc.line(next).text;
-      if (!text.trim()) continue;
-      const indent = /^[ \t]*/.exec(text)![0];
-      const column = countColumn(indent, state.tabSize);
-      if (column <= opening.indentColumn) return false;
-      if (this.classifier.classify(state, next) === "list-item") return true;
-      if (column < opening.contentColumn) return false;
-    }
-    return false;
-  }
-
-  private measureNativeChildGuide(
+  private measureNativePreviewOwnerGuide(
     element: HTMLElement,
     opening: FenceOpening,
     offset: string | undefined,
     isOpening: boolean,
-  ): PreviewChildGuide | undefined {
+  ): PreviewOwnerGuide | undefined {
     if (offset === undefined) return;
     if (isOpening) {
       if (isHiddenClosingFence(element.nextElementSibling))
-        return measureOpeningChildGuide(element, element, offset);
+        return measureOpeningPreviewOwnerGuide(element, element, offset);
       return;
     }
     const line = documentLineForElement(this.view, element);
@@ -1603,7 +1567,7 @@ export class NestedCodeBlockLayoutPluginValue {
         bodyFoldOffset,
         ownerGuideClip,
         ownerGuideOffset,
-        childGuide,
+        previewOwnerGuide,
         guideHeight,
         outerGuideHeight,
         indentGuideCovered,
@@ -1651,7 +1615,7 @@ export class NestedCodeBlockLayoutPluginValue {
           bodyFoldOffset,
           ownerGuideClip,
           ownerGuideOffset,
-          childGuide,
+          previewOwnerGuide,
           guideHeight:
             guideHeight ?? this.nativeRows.get(source.from)?.guideHeight,
           outerGuideHeight:
@@ -2027,14 +1991,14 @@ function nativeAttributes(
       classes.push(BODY_FOLD_CLASS);
       properties.push([BODY_FOLD_OFFSET, row.bodyFoldOffset]);
     }
-    if (presentation.kind !== "source" && row.childGuide) {
-      const guide = row.childGuide;
+    if (presentation.kind !== "source" && row.previewOwnerGuide) {
+      const guide = row.previewOwnerGuide;
       properties.push([CODE_OWNER_GUIDE_OFFSET, guide.offset]);
       if (guide.kind === "opening") {
-        classes.push(CODE_CHILD_GUIDE_CLASS);
+        classes.push(CODE_PREVIEW_OWNER_GUIDE_CLASS);
         properties.push(
-          [CODE_CHILD_GUIDE_TOP, guide.top],
-          [CODE_CHILD_GUIDE_HEIGHT, guide.height],
+          [CODE_PREVIEW_OWNER_GUIDE_TOP, guide.top],
+          [CODE_PREVIEW_OWNER_GUIDE_HEIGHT, guide.height],
         );
       } else {
         classes.push(CODE_OWNER_GUIDE_CLASS);
@@ -2500,11 +2464,11 @@ function measureOpeningAlignment(
   };
 }
 
-function measureOpeningChildGuide(
+function measureOpeningPreviewOwnerGuide(
   opening: HTMLElement,
   block: HTMLElement,
   offset: string,
-): PreviewChildGuide | undefined {
+): PreviewOwnerGuide | undefined {
   const code =
     block.querySelector(".ec-line .code") ??
     block.querySelector("code") ??
