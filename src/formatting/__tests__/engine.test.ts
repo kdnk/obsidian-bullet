@@ -8,6 +8,7 @@ import { dirname, join, resolve } from "node:path";
 import { rollup } from "rollup";
 import * as ts from "typescript";
 
+import { selectedLinterRules } from "../settings";
 import type { FormattingSettings } from "../types";
 
 interface Example {
@@ -342,6 +343,158 @@ test("safe Prettier keeps nested fenced content and is idempotent", async () => 
   expect(
     await engine.prettierMarkdown(expected, { useTabs: true, tabWidth: 4 }),
   ).toBe(expected);
+});
+
+function importedActiveCodeProfile(): FormattingSettings {
+  const ruleConfigs = Object.fromEntries(
+    selectedLinterRules.map((name) => [name, { enabled: true }]),
+  );
+  Object.assign(ruleConfigs, {
+    "yaml-timestamp": { enabled: false },
+    "compact-yaml": { enabled: true, "inner-new-lines": true },
+    "move-footnotes-to-the-bottom": {
+      enabled: true,
+      "include-blank-line-between-footnotes": false,
+    },
+    "heading-blank-lines": {
+      enabled: true,
+      bottom: true,
+      "empty-line-after-yaml": true,
+    },
+    "trailing-spaces": { enabled: true, "two-space-line-break": true },
+    "space-between-chinese-japanese-or-korean-and-english-or-numbers": {
+      enabled: true,
+      "english-symbols-punctuation-before": "-+;:°%$)]",
+      "english-symbols-punctuation-after": "-+([¥$",
+    },
+  });
+  return engine.importLegacyFormattingSettings(
+    {
+      ruleConfigs,
+      commonStyles: { minimumNumberOfDollarSignsToBeAMathBlock: 2 },
+      foldersToIgnore: ["templates"],
+    },
+    { formatOnSave: true, runPrettierAfterFormatting: true },
+  ).settings;
+}
+
+test.each([
+  {
+    description: "a list-attached malformed closing fence",
+    input: "- ```txt\n  日本語ABC  \n  - literal marker\n```\n- tail",
+    expected: "- ```txt\n  日本語ABC  \n  - literal marker\n  ```\n- tail\n",
+  },
+  {
+    description: "a compact empty ancestor around a code fence",
+    input: "- - ```txt\n    日本語ABC  \n    - literal marker\n    ```\n- tail",
+    expected:
+      "- \n\t- ```txt\n\t  日本語ABC  \n\t  - literal marker\n\t  ```\n- tail\n",
+  },
+  {
+    description: "an expanded empty ancestor around a code fence",
+    input:
+      "- \n  - ```txt\n    日本語ABC  \n    - literal marker\n    ```\n- tail",
+    expected:
+      "- \n\t- ```txt\n\t  日本語ABC  \n\t  - literal marker\n\t  ```\n- tail\n",
+  },
+  {
+    description: "multiple compact empty ancestors",
+    input:
+      "- - - ```txt\n      日本語ABC  \n      <div>- literal</div>\n      ~~~not a fence\n      ```\n- tail",
+    expected:
+      "- \n\t- \n\t\t- ```txt\n\t\t  日本語ABC  \n\t\t  <div>- literal</div>\n\t\t  ~~~not a fence\n\t\t  ```\n- tail\n",
+  },
+  {
+    description: "bare empty ancestors with tab indentation",
+    input: "-\n\t-\n\t\t- ```txt\n\t\t  日本語ABC  \n\t\t  ```",
+    expected: "- \n\t- \n\t\t- ```txt\n\t\t  日本語ABC  \n\t\t  ```\n",
+  },
+  {
+    description: "an ordered empty ancestor",
+    input: "9. - ```txt\n     日本語ABC  \n     ```",
+    expected: "9. \n\t- ```txt\n\t  日本語ABC  \n\t  ```\n",
+  },
+  {
+    description: "blank and indented literal code rows",
+    input: "- - ```txt\n    \n      日本語ABC  \n    ```",
+    expected: "- \n\t- ```txt\n\t  \n\t    日本語ABC  \n\t  ```\n",
+  },
+])(
+  "the imported active profile preserves literal code across repeated full passes for $description",
+  async ({ input, expected }) => {
+    const request = {
+      file,
+      indent: { useTabs: true, tabWidth: 4 },
+      settings: importedActiveCodeProfile(),
+      signal: new AbortController().signal,
+    };
+    expect(await engine.formatMarkdown({ ...request, text: input })).toBe(
+      expected,
+    );
+    expect(await engine.formatMarkdown({ ...request, text: expected })).toBe(
+      expected,
+    );
+  },
+);
+
+test("keeps ordinary formatting and literal token text beside protected code ancestors", async () => {
+  const transformed: string[] = [];
+  const transform = async (value: string) => {
+    transformed.push(value);
+    return value;
+  };
+  const request = {
+    file,
+    indent: { useTabs: true, tabWidth: 4 },
+    settings: importedActiveCodeProfile(),
+    signal: new AbortController().signal,
+    linker: transform,
+    script: transform,
+  };
+  const input =
+    "- - ```txt\n    BULLETEMPTYCODEANCESTOR\n    BULLETEMPTYCODEANCESTORX 日本語ABC  \n    ```\n- 日本語ABC\n- \n\nprose日本語ABC";
+  const expected =
+    "- \n\t- ```txt\n\t  BULLETEMPTYCODEANCESTOR\n\t  BULLETEMPTYCODEANCESTORX 日本語ABC  \n\t  ```\n- 日本語 ABC\n\nprose 日本語 ABC\n";
+  expect(await engine.formatMarkdown({ ...request, text: input })).toBe(
+    expected,
+  );
+  expect(await engine.formatMarkdown({ ...request, text: expected })).toBe(
+    expected,
+  );
+  expect(transformed).toEqual([input, input, expected, expected]);
+});
+
+test("does not remove timestamp values that match the internal ancestor marker", async () => {
+  const s = importedActiveCodeProfile();
+  s.profile.disabledRules = s.profile.disabledRules.filter(
+    (rule) => rule !== "yaml-timestamp",
+  );
+  s.timestamps = {
+    kind: "enabled",
+    created: true,
+    modified: false,
+    createdKey: "created",
+    modifiedKey: "modified",
+    format: "[BULLETEMPTYCODEANCESTOR]",
+    createdSource: "filesystem",
+    modifiedSource: "filesystem",
+    utc: true,
+  };
+  const request = {
+    file,
+    indent: { useTabs: true, tabWidth: 4 },
+    settings: s,
+    signal: new AbortController().signal,
+    now: 1577923200000,
+  };
+  expect(
+    await engine.formatMarkdown({
+      ...request,
+      text: "- - ```txt\n    日本語ABC  \n    ```",
+    }),
+  ).toBe(
+    "---\ncreated: BULLETEMPTYCODEANCESTOR\n---\n- \n\t- ```txt\n\t  日本語ABC  \n\t  ```\n",
+  );
 });
 
 test("imports a selected Linter profile without executable custom code", () => {
