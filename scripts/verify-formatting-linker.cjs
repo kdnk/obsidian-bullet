@@ -66,6 +66,7 @@ function sample() {
     const state = window.__linkerFormattingProof;
     return {
       text: state.leaf.view.editor.getValue(),
+      bulletEnabled: Boolean(app.plugins.plugins.bullet),
       saved: await app.vault.read(state.file),
       runs: state.runs,
     };
@@ -80,22 +81,23 @@ function configure(
     async (input, onSave, automaticLinker, linkerOnSave) => {
       const state = window.__linkerFormattingProof;
       const bullet = app.plugins.plugins.bullet;
-      bullet.settings.formatting = {
-        ...bullet.settings.formatting,
-        onSave,
-        automaticLinker,
-        markdown: false,
-        footnotes: false,
-        listCleanup: false,
-        spacing: false,
-        cjkSpacing: true,
-        joinHyphenatedWords: false,
-        compactFrontmatter: false,
-        correctClosingFences: false,
-        timestamps: { kind: "disabled" },
-        script: { kind: "disabled" },
-        profile: { ...bullet.settings.formatting.profile, disabledRules: [] },
-      };
+      if (bullet)
+        bullet.settings.formatting = {
+          ...bullet.settings.formatting,
+          onSave,
+          automaticLinker,
+          markdown: false,
+          footnotes: false,
+          listCleanup: false,
+          spacing: false,
+          cjkSpacing: true,
+          joinHyphenatedWords: false,
+          compactFrontmatter: false,
+          correctClosingFences: false,
+          timestamps: { kind: "disabled" },
+          script: { kind: "disabled" },
+          profile: { ...bullet.settings.formatting.profile, disabledRules: [] },
+        };
       app.plugins.plugins["automatic-linker"].settings.formatOnSave =
         linkerOnSave;
       state.leaf.view.editor.setValue("- setup source");
@@ -116,6 +118,7 @@ function run(name, options = {}, expectedOutput = expected) {
     onSave = true,
     automaticLinker = true,
     linkerOnSave = true,
+    bulletEnabled = true,
   } = options;
   configure(input, options);
   assert.equal(sample().saved, "- setup source");
@@ -129,7 +132,10 @@ function run(name, options = {}, expectedOutput = expected) {
   const result = sample();
   assert.equal(result.saved, expectedOutput);
   assert.equal(result.text, expectedOutput);
-  const expectedRuns = onSave ? Number(automaticLinker) : Number(linkerOnSave);
+  assert.equal(result.bulletEnabled, bulletEnabled);
+  const expectedRuns = Number(
+    bulletEnabled ? onSave && automaticLinker : linkerOnSave,
+  );
   assert.equal(
     result.runs,
     expectedRuns,
@@ -216,12 +222,26 @@ try {
       run(
         `Bullet save disabled; integration ${automaticLinker}; Automatic Linker save ${linkerOnSave}`,
         { onSave: false, automaticLinker, linkerOnSave },
-        linkerOnSave
-          ? "- 日本語ABC [[github/a/b/issues/1]] [🔗](https://github.com/a/b/issues/1)"
-          : input,
+        input,
       );
     }
   }
+  evaluate(async () => {
+    await app.plugins.disablePlugin("bullet");
+  });
+  for (const linkerOnSave of [true, false]) {
+    run(
+      `Bullet plugin disabled; Automatic Linker save ${linkerOnSave}`,
+      { onSave: false, bulletEnabled: false, linkerOnSave },
+      linkerOnSave
+        ? "- 日本語ABC [[github/a/b/issues/1]] [🔗](https://github.com/a/b/issues/1)"
+        : input,
+    );
+  }
+  evaluate(async () => {
+    await app.plugins.loadManifest(".obsidian/plugins/bullet");
+    await app.plugins.enablePlugin("bullet");
+  });
   configure(input, {
     onSave: false,
     automaticLinker: false,
@@ -237,12 +257,14 @@ try {
     "- 日本語ABC [[github/a/b/issues/1]] [🔗](https://github.com/a/b/issues/1)";
   for (let attempt = 0; attempt < 60 && sample().text !== standalone; attempt++)
     evaluate(() => new Promise((resolve) => setTimeout(resolve, 100)));
-  assert.equal(sample().text, standalone);
-  assert.equal(sample().runs, 1);
+  const manual = sample();
+  assert.equal(manual.bulletEnabled, true);
+  assert.equal(manual.text, standalone);
+  assert.equal(manual.runs, 1);
   results.push({
     name: "existing Format file command",
     entry: "programmatic Obsidian command",
-    ...sample(),
+    ...manual,
   });
   fs.writeFileSync(
     path.join(output, "results.json"),
@@ -255,6 +277,10 @@ try {
       const state = window.__linkerFormattingProof;
       await app.plugins.disablePlugin("automatic-linker");
       delete app.plugins.manifests["automatic-linker"];
+      if (!app.plugins.plugins.bullet) {
+        await app.plugins.loadManifest(".obsidian/plugins/bullet");
+        await app.plugins.enablePlugin("bullet");
+      }
       app.plugins.plugins.bullet.settings.formatting = JSON.parse(
         state.previous.settings,
       );

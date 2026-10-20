@@ -10,7 +10,7 @@ Open **Settings → Bullet → Formatting** to adjust the default profile. No im
 
 **Integrate with Automatic Linker** starts enabled. When Automatic Linker is installed and enabled, Bullet calls its `formatText()` API before the other formatting stages. Bullet's integration setting applies to explicit saves and **Bullet: Format current note**, regardless of Automatic Linker's own **Format on save** setting.
 
-Turn the integration off to run Bullet's other formatting stages without linking. While Bullet manages explicit saves, Automatic Linker's own save hook yields to Bullet, including when integration is off. If you disable Bullet's **Format on explicit save**, Automatic Linker resumes its standalone save behavior according to its own setting. Automatic Linker's commands remain available.
+Turn the integration off to run Bullet's other formatting stages without linking. While the Bullet plugin is enabled, Automatic Linker's own automatic save formatting stays disabled, regardless of Bullet's formatting settings. Turning off Bullet's **Format on explicit save** stops automatic formatting by both plugins. Disable the Bullet plugin to restore Automatic Linker's standalone save behavior. Both plugins' manual commands remain available.
 
 Enabling Bullet does not change another plugin's saved settings. Standalone Linter or Prettier save hooks must remain disabled when Bullet manages formatting.
 
@@ -90,6 +90,6 @@ node scripts/verify-integrated-formatting.cjs /tmp/obsidian-bullet-formatting-pr
 
 The output directory must be fresh. The script checks native Save, a real module import and reload, Undo, stale asynchronous results, zoom, following input, and saved Markdown. It restores its own settings and temporary files. Run the lifecycle cleanup after verification, including after failures.
 
-Use `scripts/verify-formatting-linker.cjs <fresh-output-directory> <built-automatic-linker-directory>` for both plugin load orders, independent integration and standalone-save settings, and the existing Format file command. The command entry is invoked through Obsidian's command API; save and Undo use native keyboard input. The verifier temporarily installs the built Automatic Linker only in the test vault and removes that installation afterward.
+Use `scripts/verify-formatting-linker.cjs <fresh-output-directory> <built-automatic-linker-directory>` for both plugin load orders, independent integration settings, Automatic Linker suppression while Bullet is enabled, standalone saving after Bullet is disabled, and the existing Format file command. The command entry is invoked through Obsidian's command API; save and Undo use native keyboard input. The verifier temporarily installs the built Automatic Linker only in the test vault and removes that installation afterward.
 
 Use `scripts/verify-formatting-settings.cjs <fresh-output-directory>` to check fresh default settings through native settings controls. The verifier checks the default profile, persisted integration toggle, timestamp options, save toggle, and absence of an import control, then restores the settings.
