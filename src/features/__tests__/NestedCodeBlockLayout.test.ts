@@ -3413,6 +3413,90 @@ test.each([
   },
 );
 
+test.each([
+  {
+    name: "attached fence",
+    source: "- ```js\n    code\n   ```\n- outside\n    continuation",
+    expected: [{ line: 2, from: 2, to: 4, source: "  " }],
+  },
+  {
+    name: "nested attached fence",
+    source: "- parent\n\t- ```js\n\t  \tcode\n\t   ```",
+    expected: [{ line: 3, from: 3, to: 4, source: "\t" }],
+  },
+  {
+    name: "continuation fence",
+    source: "- parent\n  ```js\n    code\n   ```",
+    expected: [{ line: 3, from: 2, to: 4, source: "  " }],
+  },
+  {
+    name: "nested continuation fence",
+    source: "- parent\n\t- child\n\t  ```js\n\t  \tcode\n\t   ```",
+    expected: [{ line: 4, from: 3, to: 4, source: "\t" }],
+  },
+  {
+    name: "ordinary root fence",
+    source: "```js\n\tcode\n ```\n\toutside",
+    expected: [{ line: 2, from: 0, to: 1, source: "\t" }],
+  },
+  {
+    name: "whitespace-only body",
+    source: "- ```js\n    \t\n\n \n  ```",
+    expected: [{ line: 2, from: 2, to: 5, source: "  \t" }],
+  },
+  {
+    name: "tab crossing the container boundary",
+    source: "- ```js\n\t\tcode\n\t```",
+    expected: [{ line: 2, from: 1, to: 2, source: "\t" }],
+  },
+  {
+    name: "fence-shaped code content",
+    source: "- ````js\n   ```\n    ~~~\n   ````",
+    expected: [
+      { line: 2, from: 2, to: 3, source: " " },
+      { line: 3, from: 2, to: 4, source: "  " },
+    ],
+  },
+])("isolates literal code indentation in $name", ({ source, expected }) => {
+  const state = EditorState.create({ doc: source });
+  const plugin = new NestedCodeBlockLayoutPluginValue(
+    {
+      state,
+      visibleRanges: [{ from: 0, to: state.doc.length }],
+      contentDOM: { querySelectorAll: () => [] },
+      dom: { ownerDocument: { defaultView: {} } },
+      requestMeasure: jest.fn(),
+    } as never,
+    () => null,
+  );
+  const indentation: Array<{
+    line: number;
+    from: number;
+    to: number;
+    source: string;
+  }> = [];
+  plugin.prefixRoleDecorations.between(
+    0,
+    state.doc.length,
+    (from, to, decoration) => {
+      if (decorationClass(decoration) !== "bullet-plugin-code-content-indent")
+        return;
+      const line = state.doc.lineAt(from);
+      indentation.push({
+        line: line.number,
+        from: from - line.from,
+        to: to - line.from,
+        source: state.doc.sliceString(from, to),
+      });
+      expect(widgetDecoration(decoration)).toBeNull();
+    },
+  );
+
+  expect(indentation).toEqual(expected);
+  expect(state.doc.toString()).toBe(source);
+  plugin.destroy();
+});
+
 test.each([2, 3, 4])(
   "preserves continuation editing guides with the cursor on row %s",
   (row) => {

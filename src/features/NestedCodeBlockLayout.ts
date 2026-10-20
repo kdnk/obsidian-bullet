@@ -48,6 +48,7 @@ const PREVIEW_FIRST_CLASS = "bullet-plugin-code-preview-first";
 const PREVIEW_LAST_CLASS = "bullet-plugin-code-preview-last";
 const PREVIEW_BODY_CLASS = "bullet-plugin-code-preview-body";
 const CODE_OWNER_PREFIX_CLASS = "bullet-plugin-code-owner-prefix";
+const CODE_CONTENT_INDENT_CLASS = "bullet-plugin-code-content-indent";
 const CODE_CONTINUATION_PREVIEW_PREFIX_CLASS =
   "bullet-plugin-code-continuation-preview-prefix";
 const CODE_OWNER_GUIDE_CLIPPED_CLASS = "bullet-plugin-code-owner-guide-clipped";
@@ -239,6 +240,9 @@ interface CodeContentBoundary {
 const contentGlyph = Decoration.mark({ class: CODE_CONTENT_CLASS });
 const owningListContinuation = Decoration.mark({
   class: CODE_OWNER_PREFIX_CLASS,
+});
+const codeContentIndent = Decoration.mark({
+  class: CODE_CONTENT_INDENT_CLASS,
 });
 const continuationPreviewPrefix = Decoration.mark({
   class: CODE_CONTINUATION_PREVIEW_PREFIX_CLASS,
@@ -2237,6 +2241,26 @@ function codeBlockSourceDecorations(
       }
       visitedLines.add(line.number);
       const fence = classifier.getCodeFence(state, line.number);
+      if (fence && line.number !== fence.openingLineNumber) {
+        const content = getFenceContent(line.text, fence.containerIndent);
+        const indentEnd = /^[ \t]*/.exec(line.text)![0].length;
+        if (content && content.offset < indentEnd) {
+          const openingLine = state.doc.line(fence.openingLineNumber);
+          const openingOffset =
+            parseFenceOpening(state, fence.openingLineNumber)?.sourceOffset ??
+            getFenceContent(openingLine.text, fence.containerIndent)?.offset;
+          const marker =
+            openingOffset !== undefined &&
+            getFenceOpening(openingLine.text.slice(openingOffset));
+          if (marker && !isFenceClosing(content.text, marker))
+            prefixRoleDecorations.push(
+              codeContentIndent.range(
+                line.from + content.offset,
+                line.from + indentEnd,
+              ),
+            );
+        }
+      }
       const owner = fence && classifier.getListOwner(state, line.number);
       if (
         fence &&
