@@ -2867,11 +2867,11 @@ test.each(
     ].flatMap((geometry) =>
       ["ltr", "rtl"].flatMap((direction) =>
         ["content-box", "border-box"].flatMap((boxSizing) =>
-          [false, "direct", "continuation"].map((previewChild) => ({
+          ["source", "leaf", "direct", "continuation"].map((presentation) => ({
             zoomIndent,
             direction,
             boxSizing,
-            previewChild,
+            presentation,
             ...geometry,
           })),
         ),
@@ -2879,15 +2879,19 @@ test.each(
     ),
   ),
 )(
-  "aligns an empty-viewport owner guide with native paint $direction $margin $boxSizing and zoom $zoomIndent, preview child $previewChild",
-  ({ zoomIndent, direction, boxSizing, margin, center, previewChild }) => {
+  "aligns an empty-viewport owner guide with native paint $direction $margin $boxSizing and zoom $zoomIndent, presentation $presentation",
+  ({ zoomIndent, direction, boxSizing, margin, center, presentation }) => {
     const text =
       "\t\t- ```js\n\n\n\t\t  ```" +
-      (previewChild === "continuation" ? "\n\t\t  note" : "") +
-      (previewChild ? "\n\t\t\t- child\n- outside" : "");
+      (presentation === "continuation" ? "\n\t\t  note" : "") +
+      (presentation === "direct" || presentation === "continuation"
+        ? "\n\t\t\t- child\n- outside"
+        : presentation === "leaf"
+          ? "\n- outside"
+          : "");
     const state = EditorState.create({
       doc: text,
-      selection: { anchor: previewChild ? text.length : 0 },
+      selection: { anchor: presentation === "source" ? 0 : text.length },
     });
     const blank = makeLine(["HyperMD-codeblock"], {
       position: state.doc.line(3).from,
@@ -3012,9 +3016,9 @@ test.each(
       blank.style.getPropertyValue("--bullet-nested-code-block-inset"),
     ).toBe(`${indentWidth + 28.2}px`);
     expect(ownerX()).toBeCloseTo((zoomIndent ? 40 : 76) + center, 8);
-    if (previewChild) {
+    if (presentation === "direct" || presentation === "continuation") {
       const child = view.state.doc.line(
-        previewChild === "continuation" ? 6 : 5,
+        presentation === "continuation" ? 6 : 5,
       );
       drivers.get(plugin)!.dispatch({
         changes: { from: child.from, to: child.to, insert: "\t\t- sibling" },
@@ -3024,11 +3028,9 @@ test.each(
         true,
       );
       expect(blank.classList.contains("bullet-plugin-code-owner-guide")).toBe(
-        false,
+        true,
       );
-      expect(
-        blank.style.getPropertyValue("--bullet-code-owner-guide-offset"),
-      ).toBe("");
+      expect(ownerX()).toBeCloseTo((zoomIndent ? 40 : 76) + center, 8);
     }
     plugin.destroy();
   },

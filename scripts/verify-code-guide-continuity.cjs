@@ -49,7 +49,7 @@ const cases = longChild
         closing: 405,
         cursor: 407,
         editing: false,
-        childGuide: true,
+        ownerGuide: true,
       },
     ]
   : blankViewport
@@ -70,6 +70,27 @@ const cases = longChild
         },
       ]
     : [
+        ...[true, false].map((child) => ({
+          name: `root-shell-${child ? "child" : "sibling"}-preview`,
+          text: [
+            "# Settings",
+            "",
+            "- ```sh",
+            "  git remote add upstream <upstream-repository-url>",
+            "  git remote set-url upstream --push NO-PUSH",
+            "  but pull --check",
+            "  but config target upstream/main --push-remote origin",
+            "  ```",
+            ...(child ? ["\t- child"] : []),
+            "- hello",
+            "\t- hello",
+          ].join("\n"),
+          opening: 3,
+          closing: 8,
+          cursor: child ? 10 : 9,
+          editing: false,
+          ownerGuide: true,
+        })),
         {
           name: "attached-child-preview",
           text: attached,
@@ -77,7 +98,7 @@ const cases = longChild
           closing: 7,
           cursor: 17,
           editing: false,
-          childGuide: true,
+          ownerGuide: true,
         },
         {
           name: "long-attached-child-preview",
@@ -96,7 +117,7 @@ const cases = longChild
           closing: 23,
           cursor: 25,
           editing: false,
-          childGuide: true,
+          ownerGuide: true,
         },
         {
           name: "continuation-before-child-preview",
@@ -105,7 +126,7 @@ const cases = longChild
           closing: 5,
           cursor: 8,
           editing: false,
-          childGuide: true,
+          ownerGuide: true,
         },
         {
           name: "attached-editing",
@@ -122,6 +143,7 @@ const cases = longChild
           closing: 16,
           cursor: 17,
           editing: false,
+          ownerGuide: true,
         },
         {
           name: "root-continuation",
@@ -150,6 +172,7 @@ const original = evaluate(() => ({
 }));
 const results = [];
 const failures = [];
+let calibration;
 
 try {
   cdp("Emulation.setFocusEmulationEnabled", { enabled: true });
@@ -160,9 +183,150 @@ try {
         await app.vault.create(note, ""),
       );
       app.setBaseFontSize(font);
+      window.__codeContinuityPaintedX = (marker) => {
+        const box = marker.getBoundingClientRect();
+        const css = getComputedStyle(marker, "::after");
+        const length = (value, size) =>
+          value.endsWith("%")
+            ? (parseFloat(value) * size) / 100
+            : parseFloat(value);
+        const width = parseFloat(css.width);
+        const [translate = "0px"] =
+          css.translate === "none" ? [] : css.translate.split(/\s+/);
+        const transform =
+          css.transform === "none"
+            ? new DOMMatrix()
+            : new DOMMatrix(css.transform);
+        return (
+          box.left +
+          (css.left === "auto"
+            ? box.width / 2
+            : length(css.left, box.width) + width / 2) +
+          length(translate, width) +
+          transform.e
+        );
+      };
     },
     note,
     font,
+  );
+  calibration = evaluate(async () => {
+    const editor = app.workspace.activeLeaf.view.editor;
+    editor.setValue("- calibration\n\t- child\n- tail");
+    editor.setCursor({ line: 2, ch: 6 });
+    editor.scrollIntoView(
+      { from: { line: 0, ch: 0 }, to: { line: 2, ch: 6 } },
+      true,
+    );
+    window.focus();
+    editor.focus();
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const cm = editor.cm;
+    const row = (number) =>
+      [...cm.contentDOM.querySelectorAll(".cm-line")].find(
+        (el) => cm.state.doc.lineAt(cm.posAtDOM(el)).number === number,
+      );
+    const marker = row(1)?.querySelector(".list-bullet");
+    const guide = row(2)?.querySelector(".cm-indent");
+    if (!marker || !guide)
+      throw Error("Ordinary native list calibration required");
+    const paint = getComputedStyle(guide, "::before");
+    const guideStyle = getComputedStyle(guide);
+    if (
+      guideStyle.direction !== "ltr" ||
+      guideStyle.writingMode !== "horizontal-tb" ||
+      paint.position !== "absolute" ||
+      paint.transform !== "none" ||
+      paint.translate !== "none" ||
+      paint.rotate !== "none" ||
+      paint.scale !== "none" ||
+      paint.content === "none" ||
+      paint.display === "none" ||
+      paint.visibility !== "visible" ||
+      Number(paint.opacity) !== 1
+    )
+      throw Error(
+        "Native guide calibration requires visible untransformed LTR paint",
+      );
+    const px = (value) => {
+      if (!/^-?\d+(?:\.\d+)?px$/.test(value))
+        throw Error(
+          `Native guide calibration requires pixel geometry: ${value}`,
+        );
+      return Number.parseFloat(value);
+    };
+    const left = px(paint.left);
+    const marginLeft = px(paint.marginLeft);
+    const width = px(paint.width);
+    const borderLeft = px(paint.borderLeftWidth);
+    const borderRight = px(paint.borderRightWidth);
+    const borderCount = Number(borderLeft > 0) + Number(borderRight > 0);
+    if (
+      borderCount !== 1 ||
+      (borderLeft > 0 && paint.borderLeftStyle !== "solid") ||
+      (borderRight > 0 && paint.borderRightStyle !== "solid") ||
+      px(paint.height) <= 0
+    )
+      throw Error(
+        "Native guide calibration requires one solid vertical border",
+      );
+    const container =
+      guideStyle.position === "static" ? guide.offsetParent : guide;
+    if (!(container instanceof HTMLElement))
+      throw Error("Native guide calibration requires a positioned container");
+    const containerBox = container.getBoundingClientRect();
+    const borderBoxWidth =
+      paint.boxSizing === "border-box"
+        ? width
+        : width +
+          px(paint.paddingLeft) +
+          px(paint.paddingRight) +
+          borderLeft +
+          borderRight;
+    const nativeGuideX =
+      containerBox.left +
+      container.clientLeft +
+      left +
+      marginLeft +
+      (borderLeft > 0 ? borderLeft / 2 : borderBoxWidth - borderRight / 2);
+    const parentBulletX = window.__codeContinuityPaintedX(marker);
+    const nativeGuideDelta = nativeGuideX - parentBulletX;
+    if (!Number.isFinite(nativeGuideDelta))
+      throw Error("Native list calibration is unmeasurable");
+    return {
+      parentBulletX,
+      nativeGuideX,
+      nativeGuideDelta,
+      guide: guide.getBoundingClientRect().toJSON(),
+      container: {
+        ...containerBox.toJSON(),
+        clientLeft: container.clientLeft,
+        position: getComputedStyle(container).position,
+      },
+      pseudo: {
+        position: paint.position,
+        transform: paint.transform,
+        translate: paint.translate,
+        rotate: paint.rotate,
+        scale: paint.scale,
+        left: paint.left,
+        marginLeft: paint.marginLeft,
+        width: paint.width,
+        height: paint.height,
+        boxSizing: paint.boxSizing,
+        borderLeftWidth: paint.borderLeftWidth,
+        borderRightWidth: paint.borderRightWidth,
+        borderLeftColor: paint.borderLeftColor,
+        borderRightColor: paint.borderRightColor,
+        paddingLeft: paint.paddingLeft,
+        paddingRight: paint.paddingRight,
+      },
+    };
+  });
+  const calibrationShot = cdp("Page.captureScreenshot", { format: "png" });
+  fs.writeFileSync(
+    `${output}/native-guide-calibration.png`,
+    Buffer.from(calibrationShot.data, "base64"),
   );
   for (const mode of ["native", "shiki", "numbers"]) {
     evaluate(async (mode) => {
@@ -180,7 +344,7 @@ try {
       const record = { name: `${mode}-${test.name}-${font}`, fixture: test };
       try {
         record.geometry = evaluate(
-          async (test, blankViewport, longChild) => {
+          async (test, blankViewport, longChild, nativeGuideDelta) => {
             const view = app.workspace.activeLeaf.view;
             const editor = view.editor;
             editor.setValue(test.text);
@@ -208,33 +372,12 @@ try {
             );
             if (!marker)
               throw Error("Visible owner bullet required for calibration");
-            const paintedX = (marker) => {
-              const box = marker.getBoundingClientRect();
-              const css = getComputedStyle(marker, "::after");
-              const length = (value, size) =>
-                value.endsWith("%")
-                  ? (parseFloat(value) * size) / 100
-                  : parseFloat(value);
-              const width = parseFloat(css.width);
-              const [translate = "0px"] =
-                css.translate === "none" ? [] : css.translate.split(/\s+/);
-              const transform =
-                css.transform === "none"
-                  ? new DOMMatrix()
-                  : new DOMMatrix(css.transform);
-              return (
-                box.left +
-                (css.left === "auto"
-                  ? box.width / 2
-                  : length(css.left, box.width) + width / 2) +
-                length(translate, width) +
-                transform.e
-              );
-            };
-            const ownerX = paintedX(marker);
+            const paintedX = window.__codeContinuityPaintedX;
+            const ownerX = paintedX(marker) + nativeGuideDelta;
             const ancestorX =
               test.owner > 1
-                ? paintedX(row(1).querySelector(".list-bullet"))
+                ? paintedX(row(1).querySelector(".list-bullet")) +
+                  nativeGuideDelta
                 : null;
             if (!Number.isFinite(ownerX))
               throw Error("Native bullet paint is unmeasurable");
@@ -243,7 +386,7 @@ try {
               ch: editor.getLine(test.cursor - 1).length,
             });
             const scrollTarget =
-              test.childGuide && !longChild
+              test.ownerGuide && !longChild
                 ? { line: test.opening - 1, ch: 0 }
                 : editor.getCursor();
             editor.scrollIntoView(
@@ -335,7 +478,7 @@ try {
                 bottom = preview
                   ? preview.getBoundingClientRect().bottom - 2
                   : closing.bottom - 2;
-                if (test.childGuide)
+                if (test.ownerGuide)
                   bottom = Math.min(bottom, viewport.bottom - 4);
               }
             }
@@ -361,6 +504,7 @@ try {
           test,
           blankViewport,
           longChild,
+          calibration.nativeGuideDelta,
         );
         const shot = cdp("Page.captureScreenshot", { format: "png" });
         fs.writeFileSync(
@@ -429,7 +573,7 @@ try {
           shot.data,
           record.geometry,
         );
-        if (test.editing || test.childGuide) {
+        if (test.editing || test.ownerGuide) {
           assert(record.pixels.minimum >= 12, "Owner guide has a painted gap");
           assert(
             record.pixels.maximum - record.pixels.minimum <= 8,
@@ -455,13 +599,14 @@ try {
 } finally {
   fs.writeFileSync(
     `${output}/results.json`,
-    JSON.stringify({ results, failures }, null, 2),
+    JSON.stringify({ calibration, results, failures }, null, 2),
   );
   try {
     evaluate(
       async ({ original, note }) => {
         window.__codeContinuityLeaf?.detach();
         delete window.__codeContinuityLeaf;
+        delete window.__codeContinuityPaintedX;
         app.setBaseFontSize(original.font);
         if (original.shiki) {
           await app.plugins.enablePlugin("shiki-highlighter");
