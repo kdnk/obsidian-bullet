@@ -216,12 +216,14 @@ type MeasureRequest = {
 function makeHoverFixture(options: {
   editor: ReturnType<typeof makeEditor>;
   root: ReturnType<typeof makeRoot>;
-  hoveredGuide: ReturnType<typeof makeGuideLine>["guides"][number];
-  candidates: Array<ReturnType<typeof makeGuideLine>["guides"][number]>;
+  hoveredGuide: ReturnType<typeof makeGuideLine>["guides"][number] | null;
+  candidates: Array<{ classList: ReturnType<typeof makeClassList> }>;
   lineByElement: Map<unknown, number>;
+  offsetByGuide?: Map<unknown, number>;
 }) {
   type CapturedListener = (event: Event) => void;
   const addEventListener = jest.fn<void, [string, CapturedListener, boolean]>();
+  const elementFromPoint = jest.fn<unknown, [number, number]>(() => null);
   const querySelector = jest.fn((selector: string) =>
     selector ===
     ".cm-indent:hover, .cm-hmd-list-indent > .cm-indent-spacing:hover"
@@ -231,7 +233,7 @@ function makeHoverFixture(options: {
   const querySelectorAll = jest.fn((selector: string) => {
     if (
       selector ===
-      ".cm-hmd-list-indent > .cm-indent, .cm-hmd-list-indent > .cm-indent-spacing"
+      ".cm-hmd-list-indent .cm-indent, .cm-hmd-list-indent .cm-indent-spacing, .cm-hmd-codeblock .cm-indent, .cm-line.bullet-plugin-code-owner-guide, .cm-line.bullet-plugin-code-preview-owner-guide"
     ) {
       return options.candidates;
     }
@@ -255,23 +257,27 @@ function makeHoverFixture(options: {
   const contentDOM = {
     addEventListener,
     removeEventListener: jest.fn(),
+    ownerDocument: {
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+      elementFromPoint,
+    },
     querySelector,
     querySelectorAll,
+    contains: (target: unknown) => options.candidates.includes(target as never),
   };
   const requests: MeasureRequest[] = [];
   const view = {
     contentDOM,
-    state: {
-      doc: {
-        lineAt: jest.fn((offset: number) => ({ number: offset + 1 })),
-      },
-    },
-    posAtDOM: jest.fn((element: unknown) => {
+    state: EditorState.create({ doc: options.root.print() }),
+    posAtDOM: jest.fn((element: unknown): number => {
+      const offset = options.offsetByGuide?.get(element);
+      if (offset !== undefined) return offset;
       const line = options.lineByElement.get(element);
       if (line === undefined) {
         throw new Error("Expected a mapped line element");
       }
-      return line;
+      return view.state.doc.line(line + 1).from;
     }),
     requestMeasure: jest.fn((request: MeasureRequest) => {
       requests.push(request);
@@ -296,6 +302,7 @@ function makeHoverFixture(options: {
 
   return {
     addEventListener,
+    elementFromPoint,
     pluginValue,
     requests,
   };
@@ -443,6 +450,272 @@ describe("GuideFoldingPluginValue hover measurement", () => {
         "bullet-plugin-hovered-indent-guide-end",
       ),
     ).toBe(true);
+    fixture.pluginValue.destroy();
+  });
+
+  test("groups a code-owner stroke with its child guide segments", () => {
+    const editor = makeEditor({
+      text: [
+        "- parent",
+        "\t- ```",
+        "\t  code",
+        "\t  ```",
+        "\t\t- child",
+        "\t\t\t- leaf",
+      ].join("\n"),
+      cursor: { line: 2, ch: 3 },
+    });
+    const root = makeRoot({ editor });
+    const openingFrom = editor.getLine(0).length + 1;
+    const code = makeGuideLine(["\t", "  "]);
+    const owner = Object.assign(code.guides[1], {
+      getAttribute: (name: string) =>
+        name === "data-bullet-code-opening-from" ? String(openingFrom) : null,
+    });
+    owner.matches.mockImplementation((selector: string) =>
+      selector.includes(".cm-line.bullet-plugin-code-owner-guide"),
+    );
+    const child = makeGuideLine(["\t", "\t"]);
+    const leaf = makeGuideLine(["\t", "\t", "\t"]);
+    const fixture = makeHoverFixture({
+      editor,
+      root,
+      hoveredGuide: child.guides[1],
+      candidates: [...code.guides, ...child.guides, ...leaf.guides],
+      lineByElement: new Map([
+        [code.line, 2],
+        [child.line, 4],
+        [leaf.line, 5],
+      ]),
+    });
+
+    const measurement = fixture.requests[0]?.read?.();
+    expect(measurement?.indentGuides).toEqual([
+      owner,
+      child.guides[1],
+      leaf.guides[1],
+    ]);
+    if (!measurement) throw new Error("Expected a hover measurement");
+    fixture.requests[0]?.write?.(measurement);
+    expect(owner.classList.contains("bullet-plugin-hovered-indent-guide")).toBe(
+      true,
+    );
+    fixture.pluginValue.destroy();
+  });
+
+  test("resolves an ordinary guide inside a source decoration wrapper", () => {
+    const editor = makeEditor({
+      text: "- parent\n\t- child\n\t\t- leaf",
+      cursor: { line: 2, ch: 2 },
+    });
+    const root = makeRoot({ editor });
+    const leaf = makeGuideLine(["\t", "\t"]);
+    const guide = leaf.guides[1];
+    const wrapper = {
+      matches: jest.fn((selector: string) => selector === ".source-decoration"),
+      childNodes: [guide],
+      textContent: "\t",
+      contains: (node: unknown) => node === guide,
+    };
+    guide.parentElement = wrapper;
+    guide.closest.mockImplementation((selector: string) => {
+      if (selector === ".cm-line") return leaf.line;
+      if (selector === ".cm-hmd-list-indent")
+        return leaf.indentContainer as never;
+      return null;
+    });
+    leaf.indentContainer.childNodes.splice(1, 1, wrapper);
+    const fixture = makeHoverFixture({
+      editor,
+      root,
+      hoveredGuide: guide,
+      candidates: leaf.guides,
+      lineByElement: new Map([[leaf.line, 2]]),
+    });
+
+    expect(fixture.requests[0]?.read?.()?.indentGuides).toEqual([guide]);
+    fixture.pluginValue.destroy();
+  });
+
+  test("resolves ancestor guides through code wrappers without claiming code indentation", () => {
+    const editor = makeEditor({
+      text: [
+        "- parent",
+        "\t- ```",
+        "\t  \tcode",
+        "\t  ```",
+        "\t- sibling",
+      ].join("\n"),
+      cursor: { line: 2, ch: 4 },
+    });
+    const root = makeRoot({ editor });
+    const code = makeGuideLine(["\t", "\t"]);
+    const wrapper = {};
+    for (const guide of code.guides) {
+      guide.closest.mockImplementation((selector: string) => {
+        if (selector === ".cm-line") return code.line;
+        if (selector === ".cm-hmd-codeblock") return wrapper as never;
+        return null;
+      });
+    }
+    const sibling = makeGuideLine(["\t"]);
+    const bodyFrom = editor.getLine(0).length + editor.getLine(1).length + 2;
+    const fixture = makeHoverFixture({
+      editor,
+      root,
+      hoveredGuide: code.guides[0],
+      candidates: [...code.guides, ...sibling.guides],
+      lineByElement: new Map([
+        [code.line, 2],
+        [sibling.line, 4],
+      ]),
+      offsetByGuide: new Map([
+        [code.guides[0], bodyFrom],
+        [code.guides[1], bodyFrom + 3],
+      ]),
+    });
+
+    expect(fixture.requests[0]?.read?.()?.indentGuides).toEqual([
+      code.guides[0],
+      sibling.guides[0],
+    ]);
+    fixture.pluginValue.destroy();
+  });
+
+  test("prioritizes the painted owner over a tab guide and clears hover over code text", () => {
+    const editor = makeEditor({
+      text: "- parent\n\t- ```\n\t  code\n\t  ```\n\t\t- child",
+      cursor: { line: 2, ch: 3 },
+    });
+    const root = makeRoot({ editor });
+    const code = makeGuideLine(["\t", "\t"]);
+    const owner = Object.assign(code.line, {
+      classList: makeClassList(),
+      getAttribute: () => String(editor.getLine(0).length + 1),
+      getBoundingClientRect: () => ({ left: 0, top: 0, bottom: 100 }),
+    });
+    owner.matches.mockImplementation(
+      (selector: string) =>
+        selector === ".cm-line" ||
+        selector === ":hover" ||
+        selector.includes(".cm-line.bullet-plugin-code-owner-guide"),
+    );
+    Object.assign(owner.ownerDocument, {
+      defaultView: {
+        getComputedStyle: () => ({
+          backgroundSize: "3px 100px",
+          backgroundPositionX: "48.5px",
+          backgroundPositionY: "0px",
+        }),
+      },
+    });
+    const child = makeGuideLine(["\t", "\t"]);
+    const fixture = makeHoverFixture({
+      editor,
+      root,
+      hoveredGuide: code.guides[1],
+      candidates: [owner, ...child.guides],
+      lineByElement: new Map([
+        [code.line, 2],
+        [child.line, 4],
+      ]),
+    });
+    const pointerMove = fixture.addEventListener.mock.calls.find(
+      ([name]) => name === "pointermove",
+    )?.[1];
+    fixture.elementFromPoint.mockReturnValue(owner);
+    pointerMove?.({
+      target: code.guides[1],
+      clientX: 50,
+      clientY: 50,
+    } as unknown as Event);
+    const measurement = fixture.requests.at(-1)?.read?.();
+    expect(measurement?.indentGuides).toEqual([owner, child.guides[1]]);
+    if (!measurement) throw new Error("Expected a hover measurement");
+    fixture.requests.at(-1)?.write?.(measurement);
+    expect(owner.classList.contains("bullet-plugin-hovered-indent-guide")).toBe(
+      true,
+    );
+
+    pointerMove?.({
+      target: owner,
+      clientX: 80,
+      clientY: 50,
+    } as unknown as Event);
+    expect(owner.classList.contains("bullet-plugin-hovered-indent-guide")).toBe(
+      false,
+    );
+    expect(
+      child.guides[1].classList.contains("bullet-plugin-hovered-indent-guide"),
+    ).toBe(false);
+    fixture.pluginValue.destroy();
+  });
+
+  test("clears code-owner hover when its paint moves beneath a stationary pointer", () => {
+    const editor = makeEditor({
+      text: "- parent\n\t- ```\n\t  code\n\t  ```\n\t\t- child",
+      cursor: { line: 2, ch: 3 },
+    });
+    const root = makeRoot({ editor });
+    const code = makeGuideLine(["\t", "\t"]);
+    let strokeLeft = 48.5;
+    const owner = Object.assign(code.line, {
+      classList: makeClassList(),
+      getAttribute: () => String(editor.getLine(0).length + 1),
+      getBoundingClientRect: () => ({ left: 0, top: 0, bottom: 100 }),
+    });
+    owner.matches.mockImplementation(
+      (selector: string) =>
+        selector === ".cm-line" ||
+        selector === ":hover" ||
+        selector.includes(".cm-line.bullet-plugin-code-owner-guide"),
+    );
+    Object.assign(owner.ownerDocument, {
+      defaultView: {
+        getComputedStyle: () => ({
+          backgroundSize: "3px 100px",
+          backgroundPositionX: `${strokeLeft}px`,
+          backgroundPositionY: "0px",
+        }),
+      },
+    });
+    const child = makeGuideLine(["\t", "\t"]);
+    const fixture = makeHoverFixture({
+      editor,
+      root,
+      hoveredGuide: null,
+      candidates: [owner, ...child.guides],
+      lineByElement: new Map([
+        [code.line, 2],
+        [child.line, 4],
+      ]),
+    });
+    fixture.elementFromPoint.mockReturnValue(owner);
+    const pointerMove = fixture.addEventListener.mock.calls.find(
+      ([name]) => name === "pointermove",
+    )?.[1];
+    pointerMove?.({
+      target: owner,
+      clientX: 50,
+      clientY: 50,
+    } as unknown as Event);
+    const request = fixture.requests.at(-1);
+    const initial = request?.read?.();
+    if (!initial) throw new Error("Expected a hover measurement");
+    request?.write?.(initial);
+    expect(initial.indentGuides).toEqual([owner, child.guides[1]]);
+
+    strokeLeft = 58.5;
+    const moved = request?.read?.();
+    if (!moved) throw new Error("Expected a hover measurement after layout");
+    request?.write?.(moved);
+    expect(moved.indentGuides).toEqual([]);
+    expect(owner.classList.contains("bullet-plugin-hovered-indent-guide")).toBe(
+      false,
+    );
+    expect(
+      child.guides[1].classList.contains("bullet-plugin-hovered-indent-guide"),
+    ).toBe(false);
     fixture.pluginValue.destroy();
   });
 
@@ -1513,12 +1786,12 @@ describe("GuideFolding persistent guide styles", () => {
   test("shows a pointer only for actionable vertical guides", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(
-      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\s*\{([^}]*)\}/,
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\s*\{([^}]*)\}/,
     )?.[1];
 
     expect(declarations?.trim()).toBe("cursor: pointer;");
     expect(styles).not.toMatch(
-      /(?:^|\n)\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\s*\{[^}]*cursor:\s*pointer/,
+      /(?:^|\n)\.markdown-source-view\.mod-cm6\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\s*\{[^}]*cursor:\s*pointer/,
     );
   });
 
@@ -1575,7 +1848,7 @@ describe("GuideFolding persistent guide styles", () => {
   test("uses native active guide styling when enhanced hover is disabled", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(
-      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\s+\.markdown-source-view\.mod-cm6\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const normalized = declarations?.replace(/\s+/g, " ").trim();
 
@@ -1592,19 +1865,19 @@ describe("GuideFolding persistent guide styles", () => {
       /\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s*\{([^}]*)\}/,
     )?.[1];
     const declarations = styles.match(
-      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const startDeclarations = styles.match(
-      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide\.bullet-plugin-hovered-indent-guide-start::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\.bullet-plugin-hovered-indent-guide\.bullet-plugin-hovered-indent-guide-start::before\s*\{([^}]*)\}/,
     )?.[1];
     const endDeclarations = styles.match(
-      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide\.bullet-plugin-hovered-indent-guide-end::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\.bullet-plugin-hovered-indent-guide\.bullet-plugin-hovered-indent-guide-end::before\s*\{([^}]*)\}/,
     )?.[1];
     const livePreviewOffset = styles.match(
-      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const sourceModeOffset = styles.match(
-      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6:not\(\.is-live-preview\)\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-vertical-lines-action-toggle-folding\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6:not\(\.is-live-preview\)\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\.bullet-plugin-hovered-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const normalized = declarations?.replace(/\s+/g, " ").trim();
 
@@ -1770,22 +2043,22 @@ describe("GuideFolding outer guide styles", () => {
       /body:not\(\.is-mobile\)\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.bullet-plugin-outer-list-guide\.bullet-plugin-selected-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const selectedInner = styles.match(
-      /\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-selected-indent-guide::before\s*\{([^}]*)\}/,
+      /\.markdown-source-view\.mod-cm6\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\.bullet-plugin-selected-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const enhancedSelectedInner = styles.match(
-      /\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-selected-indent-guide::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\.bullet-plugin-selected-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const selectedInnerStart = styles.match(
-      /\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-selected-indent-guide\.bullet-plugin-selected-indent-guide-start::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\.bullet-plugin-selected-indent-guide\.bullet-plugin-selected-indent-guide-start::before\s*\{([^}]*)\}/,
     )?.[1];
     const selectedInnerEnd = styles.match(
-      /\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-selected-indent-guide\.bullet-plugin-selected-indent-guide-end::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\.bullet-plugin-selected-indent-guide\.bullet-plugin-selected-indent-guide-end::before\s*\{([^}]*)\}/,
     )?.[1];
     const selectedLivePreviewOffset = styles.match(
-      /\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-selected-indent-guide::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\.bullet-plugin-selected-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const selectedSourceModeOffset = styles.match(
-      /\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6:not\(\.is-live-preview\)\s+\.cm-hmd-list-indent\s+\.cm-indent\.bullet-plugin-selected-indent-guide::before\s*\{([^}]*)\}/,
+      /\.bullet-plugin-enhanced-vertical-line-hover\s+\.markdown-source-view\.mod-cm6:not\(\.is-live-preview\)\s+:is\(\.cm-hmd-list-indent, \.cm-hmd-codeblock\)\s+\.cm-indent\.bullet-plugin-selected-indent-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     const selectedInnerRules = Array.from(
       styles.matchAll(
@@ -2912,7 +3185,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     const querySelectorAll = jest.fn((selector: string) => {
       if (
         selector ===
-        ".cm-hmd-list-indent > .cm-indent, .cm-hmd-list-indent > .cm-indent-spacing"
+        ".cm-hmd-list-indent .cm-indent, .cm-hmd-list-indent .cm-indent-spacing, .cm-hmd-codeblock .cm-indent, .cm-line.bullet-plugin-code-owner-guide, .cm-line.bullet-plugin-code-preview-owner-guide"
       ) {
         return candidates;
       }
@@ -3713,7 +3986,7 @@ describe("GuideFoldingPluginValue guide interactions", () => {
       }
       if (
         selector ===
-        ".cm-hmd-list-indent > .cm-indent, .cm-hmd-list-indent > .cm-indent-spacing"
+        ".cm-hmd-list-indent .cm-indent, .cm-hmd-list-indent .cm-indent-spacing, .cm-hmd-codeblock .cm-indent, .cm-line.bullet-plugin-code-owner-guide, .cm-line.bullet-plugin-code-preview-owner-guide"
       ) {
         return [hoveredSpacing];
       }
@@ -4424,7 +4697,6 @@ describe("GuideFoldingPluginValue guide interactions", () => {
     );
 
     expect(pluginValue.click(event, makeView(1))).toBe(false);
-    expect(target.closest).not.toHaveBeenCalled();
     expect(preventDefault).not.toHaveBeenCalled();
   });
 

@@ -45,9 +45,14 @@ const SELECTED_GUIDE_END_SELECTOR = `.${SELECTED_GUIDE_END_MARKER}`;
 const HOVERED_GUIDE_CANDIDATE_SELECTOR =
   `${INDENT_GUIDE_SELECTOR}:hover, ` +
   ".cm-hmd-list-indent > .cm-indent-spacing:hover";
+const CODE_OWNER_GUIDE_SELECTOR =
+  ".cm-line.bullet-plugin-code-owner-guide, " +
+  ".cm-line.bullet-plugin-code-preview-owner-guide";
 const RENDERED_GUIDE_CANDIDATE_SELECTOR =
-  ".cm-hmd-list-indent > .cm-indent, " +
-  ".cm-hmd-list-indent > .cm-indent-spacing";
+  ".cm-hmd-list-indent .cm-indent, " +
+  ".cm-hmd-list-indent .cm-indent-spacing, " +
+  ".cm-hmd-codeblock .cm-indent, " +
+  CODE_OWNER_GUIDE_SELECTOR;
 const OUTER_LIST_GUIDE_CLASS = "bullet-plugin-outer-list-guide";
 const OUTER_LIST_GUIDE_SELECTOR = `.${OUTER_LIST_GUIDE_CLASS}`;
 const HOVERED_OUTER_LIST_GUIDE_CLASS = "bullet-plugin-hovered-outer-list-guide";
@@ -402,32 +407,35 @@ function getGuideIndentPrefix(
   pressedGuide: Element,
   hiddenIndent: string,
 ): string | null {
-  const indentContainer = pressedGuide.parentElement;
-  if (!indentContainer?.matches(INDENT_CONTAINER_SELECTOR)) {
+  const indentContainer = pressedGuide.parentElement?.matches(
+    INDENT_CONTAINER_SELECTOR,
+  )
+    ? pressedGuide.parentElement
+    : pressedGuide.closest(INDENT_CONTAINER_SELECTOR);
+  if (!indentContainer) {
     return null;
   }
 
-  let prefix = "";
-  for (const child of Array.from(indentContainer.childNodes)) {
-    if (child === pressedGuide) {
-      return hiddenIndent + prefix;
+  function prefixBefore(parent: Node): string | null {
+    let prefix = "";
+    for (const child of Array.from(parent.childNodes)) {
+      if (child === pressedGuide) return prefix;
+      if (child.contains?.(pressedGuide)) {
+        const nested = prefixBefore(child);
+        return nested === null ? null : prefix + nested;
+      }
+      prefix += child.textContent ?? "";
     }
-    prefix += child.textContent ?? "";
+    return null;
   }
-
-  return null;
+  const prefix = prefixBefore(indentContainer);
+  return prefix === null ? null : hiddenIndent + prefix;
 }
 
 function resolveVerticalGuideTarget(
   list: List,
-  pressedGuide: Element,
-  hiddenIndent = "",
+  indentPrefix: string,
 ): List | null {
-  const indentPrefix = getGuideIndentPrefix(pressedGuide, hiddenIndent);
-  if (indentPrefix === null) {
-    return null;
-  }
-
   let ancestor = list.getParent();
   while (ancestor?.getParent()) {
     if (ancestor.getFirstLineIndent() === indentPrefix) {
@@ -449,31 +457,16 @@ function hasSameListStart(left: List, right: List | MyEditorPosition) {
 function collectVerticalGuideGroup(
   hoveredGuide: Element,
   guides: Iterable<Element>,
-  getListForGuide: (guide: Element) => List | null,
-  getHiddenIndent: (guide: Element) => string | null = () => "",
+  getTargetForGuide: (guide: Element) => List | null,
 ): Element[] {
-  const hoveredList = getListForGuide(hoveredGuide);
-  const hoveredHiddenIndent = getHiddenIndent(hoveredGuide);
-  const hoveredTarget = hoveredList
-    ? resolveVerticalGuideTarget(
-        hoveredList,
-        hoveredGuide,
-        hoveredHiddenIndent ?? "",
-      )
-    : null;
-  if (!hoveredTarget || hoveredHiddenIndent === null) {
+  const hoveredTarget = getTargetForGuide(hoveredGuide);
+  if (!hoveredTarget) {
     return [];
   }
 
   return Array.from(guides).filter((guide) => {
-    const list = getListForGuide(guide);
-    const hiddenIndent = getHiddenIndent(guide);
-    const target = list
-      ? resolveVerticalGuideTarget(list, guide, hiddenIndent ?? "")
-      : null;
-    return hiddenIndent !== null && target
-      ? hasSameListStart(target, hoveredTarget)
-      : false;
+    const target = getTargetForGuide(guide);
+    return target ? hasSameListStart(target, hoveredTarget) : false;
   });
 }
 
@@ -551,7 +544,8 @@ export class GuideFoldingPluginValue implements PluginValue {
 
   private destroyed = false;
   private lastOuterVisibility: boolean;
-  private lastPointerGuide: Element | null = null;
+  private pointerPosition: Pick<PointerEvent, "clientX" | "clientY"> | null =
+    null;
   private selectedGuide: SelectedGuide | null = null;
   private outerListChunks: readonly OuterListChunk[] | null = null;
   private activeDocument: Document | null;
@@ -696,9 +690,15 @@ export class GuideFoldingPluginValue implements PluginValue {
       return true;
     }
 
-    const pressedGuide = pressedTarget.matches(INDENT_GUIDE_SELECTOR)
-      ? pressedTarget
-      : this.resolveMobileIndentGuide(pressedTarget, event.clientX);
+    const pressedGuide =
+      this.resolvePaintedCodeGuide(
+        pressedTarget,
+        event.clientX,
+        event.clientY,
+      ) ??
+      (pressedTarget.matches(INDENT_GUIDE_SELECTOR)
+        ? pressedTarget
+        : this.resolveMobileIndentGuide(pressedTarget, event.clientX));
     if (!pressedGuide) {
       return false;
     }
@@ -722,16 +722,7 @@ export class GuideFoldingPluginValue implements PluginValue {
 
     const line = this.view.state.doc.lineAt(offset).number - 1;
     const root = this.parser.parse(editor, { line, ch: 0 });
-    const list = root?.getListUnderLine(line);
-    if (!list) {
-      return false;
-    }
-
-    const hiddenIndent = this.getHiddenIndentForGuide(editor, pressedGuide);
-    if (hiddenIndent === null) {
-      return false;
-    }
-    const target = resolveVerticalGuideTarget(list, pressedGuide, hiddenIndent);
+    const target = root && this.getTargetForGuide(root, editor, pressedGuide);
     if (!target) {
       return false;
     }
@@ -780,8 +771,42 @@ export class GuideFoldingPluginValue implements PluginValue {
     );
   }
 
+  private resolvePaintedCodeGuide(
+    target: Element,
+    clientX: number,
+    clientY: number,
+  ) {
+    const row = target.closest(LINE_SELECTOR);
+    const win = row?.ownerDocument.defaultView;
+    if (!row?.matches(CODE_OWNER_GUIDE_SELECTOR) || !win) return null;
+    const bounds = row.getBoundingClientRect();
+    const preview = row.classList.contains(
+      "bullet-plugin-code-preview-owner-guide",
+    );
+    const style = win.getComputedStyle(row, preview ? "::after" : undefined);
+    const width = Number.parseFloat(
+      preview ? style.width : style.backgroundSize,
+    );
+    const left =
+      bounds.left +
+      Number.parseFloat(preview ? style.left : style.backgroundPositionX);
+    const top =
+      bounds.top +
+      Number.parseFloat(preview ? style.top : style.backgroundPositionY);
+    const height = preview
+      ? Number.parseFloat(style.height)
+      : bounds.bottom - top;
+    return left <= clientX &&
+      clientX < left + width &&
+      top <= clientY &&
+      clientY < top + height
+      ? row
+      : null;
+  }
+
   destroy() {
     this.destroyed = true;
+    this.pointerPosition = null;
     this.view.contentDOM.removeEventListener(
       "mousedown",
       this.onMouseDown,
@@ -829,7 +854,8 @@ export class GuideFoldingPluginValue implements PluginValue {
       isElementLike(target) &&
       this.view.contentDOM.contains(target) &&
       (target.matches(INDENT_GUIDE_SELECTOR) ||
-        target.matches(OUTER_LIST_GUIDE_SELECTOR))
+        target.matches(OUTER_LIST_GUIDE_SELECTOR) ||
+        this.resolvePaintedCodeGuide(target, event.clientX, event.clientY))
     ) {
       return;
     }
@@ -861,9 +887,41 @@ export class GuideFoldingPluginValue implements PluginValue {
     }
   }
 
-  private getListForGuide(root: Root, guide: Element) {
+  private getTargetForGuide(root: Root, editor: Reader, guide: Element) {
     const line = this.getLineForGuide(guide);
-    return line === null ? null : root.getListUnderLine(line);
+    if (line === null) return null;
+    if (guide.matches(CODE_OWNER_GUIDE_SELECTOR)) {
+      const attribute = guide.getAttribute("data-bullet-code-opening-from");
+      if (attribute === null) return null;
+      const opening = Number(attribute);
+      if (
+        !Number.isInteger(opening) ||
+        opening < 0 ||
+        opening > this.view.state.doc.length
+      )
+        return null;
+      return root.getListUnderLine(
+        this.view.state.doc.lineAt(opening).number - 1,
+      );
+    }
+    const list = root.getListUnderLine(line);
+    if (!list) return null;
+    if (guide.closest(".cm-hmd-codeblock")) {
+      try {
+        const offset = this.view.posAtDOM(guide);
+        const source = this.view.state.doc.lineAt(offset);
+        const prefix = source.text.slice(0, offset - source.from);
+        return source.number - 1 === line && /^[ \t]*$/.test(prefix)
+          ? resolveVerticalGuideTarget(list, prefix)
+          : null;
+      } catch {
+        return null;
+      }
+    }
+    const hiddenIndent = this.getHiddenIndentForGuide(editor, guide);
+    if (hiddenIndent === null) return null;
+    const prefix = getGuideIndentPrefix(guide, hiddenIndent);
+    return prefix === null ? null : resolveVerticalGuideTarget(list, prefix);
   }
 
   private getHiddenIndentForGuide(editor: Reader, guide: Element) {
@@ -883,9 +941,24 @@ export class GuideFoldingPluginValue implements PluginValue {
 
   private readHoveredIndentGuideGroup(): Element[] {
     if (!this.interactionEnabled()) return [];
-    const hoveredGuide = this.view.contentDOM.querySelector(
-      HOVERED_GUIDE_CANDIDATE_SELECTOR,
-    );
+    const pointer = this.pointerPosition;
+    const pointerTarget = pointer
+      ? (this.activeDocument?.elementFromPoint(
+          pointer.clientX,
+          pointer.clientY,
+        ) ?? null)
+      : null;
+    const hoveredGuide =
+      (pointer &&
+      isElementLike(pointerTarget) &&
+      this.view.contentDOM.contains(pointerTarget)
+        ? this.resolvePaintedCodeGuide(
+            pointerTarget,
+            pointer.clientX,
+            pointer.clientY,
+          )
+        : null) ??
+      this.view.contentDOM.querySelector(HOVERED_GUIDE_CANDIDATE_SELECTOR);
     if (!hoveredGuide) {
       return [];
     }
@@ -905,8 +978,7 @@ export class GuideFoldingPluginValue implements PluginValue {
           RENDERED_GUIDE_CANDIDATE_SELECTOR,
         ),
       ),
-      (guide) => this.getListForGuide(root, guide),
-      (guide) => this.getHiddenIndentForGuide(editor, guide),
+      (guide) => this.getTargetForGuide(root, editor, guide),
     );
   }
 
@@ -951,14 +1023,8 @@ export class GuideFoldingPluginValue implements PluginValue {
     const indentGuides = Array.from(
       this.view.contentDOM.querySelectorAll(RENDERED_GUIDE_CANDIDATE_SELECTOR),
     ).filter((guide) => {
-      const list = this.getListForGuide(root, guide);
-      const hiddenIndent = this.getHiddenIndentForGuide(editor, guide);
-      const target = list
-        ? resolveVerticalGuideTarget(list, guide, hiddenIndent ?? "")
-        : null;
-      return hiddenIndent !== null && target
-        ? hasSameListStart(target, targetStart)
-        : false;
+      const target = this.getTargetForGuide(root, editor, guide);
+      return target ? hasSameListStart(target, targetStart) : false;
     });
     return { key, valid: true, indentGuides, outerGuides: [] };
   }
@@ -974,26 +1040,30 @@ export class GuideFoldingPluginValue implements PluginValue {
   }
 
   private onPointerMove = (event: PointerEvent) => {
+    const owner = isElementLike(event.target)
+      ? this.resolvePaintedCodeGuide(event.target, event.clientX, event.clientY)
+      : null;
+    this.pointerPosition = owner
+      ? { clientX: event.clientX, clientY: event.clientY }
+      : null;
     const guide =
-      isElementLike(event.target) &&
+      owner ??
+      (isElementLike(event.target) &&
       (event.target.matches(INDENT_GUIDE_SELECTOR) ||
         (event.target.matches(OUTER_LIST_GUIDE_SELECTOR) &&
           event.target.getAttribute("data-actionable") === "true"))
         ? event.target
-        : null;
+        : null);
     if (!guide) {
-      this.lastPointerGuide = null;
       synchronizeHoveredIndentGuides(this.view.contentDOM, []);
       synchronizeHoveredOuterListGuides(this.view.contentDOM, []);
       return;
     }
-    if (guide === this.lastPointerGuide) return;
-    this.lastPointerGuide = guide;
     this.scheduleGuideSynchronization();
   };
 
   private onPointerLeave = () => {
-    this.lastPointerGuide = null;
+    this.pointerPosition = null;
     synchronizeHoveredIndentGuides(this.view.contentDOM, []);
     synchronizeHoveredOuterListGuides(this.view.contentDOM, []);
   };
@@ -1006,7 +1076,7 @@ export class GuideFoldingPluginValue implements PluginValue {
       this.view.dispatch({});
     }
     if (!this.interactionEnabled()) {
-      this.lastPointerGuide = null;
+      this.pointerPosition = null;
       synchronizeHoveredIndentGuides(this.view.contentDOM, []);
     }
     if (!this.outerInteractionEnabled()) {

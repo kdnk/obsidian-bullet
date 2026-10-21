@@ -1958,7 +1958,7 @@ function nativeAttributes(
   cursorLine = false,
 ): {
   class: string;
-  attributes: { style: string };
+  attributes: { style: string; "data-bullet-code-opening-from"?: string };
 } {
   const classes = [CODE_BLOCK_CLASS];
   if (cursorLine) classes.push(CODE_CURSOR_LINE_CLASS);
@@ -2067,6 +2067,9 @@ function nativeAttributes(
   return {
     class: classes.join(" "),
     attributes: {
+      ...(row
+        ? { "data-bullet-code-opening-from": String(row.source.openingFrom) }
+        : {}),
       style: properties
         .filter(([, value]) => value !== undefined)
         .map(

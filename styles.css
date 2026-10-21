@@ -223,7 +223,6 @@ body.bullet-plugin-better-lists
   .bullet-plugin-code-guide-continuation
   .cm-indent::before {
   block-size: var(--bullet-code-indent-guide-height);
-  pointer-events: none;
 }
 
 body.bullet-plugin-better-lists
@@ -231,7 +230,6 @@ body.bullet-plugin-better-lists
   .bullet-plugin-code-guide-continuation
   .bullet-plugin-outer-list-guide::before {
   block-size: var(--bullet-code-outer-guide-height);
-  pointer-events: none;
 }
 
 body.bullet-plugin-better-lists
@@ -265,16 +263,20 @@ body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-code-owner-guide {
   background-image: linear-gradient(
-    var(--indentation-guide-color),
-    var(--indentation-guide-color)
+    var(--bullet-code-guide-color, var(--indentation-guide-color)),
+    var(--bullet-code-guide-color, var(--indentation-guide-color))
   );
   background-origin: border-box;
   background-repeat: no-repeat;
-  background-size: var(--indentation-guide-width)
+  background-size: var(
+      --bullet-code-guide-width,
+      var(--indentation-guide-width)
+    )
     calc(100% - var(--bullet-code-owner-guide-clip, 0px));
   background-position: left
     calc(
-      var(--bullet-code-owner-guide-offset) - var(--indentation-guide-width) / 2
+      var(--bullet-code-owner-guide-offset) -
+        var(--bullet-code-guide-width, var(--indentation-guide-width)) / 2
     )
     top var(--bullet-code-owner-guide-clip, 0px);
 }
@@ -284,14 +286,43 @@ body.bullet-plugin-better-lists
   .cm-line.bullet-plugin-code-preview-owner-guide::after {
   content: "";
   position: absolute;
-  pointer-events: none;
+  pointer-events: auto;
   left: calc(
-    var(--bullet-code-owner-guide-offset) - var(--indentation-guide-width) / 2
+    var(--bullet-code-owner-guide-offset) -
+      var(--bullet-code-guide-width, var(--indentation-guide-width)) / 2
   );
   top: var(--bullet-code-preview-owner-guide-top);
-  width: var(--indentation-guide-width);
+  width: var(--bullet-code-guide-width, var(--indentation-guide-width));
   height: var(--bullet-code-preview-owner-guide-height);
-  background-color: var(--indentation-guide-color);
+  background-color: var(
+    --bullet-code-guide-color,
+    var(--indentation-guide-color)
+  );
+}
+
+.markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-selected-indent-guide {
+  --bullet-code-guide-width: var(--indentation-guide-width-active);
+  --bullet-code-guide-color: var(--indentation-guide-color-active);
+}
+
+.bullet-plugin-vertical-lines-action-toggle-folding
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-hovered-indent-guide {
+  --bullet-code-guide-width: var(--indentation-guide-width-active);
+  --bullet-code-guide-color: var(--indentation-guide-color-active);
+}
+
+.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-selected-indent-guide {
+  --bullet-code-guide-width: 3px;
+}
+
+.bullet-plugin-vertical-lines-action-toggle-folding.bullet-plugin-enhanced-vertical-line-hover
+  .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-hovered-indent-guide {
+  --bullet-code-guide-width: 3px;
 }
 
 body.bullet-plugin-better-lists
@@ -679,13 +710,13 @@ body:not(
 
 .bullet-plugin-vertical-lines-action-toggle-folding
   .markdown-source-view.mod-cm6
-  .cm-hmd-list-indent
+  :is(.cm-hmd-list-indent, .cm-hmd-codeblock)
   .cm-indent {
   cursor: pointer;
 }
 
 .markdown-source-view.mod-cm6
-  .cm-hmd-list-indent
+  :is(.cm-hmd-list-indent, .cm-hmd-codeblock)
   .cm-indent.bullet-plugin-selected-indent-guide::before {
   border-inline-end: var(--indentation-guide-width-active) solid
     var(--indentation-guide-color-active);
@@ -693,7 +724,7 @@ body:not(
 
 .bullet-plugin-enhanced-vertical-line-hover
   .markdown-source-view.mod-cm6
-  .cm-hmd-list-indent
+  :is(.cm-hmd-list-indent, .cm-hmd-codeblock)
   .cm-indent.bullet-plugin-selected-indent-guide::before {
   inline-size: 3px;
   border-inline-end: 0;
@@ -702,7 +733,7 @@ body:not(
 
 .bullet-plugin-enhanced-vertical-line-hover
   .markdown-source-view.mod-cm6
-  .cm-hmd-list-indent
+  :is(.cm-hmd-list-indent, .cm-hmd-codeblock)
   .cm-indent.bullet-plugin-selected-indent-guide.bullet-plugin-selected-indent-guide-start::before {
   border-start-start-radius: 2px;
   border-start-end-radius: 2px;
@@ -710,7 +741,7 @@ body:not(
 
 .bullet-plugin-enhanced-vertical-line-hover
   .markdown-source-view.mod-cm6
-  .cm-hmd-list-indent
+  :is(.cm-hmd-list-indent, .cm-hmd-codeblock)
   .cm-indent.bullet-plugin-selected-indent-guide.bullet-plugin-selected-indent-guide-end::before {
   border-end-start-radius: 2px;
   border-end-end-radius: 2px;
@@ -718,21 +749,21 @@ body:not(
 
 .bullet-plugin-enhanced-vertical-line-hover
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-hmd-list-indent
+  :is(.cm-hmd-list-indent, .cm-hmd-codeblock)
   .cm-indent.bullet-plugin-selected-indent-guide::before {
   margin-inline-start: var(--indentation-guide-editing-indent);
 }
 
 .bullet-plugin-enhanced-vertical-line-hover
   .markdown-source-view.mod-cm6:not(.is-live-preview)
-  .cm-hmd-list-indent
+  :is(.cm-hmd-list-indent, .cm-hmd-codeblock)
   .cm-indent.bullet-plugin-selected-indent-guide::before {
   margin-inline-start: var(--indentation-guide-source-indent);
 }
 
 .bullet-plugin-vertical-lines-action-toggle-folding
   .markdown-source-view.mod-cm6
-  .cm-hmd-list-indent
+  :is(.cm-hmd-list-indent, .cm-hmd-codeblock)
   .cm-indent.bullet-plugin-hovered-indent-guide::before {
   border-inline-end: var(--indentation-guide-width-active) solid
     var(--indentation-guide-color-active);
@@ -740,7 +771,7 @@ body:not(
 
 .bullet-plugin-vertical-lines-action-toggle-folding.bullet-plugin-enhanced-vertical-line-hover
   .markdown-source-view.mod-cm6
-  .cm-hmd-list-indent
+  :is(.cm-hmd-list-indent, .cm-hmd-codeblock)
   .cm-indent.bullet-plugin-hovered-indent-guide::before {
   inline-size: 3px;
   border-inline-end: 0;
@@ -749,7 +780,7 @@ body:not(
 
 .bullet-plugin-vertical-lines-action-toggle-folding.bullet-plugin-enhanced-vertical-line-hover
   .markdown-source-view.mod-cm6
-  .cm-hmd-list-indent
+  :is(.cm-hmd-list-indent, .cm-hmd-codeblock)
   .cm-indent.bullet-plugin-hovered-indent-guide.bullet-plugin-hovered-indent-guide-start::before {
   border-start-start-radius: 2px;
   border-start-end-radius: 2px;
@@ -757,7 +788,7 @@ body:not(
 
 .bullet-plugin-vertical-lines-action-toggle-folding.bullet-plugin-enhanced-vertical-line-hover
   .markdown-source-view.mod-cm6
-  .cm-hmd-list-indent
+  :is(.cm-hmd-list-indent, .cm-hmd-codeblock)
   .cm-indent.bullet-plugin-hovered-indent-guide.bullet-plugin-hovered-indent-guide-end::before {
   border-end-start-radius: 2px;
   border-end-end-radius: 2px;
@@ -765,14 +796,14 @@ body:not(
 
 .bullet-plugin-vertical-lines-action-toggle-folding.bullet-plugin-enhanced-vertical-line-hover
   .markdown-source-view.mod-cm6.is-live-preview
-  .cm-hmd-list-indent
+  :is(.cm-hmd-list-indent, .cm-hmd-codeblock)
   .cm-indent.bullet-plugin-hovered-indent-guide::before {
   margin-inline-start: var(--indentation-guide-editing-indent);
 }
 
 .bullet-plugin-vertical-lines-action-toggle-folding.bullet-plugin-enhanced-vertical-line-hover
   .markdown-source-view.mod-cm6:not(.is-live-preview)
-  .cm-hmd-list-indent
+  :is(.cm-hmd-list-indent, .cm-hmd-codeblock)
   .cm-indent.bullet-plugin-hovered-indent-guide::before {
   margin-inline-start: var(--indentation-guide-source-indent);
 }

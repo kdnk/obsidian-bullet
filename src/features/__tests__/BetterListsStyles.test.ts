@@ -225,10 +225,10 @@ describe("BetterListsStyles", () => {
     )?.[1];
 
     expect(indent?.replace(/\s+/g, " ").trim()).toBe(
-      "block-size: var(--bullet-code-indent-guide-height); pointer-events: none;",
+      "block-size: var(--bullet-code-indent-guide-height);",
     );
     expect(outer?.replace(/\s+/g, " ").trim()).toBe(
-      "block-size: var(--bullet-code-outer-guide-height); pointer-events: none;",
+      "block-size: var(--bullet-code-outer-guide-height);",
     );
     expect(`${indent} ${outer}`).not.toMatch(
       /\b(?:display|visibility|width|min-width|position|inset-block-start|translate|transform|border-inline-start-width)\s*:/,
