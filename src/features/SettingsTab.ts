@@ -2,11 +2,9 @@ import {
   App,
   Plugin,
   PluginSettingTab,
-  Setting,
   SettingDefinitionControl,
   SettingDefinitionGroup,
   SettingDefinitionItem,
-  requireApiVersion,
 } from "obsidian";
 
 import { Feature } from "./Feature";
@@ -342,85 +340,9 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
     await this.settings.save();
   }
 
-  display(): void {
-    this.renderSettings();
-  }
-
-  private renderSettings(): void {
-    this.containerEl.empty();
-
-    for (const group of SETTING_GROUPS) {
-      new Setting(this.containerEl).setName(group.heading).setHeading();
-      for (const definition of group.items) {
-        this.renderSetting(definition);
-      }
-    }
-    const formatting = formattingSettingDefinitions(
-      this.settings,
-      this.refreshFormatting,
-    );
-    new Setting(this.containerEl)
-      .setName(formatting.heading ?? "Formatting")
-      .setHeading();
-    for (const definition of formatting.items) {
-      if (definition.visible && !definition.visible()) continue;
-      if ("render" in definition && definition.render) {
-        const row = new Setting(this.containerEl)
-          .setName(definition.name)
-          .setDesc(definition.desc ?? "");
-        definition.render(row);
-      }
-    }
-  }
-
   private refreshFormatting = (): void => {
-    if (requireApiVersion("1.13.0")) this.update();
-    else this.renderSettings();
+    this.update();
   };
-
-  private renderSetting(definition: BulletSettingDefinition): void {
-    const setting = new Setting(this.containerEl)
-      .setName(definition.name)
-      .setDesc(definition.desc);
-    const control = definition.control;
-    const currentValue = this.getControlValue(control.key);
-
-    if (control.type === "dropdown") {
-      if (typeof currentValue !== "string") {
-        throw new TypeError(`Expected ${control.key} to resolve to a string`);
-      }
-      setting.addDropdown((dropdown) => {
-        dropdown
-          .addOptions(control.options)
-          .setValue(currentValue)
-          .onChange(async (value) => {
-            await this.setControlValue(control.key, value);
-          });
-      });
-      return;
-    }
-
-    if (control.type === "color") {
-      if (typeof currentValue !== "string") {
-        throw new TypeError(`Expected ${control.key} to resolve to a string`);
-      }
-      setting.addColorPicker((color) => {
-        color.setValue(currentValue).onChange(async (value) => {
-          await this.setControlValue(control.key, value);
-        });
-      });
-      return;
-    }
-
-    if (typeof currentValue !== "boolean") {
-      throw new TypeError(`Expected ${control.key} to resolve to a boolean`);
-    }
-    setting.addToggle((toggle) => {
-      toggle.setValue(currentValue).onChange(async (value) => {
-        await this.setControlValue(control.key, value);
-      });
-    });
-  }
 }
 
 export class SettingsTab implements Feature {

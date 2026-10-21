@@ -1,168 +1,17 @@
 import { defaultFormattingSettings } from "../../formatting/settings";
 import { SettingsTab } from "../SettingsTab";
 
-const mockSettingsRecords: FakeSetting[] = [];
-let mockModernSettings = false;
 const mockUpdate = jest.fn();
 
 jest.mock(
   "obsidian",
   () => ({
-    requireApiVersion: () => mockModernSettings,
     PluginSettingTab: class PluginSettingTab {
-      containerEl: { empty: jest.Mock };
-
-      constructor() {
-        this.containerEl = { empty: jest.fn() };
-        if (mockModernSettings) Object.assign(this, { update: mockUpdate });
-      }
-    },
-    Setting: class Setting {
-      name = "";
-      desc = "";
-      heading = false;
-      dropdown?: FakeDropdownRecord;
-      color?: FakeColorRecord;
-      toggle?: FakeToggleRecord;
-
-      constructor() {
-        mockSettingsRecords.push(this);
-      }
-
-      setName(name: string) {
-        this.name = name;
-        return this;
-      }
-
-      setDesc(desc: string) {
-        this.desc = desc;
-        return this;
-      }
-
-      setHeading() {
-        this.heading = true;
-        return this;
-      }
-
-      addDropdown(configure: (dropdown: FakeDropdown) => void) {
-        const record: FakeDropdownRecord = {
-          options: {},
-          value: "",
-          callbacks: [],
-        };
-        const dropdown: FakeDropdown = {
-          addOptions(options) {
-            record.options = options;
-            return this;
-          },
-          setValue(value) {
-            record.value = value;
-            return this;
-          },
-          onChange(callback) {
-            record.callbacks.push(callback);
-            return this;
-          },
-        };
-        configure(dropdown);
-        this.dropdown = record;
-        return this;
-      }
-
-      addToggle(configure: (toggle: FakeToggle) => void) {
-        const record: FakeToggleRecord = {
-          value: false,
-          callbacks: [],
-        };
-        const toggle: FakeToggle = {
-          setValue(value) {
-            record.value = value;
-            return this;
-          },
-          onChange(callback) {
-            record.callbacks.push(callback);
-            return this;
-          },
-        };
-        configure(toggle);
-        this.toggle = record;
-        return this;
-      }
-
-      addButton() {
-        return this;
-      }
-      addTextArea() {
-        return this;
-      }
-      addText() {
-        return this;
-      }
-
-      addColorPicker(configure: (color: FakeColor) => void) {
-        const record: FakeColorRecord = {
-          value: "",
-          callbacks: [],
-        };
-        const color: FakeColor = {
-          setValue(value) {
-            record.value = value;
-            return this;
-          },
-          onChange(callback) {
-            record.callbacks.push(callback);
-            return this;
-          },
-        };
-        configure(color);
-        this.color = record;
-        return this;
-      }
+      update = mockUpdate;
     },
   }),
   { virtual: true },
 );
-
-interface FakeSetting {
-  name: string;
-  desc: string;
-  heading: boolean;
-  dropdown?: FakeDropdownRecord;
-  color?: FakeColorRecord;
-  toggle?: FakeToggleRecord;
-}
-
-interface FakeDropdownRecord {
-  options: Record<string, string>;
-  value: string;
-  callbacks: Array<(value: string) => Promise<void>>;
-}
-
-interface FakeDropdown {
-  addOptions(options: Record<string, string>): FakeDropdown;
-  setValue(value: string): FakeDropdown;
-  onChange(callback: (value: string) => Promise<void>): FakeDropdown;
-}
-
-interface FakeToggleRecord {
-  value: boolean;
-  callbacks: Array<(value: boolean) => Promise<void>>;
-}
-
-interface FakeToggle {
-  setValue(value: boolean): FakeToggle;
-  onChange(callback: (value: boolean) => Promise<void>): FakeToggle;
-}
-
-interface FakeColorRecord {
-  value: string;
-  callbacks: Array<(value: string) => Promise<void>>;
-}
-
-interface FakeColor {
-  setValue(value: string): FakeColor;
-  onChange(callback: (value: string) => Promise<void>): FakeColor;
-}
 
 type FakeControl =
   | {
@@ -178,7 +27,8 @@ type FakeControl =
 interface FakeSettingDefinition {
   name: string;
   desc?: string;
-  control: FakeControl;
+  control?: FakeControl;
+  render?(setting: unknown): void;
 }
 
 interface FakeSettingGroup {
@@ -188,7 +38,6 @@ interface FakeSettingGroup {
 }
 
 interface TestableSettingsTab {
-  display(): void;
   getSettingDefinitions(): FakeSettingGroup[];
   getControlValue(key: string): unknown;
   setControlValue(key: string, value: unknown): Promise<void>;
@@ -234,30 +83,59 @@ async function loadTab(
 
 describe("SettingsTab", () => {
   beforeEach(() => {
-    mockSettingsRecords.length = 0;
-    mockModernSettings = false;
     mockUpdate.mockClear();
   });
 
-  test.each([false, true])(
-    "refreshes formatting controls with modern settings API %s",
-    async (modern) => {
-      mockModernSettings = modern;
-      const tab = await loadTab(makeSettings());
-      tab.display();
-      const initialCount = mockSettingsRecords.length;
-      const timestamp = mockSettingsRecords.find(
-        (record) => record.name === "File timestamps",
-      );
-      if (!timestamp?.toggle) throw new Error("Expected timestamp toggle");
+  test("refreshes native formatting controls after persisting timestamps", async () => {
+    const settings = makeSettings();
+    const savedFormatting: ReturnType<typeof defaultFormattingSettings>[] = [];
+    settings.save.mockImplementation(async () => {
+      savedFormatting.push(structuredClone(settings.formatting));
+    });
+    const tab = await loadTab(settings);
+    const timestamp = tab
+      .getSettingDefinitions()
+      .find((group) => group.heading === "Formatting")
+      ?.items.find((definition) => definition.name === "File timestamps");
+    if (!timestamp?.render) throw new Error("Expected timestamp renderer");
+    let change: (value: boolean) => Promise<void> = async () => {
+      throw new Error("Expected timestamp change callback");
+    };
+    const toggle = {
+      setValue: () => toggle,
+      onChange(callback: typeof change) {
+        change = callback;
+        return toggle;
+      },
+    };
+    timestamp.render({
+      addToggle(configure: (component: typeof toggle) => void) {
+        configure(toggle);
+      },
+    });
 
-      await timestamp.toggle.callbacks[0](true);
+    await change(true);
 
-      expect(mockUpdate).toHaveBeenCalledTimes(modern ? 1 : 0);
-      if (modern) expect(mockSettingsRecords).toHaveLength(initialCount);
-      else expect(mockSettingsRecords.length).toBeGreaterThan(initialCount);
-    },
-  );
+    expect(savedFormatting).toEqual([
+      expect.objectContaining({
+        timestamps: {
+          kind: "enabled",
+          created: true,
+          modified: true,
+          createdKey: "created",
+          modifiedKey: "modified",
+          createdSource: "filesystem",
+          modifiedSource: "filesystem",
+          format: "YYYY-MM-DD-HHmmss",
+          utc: false,
+        },
+      }),
+    ]);
+    expect(settings.formatting.timestamps).toEqual(
+      savedFormatting[0].timestamps,
+    );
+    expect(mockUpdate).toHaveBeenCalledTimes(1);
+  });
 
   test("groups searchable declarative settings by purpose", async () => {
     const tab = await loadTab(makeSettings());
@@ -391,85 +269,5 @@ describe("SettingsTab", () => {
         tab.setControlValue("bulletThreadingColor", color),
       ).rejects.toThrow("bulletThreadingColor");
     }
-  });
-
-  test("keeps the imperative display fallback for pre-1.13 Obsidian", async () => {
-    const settings = makeSettings();
-    const tab = await loadTab(settings);
-
-    tab.display();
-
-    expect(
-      mockSettingsRecords
-        .slice(0, 19)
-        .map(
-          (setting) =>
-            `${setting.heading ? "heading" : "setting"}:${setting.name}`,
-        ),
-    ).toEqual([
-      "heading:Editing",
-      "setting:Keep typed text in lists",
-      "setting:Keep cursor out of list markers",
-      "setting:Enhance the Tab key",
-      "setting:Enhance the Enter key",
-      "setting:Vim-mode o/O inserts bullets",
-      "setting:Enhance the Ctrl+A or Cmd+A behavior",
-      "setting:Drag-and-Drop",
-      "heading:Appearance",
-      "setting:Style list bullets",
-      "setting:Enhance vertical lines",
-      "setting:Bullet threading",
-      "setting:Thread color",
-      "heading:Folding",
-      "setting:Draw outer list lines",
-      "setting:Fold lists from vertical indentation lines",
-      "setting:Show fold controls on the right on mobile",
-      "heading:Advanced",
-      "setting:Debug mode",
-    ]);
-
-    const settingRecords = mockSettingsRecords.filter(
-      (setting) => !setting.heading,
-    );
-    const cursorSetting = settingRecords[1];
-    const hoverSetting = settingRecords[8];
-    const threadingSetting = settingRecords[9];
-    const colorSetting = settingRecords[10];
-    const outerSetting = settingRecords[11];
-    const actionSetting = settingRecords[12];
-    const mobileSetting = settingRecords[13];
-
-    expect(cursorSetting?.dropdown?.value).toBe("bullet-and-checkbox");
-    expect(hoverSetting?.toggle?.value).toBe(true);
-    expect(threadingSetting?.toggle?.value).toBe(false);
-    expect(colorSetting?.color?.value).toBe("#8b5cf6");
-    expect(outerSetting?.toggle?.value).toBe(true);
-    expect(actionSetting?.toggle?.value).toBe(true);
-    expect(mobileSetting?.toggle?.value).toBe(true);
-
-    if (
-      !hoverSetting.toggle ||
-      !outerSetting.toggle ||
-      !actionSetting.toggle ||
-      !mobileSetting.toggle ||
-      !threadingSetting.toggle ||
-      !colorSetting.color
-    ) {
-      throw new Error("Expected legacy toggle controls");
-    }
-    await hoverSetting.toggle.callbacks[0](false);
-    await outerSetting.toggle.callbacks[0](false);
-    await actionSetting.toggle.callbacks[0](false);
-    await mobileSetting.toggle.callbacks[0](false);
-    await threadingSetting.toggle.callbacks[0](true);
-    await colorSetting.color.callbacks[0]("#abcdef");
-
-    expect(settings.enhancedVerticalLineHover).toBe(false);
-    expect(settings.outerVerticalLines).toBe(false);
-    expect(settings.verticalLinesAction).toBe("none");
-    expect(settings.mobileRightFoldControls).toBe(false);
-    expect(settings.bulletThreading).toBe(true);
-    expect(settings.bulletThreadingColor).toBe("#abcdef");
-    expect(settings.save).toHaveBeenCalledTimes(6);
   });
 });

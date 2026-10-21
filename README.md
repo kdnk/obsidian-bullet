@@ -6,7 +6,7 @@ Bullet makes nested lists feel closer to Workflowy or Roam Research without givi
 
 [Latest release](https://github.com/kdnk/obsidian-bullet/releases/latest) · [Report an issue](https://github.com/kdnk/obsidian-bullet/issues)
 
-Requires Obsidian 1.12.7 or later. Bullet supports desktop and mobile.
+Requires Obsidian 1.14.0 or later. Bullet supports desktop and mobile.
 
 ## What Bullet changes
 
@@ -220,7 +220,7 @@ All settings are under **Settings → Bullet**.
 
 ## Compatibility
 
-- Bullet requires Obsidian 1.12.7 or later and is available on desktop and mobile.
+- Bullet requires Obsidian 1.14.0 or later and is available on desktop and mobile.
 - The editing enhancements work in Obsidian's Markdown editor. Vertical-line folding, outer guides, and right-side mobile fold controls are designed for Live Preview.
 - The fold and unfold commands require Obsidian's **Fold indent** editor setting to be enabled.
 

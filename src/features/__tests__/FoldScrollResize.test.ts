@@ -19,9 +19,27 @@ const nativeView = EditorView.prototype as unknown as {
   measure(flush?: boolean): void;
   readMeasured(): void;
 };
+class TestWindow extends EventTarget {}
+const originalWindowConstructor = Object.getOwnPropertyDescriptor(
+  globalThis,
+  "Window",
+);
+
+beforeAll(() => {
+  Object.defineProperty(globalThis, "Window", {
+    configurable: true,
+    value: TestWindow,
+  });
+});
+
+afterAll(() => {
+  if (originalWindowConstructor)
+    Object.defineProperty(globalThis, "Window", originalWindowConstructor);
+  else Reflect.deleteProperty(globalThis, "Window");
+});
 
 function makeWindow() {
-  const window = Object.assign(new EventTarget(), {
+  const window = Object.assign(new TestWindow(), {
     devicePixelRatio: 2,
     requestAnimationFrame: () => 1,
     cancelAnimationFrame: () => undefined,
@@ -89,7 +107,12 @@ function setup(
       EditorView.prototype.lineBlockAtHeight.call(view as never, height),
     viewState: {
       scrollTarget: null as ScrollTarget | null,
-      scrollTop: 336,
+      scrollOffset: 336,
+      scaleY: 1,
+      get scrollParent() {
+        return view.scrollDOM;
+      },
+      getScrollOffset: () => view.scrollDOM.scrollTop,
       scrollAnchorPos: 0,
       scrollAnchorHeight: -1,
       editorHeight: 600,
@@ -105,13 +128,15 @@ function setup(
       },
       scrollAnchorAt: (scrollTop: number) => blockAtHeight(scrollTop + 8),
       measure: () => {
-        view.viewState.scrollTop = view.scrollDOM.scrollTop;
+        view.viewState.scrollOffset = view.scrollDOM.scrollTop;
         return 0;
       },
       update: (update: ViewUpdate, target: ScrollTarget | null) => {
         // Map the old height-map anchor before adopting the edited document.
         // Native measure then applies its height delta after custom callbacks.
-        const anchor = view.viewState.scrollAnchorAt(view.viewState.scrollTop);
+        const anchor = view.viewState.scrollAnchorAt(
+          view.viewState.scrollOffset,
+        );
         view.viewState.scrollAnchorPos = update.changes.mapPos(anchor.from, -1);
         view.viewState.scrollAnchorHeight = anchor.top;
         view.state = update.state;

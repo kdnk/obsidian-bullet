@@ -2,7 +2,7 @@
   "id": "bullet",
   "name": "Bullet",
   "version": "5.21.3",
-  "minAppVersion": "1.12.7",
+  "minAppVersion": "1.14.0",
   "description": "Work with your lists like in Workflowy or RoamResearch.",
   "author": "Kodai Nakamura",
   "authorUrl": "https://github.com/kdnk",

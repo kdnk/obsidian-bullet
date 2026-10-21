@@ -2125,7 +2125,9 @@ describe("BulletTypingGuard selected line joins", () => {
             userEvent,
           }).state;
           expect(result.doc.toString()).toBe(expected);
-          expect(result.selection).toEqual(EditorSelection.single(caret));
+          expect(result.selection).toEqual(
+            EditorSelection.create([EditorSelection.cursor(caret, -1)]),
+          );
         }
       },
     );
@@ -2208,7 +2210,9 @@ describe("BulletTypingGuard selected line joins", () => {
           userEvent: "input",
         }).state;
         expect(result.doc.toString()).toBe(expected);
-        expect(result.selection).toEqual(EditorSelection.single(caret));
+        expect(result.selection).toEqual(
+          EditorSelection.create([EditorSelection.cursor(caret, -1)]),
+        );
       }
     },
   );
