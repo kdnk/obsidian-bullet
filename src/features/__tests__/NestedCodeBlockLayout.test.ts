@@ -279,6 +279,7 @@ function makeLine(
     }),
     querySelector: (selector: string) =>
       selector === ".cm-formatting-list" ? marker : null,
+    querySelectorAll: (): HTMLElement[] => [],
   };
 }
 

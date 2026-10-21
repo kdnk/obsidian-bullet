@@ -125,14 +125,13 @@ export class Formatting implements Feature {
     const original = command.checkCallback;
     this.command = command;
     this.original = original;
-    const feature = this;
-    this.wrapper = function (this: unknown, checking) {
-      const owner = feature.host.workspace.activeEditor;
+    const run = (save: SaveCallback, checking: boolean) => {
+      const owner = this.host.workspace.activeEditor;
       if (
         !checking &&
-        feature.active &&
-        feature.settings.formatting.onSave &&
-        feature.legacyLinkerEnabled()
+        this.active &&
+        this.settings.formatting.onSave &&
+        this.legacyLinkerEnabled()
       ) {
         new Notice(
           "Bullet save formatting requires the updated Automatic Linker. Update Automatic Linker or disable its format-on-save setting.",
@@ -140,17 +139,16 @@ export class Formatting implements Feature {
       }
       if (
         checking ||
-        !feature.ownsExplicitSaveFormatting() ||
+        !this.ownsExplicitSaveFormatting() ||
         !owner?.file ||
         !owner.editor.cm
       ) {
-        return original.call(this, checking);
+        return save(checking);
       }
-      const context = this;
       const file = owner.file;
       const editor = owner.editor;
       const view = editor.cm;
-      void feature.enqueue(owner, {
+      void this.enqueue(owner, {
         finish: async () => {
           if (
             owner.file !== file ||
@@ -160,8 +158,8 @@ export class Formatting implements Feature {
           )
             return;
           try {
-            if (feature.host.workspace.activeEditor === owner) {
-              original.call(context, false);
+            if (this.host.workspace.activeEditor === owner) {
+              save(false);
             } else if (typeof owner.save === "function") {
               await owner.save();
             }
@@ -173,6 +171,9 @@ export class Formatting implements Feature {
         },
       });
       return true;
+    };
+    this.wrapper = function (this: unknown, checking) {
+      return run(original.bind(this), checking);
     };
     command.checkCallback = this.wrapper;
   }

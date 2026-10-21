@@ -6,6 +6,7 @@ import {
   SettingDefinitionControl,
   SettingDefinitionGroup,
   SettingDefinitionItem,
+  requireApiVersion,
 } from "obsidian";
 
 import { Feature } from "./Feature";
@@ -342,6 +343,10 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
   }
 
   display(): void {
+    this.renderSettings();
+  }
+
+  private renderSettings(): void {
     this.containerEl.empty();
 
     for (const group of SETTING_GROUPS) {
@@ -369,8 +374,8 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
   }
 
   private refreshFormatting = (): void => {
-    if (typeof this.update === "function") this.update();
-    else this.display();
+    if (requireApiVersion("1.13.0")) this.update();
+    else this.renderSettings();
   };
 
   private renderSetting(definition: BulletSettingDefinition): void {

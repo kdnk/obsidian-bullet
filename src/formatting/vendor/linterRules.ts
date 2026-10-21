@@ -1,5 +1,4 @@
-import { moment } from "obsidian";
-
+import type { Moment } from "moment";
 import parseFormat from "moment-parseformat";
 import { isScalar, parseDocument, visit } from "yaml";
 
@@ -27,6 +26,8 @@ import {
   yamlRegex,
 } from "./linterHelpers";
 
+import { moment } from "../moment";
+
 type DateCreatedSourceOfTruth = "file system" | "frontmatter";
 type DateModifiedSourceOfTruth = "file system" | "user or Linter edits";
 type AfterFileChangeLintTimes = string;
@@ -45,7 +46,7 @@ export interface YamlTimestampOptions {
   timestampUpdateOnFileContentUpdated: AfterFileChangeLintTimes;
   fileModifiedTime: string;
   locale: string;
-  currentTime: moment.Moment;
+  currentTime: Moment;
   fileName: string;
 }
 export class YamlTimestamp {
@@ -213,7 +214,7 @@ export class YamlTimestamp {
     format: string,
     locale: string,
     utc: boolean,
-  ): moment.Moment | null {
+  ): Moment | null {
     if (timestamp == undefined) {
       return null;
     }
@@ -249,8 +250,8 @@ export class YamlTimestamp {
     return match.replace(key + ":", "").trim();
   }
   getTimeDifferenceInSeconds(
-    modifiedDateTimeMetadata: moment.Moment,
-    yamlModifiedDateTime: moment.Moment,
+    modifiedDateTimeMetadata: Moment,
+    yamlModifiedDateTime: Moment,
     options: YamlTimestampOptions,
   ): number {
     const formattedDateModifiedDate = (

@@ -1,7 +1,6 @@
-import { moment } from "obsidian";
-
 import { isScalar, isSeq, parseDocument } from "yaml";
 
+import { moment } from "./moment";
 import type { FormattingFile, FormattingSettings } from "./types";
 import {
   IgnoreTypes,

@@ -1,5 +1,6 @@
-import eslint from "@eslint/js";
 import eslintComments from "@eslint-community/eslint-plugin-eslint-comments";
+import eslint from "@eslint/js";
+import noUnsanitized from "eslint-plugin-no-unsanitized";
 import obsidianmd from "eslint-plugin-obsidianmd";
 import tseslint from "typescript-eslint";
 
@@ -10,6 +11,7 @@ export default tseslint.config(
     plugins: {
       "@eslint-community/eslint-comments": eslintComments,
       obsidianmd,
+      "no-unsanitized": noUnsanitized,
     },
     languageOptions: {
       parserOptions: {
@@ -18,7 +20,11 @@ export default tseslint.config(
       },
     },
     rules: {
-      "@typescript-eslint/no-this-alias": 0,
+      "@typescript-eslint/no-this-alias": "error",
+      "@typescript-eslint/no-deprecated": "warn",
+      "no-unsanitized/method": "error",
+      "no-unsanitized/property": "error",
+      "obsidianmd/no-unsupported-api": "error",
       "@typescript-eslint/await-thenable": "warn",
       "@typescript-eslint/no-explicit-any": ["warn", { fixToUnknown: true }],
       "@typescript-eslint/no-floating-promises": "warn",

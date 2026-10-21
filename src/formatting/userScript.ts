@@ -37,6 +37,7 @@ export async function runUserScript(
     throw new Error(`Save script does not exist. ${path}`);
   const url = new URL(input.app.vault.adapter.getResourcePath(path));
   url.searchParams.set("bullet-mtime", String(stat.mtime));
+  // eslint-disable-next-line no-unsanitized/method -- The user explicitly selects this validated vault module to execute with plugin privileges.
   const module: unknown = await import(url.href);
   if (!isScriptModule(module))
     throw new TypeError("Save script must export a default function.");

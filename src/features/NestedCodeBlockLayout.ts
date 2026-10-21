@@ -2538,11 +2538,8 @@ function measureCodeGuideContinuation(
 } {
   const openingBounds = opening.getBoundingClientRect();
   const openingStarts = measureGuideStarts(opening);
-  const coversIndent =
-    typeof opening.querySelectorAll === "function" &&
-    opening.querySelectorAll(".cm-indent").length > 0;
+  const coversIndent = opening.querySelectorAll(".cm-indent").length > 0;
   const coversOuter =
-    typeof opening.querySelectorAll === "function" &&
     opening.querySelectorAll(".bullet-plugin-outer-list-guide").length > 0;
   let paintEnd =
     openingBounds.top +
@@ -2613,7 +2610,6 @@ function measureGuideStarts(line: HTMLElement): {
 } {
   const lineTop = line.getBoundingClientRect().top;
   const starts = (selector: string) => {
-    if (typeof line.querySelectorAll !== "function") return;
     const tops = Array.from(line.querySelectorAll<HTMLElement>(selector))
       .map((guide) => {
         const win = line.ownerDocument.defaultView;

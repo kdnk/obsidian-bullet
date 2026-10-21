@@ -151,6 +151,20 @@ beforeEach(() => {
     .mockImplementation((text) => text.replace(/\[\d+\]/g, ""));
 });
 
+test("preserves the save callback receiver before and after formatting", async () => {
+  const state = await setup();
+  const receiver = { source: "save command" };
+
+  state.command.checkCallback.call(receiver, true);
+  expect(state.original.mock.contexts).toEqual([receiver]);
+  state.command.checkCallback.call(receiver, false);
+  await settle();
+
+  expect(state.original.mock.contexts).toEqual([receiver, receiver]);
+  expect(state.saved).toEqual(["- hello\n"]);
+  await state.feature.unload();
+});
+
 test("formats explicit saves in one undoable edit and maps the latest backward selection", async () => {
   const gate = deferred();
   mockFormat.mockReturnValue(gate.promise);

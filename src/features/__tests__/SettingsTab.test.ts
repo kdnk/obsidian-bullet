@@ -2,15 +2,19 @@ import { defaultFormattingSettings } from "../../formatting/settings";
 import { SettingsTab } from "../SettingsTab";
 
 const mockSettingsRecords: FakeSetting[] = [];
+let mockModernSettings = false;
+const mockUpdate = jest.fn();
 
 jest.mock(
   "obsidian",
   () => ({
+    requireApiVersion: () => mockModernSettings,
     PluginSettingTab: class PluginSettingTab {
       containerEl: { empty: jest.Mock };
 
       constructor() {
         this.containerEl = { empty: jest.fn() };
+        if (mockModernSettings) Object.assign(this, { update: mockUpdate });
       }
     },
     Setting: class Setting {
@@ -231,7 +235,29 @@ async function loadTab(
 describe("SettingsTab", () => {
   beforeEach(() => {
     mockSettingsRecords.length = 0;
+    mockModernSettings = false;
+    mockUpdate.mockClear();
   });
+
+  test.each([false, true])(
+    "refreshes formatting controls with modern settings API %s",
+    async (modern) => {
+      mockModernSettings = modern;
+      const tab = await loadTab(makeSettings());
+      tab.display();
+      const initialCount = mockSettingsRecords.length;
+      const timestamp = mockSettingsRecords.find(
+        (record) => record.name === "File timestamps",
+      );
+      if (!timestamp?.toggle) throw new Error("Expected timestamp toggle");
+
+      await timestamp.toggle.callbacks[0](true);
+
+      expect(mockUpdate).toHaveBeenCalledTimes(modern ? 1 : 0);
+      if (modern) expect(mockSettingsRecords).toHaveLength(initialCount);
+      else expect(mockSettingsRecords.length).toBeGreaterThan(initialCount);
+    },
+  );
 
   test("groups searchable declarative settings by purpose", async () => {
     const tab = await loadTab(makeSettings());
