@@ -62,6 +62,14 @@ function point(kind) {
         (border > 0 ? border / 2 : width / 2)
       );
     };
+    const ownerTarget = (css, x, y) => ({
+      x,
+      y,
+      paintX: x,
+      hitLeft:
+        x + number(css.getPropertyValue("--bullet-code-guide-hit-offset")),
+      hitWidth: number(css.getPropertyValue("--bullet-code-guide-hit-width")),
+    });
     const ownerPaint = (opening, closing) => {
       for (const el of rows) {
         const line = cm.state.doc.lineAt(cm.posAtDOM(el)).number;
@@ -71,29 +79,36 @@ function point(kind) {
           const css = getComputedStyle(el, "::after");
           const height = number(css.height);
           if (height > 5)
-            return {
-              x: box.left + number(css.left) + number(css.width) / 2,
-              y: box.top + number(css.top) + height * 0.75,
-            };
+            return ownerTarget(
+              css,
+              box.left + number(css.left) + number(css.width) / 2,
+              box.top + number(css.top) + height * 0.75,
+            );
         }
         if (el.classList.contains("bullet-plugin-code-owner-guide")) {
           const css = getComputedStyle(el);
           const height = number(css.backgroundSize.split(/\s+/)[1]);
           if (height > 5)
-            return {
-              x:
-                box.left +
+            return ownerTarget(
+              css,
+              box.left +
                 number(css.backgroundPositionX) +
                 number(css.backgroundSize) / 2,
-              y: box.bottom - Math.min(height / 2, 8),
-            };
+              box.bottom - Math.min(height / 2, 8),
+            );
         }
       }
       throw Error(`Visible owner paint required for ${opening}`);
     };
     let target;
-    if (kind === "owner") target = ownerPaint(4, 7);
-    else if (kind === "leaf") target = ownerPaint(9, 12);
+    if (kind.startsWith("owner") || kind === "code-text") {
+      target = ownerPaint(4, 7);
+      if (kind === "owner-left") target.x = target.hitLeft + 2;
+      if (kind === "owner-right")
+        target.x = target.hitLeft + target.hitWidth - 2;
+      if (kind === "code-text")
+        target.x = target.hitLeft + target.hitWidth + 24;
+    } else if (kind === "leaf") target = ownerPaint(9, 12);
     else if (kind === "child") {
       const guide = row(8)?.querySelectorAll(
         ".cm-hmd-list-indent .cm-indent",
@@ -204,7 +219,16 @@ try {
         },
         { text, editing },
       );
-      for (const kind of ["child", "owner", "ancestor", "leaf", "text"]) {
+      for (const kind of [
+        "child",
+        "owner",
+        "owner-left",
+        "owner-right",
+        "ancestor",
+        "leaf",
+        "code-text",
+        "text",
+      ]) {
         const record = {
           name: `${mode}-${editing ? "source" : "preview"}-${kind}`,
         };
@@ -221,7 +245,7 @@ try {
             `${output}/${record.name}.png`,
             Buffer.from(shot.data, "base64"),
           );
-          if (kind !== "text") {
+          if (kind !== "text" && kind !== "code-text") {
             record.paint = evaluate(
               async (data, point) => {
                 const bitmap = await createImageBitmap(
@@ -239,8 +263,9 @@ try {
                 context.drawImage(bitmap, 0, 0);
                 bitmap.close();
                 const scale = canvas.width / innerWidth;
-                const low = Math.floor((point.x - 7) * scale);
-                const high = Math.ceil((point.x + 7) * scale);
+                const paintX = point.paintX ?? point.x;
+                const low = Math.floor((paintX - 7) * scale);
+                const high = Math.ceil((paintX + 7) * scale);
                 const pixels = context.getImageData(
                   low,
                   Math.floor(point.y * scale),
@@ -269,7 +294,7 @@ try {
                 return {
                   width: mass / peak / scale,
                   center,
-                  expectedCenter: point.x,
+                  expectedCenter: paintX,
                   peak,
                 };
               },
@@ -284,7 +309,7 @@ try {
           assert(Math.abs(record.state.received.x - record.point.x) < 1);
           assert(Math.abs(record.state.received.y - record.point.y) < 1);
           assert.equal(record.state.markdown, text);
-          if (kind === "text")
+          if (kind === "text" || kind === "code-text")
             assert.equal(
               record.state.segments.length,
               0,
@@ -300,7 +325,7 @@ try {
               "Screenshot shows a 3px guide",
             );
             assert(
-              Math.abs(record.paint.center - record.point.x) < 0.8,
+              Math.abs(record.paint.center - record.paint.expectedCenter) < 0.8,
               "Hover paint remains centered",
             );
             assert(
@@ -313,7 +338,7 @@ try {
               ),
               "Every highlighted segment is 3px wide",
             );
-            if (kind === "owner" || kind === "child") {
+            if (kind.startsWith("owner") || kind === "child") {
               assert(
                 record.state.segments.some(
                   (segment) =>
@@ -351,7 +376,7 @@ try {
         try {
           record.states = [];
           for (const folded of [true, false]) {
-            const target = point("owner");
+            const target = point(folded ? "owner-left" : "owner-right");
             cdp("Input.dispatchMouseEvent", {
               type: "mouseMoved",
               x: target.x,
@@ -470,6 +495,13 @@ try {
       const css = getComputedStyle(row),
         bounds = row.getBoundingClientRect();
       const left = bounds.left + parseFloat(css.backgroundPositionX);
+      const center = left + parseFloat(css.backgroundSize) / 2;
+      const hitLeft =
+        center +
+        parseFloat(css.getPropertyValue("--bullet-code-guide-hit-offset"));
+      const hitWidth = parseFloat(
+        css.getPropertyValue("--bullet-code-guide-hit-width"),
+      );
       const view = app.workspace.activeLeaf.view;
       await view.save();
       return {
@@ -477,6 +509,7 @@ try {
         hoveredRow: row.matches(":hover"),
         insidePaint:
           left <= point.x && point.x < left + parseFloat(css.backgroundSize),
+        insideHit: hitLeft <= point.x && point.x < hitLeft + hitWidth,
         hoveredSegments: view.editor.cm.contentDOM.querySelectorAll(
           ".bullet-plugin-hovered-indent-guide",
         ).length,
@@ -492,10 +525,9 @@ try {
       false,
       "Paint moved away from the stationary pointer",
     );
-    assert.equal(
-      resize.after.hoveredSegments,
-      0,
-      "Layout changes clear stale guide hover",
+    assert(
+      resize.after.insideHit && resize.after.hoveredSegments > 0,
+      "Stationary pointer follows the current native-sized hit area",
     );
     assert.equal(resize.after.markdown, fixture);
   } catch (error) {

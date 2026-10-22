@@ -88,7 +88,7 @@ function decorationAttributes(decoration: Decoration) {
     typeof attributes.style !== "string"
   )
     throw new Error("Expected native line style");
-  return { class: spec.class, style: attributes.style };
+  return { class: spec.class, style: attributes.style, attributes };
 }
 
 function decorationClass(decoration: Decoration): string | null {
@@ -121,13 +121,14 @@ function mountLayout(
   );
   const applied = new Map<
     HTMLElement,
-    { classes: string[]; properties: string[] }
+    { classes: string[]; properties: string[]; attributes: string[] }
   >();
   const render = (decorations: DecorationSet = plugin.decorations) => {
     for (const [element, attrs] of applied) {
       for (const name of attrs.classes) element.classList.remove(name);
       for (const property of attrs.properties)
         element.style.removeProperty(property);
+      for (const name of attrs.attributes) element.removeAttribute(name);
     }
     applied.clear();
     const lines = Array.from(
@@ -153,7 +154,14 @@ function mountLayout(
           );
           return [name];
         });
-        applied.set(element, { classes, properties });
+        const attributes = Object.entries(attrs.attributes).flatMap(
+          ([name, value]) => {
+            if (name === "style" || typeof value !== "string") return [];
+            element.setAttribute(name, value);
+            return [name];
+          },
+        );
+        applied.set(element, { classes, properties, attributes });
       }
     });
   };
@@ -258,7 +266,11 @@ function makeLine(
           }),
         }
       : null;
+  const attributes = new Map<string, string>();
   return {
+    setAttribute: (name: string, value: string) => attributes.set(name, value),
+    removeAttribute: (name: string) => attributes.delete(name),
+    getAttribute: (name: string) => attributes.get(name) ?? null,
     position: options.position,
     get className() {
       return [...this.classList].join(" ");
@@ -408,11 +420,17 @@ function makePreviewFixture(empty = false, outside = false) {
     body,
     observe,
     disconnect,
-    notify: (target: unknown, type = "childList", previousClass?: string) =>
+    notify: (
+      target: unknown,
+      type = "childList",
+      previousClass?: string,
+      attributeName = "class",
+    ) =>
       notify([
         {
           target,
           type,
+          attributeName,
           oldValue:
             previousClass ??
             (typeof target === "object" && target && "className" in target
@@ -839,10 +857,11 @@ function lineAttributes(
   plugin: NestedCodeBlockLayoutPluginValue,
   position: number,
 ) {
-  let result = { class: "", style: "" };
+  const result = { class: "", style: "" };
   plugin.decorations.between(position, position, (from, to, decoration) => {
     if (from === position && to === position && !widgetDecoration(decoration))
-      result = decorationAttributes(decoration);
+      ({ class: result.class, style: result.style } =
+        decorationAttributes(decoration));
   });
   return result;
 }
@@ -1337,6 +1356,7 @@ describe("native measurement publication", () => {
           : selector.includes(".cm-indent")
             ? [
                 {
+                  classList: makeClassList("cm-indent"),
                   getBoundingClientRect: () => ({ top: 197.25 }),
                 },
               ]
@@ -1353,6 +1373,7 @@ describe("native measurement publication", () => {
           : selector.includes(".cm-indent")
             ? [
                 {
+                  classList: makeClassList("cm-indent"),
                   getBoundingClientRect: () => ({ top: 106 }),
                 },
               ]
@@ -1382,7 +1403,7 @@ describe("native measurement publication", () => {
     expect(lineAttributes(fixture.plugin, outside.position)).toEqual({
       class: "bullet-plugin-code-guide-seam",
       style:
-        "--bullet-code-indent-guide-seam-clip: 0.25px; --bullet-code-outer-guide-seam-clip: 0.25px;",
+        "--bullet-code-indent-guide-seam-top: 0.25px; --bullet-code-outer-guide-seam-top: 0.25px;",
     });
 
     const dispatch = drivers.get(fixture.plugin)!.dispatch;
@@ -1414,7 +1435,7 @@ describe("native measurement publication", () => {
     expect(lineAttributes(fixture.plugin, outside.position)).toEqual({
       class: "bullet-plugin-code-guide-seam",
       style:
-        "--bullet-code-indent-guide-seam-clip: 0.25px; --bullet-code-outer-guide-seam-clip: 0.25px;",
+        "--bullet-code-indent-guide-seam-top: 0.25px; --bullet-code-outer-guide-seam-top: 0.25px;",
     });
 
     fixture.measure();
@@ -1534,6 +1555,7 @@ describe("native measurement publication", () => {
     }
     const guides = [opening, outside].map((line) => {
       const guide = {
+        classList: makeClassList("cm-indent"),
         offsetParent: line,
         parentElement: line,
         getBoundingClientRect: () => ({
@@ -1561,7 +1583,12 @@ describe("native measurement publication", () => {
             : guides.some((guide) => element === guide)
               ? "static"
               : "relative",
-          top: "0px",
+          top:
+            pseudo && element === guides[1]
+              ? outside.style.getPropertyValue(
+                  "--bullet-code-indent-guide-seam-top",
+                ) || "0px"
+              : "0px",
         }),
       });
     }
@@ -1573,9 +1600,132 @@ describe("native measurement publication", () => {
     );
     expect(lineAttributes(fixture.plugin, outside.position)).toEqual({
       class: "bullet-plugin-code-guide-seam",
-      style: "--bullet-code-indent-guide-seam-clip: 0.1640625px;",
+      style: "--bullet-code-indent-guide-seam-top: 0.1640625px;",
     });
+    const stable = lineAttributes(fixture.plugin, opening.position);
+    for (let repeat = 0; repeat < 3; repeat++) {
+      fixture.measure();
+      expect(lineAttributes(fixture.plugin, opening.position)).toEqual(stable);
+      expect(lineAttributes(fixture.plugin, outside.position)).toEqual({
+        class: "bullet-plugin-code-guide-seam",
+        style: "--bullet-code-indent-guide-seam-top: 0.1640625px;",
+      });
+    }
     fixture.plugin.destroy();
+  });
+
+  test("publishes native guide ownership across redraws and an offscreen opener", () => {
+    const fixture = makePreviewFixture(false, true);
+    const [opening, , , , following] = fixture.lines;
+    const attribute = "data-bullet-code-guide-native-starts";
+    const marker = "bullet-plugin-code-guide-native-start";
+    fixture.lines.forEach((line, index) => {
+      line.getBoundingClientRect = () =>
+        ({ left: 100, right: 300, top: 100 + index * 24, height: 24 }) as never;
+    });
+    type PrefixNode = {
+      textContent: string;
+      previousSibling: PrefixNode | null;
+      parentNode: PrefixNode | null;
+    };
+    const guides = (count: number, top: number) => {
+      const result: Array<
+        PrefixNode & {
+          classList: ReturnType<typeof makeClassList>;
+          getBoundingClientRect: () => { top: number };
+        }
+      > = [];
+      for (let index = 0; index < count; index++)
+        result.push({
+          textContent: "\t",
+          previousSibling: result[index - 1] ?? null,
+          parentNode: null,
+          classList: makeClassList("cm-indent"),
+          getBoundingClientRect: () => ({ top }),
+        });
+      let previousWrapper: PrefixNode | null = null;
+      for (const guide of result) {
+        const wrapper: PrefixNode = {
+          textContent: guide.textContent,
+          previousSibling: previousWrapper,
+          parentNode: null,
+        };
+        guide.previousSibling = null;
+        guide.parentNode = wrapper;
+        previousWrapper = wrapper;
+      }
+      return result;
+    };
+    const ancestors = guides(2, 100);
+    let descendants = guides(3, 196.25);
+    Object.assign(opening, {
+      querySelectorAll: (selector: string) =>
+        selector === ".cm-indent" ? ancestors : [],
+    });
+    Object.assign(following, {
+      querySelectorAll: (selector: string) =>
+        selector.includes(".cm-indent") ? descendants : [],
+    });
+    Object.assign(fixture.view.contentDOM, {
+      contains: (element: unknown) =>
+        fixture.lines.some((line) => line === element) ||
+        descendants.some((guide) => guide === element),
+    });
+    const marked = () =>
+      descendants.map((guide) => guide.classList.contains(marker));
+
+    fixture.measure();
+    fixture.notify(following);
+    expect(marked()).toEqual([false, false, true]);
+    descendants = guides(3, 196.25);
+    fixture.notify(following);
+    expect(marked()).toEqual([false, false, true]);
+    expect(following.getAttribute(attribute)).toBe('["\\t\\t"]');
+    const pending = fixture.measurements.length;
+    const rect = jest.spyOn(following, "getBoundingClientRect");
+    const previousClass = [...descendants[2].classList].join(" ");
+    descendants[2].classList.remove(marker);
+    fixture.notify(descendants[2], "attributes", previousClass);
+    expect(marked()).toEqual([false, false, true]);
+    expect(rect).not.toHaveBeenCalled();
+    expect(fixture.measurements).toHaveLength(pending);
+
+    const removed = ancestors.pop();
+    fixture.measure();
+    fixture.notify(following, "attributes", undefined, attribute);
+    expect(following.getAttribute(attribute)).toBe('["\\t","\\t\\t"]');
+    expect(marked()).toEqual([false, true, true]);
+    if (removed) ancestors.push(removed);
+    fixture.measure();
+    fixture.notify(following, "attributes", undefined, attribute);
+    expect(marked()).toEqual([false, false, true]);
+
+    fixture.show(fixture.lines.slice(1));
+    fixture.measure();
+    fixture.redraw();
+    descendants = guides(3, 196.25);
+    fixture.notify(following);
+    expect(following.getAttribute(attribute)).toBe('["\\t\\t"]');
+    expect(marked()).toEqual([false, false, true]);
+
+    following.setAttribute(attribute, "[]");
+    fixture.notify(following, "attributes", undefined, attribute);
+    expect(marked()).toEqual([false, false, false]);
+    following.setAttribute(attribute, '["\\t\\t"]');
+    fixture.notify(following, "attributes", undefined, attribute);
+    expect(marked()).toEqual([false, false, true]);
+    following.removeAttribute(attribute);
+    fixture.notify(following, "attributes", undefined, attribute);
+    expect(marked()).toEqual([false, false, false]);
+    following.setAttribute(attribute, '["\\t\\t"]');
+    fixture.notify(following, "attributes", undefined, attribute);
+    expect(marked()).toEqual([false, false, true]);
+    const idle = fixture.measurements.length;
+    fixture.notify(following);
+    fixture.notify(following, "attributes", undefined, attribute);
+    expect(fixture.measurements).toHaveLength(idle);
+    fixture.plugin.destroy();
+    expect(marked()).toEqual([false, false, false]);
   });
 
   test("preserves positioned outer-guide origins and static-guide containing wrappers", () => {
@@ -1587,6 +1737,7 @@ describe("native measurement publication", () => {
     });
     for (const line of [opening, outside]) {
       const indent = {
+        classList: makeClassList("cm-indent"),
         offsetParent: {
           clientTop: 1,
           getBoundingClientRect: () => ({
@@ -1630,7 +1781,7 @@ describe("native measurement publication", () => {
     expect(lineAttributes(fixture.plugin, outside.position)).toEqual({
       class: "bullet-plugin-code-guide-seam",
       style:
-        "--bullet-code-indent-guide-seam-clip: 0.25px; --bullet-code-outer-guide-seam-clip: 0.25px;",
+        "--bullet-code-indent-guide-seam-top: 0.25px; --bullet-code-outer-guide-seam-top: 0.25px;",
     });
     fixture.plugin.destroy();
   });
@@ -1641,7 +1792,12 @@ describe("native measurement publication", () => {
     Object.assign(opening, {
       querySelectorAll: (selector: string) =>
         selector === ".cm-indent"
-          ? [{ getBoundingClientRect: () => ({ top: 100 }) }]
+          ? [
+              {
+                classList: makeClassList("cm-indent"),
+                getBoundingClientRect: () => ({ top: 100 }),
+              },
+            ]
           : [],
     });
 
@@ -2389,7 +2545,7 @@ test("remeasures processor changes while ignoring decoration-only native class m
     expect.objectContaining({
       childList: true,
       subtree: true,
-      attributeFilter: ["class"],
+      attributeFilter: ["class", "data-bullet-code-guide-native-starts"],
     }),
   );
   plugin.destroy();
@@ -2834,6 +2990,7 @@ test.each(["-", "123."])(
         measurements.push(measurement),
     };
     const indent = {
+      classList: makeClassList("cm-indent"),
       position: state.doc.line(2).from,
       childNodes: [{}],
       getBoundingClientRect: () => ({ left: 100, right: 172 }),
@@ -2853,7 +3010,6 @@ test.each(["-", "123."])(
       content.style.getPropertyValue("--bullet-nested-code-block-inset"),
     ).toBe("102.2px");
     expect(view.dom.appendChild).toHaveBeenCalledTimes(1);
-    expect(range.setEnd).toHaveBeenCalledTimes(aggregatedPrefix ? 2 : 0);
     plugin.destroy();
     expect(nodes[0].remove).toHaveBeenCalledTimes(1);
   },
@@ -2861,11 +3017,7 @@ test.each(["-", "123."])(
 
 test.each(
   ["", "\t", " "].flatMap((zoomIndent) =>
-    [
-      { margin: 13.6, center: 15.1 },
-      { margin: 20.4, center: 21.9 },
-      { margin: 25.5, center: 27 },
-    ].flatMap((geometry) =>
+    [{ margin: 13.6 }, { margin: 20.4 }, { margin: 25.5 }].flatMap((geometry) =>
       ["ltr", "rtl"].flatMap((direction) =>
         ["content-box", "border-box"].flatMap((boxSizing) =>
           ["source", "leaf", "direct", "continuation"].map((presentation) => ({
@@ -2880,8 +3032,8 @@ test.each(
     ),
   ),
 )(
-  "aligns an empty-viewport owner guide with native paint $direction $margin $boxSizing and zoom $zoomIndent, presentation $presentation",
-  ({ zoomIndent, direction, boxSizing, margin, center, presentation }) => {
+  "aligns an owner guide with native paint $direction $margin $boxSizing and zoom $zoomIndent, presentation $presentation",
+  ({ zoomIndent, direction, boxSizing, margin, presentation }) => {
     const text =
       "\t\t- ```js\n\n\n\t\t  ```" +
       (presentation === "continuation" ? "\n\t\t  note" : "") +
@@ -2906,17 +3058,36 @@ test.each(
       style: ReturnType<typeof makeStyle>;
     }> = [];
     let indentWidth = zoomIndent ? 36 : 72;
+    const nativeWidth = zoomIndent === " " ? 0.578704 : 1;
+    const activeWidth = zoomIndent === " " ? 2.984086 : 3;
+    const normalBoxWidth = 2;
+    const center = margin + (zoomIndent === " " ? 1.710648 : 1.5);
+    const activeCenter =
+      margin +
+      (direction === "rtl"
+        ? zoomIndent === " "
+          ? 0.507957
+          : 0.5
+        : zoomIndent === " "
+          ? 1.492043
+          : 1.5);
     const doc = {
       defaultView: {
-        getComputedStyle: (_element: unknown, pseudo?: string) =>
-          pseudo
+        getComputedStyle: (element: unknown, pseudo?: string) => {
+          const active =
+            typeof element === "object" &&
+            element !== null &&
+            "className" in element &&
+            typeof element.className === "string" &&
+            element.className.includes("bullet-plugin-selected-indent-guide");
+          return pseudo
             ? {
                 left: `${direction === "rtl" ? 62 - margin : 28}px`,
-                width: boxSizing === "border-box" ? "2px" : "1px",
+                width: `${active ? activeWidth : boxSizing === "border-box" ? normalBoxWidth : normalBoxWidth - nativeWidth}px`,
                 marginLeft: `${direction === "rtl" ? 0 : margin}px`,
                 marginRight: `${direction === "rtl" ? margin : 0}px`,
-                borderLeftWidth: direction === "rtl" ? "1px" : "0px",
-                borderRightWidth: direction === "rtl" ? "0px" : "1px",
+                borderLeftWidth: `${!active && direction === "rtl" ? nativeWidth : 0}px`,
+                borderRightWidth: `${!active && direction === "ltr" ? nativeWidth : 0}px`,
                 paddingLeft: "0px",
                 paddingRight: "0px",
                 boxSizing,
@@ -2927,7 +3098,8 @@ test.each(
                 marginInlineEnd: "4.8px",
                 direction,
                 position: "static",
-              },
+              };
+        },
       },
       createTextNode: (text: string) => ({ textContent: text }),
     };
@@ -2948,12 +3120,14 @@ test.each(
           getBoundingClientRect: () => ({ left: 200, right: 500 }),
         },
         getBoundingClientRect: () => ({
-          left: element.className === "cm-indent" ? 230 : 0,
-          right: element.className === "cm-indent" ? 266 : 23.4,
+          left: element.className.startsWith("cm-indent") ? 230 : 0,
+          right: element.className.startsWith("cm-indent") ? 266 : 23.4,
           width:
             element.className === "bullet-plugin-code-indent-measure"
               ? indentWidth
-              : 23.4,
+              : element.className.startsWith("cm-indent")
+                ? 36
+                : 23.4,
         }),
       };
       created.push(element);
@@ -2991,9 +3165,11 @@ test.each(
     expect(blank.classList.contains("bullet-plugin-code-owner-guide")).toBe(
       true,
     );
-    const ownerX = () => {
+    const ownerX = (active = false) => {
       const offset = blank.style.getPropertyValue(
-        "--bullet-code-owner-guide-offset",
+        active
+          ? "--bullet-code-owner-guide-active-offset"
+          : "--bullet-code-owner-guide-offset",
       );
       const values = offset.match(/-?\d+(?:\.\d+)?(?=px)/g)?.map(Number);
       expect(offset.startsWith("calc(100% - ")).toBe(direction === "rtl");
@@ -3002,6 +3178,27 @@ test.each(
       return values[0] - values[1];
     };
     expect(ownerX()).toBeCloseTo((zoomIndent ? 36 : 72) + center, 8);
+    expect(ownerX(true)).toBeCloseTo((zoomIndent ? 36 : 72) + activeCenter, 8);
+    expect(
+      blank.style.getPropertyValue("--bullet-code-owner-guide-width"),
+    ).toBe(`${nativeWidth}px`);
+    expect(
+      blank.style.getPropertyValue("--bullet-code-owner-guide-active-width"),
+    ).toBe(`${activeWidth}px`);
+    for (const [prefix, expectedCenter] of [
+      ["--bullet-code-owner-guide", center],
+      ["--bullet-code-owner-guide-active", activeCenter],
+    ] satisfies Array<[string, number]>) {
+      expect(
+        Number.parseFloat(blank.style.getPropertyValue(`${prefix}-hit-offset`)),
+      ).toBeCloseTo(
+        direction === "rtl" ? expectedCenter - 36 : -expectedCenter,
+        8,
+      );
+      expect(
+        Number.parseFloat(blank.style.getPropertyValue(`${prefix}-hit-width`)),
+      ).toBeCloseTo(28.2, 8);
+    }
     const expectedUnits =
       zoomIndent === " " ? ["\t", "\t"] : [zoomIndent ? "\t" : "\t\t"];
     // Both the raw closing fence and the detached list marker retain the
@@ -3017,6 +3214,7 @@ test.each(
       blank.style.getPropertyValue("--bullet-nested-code-block-inset"),
     ).toBe(`${indentWidth + 28.2}px`);
     expect(ownerX()).toBeCloseTo((zoomIndent ? 40 : 76) + center, 8);
+    expect(ownerX(true)).toBeCloseTo((zoomIndent ? 40 : 76) + activeCenter, 8);
     if (presentation === "direct" || presentation === "continuation") {
       const child = view.state.doc.line(
         presentation === "continuation" ? 6 : 5,

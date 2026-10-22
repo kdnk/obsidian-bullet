@@ -220,6 +220,8 @@ function makeHoverFixture(options: {
   candidates: Array<{ classList: ReturnType<typeof makeClassList> }>;
   lineByElement: Map<unknown, number>;
   offsetByGuide?: Map<unknown, number>;
+  activeGuides?: Array<ReturnType<typeof makeGuideLine>["guides"][number]>;
+  codeOwnerGuides?: Array<ReturnType<typeof makeGuideLine>["guides"][number]>;
 }) {
   type CapturedListener = (event: Event) => void;
   const addEventListener = jest.fn<void, [string, CapturedListener, boolean]>();
@@ -231,6 +233,17 @@ function makeHoverFixture(options: {
       : null,
   );
   const querySelectorAll = jest.fn((selector: string) => {
+    if (
+      selector ===
+      ".cm-line.bullet-plugin-code-owner-guide, .cm-line.bullet-plugin-code-preview-owner-guide"
+    )
+      return options.codeOwnerGuides ?? [];
+    if (selector === ".cm-hmd-list-indent > .cm-indent.cm-active-indent")
+      return options.activeGuides ?? [];
+    if (selector === ".bullet-plugin-code-owner-active-indent")
+      return options.candidates.filter((guide) =>
+        guide.classList.contains("bullet-plugin-code-owner-active-indent"),
+      );
     if (
       selector ===
       ".cm-hmd-list-indent .cm-indent, .cm-hmd-list-indent .cm-indent-spacing, .cm-hmd-codeblock .cm-indent, .cm-line.bullet-plugin-code-owner-guide, .cm-line.bullet-plugin-code-preview-owner-guide"
@@ -503,6 +516,59 @@ describe("GuideFoldingPluginValue hover measurement", () => {
     fixture.pluginValue.destroy();
   });
 
+  test("follows native caret-active groups without applying hover geometry", () => {
+    const editor = makeEditor({
+      text: "- parent\n\t- ```\n\t  code\n\t  ```\n\t\t- child\n- tail",
+      cursor: { line: 2, ch: 3 },
+    });
+    const root = makeRoot({ editor });
+    const code = makeGuideLine(["\t", "  "]);
+    const owner = Object.assign(code.guides[1], {
+      getAttribute: (name: string) =>
+        name === "data-bullet-code-opening-from"
+          ? String(editor.getLine(0).length + 1)
+          : null,
+    });
+    owner.matches.mockImplementation((selector: string) =>
+      selector.includes(".cm-line.bullet-plugin-code-owner-guide"),
+    );
+    const child = makeGuideLine(["\t", "\t"]);
+    const activeGuides = [child.guides[1]];
+    const fixture = makeHoverFixture({
+      editor,
+      root,
+      hoveredGuide: null,
+      candidates: [owner, ...child.guides],
+      activeGuides,
+      codeOwnerGuides: [owner],
+      lineByElement: new Map([
+        [code.line, 2],
+        [child.line, 4],
+      ]),
+    });
+    const request = fixture.requests[0];
+    if (!request?.read || !request.write)
+      throw new Error("Expected a guide measurement");
+    request.write(request.read());
+    expect(
+      owner.classList.contains("bullet-plugin-code-owner-active-indent"),
+    ).toBe(true);
+    expect(owner.classList.contains("bullet-plugin-hovered-indent-guide")).toBe(
+      false,
+    );
+    activeGuides.splice(0, 1, child.guides[0]);
+    request.write(request.read());
+    expect(
+      owner.classList.contains("bullet-plugin-code-owner-active-indent"),
+    ).toBe(false);
+    activeGuides.splice(0, 1, child.guides[1]);
+    request.write(request.read());
+    fixture.pluginValue.destroy();
+    expect(
+      owner.classList.contains("bullet-plugin-code-owner-active-indent"),
+    ).toBe(false);
+  });
+
   test("resolves an ordinary guide inside a source decoration wrapper", () => {
     const editor = makeEditor({
       text: "- parent\n\t- child\n\t\t- leaf",
@@ -606,6 +672,8 @@ describe("GuideFoldingPluginValue hover measurement", () => {
           backgroundSize: "3px 100px",
           backgroundPositionX: "48.5px",
           backgroundPositionY: "0px",
+          getPropertyValue: (name: string) =>
+            name === "--bullet-code-guide-hit-offset" ? "-12px" : "24px",
         }),
       },
     });
@@ -639,6 +707,14 @@ describe("GuideFoldingPluginValue hover measurement", () => {
 
     pointerMove?.({
       target: owner,
+      clientX: 39,
+      clientY: 50,
+    } as unknown as Event);
+    const gutter = fixture.requests.at(-1)?.read?.();
+    expect(gutter?.indentGuides).toEqual([owner, child.guides[1]]);
+
+    pointerMove?.({
+      target: owner,
       clientX: 80,
       clientY: 50,
     } as unknown as Event);
@@ -651,7 +727,7 @@ describe("GuideFoldingPluginValue hover measurement", () => {
     fixture.pluginValue.destroy();
   });
 
-  test("clears code-owner hover when its paint moves beneath a stationary pointer", () => {
+  test("clears code-owner hover when its hit area moves beneath a stationary pointer", () => {
     const editor = makeEditor({
       text: "- parent\n\t- ```\n\t  code\n\t  ```\n\t\t- child",
       cursor: { line: 2, ch: 3 },
@@ -676,6 +752,8 @@ describe("GuideFoldingPluginValue hover measurement", () => {
           backgroundSize: "3px 100px",
           backgroundPositionX: `${strokeLeft}px`,
           backgroundPositionY: "0px",
+          getPropertyValue: (name: string) =>
+            name === "--bullet-code-guide-hit-offset" ? "-4px" : "8px",
         }),
       },
     });

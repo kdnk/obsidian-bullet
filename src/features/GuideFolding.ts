@@ -45,6 +45,8 @@ const SELECTED_GUIDE_END_SELECTOR = `.${SELECTED_GUIDE_END_MARKER}`;
 const HOVERED_GUIDE_CANDIDATE_SELECTOR =
   `${INDENT_GUIDE_SELECTOR}:hover, ` +
   ".cm-hmd-list-indent > .cm-indent-spacing:hover";
+const ACTIVE_CODE_GUIDE_CLASS = "bullet-plugin-code-owner-active-indent";
+const ACTIVE_CODE_GUIDE_SELECTOR = `.${ACTIVE_CODE_GUIDE_CLASS}`;
 const CODE_OWNER_GUIDE_SELECTOR =
   ".cm-line.bullet-plugin-code-owner-guide, " +
   ".cm-line.bullet-plugin-code-preview-owner-guide";
@@ -76,6 +78,7 @@ const CHUNK_LINE_ATTRIBUTE_RE = /^(0|[1-9]\d*)$/;
 const LIST_PREFIX_RE = /^[ \t]*(?:[-*+]|\d+\.)(?:[ \t]+|$)/;
 
 type GuideMeasurement = {
+  activeCodeGuides: Element[];
   indentGuides: Element[];
   outerGuides: Element[];
   selection: {
@@ -486,6 +489,19 @@ function synchronizeHoveredIndentGuides(
   );
 }
 
+function synchronizeActiveCodeGuides(
+  contentDOM: ParentNode,
+  guides: Iterable<Element>,
+) {
+  const next = new Set(guides);
+  for (const element of Array.from(
+    contentDOM.querySelectorAll(ACTIVE_CODE_GUIDE_SELECTOR),
+  )) {
+    if (!next.has(element)) element.classList.remove(ACTIVE_CODE_GUIDE_CLASS);
+  }
+  for (const element of next) element.classList.add(ACTIVE_CODE_GUIDE_CLASS);
+}
+
 function synchronizeSelectedIndentGuides(
   contentDOM: ParentNode,
   highlightedGuides: Iterable<Element>,
@@ -776,32 +792,52 @@ export class GuideFoldingPluginValue implements PluginValue {
     clientX: number,
     clientY: number,
   ) {
-    const row = target.closest(LINE_SELECTOR);
-    const win = row?.ownerDocument.defaultView;
-    if (!row?.matches(CODE_OWNER_GUIDE_SELECTOR) || !win) return null;
-    const bounds = row.getBoundingClientRect();
-    const preview = row.classList.contains(
-      "bullet-plugin-code-preview-owner-guide",
-    );
-    const style = win.getComputedStyle(row, preview ? "::after" : undefined);
-    const width = Number.parseFloat(
-      preview ? style.width : style.backgroundSize,
-    );
-    const left =
-      bounds.left +
-      Number.parseFloat(preview ? style.left : style.backgroundPositionX);
-    const top =
-      bounds.top +
-      Number.parseFloat(preview ? style.top : style.backgroundPositionY);
-    const height = preview
-      ? Number.parseFloat(style.height)
-      : bounds.bottom - top;
-    return left <= clientX &&
-      clientX < left + width &&
-      top <= clientY &&
-      clientY < top + height
-      ? row
-      : null;
+    const targetRow = target.closest(LINE_SELECTOR);
+    const rows = targetRow?.matches(CODE_OWNER_GUIDE_SELECTOR)
+      ? [targetRow]
+      : target === this.view.contentDOM
+        ? Array.from(
+            this.view.contentDOM.querySelectorAll(CODE_OWNER_GUIDE_SELECTOR),
+          )
+        : [];
+    for (const row of rows) {
+      const win = row.ownerDocument.defaultView;
+      if (!win) continue;
+      const bounds = row.getBoundingClientRect();
+      const preview = row.classList.contains(
+        "bullet-plugin-code-preview-owner-guide",
+      );
+      const style = win.getComputedStyle(row, preview ? "::after" : undefined);
+      const width = Number.parseFloat(
+        preview ? style.width : style.backgroundSize,
+      );
+      const center =
+        bounds.left +
+        Number.parseFloat(preview ? style.left : style.backgroundPositionX) +
+        width / 2;
+      const left =
+        center +
+        Number.parseFloat(
+          style.getPropertyValue("--bullet-code-guide-hit-offset"),
+        );
+      const hitWidth = Number.parseFloat(
+        style.getPropertyValue("--bullet-code-guide-hit-width"),
+      );
+      const top =
+        bounds.top +
+        Number.parseFloat(preview ? style.top : style.backgroundPositionY);
+      const height = preview
+        ? Number.parseFloat(style.height)
+        : bounds.bottom - top;
+      if (
+        left <= clientX &&
+        clientX < left + hitWidth &&
+        top <= clientY &&
+        clientY < top + height
+      )
+        return row;
+    }
+    return null;
   }
 
   destroy() {
@@ -834,6 +870,7 @@ export class GuideFoldingPluginValue implements PluginValue {
     synchronizeSelectedIndentGuides(this.view.contentDOM, []);
     synchronizeSelectedOuterListGuides(this.view.contentDOM, []);
     synchronizePersistentIndentGuides(this.view.contentDOM, false);
+    synchronizeActiveCodeGuides(this.view.contentDOM, []);
   }
 
   private onMouseDown = (event: MouseEvent) => {
@@ -1029,8 +1066,40 @@ export class GuideFoldingPluginValue implements PluginValue {
     return { key, valid: true, indentGuides, outerGuides: [] };
   }
 
+  private readActiveCodeGuides(): Element[] {
+    const owners = Array.from(
+      this.view.contentDOM.querySelectorAll(CODE_OWNER_GUIDE_SELECTOR),
+    );
+    if (owners.length === 0) return [];
+    const active = Array.from(
+      this.view.contentDOM.querySelectorAll(
+        `${LINE_INDENT_GUIDE_SELECTOR}.cm-active-indent`,
+      ),
+    );
+    const first = active[0];
+    const line = first ? this.getLineForGuide(first) : null;
+    const editor = getEditorFromState(this.view.state);
+    if (line === null || !editor) return [];
+    const root = this.parser.parse(editor, { line, ch: 0 });
+    if (!root) return [];
+    const targets = active.map((guide) =>
+      this.getTargetForGuide(root, editor, guide),
+    );
+    return owners.filter((owner) => {
+      const target = this.getTargetForGuide(root, editor, owner);
+      return (
+        target !== null &&
+        targets.some(
+          (activeTarget) =>
+            activeTarget !== null && hasSameListStart(target, activeTarget),
+        )
+      );
+    });
+  }
+
   private readGuideMeasurement(): GuideMeasurement {
     return {
+      activeCodeGuides: this.readActiveCodeGuides(),
       indentGuides: this.readHoveredIndentGuideGroup(),
       outerGuides: this.outerInteractionEnabled()
         ? collectHoveredOuterListGuides(this.view.contentDOM)
@@ -1115,6 +1184,10 @@ export class GuideFoldingPluginValue implements PluginValue {
           return;
         }
 
+        synchronizeActiveCodeGuides(
+          this.view.contentDOM,
+          measurement?.activeCodeGuides ?? [],
+        );
         synchronizePersistentIndentGuides(
           this.view.contentDOM,
           this.interactionEnabled(),

@@ -187,6 +187,23 @@ describe("BetterListsStyles", () => {
     );
   });
 
+  test("resolves native guide tab stops with their own font size", () => {
+    const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
+    const nativeGuide = styles.match(
+      /\.HyperMD-codeblock\.HyperMD-list-line\s+:is\(\.cm-indent, \.bullet-plugin-outer-list-guide\)\s*\{([^}]*)\}/,
+    )?.[1];
+    const literalCodeIndent = styles.match(
+      /\.cm-line\.bullet-plugin-nested-code-block\s+\.bullet-plugin-code-content-indent\s+\.cm-indent\s*\{([^}]*)\}/,
+    )?.[1];
+
+    expect(nativeGuide?.replace(/\s+/g, " ").trim()).toBe(
+      "font-size: var(--font-text-size); tab-size: var(--list-indent);",
+    );
+    expect(literalCodeIndent?.replace(/\s+/g, " ").trim()).toBe(
+      "font-size: inherit;",
+    );
+  });
+
   test("hides only the owning continuation guide in native code preview rows", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(
@@ -201,14 +218,14 @@ describe("BetterListsStyles", () => {
     );
   });
 
-  test("clips the first source owner guide without hiding or resizing its indent", () => {
+  test("starts the first source owner guide below the aligned marker", () => {
     const styles = readFileSync(join(__dirname, "../../../styles.css"), "utf8");
     const declarations = styles.match(
       /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-code-owner-guide-clipped\s+\.bullet-plugin-code-owner-prefix\s+\.cm-indent::before\s*\{([^}]*)\}/,
     )?.[1];
 
     expect(declarations?.replace(/\s+/g, " ").trim()).toBe(
-      "clip-path: inset(var(--bullet-code-owner-guide-clip) 0 0 0);",
+      "top: var(--bullet-code-owner-guide-clip);",
     );
     expect(declarations).not.toMatch(
       /\b(?:display|visibility|width|min-width|height|position|inset-block-start|translate|transform)\s*:/,
@@ -225,26 +242,26 @@ describe("BetterListsStyles", () => {
     )?.[1];
 
     expect(indent?.replace(/\s+/g, " ").trim()).toBe(
-      "block-size: var(--bullet-code-indent-guide-height);",
+      "block-size: calc( var(--bullet-code-indent-guide-height) - var(--bullet-code-indent-guide-seam-top, 0px) );",
     );
     expect(outer?.replace(/\s+/g, " ").trim()).toBe(
-      "block-size: var(--bullet-code-outer-guide-height);",
+      "block-size: calc( var(--bullet-code-outer-guide-height) - var(--bullet-code-outer-guide-seam-top, 0px) );",
     );
     expect(`${indent} ${outer}`).not.toMatch(
       /\b(?:display|visibility|width|min-width|position|inset-block-start|translate|transform|border-inline-start-width)\s*:/,
     );
 
     const indentSeam = styles.match(
-      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-code-guide-seam\s+\.cm-indent::before\s*\{([^}]*)\}/,
+      /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-code-guide-seam\s+\.cm-indent:not\(\.bullet-plugin-code-guide-native-start\)::before\s*\{([^}]*)\}/,
     )?.[1];
     const outerSeam = styles.match(
       /body\.bullet-plugin-better-lists\s+\.markdown-source-view\.mod-cm6\.is-live-preview\s+\.cm-line\.bullet-plugin-code-guide-seam\s+\.bullet-plugin-outer-list-guide::before\s*\{([^}]*)\}/,
     )?.[1];
     expect(indentSeam?.replace(/\s+/g, " ").trim()).toBe(
-      "clip-path: inset(var(--bullet-code-indent-guide-seam-clip) 0 0 0);",
+      "top: var(--bullet-code-indent-guide-seam-top);",
     );
     expect(outerSeam?.replace(/\s+/g, " ").trim()).toBe(
-      "clip-path: inset(var(--bullet-code-outer-guide-seam-clip) 0 0 0);",
+      "top: var(--bullet-code-outer-guide-seam-top);",
     );
     expect(`${indentSeam} ${outerSeam}`).not.toMatch(
       /\b(?:display|visibility|width|min-width|height|position|inset-block-start|translate|transform|border-inline-start-width)\s*:/,

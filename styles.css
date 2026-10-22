@@ -98,6 +98,7 @@ body.bullet-plugin-better-lists
   .HyperMD-codeblock.HyperMD-list-line
   :is(.cm-indent, .bullet-plugin-outer-list-guide) {
   font-size: var(--font-text-size);
+  tab-size: var(--list-indent);
 }
 
 body.bullet-plugin-better-lists
@@ -151,7 +152,7 @@ body.bullet-plugin-better-lists
   .cm-line.bullet-plugin-code-owner-guide-clipped
   .bullet-plugin-code-owner-prefix
   .cm-indent::before {
-  clip-path: inset(var(--bullet-code-owner-guide-clip) 0 0 0);
+  top: var(--bullet-code-owner-guide-clip);
 }
 
 body.bullet-plugin-better-lists
@@ -222,14 +223,20 @@ body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .bullet-plugin-code-guide-continuation
   .cm-indent::before {
-  block-size: var(--bullet-code-indent-guide-height);
+  block-size: calc(
+    var(--bullet-code-indent-guide-height) -
+      var(--bullet-code-indent-guide-seam-top, 0px)
+  );
 }
 
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .bullet-plugin-code-guide-continuation
   .bullet-plugin-outer-list-guide::before {
-  block-size: var(--bullet-code-outer-guide-height);
+  block-size: calc(
+    var(--bullet-code-outer-guide-height) -
+      var(--bullet-code-outer-guide-seam-top, 0px)
+  );
 }
 
 body.bullet-plugin-better-lists
@@ -259,6 +266,11 @@ body.bullet-plugin-better-lists
   visibility: hidden;
 }
 
+.markdown-source-view.mod-cm6.is-live-preview .cm-line {
+  --bullet-code-guide-hit-offset: var(--bullet-code-owner-guide-hit-offset);
+  --bullet-code-guide-hit-width: var(--bullet-code-owner-guide-hit-width);
+}
+
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-code-owner-guide {
@@ -270,13 +282,13 @@ body.bullet-plugin-better-lists
   background-repeat: no-repeat;
   background-size: var(
       --bullet-code-guide-width,
-      var(--indentation-guide-width)
+      var(--bullet-code-owner-guide-width)
     )
     calc(100% - var(--bullet-code-owner-guide-clip, 0px));
   background-position: left
     calc(
-      var(--bullet-code-owner-guide-offset) -
-        var(--bullet-code-guide-width, var(--indentation-guide-width)) / 2
+      var(--bullet-code-guide-offset, var(--bullet-code-owner-guide-offset)) -
+        var(--bullet-code-guide-width, var(--bullet-code-owner-guide-width)) / 2
     )
     top var(--bullet-code-owner-guide-clip, 0px);
 }
@@ -288,11 +300,11 @@ body.bullet-plugin-better-lists
   position: absolute;
   pointer-events: auto;
   left: calc(
-    var(--bullet-code-owner-guide-offset) -
-      var(--bullet-code-guide-width, var(--indentation-guide-width)) / 2
+    var(--bullet-code-guide-offset, var(--bullet-code-owner-guide-offset)) -
+      var(--bullet-code-guide-width, var(--bullet-code-owner-guide-width)) / 2
   );
   top: var(--bullet-code-preview-owner-guide-top);
-  width: var(--bullet-code-guide-width, var(--indentation-guide-width));
+  width: var(--bullet-code-guide-width, var(--bullet-code-owner-guide-width));
   height: var(--bullet-code-preview-owner-guide-height);
   background-color: var(
     --bullet-code-guide-color,
@@ -301,28 +313,35 @@ body.bullet-plugin-better-lists
 }
 
 .markdown-source-view.mod-cm6.is-live-preview
+  .cm-line.bullet-plugin-code-owner-active-indent {
+  --bullet-code-guide-color: var(--indentation-guide-color-active);
+}
+
+.markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-selected-indent-guide {
-  --bullet-code-guide-width: var(--indentation-guide-width-active);
+  --bullet-code-guide-offset: var(--bullet-code-owner-guide-active-offset);
+  --bullet-code-guide-width: var(--bullet-code-owner-guide-active-width);
+  --bullet-code-guide-hit-offset: var(
+    --bullet-code-owner-guide-active-hit-offset
+  );
+  --bullet-code-guide-hit-width: var(
+    --bullet-code-owner-guide-active-hit-width
+  );
   --bullet-code-guide-color: var(--indentation-guide-color-active);
 }
 
 .bullet-plugin-vertical-lines-action-toggle-folding
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-hovered-indent-guide {
-  --bullet-code-guide-width: var(--indentation-guide-width-active);
+  --bullet-code-guide-offset: var(--bullet-code-owner-guide-active-offset);
+  --bullet-code-guide-width: var(--bullet-code-owner-guide-active-width);
+  --bullet-code-guide-hit-offset: var(
+    --bullet-code-owner-guide-active-hit-offset
+  );
+  --bullet-code-guide-hit-width: var(
+    --bullet-code-owner-guide-active-hit-width
+  );
   --bullet-code-guide-color: var(--indentation-guide-color-active);
-}
-
-.bullet-plugin-enhanced-vertical-line-hover
-  .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line.bullet-plugin-selected-indent-guide {
-  --bullet-code-guide-width: 3px;
-}
-
-.bullet-plugin-vertical-lines-action-toggle-folding.bullet-plugin-enhanced-vertical-line-hover
-  .markdown-source-view.mod-cm6.is-live-preview
-  .cm-line.bullet-plugin-hovered-indent-guide {
-  --bullet-code-guide-width: 3px;
 }
 
 body.bullet-plugin-better-lists
@@ -343,15 +362,15 @@ body.bullet-plugin-better-lists
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-code-guide-seam
-  .cm-indent::before {
-  clip-path: inset(var(--bullet-code-indent-guide-seam-clip) 0 0 0);
+  .cm-indent:not(.bullet-plugin-code-guide-native-start)::before {
+  top: var(--bullet-code-indent-guide-seam-top);
 }
 
 body.bullet-plugin-better-lists
   .markdown-source-view.mod-cm6.is-live-preview
   .cm-line.bullet-plugin-code-guide-seam
   .bullet-plugin-outer-list-guide::before {
-  clip-path: inset(var(--bullet-code-outer-guide-seam-clip) 0 0 0);
+  top: var(--bullet-code-outer-guide-seam-top);
 }
 
 body.bullet-plugin-better-lists

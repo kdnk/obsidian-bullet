@@ -55,6 +55,16 @@ const CODE_OWNER_GUIDE_CLIPPED_CLASS = "bullet-plugin-code-owner-guide-clipped";
 const CODE_OWNER_GUIDE_CLIP = "--bullet-code-owner-guide-clip";
 const CODE_OWNER_GUIDE_CLASS = "bullet-plugin-code-owner-guide";
 const CODE_OWNER_GUIDE_OFFSET = "--bullet-code-owner-guide-offset";
+const CODE_OWNER_GUIDE_WIDTH = "--bullet-code-owner-guide-width";
+const CODE_OWNER_GUIDE_HIT_OFFSET = "--bullet-code-owner-guide-hit-offset";
+const CODE_OWNER_GUIDE_HIT_WIDTH = "--bullet-code-owner-guide-hit-width";
+const CODE_OWNER_GUIDE_ACTIVE_OFFSET =
+  "--bullet-code-owner-guide-active-offset";
+const CODE_OWNER_GUIDE_ACTIVE_WIDTH = "--bullet-code-owner-guide-active-width";
+const CODE_OWNER_GUIDE_ACTIVE_HIT_OFFSET =
+  "--bullet-code-owner-guide-active-hit-offset";
+const CODE_OWNER_GUIDE_ACTIVE_HIT_WIDTH =
+  "--bullet-code-owner-guide-active-hit-width";
 const CODE_PREVIEW_OWNER_GUIDE_CLASS = "bullet-plugin-code-preview-owner-guide";
 const CODE_PREVIEW_OWNER_GUIDE_TOP = "--bullet-code-preview-owner-guide-top";
 const CODE_PREVIEW_OWNER_GUIDE_HEIGHT =
@@ -66,8 +76,11 @@ const CODE_OUTER_GUIDE_COVERED_CLASS = "bullet-plugin-code-outer-guide-covered";
 const CODE_INDENT_GUIDE_HEIGHT = "--bullet-code-indent-guide-height";
 const CODE_OUTER_GUIDE_HEIGHT = "--bullet-code-outer-guide-height";
 const CODE_GUIDE_SEAM_CLASS = "bullet-plugin-code-guide-seam";
-const CODE_INDENT_GUIDE_SEAM_CLIP = "--bullet-code-indent-guide-seam-clip";
-const CODE_OUTER_GUIDE_SEAM_CLIP = "--bullet-code-outer-guide-seam-clip";
+const CODE_GUIDE_NATIVE_START_CLASS = "bullet-plugin-code-guide-native-start";
+const CODE_GUIDE_NATIVE_STARTS_ATTRIBUTE =
+  "data-bullet-code-guide-native-starts";
+const CODE_INDENT_GUIDE_SEAM_TOP = "--bullet-code-indent-guide-seam-top";
+const CODE_OUTER_GUIDE_SEAM_TOP = "--bullet-code-outer-guide-seam-top";
 const OPENING_ALIGNED_CLASS = "bullet-plugin-code-opening-aligned";
 const OPENING_MARKER_OFFSET = "--bullet-code-opening-marker-offset";
 const BODY_FOLD_CLASS = "bullet-plugin-code-body-fold";
@@ -97,9 +110,21 @@ type PreviewAppearance = {
   radius: string;
 } & ({ kind: "plain" } | { kind: "header"; openingHeight: string });
 
+interface GuidePaint {
+  offset: string;
+  width: string;
+  hitOffset: string;
+  hitWidth: string;
+}
+
+interface OwnerGuidePaint {
+  normal: GuidePaint;
+  active: GuidePaint;
+}
+
 type PreviewOwnerGuide =
-  | { kind: "row"; offset: string; clip?: string }
-  | { kind: "opening"; offset: string; top: string; height: string };
+  | { kind: "row"; clip?: string }
+  | { kind: "opening"; top: string; height: string };
 
 interface MeasuredLine {
   element: HTMLElement;
@@ -110,13 +135,13 @@ interface MeasuredLine {
   markerOffset?: string;
   bodyFoldOffset?: string;
   ownerGuideClip?: string;
-  ownerGuideOffset?: string;
+  ownerGuidePaint?: OwnerGuidePaint;
   previewOwnerGuide?: PreviewOwnerGuide;
   guideHeight?: string;
   outerGuideHeight?: string;
   indentGuideCovered?: boolean;
   outerGuideCovered?: boolean;
-  guideSeam?: { element: HTMLElement; indentClip?: string; outerClip?: string };
+  guideSeam?: GuideSeam & { element: HTMLElement };
   preview?: OpeningAlignment;
   previewBlock?: HTMLElement;
   previewEmbed?: boolean;
@@ -152,7 +177,7 @@ interface NativeRowLayout {
   markerOffset: string | undefined;
   bodyFoldOffset: string | undefined;
   ownerGuideClip: string | undefined;
-  ownerGuideOffset: string | undefined;
+  ownerGuidePaint: OwnerGuidePaint | undefined;
   previewOwnerGuide: PreviewOwnerGuide | undefined;
   guideHeight: string | undefined;
   outerGuideHeight: string | undefined;
@@ -169,8 +194,9 @@ interface NativeSnapshot {
 }
 
 interface GuideSeam {
-  indentClip?: string;
-  outerClip?: string;
+  nativeStartPrefixes: readonly string[];
+  indentTop?: string;
+  outerTop?: string;
 }
 
 interface ProcessorLayout {
@@ -212,6 +238,7 @@ const NATIVE_CLASSES = [
   CODE_GUIDE_CONTINUATION_CLASS,
   CODE_INDENT_GUIDE_COVERED_CLASS,
   CODE_OUTER_GUIDE_COVERED_CLASS,
+  CODE_GUIDE_NATIVE_START_CLASS,
 ];
 
 function withoutLayoutClasses(value: string): string {
@@ -542,7 +569,10 @@ export class NestedCodeBlockLayoutPluginValue {
   private correctedProcessors = new Set<HTMLElement>();
   private classifier = new MarkdownLineClassifier();
   private markerMeasureContainer: HTMLElement | null = null;
-  private ownerGuideMeasure: HTMLElement | null = null;
+  private ownerGuideMeasure: {
+    normal: HTMLElement;
+    active: HTMLElement;
+  } | null = null;
   private markerMeasurements = new Map<
     number,
     { marker: HTMLElement; indent: HTMLElement; signature: string }
@@ -592,9 +622,10 @@ export class NestedCodeBlockLayoutPluginValue {
     if (Observer) {
       this.previewObserver = new Observer((records) => {
         if (this.destroyed) return;
+        this.projectNativeGuideStarts();
         let changed = false;
         let nativeChildrenChanged = false;
-        for (const { target, type, oldValue } of records) {
+        for (const { target, type, oldValue, attributeName } of records) {
           if (target === view.dom.ownerDocument.body) {
             changed = true;
             continue;
@@ -602,6 +633,7 @@ export class NestedCodeBlockLayoutPluginValue {
           const element =
             target.nodeType === 1 ? (target as HTMLElement) : null;
           if (type === "attributes") {
+            if (attributeName === CODE_GUIDE_NATIVE_STARTS_ATTRIBUTE) continue;
             if (
               element &&
               withoutLayoutClasses(oldValue ?? "") !==
@@ -625,7 +657,7 @@ export class NestedCodeBlockLayoutPluginValue {
         childList: true,
         subtree: true,
         attributes: true,
-        attributeFilter: ["class"],
+        attributeFilter: ["class", CODE_GUIDE_NATIVE_STARTS_ATTRIBUTE],
         attributeOldValue: true,
       });
       if (view.dom.ownerDocument.body)
@@ -745,6 +777,7 @@ export class NestedCodeBlockLayoutPluginValue {
     for (const element of this.styledProcessors.keys())
       this.clearProcessor(element);
     this.styledProcessors.clear();
+    this.projectNativeGuideStarts(true);
     this.previews.destroy();
     this.correctedProcessors.clear();
     this.markerMeasureContainer?.remove();
@@ -752,6 +785,28 @@ export class NestedCodeBlockLayoutPluginValue {
     this.ownerGuideMeasure = null;
     this.markerMeasurements.clear();
     this.codeMeasurements.clear();
+  }
+
+  private projectNativeGuideStarts(clear = false) {
+    for (const line of Array.from(
+      this.view.contentDOM.querySelectorAll<HTMLElement>(".cm-line"),
+    )) {
+      const prefixes = new Set(
+        clear
+          ? []
+          : nativeGuideStartPrefixes(
+              line.getAttribute(CODE_GUIDE_NATIVE_STARTS_ATTRIBUTE),
+            ),
+      );
+      for (const guide of Array.from(
+        line.querySelectorAll<HTMLElement>(".cm-indent"),
+      ))
+        setClass(
+          guide,
+          CODE_GUIDE_NATIVE_START_CLASS,
+          prefixes.has(guidePrefix(line, guide)),
+        );
+    }
   }
 
   private buildDecorations(): {
@@ -801,8 +856,8 @@ export class NestedCodeBlockLayoutPluginValue {
               ),
             ).range(from),
           ),
-          ...Array.from(this.guideSeams, ([from, clip]) =>
-            Decoration.line(guideSeamAttributes(clip)).range(from),
+          ...Array.from(this.guideSeams, ([from, seam]) =>
+            Decoration.line(guideSeamAttributes(seam)).range(from),
           ),
         ],
         sort: true,
@@ -877,14 +932,20 @@ export class NestedCodeBlockLayoutPluginValue {
       container.setAttribute("aria-hidden", "true");
       this.view.dom.appendChild(container);
       this.markerMeasureContainer = container;
-      const indent = win.createSpan();
-      indent.className = "cm-hmd-list-indent";
-      const guide = win.createSpan();
-      guide.className = "cm-indent";
-      guide.textContent = "\t";
-      indent.appendChild(guide);
-      container.appendChild(indent);
-      this.ownerGuideMeasure = guide;
+      const makeGuide = (className: string) => {
+        const indent = win.createSpan();
+        indent.className = "cm-hmd-list-indent";
+        const guide = win.createSpan();
+        guide.className = className;
+        guide.textContent = "\t";
+        indent.appendChild(guide);
+        container.appendChild(indent);
+        return guide;
+      };
+      this.ownerGuideMeasure = {
+        normal: makeGuide("cm-indent"),
+        active: makeGuide("cm-indent bullet-plugin-selected-indent-guide"),
+      };
     }
     for (const n of visible) {
       const match = listFenceRe.exec(this.view.state.doc.line(n).text);
@@ -1180,12 +1241,14 @@ export class NestedCodeBlockLayoutPluginValue {
               element,
             );
             preceding.preview = alignment;
-            const offset = this.measureOwnerGuideOffset(opening, currentInset);
-            if (offset !== undefined)
+            preceding.ownerGuidePaint = this.measureOwnerGuidePaint(
+              opening,
+              currentInset,
+            );
+            if (preceding.ownerGuidePaint)
               preceding.previewOwnerGuide = measureOpeningPreviewOwnerGuide(
                 preceding.element,
                 element,
-                offset,
               );
             const guide = measureCodeGuideContinuation(
               preceding.element,
@@ -1338,7 +1401,7 @@ export class NestedCodeBlockLayoutPluginValue {
         const firstBody =
           isCodeBody(element) && line.number === opening.openingLineNumber + 1;
         const codeContent = element.querySelector(`.${CODE_CONTENT_CLASS}`);
-        const ownerGuideOffset = this.measureOwnerGuideOffset(opening, inset);
+        const ownerGuidePaint = this.measureOwnerGuidePaint(opening, inset);
         measured.push({
           element,
           inset,
@@ -1364,13 +1427,10 @@ export class NestedCodeBlockLayoutPluginValue {
             ? (firstBodyGuideClips.get(element) ??
               measureOwnerGuideClip(element, codeContent ?? element))
             : undefined,
-          ownerGuideOffset: isOpening ? undefined : ownerGuideOffset,
-          previewOwnerGuide: this.measureNativePreviewOwnerGuide(
-            element,
-            opening,
-            ownerGuideOffset,
-            isOpening,
-          ),
+          ownerGuidePaint,
+          previewOwnerGuide: ownerGuidePaint
+            ? this.measureNativePreviewOwnerGuide(element, opening, isOpening)
+            : undefined,
           guideHeight: guide?.height,
           outerGuideHeight: guide?.outerHeight,
           indentGuideCovered:
@@ -1405,7 +1465,7 @@ export class NestedCodeBlockLayoutPluginValue {
         visibleInsets.get(openingLineNumber) ??
         (probe ? measureIntrinsicInset(probe.indent, probe.marker) : undefined);
       if (inset !== undefined) {
-        const ownerGuideOffset = this.measureOwnerGuideOffset(opening, inset);
+        const ownerGuidePaint = this.measureOwnerGuidePaint(opening, inset);
         measured.push({
           element,
           inset,
@@ -1417,13 +1477,10 @@ export class NestedCodeBlockLayoutPluginValue {
             inset,
           ),
           emptyBody: true,
-          previewOwnerGuide: this.measureNativePreviewOwnerGuide(
-            element,
-            opening,
-            ownerGuideOffset,
-            false,
-          ),
-          ownerGuideOffset,
+          previewOwnerGuide: ownerGuidePaint
+            ? this.measureNativePreviewOwnerGuide(element, opening, false)
+            : undefined,
+          ownerGuidePaint,
           ownerGuideClip:
             documentLineForElement(this.view, element)?.number ===
             openingLineNumber + 1
@@ -1441,13 +1498,11 @@ export class NestedCodeBlockLayoutPluginValue {
   private measureNativePreviewOwnerGuide(
     element: HTMLElement,
     opening: FenceOpening,
-    offset: string | undefined,
     isOpening: boolean,
   ): PreviewOwnerGuide | undefined {
-    if (offset === undefined) return;
     if (isOpening) {
       if (isHiddenClosingFence(element.nextElementSibling))
-        return measureOpeningPreviewOwnerGuide(element, element, offset);
+        return measureOpeningPreviewOwnerGuide(element, element);
       return;
     }
     const line = documentLineForElement(this.view, element);
@@ -1460,33 +1515,42 @@ export class NestedCodeBlockLayoutPluginValue {
       : undefined;
     return {
       kind: "row",
-      offset,
       clip: geometry
         ? `${Math.max(0, geometry.firstLine.top + geometry.firstLine.height - geometry.blockBounds.top)}px`
         : undefined,
     };
   }
 
-  private measureOwnerGuideOffset(
+  private measureOwnerGuidePaint(
     opening: FenceOpening,
     inset: string,
-  ): string | undefined {
+  ): OwnerGuidePaint | undefined {
     const hidden = this.zoomRange?.(this.view.state)?.indent ?? "";
     if (countColumn(hidden, this.view.state.tabSize) > opening.indentColumn)
       return;
     const marker = this.markerMeasurements.get(
       opening.openingLineNumber,
     )?.marker;
-    const guide = this.ownerGuideMeasure;
+    const guides = this.ownerGuideMeasure;
     if (
       !marker ||
-      !guide ||
+      !guides ||
       !Array.from(marker.children).some(
         (child) => child.className === "list-bullet",
       )
     )
       return;
-    const win = marker.ownerDocument.defaultView;
+    const normal = this.measureGuidePaint(marker, guides.normal, inset);
+    const active = this.measureGuidePaint(marker, guides.active, inset);
+    return normal && active ? { normal, active } : undefined;
+  }
+
+  private measureGuidePaint(
+    marker: HTMLElement,
+    guide: HTMLElement,
+    inset: string,
+  ): GuidePaint | undefined {
+    const win = guide.ownerDocument.defaultView;
     if (!win) return;
     const markerBounds = marker.getBoundingClientRect();
     const guideBounds = guide.getBoundingClientRect();
@@ -1546,9 +1610,14 @@ export class NestedCodeBlockLayoutPluginValue {
     const margin = Number.parseFloat(markerStyle.marginInlineEnd) || 0;
     const distance = markerBounds.width + margin - offset;
     if (!Number.isFinite(distance)) return;
-    return rtl
-      ? `calc(100% - ${inset} + ${distance}px)`
-      : `calc(${inset} - ${distance}px)`;
+    return {
+      offset: rtl
+        ? `calc(100% - ${inset} + ${distance}px)`
+        : `calc(${inset} - ${distance}px)`,
+      width: `${borderRight || borderLeft || boxWidth}px`,
+      hitOffset: `${guideBounds.left - center}px`,
+      hitWidth: `${Math.min(guideBounds.width, markerBounds.width + margin)}px`,
+    };
   }
 
   private measureLayout(): MeasuredFrame {
@@ -1570,7 +1639,7 @@ export class NestedCodeBlockLayoutPluginValue {
         markerOffset,
         bodyFoldOffset,
         ownerGuideClip,
-        ownerGuideOffset,
+        ownerGuidePaint,
         previewOwnerGuide,
         guideHeight,
         outerGuideHeight,
@@ -1586,8 +1655,9 @@ export class NestedCodeBlockLayoutPluginValue {
         );
         if (seamLine)
           seams.set(seamLine.from, {
-            indentClip: measurement.guideSeam.indentClip,
-            outerClip: measurement.guideSeam.outerClip,
+            nativeStartPrefixes: measurement.guideSeam.nativeStartPrefixes,
+            indentTop: measurement.guideSeam.indentTop,
+            outerTop: measurement.guideSeam.outerTop,
           });
       }
       if (element.classList.contains("cm-preview-code-block")) {
@@ -1618,7 +1688,7 @@ export class NestedCodeBlockLayoutPluginValue {
           markerOffset,
           bodyFoldOffset,
           ownerGuideClip,
-          ownerGuideOffset,
+          ownerGuidePaint,
           previewOwnerGuide,
           guideHeight:
             guideHeight ?? this.nativeRows.get(source.from)?.guideHeight,
@@ -1757,7 +1827,7 @@ export class NestedCodeBlockLayoutPluginValue {
         rows.set(from, { ...row, end: ends.get(row.source.openingFrom) });
     }
     const seams = new Map(this.guideSeams);
-    for (const [from, clip] of snapshot.seams) seams.set(from, clip);
+    for (const [from, seam] of snapshot.seams) seams.set(from, seam);
     if (
       sameNativeRows(this.nativeRows, rows) &&
       sameGuideSeams(this.guideSeams, seams)
@@ -1997,7 +2067,6 @@ function nativeAttributes(
     }
     if (presentation.kind !== "source" && row.previewOwnerGuide) {
       const guide = row.previewOwnerGuide;
-      properties.push([CODE_OWNER_GUIDE_OFFSET, guide.offset]);
       if (guide.kind === "opening") {
         classes.push(CODE_PREVIEW_OWNER_GUIDE_CLASS);
         properties.push(
@@ -2049,9 +2118,8 @@ function nativeAttributes(
         classes.push(PREVIEW_LAST_CLASS);
         break;
       case "source":
-        if (row.ownerGuideOffset !== undefined) {
+        if (row.source.kind !== "opening" && row.ownerGuidePaint) {
           classes.push(CODE_OWNER_GUIDE_CLASS);
-          properties.push([CODE_OWNER_GUIDE_OFFSET, row.ownerGuideOffset]);
         }
         if (row.ownerGuideClip !== undefined) {
           classes.push(CODE_OWNER_GUIDE_CLIPPED_CLASS);
@@ -2062,6 +2130,23 @@ function nativeAttributes(
         const exhaustive: never = presentation;
         return exhaustive;
       }
+    }
+    if (
+      row.ownerGuidePaint &&
+      (classes.includes(CODE_OWNER_GUIDE_CLASS) ||
+        classes.includes(CODE_PREVIEW_OWNER_GUIDE_CLASS))
+    ) {
+      const { normal, active } = row.ownerGuidePaint;
+      properties.push(
+        [CODE_OWNER_GUIDE_OFFSET, normal.offset],
+        [CODE_OWNER_GUIDE_WIDTH, normal.width],
+        [CODE_OWNER_GUIDE_HIT_OFFSET, normal.hitOffset],
+        [CODE_OWNER_GUIDE_HIT_WIDTH, normal.hitWidth],
+        [CODE_OWNER_GUIDE_ACTIVE_OFFSET, active.offset],
+        [CODE_OWNER_GUIDE_ACTIVE_WIDTH, active.width],
+        [CODE_OWNER_GUIDE_ACTIVE_HIT_OFFSET, active.hitOffset],
+        [CODE_OWNER_GUIDE_ACTIVE_HIT_WIDTH, active.hitWidth],
+      );
     }
   }
   return {
@@ -2076,7 +2161,15 @@ function nativeAttributes(
           ([name, value]) =>
             `${name}: ${
               name === CODE_INDENT_GUIDE_HEIGHT ||
-              name === CODE_OUTER_GUIDE_HEIGHT
+              name === CODE_OUTER_GUIDE_HEIGHT ||
+              name === CODE_OWNER_GUIDE_OFFSET ||
+              name === CODE_OWNER_GUIDE_WIDTH ||
+              name === CODE_OWNER_GUIDE_HIT_OFFSET ||
+              name === CODE_OWNER_GUIDE_HIT_WIDTH ||
+              name === CODE_OWNER_GUIDE_ACTIVE_OFFSET ||
+              name === CODE_OWNER_GUIDE_ACTIVE_WIDTH ||
+              name === CODE_OWNER_GUIDE_ACTIVE_HIT_OFFSET ||
+              name === CODE_OWNER_GUIDE_ACTIVE_HIT_WIDTH
                 ? value
                 : value?.replace(
                     /-?\d+(?:\.\d+)?px\b/g,
@@ -2094,13 +2187,16 @@ function guideSeamAttributes(seam: GuideSeam) {
   return {
     class: CODE_GUIDE_SEAM_CLASS,
     attributes: {
+      [CODE_GUIDE_NATIVE_STARTS_ATTRIBUTE]: JSON.stringify(
+        seam.nativeStartPrefixes,
+      ),
       style: [
-        seam.indentClip === undefined
+        seam.indentTop === undefined
           ? ""
-          : `${CODE_INDENT_GUIDE_SEAM_CLIP}: ${seam.indentClip};`,
-        seam.outerClip === undefined
+          : `${CODE_INDENT_GUIDE_SEAM_TOP}: ${seam.indentTop};`,
+        seam.outerTop === undefined
           ? ""
-          : `${CODE_OUTER_GUIDE_SEAM_CLIP}: ${seam.outerClip};`,
+          : `${CODE_OUTER_GUIDE_SEAM_TOP}: ${seam.outerTop};`,
       ]
         .filter(Boolean)
         .join(" "),
@@ -2116,8 +2212,13 @@ function sameGuideSeams(
   for (const [from, seam] of next) {
     const old = previous.get(from);
     if (
-      old?.indentClip !== seam.indentClip ||
-      old?.outerClip !== seam.outerClip
+      !old ||
+      old.indentTop !== seam.indentTop ||
+      old.outerTop !== seam.outerTop ||
+      old.nativeStartPrefixes.length !== seam.nativeStartPrefixes.length ||
+      old.nativeStartPrefixes.some(
+        (prefix, index) => prefix !== seam.nativeStartPrefixes[index],
+      )
     )
       return false;
   }
@@ -2499,7 +2600,6 @@ function measureOpeningAlignment(
 function measureOpeningPreviewOwnerGuide(
   opening: HTMLElement,
   block: HTMLElement,
-  offset: string,
 ): PreviewOwnerGuide | undefined {
   const code =
     block.querySelector(".ec-line .code") ??
@@ -2523,7 +2623,6 @@ function measureOpeningPreviewOwnerGuide(
   if (![openingTop, start, end].every(Number.isFinite)) return;
   return {
     kind: "opening",
-    offset,
     top: `${Math.max(0, start - openingTop)}px`,
     height: `${Math.max(0, end - start)}px`,
   };
@@ -2537,7 +2636,7 @@ function measureCodeGuideContinuation(
   outerHeight?: string;
   coversIndent: boolean;
   coversOuter: boolean;
-  seam?: { element: HTMLElement; indentClip?: string; outerClip?: string };
+  seam?: GuideSeam & { element: HTMLElement };
 } {
   const openingBounds = opening.getBoundingClientRect();
   const openingStarts = measureGuideStarts(opening);
@@ -2558,9 +2657,7 @@ function measureCodeGuideContinuation(
   }
   let indentEnd = paintEnd;
   let outerEnd = paintEnd;
-  let seam:
-    | { element: HTMLElement; indentClip?: string; outerClip?: string }
-    | undefined;
+  let seam: (GuideSeam & { element: HTMLElement }) | undefined;
   if (element?.classList.contains("cm-line")) {
     const target = element as HTMLElement;
     const starts = measureGuideStarts(target);
@@ -2573,11 +2670,12 @@ function measureCodeGuideContinuation(
     if (starts.indent !== undefined || starts.outer !== undefined)
       seam = {
         element: target,
-        indentClip:
+        nativeStartPrefixes: guidesWithNativeStart(opening, target),
+        indentTop:
           starts.indent === undefined || snappedIndent === undefined
             ? undefined
             : `${snappedIndent - starts.indent}px`,
-        outerClip:
+        outerTop:
           starts.outer === undefined || snappedOuter === undefined
             ? undefined
             : `${snappedOuter - starts.outer}px`,
@@ -2607,17 +2705,59 @@ function snapGuideStart(start: number | undefined, dpr: number) {
   return start === undefined ? undefined : Math.ceil(start * dpr) / dpr;
 }
 
+function guidePrefix(line: HTMLElement, guide: Element) {
+  let text = "";
+  for (
+    let node: Node | null = guide;
+    node && node !== line;
+    node = node.parentNode
+  )
+    for (
+      let sibling = node.previousSibling;
+      sibling;
+      sibling = sibling.previousSibling
+    )
+      text = (sibling.textContent ?? "") + text;
+  return text;
+}
+
+function guidesWithNativeStart(opening: HTMLElement, following: HTMLElement) {
+  const selector = ".cm-indent";
+  const continued = new Set(
+    Array.from(opening.querySelectorAll(selector), (guide) =>
+      guidePrefix(opening, guide),
+    ),
+  );
+  return Array.from(following.querySelectorAll(selector), (guide) =>
+    guidePrefix(following, guide),
+  ).filter((prefix) => !continued.has(prefix));
+}
+
+function nativeGuideStartPrefixes(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const prefixes: unknown = JSON.parse(value);
+    return Array.isArray(prefixes) &&
+      prefixes.every((prefix) => typeof prefix === "string")
+      ? prefixes
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 function measureGuideStarts(line: HTMLElement): {
   indent?: number;
   outer?: number;
 } {
   const lineTop = line.getBoundingClientRect().top;
-  const starts = (selector: string) => {
+  const starts = (selector: string, seamProperty: string) => {
     const tops = Array.from(line.querySelectorAll<HTMLElement>(selector))
       .map((guide) => {
         const win = line.ownerDocument.defaultView;
         const paint = win?.getComputedStyle(guide, "::before");
-        const top = Number.parseFloat(paint?.top ?? "");
+        const measuredTop = Number.parseFloat(paint?.top ?? "");
+        const top = line.style.getPropertyValue(seamProperty) ? 0 : measuredTop;
         if (paint?.position !== "absolute" || !Number.isFinite(top))
           return guide.getBoundingClientRect().top;
         const container =
@@ -2632,8 +2772,11 @@ function measureGuideStarts(line: HTMLElement): {
     return tops.length ? Math.max(...tops) : undefined;
   };
   return {
-    indent: starts(".cm-hmd-list-indent > .cm-indent"),
-    outer: starts(".bullet-plugin-outer-list-guide"),
+    indent: starts(
+      ".cm-hmd-list-indent > .cm-indent",
+      CODE_INDENT_GUIDE_SEAM_TOP,
+    ),
+    outer: starts(".bullet-plugin-outer-list-guide", CODE_OUTER_GUIDE_SEAM_TOP),
   };
 }
 

@@ -424,6 +424,11 @@ try {
         (n, e) => n + e.querySelectorAll(".cm-indent").length,
         0,
       ),
+      guideStatesPerContainer: probes.map((probe) =>
+        [...probe.querySelectorAll(".cm-indent")].map((guide) =>
+          guide.classList.contains("bullet-plugin-selected-indent-guide"),
+        ),
+      ),
       guideSamples: probes.flatMap((probe) =>
         [...probe.querySelectorAll(".cm-indent")].map((guide) => ({
           outsideContent: !guide.closest(".cm-content"),
@@ -479,7 +484,13 @@ try {
     "probe lifecycle: at most one container per editor",
   );
   check(
-    lifecycle.before.guideCount === lifecycle.before.dimensions.length &&
+    lifecycle.before.guideCount === lifecycle.before.dimensions.length * 2 &&
+      lifecycle.before.guideStatesPerContainer.every(
+        (states) =>
+          states.length === 2 &&
+          states.includes(false) &&
+          states.includes(true),
+      ) &&
       lifecycle.before.guideSamples.every(
         (sample) =>
           sample.outsideContent &&
@@ -488,7 +499,7 @@ try {
           sample.pointerEvents === "none" &&
           sample.clipped,
       ),
-    "probe lifecycle: one nonpainted, noninteractive native style sample per container",
+    "probe lifecycle: paired normal and active nonpainted, noninteractive native style samples per container",
   );
   check(
     lifecycle.before.dimensions.every(
