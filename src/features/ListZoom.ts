@@ -676,6 +676,7 @@ export class ListZoom implements Feature {
     private imeIsOpened = () => false,
     private numericBullets = () => true,
     private overrideDescendants = () => true,
+    private createChildOnLeafZoom = () => true,
   ) {
     this.zoom = new ListZoomState(parser);
   }
@@ -780,13 +781,15 @@ export class ListZoom implements Feature {
         ?.getListUnderLine(line.number - 1);
       if (!list) return;
       const contentStart = list.getFirstLineContentStartAfterCheckbox();
-      const insertion = this.zoom.childInsertion(
-        view.state,
-        range.from,
-        this.defaultIndentChars(),
-        true,
-        this.numericBullets(),
-      );
+      const insertion = this.createChildOnLeafZoom()
+        ? this.zoom.childInsertion(
+            view.state,
+            range.from,
+            this.defaultIndentChars(),
+            true,
+            this.numericBullets(),
+          )
+        : null;
       // The breadcrumb panel does not exist on initial entry, so it cannot
       // map the return position through the newly created child yet.
       if (entering && insertion?.changes) {

@@ -19,6 +19,7 @@ import {
 type SettingsControlKey =
   | "keepCursorWithinContent"
   | "keepBodyTextInBullets"
+  | "createChildOnLeafZoom"
   | "overrideTabBehaviour"
   | "overrideEnterBehaviour"
   | "overrideVimOBehaviour"
@@ -100,6 +101,14 @@ const SETTING_GROUPS = [
         control: {
           type: "toggle",
           key: "overrideSelectAllBehaviour",
+        },
+      },
+      {
+        name: "Create a child when zooming into a leaf item",
+        desc: "Automatically create an empty child and place the caret inside it when zooming into an item without children.",
+        control: {
+          type: "toggle",
+          key: "createChildOnLeafZoom",
         },
       },
       {
@@ -238,6 +247,8 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
         return this.settings.keepCursorWithinContent;
       case "keepBodyTextInBullets":
         return this.settings.keepBodyTextInBullets;
+      case "createChildOnLeafZoom":
+        return this.settings.createChildOnLeafZoom;
       case "overrideTabBehaviour":
         return this.settings.overrideTabBehaviour;
       case "overrideEnterBehaviour":
@@ -277,6 +288,9 @@ class ObsidianBulletPluginSettingTab extends PluginSettingTab {
         break;
       case "keepBodyTextInBullets":
         this.settings.keepBodyTextInBullets = decodeBooleanControl(key, value);
+        break;
+      case "createChildOnLeafZoom":
+        this.settings.createChildOnLeafZoom = decodeBooleanControl(key, value);
         break;
       case "overrideTabBehaviour":
         this.settings.overrideTabBehaviour = decodeBooleanControl(key, value);

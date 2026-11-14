@@ -77,6 +77,7 @@ export default class ObsidianBulletPlugin extends Plugin {
       () =>
         this.settings.overrideEnterBehaviour ||
         this.settings.keepBodyTextInBullets,
+      () => this.settings.createChildOnLeafZoom,
     );
 
     this.formatting = new Formatting(this, this.settings);

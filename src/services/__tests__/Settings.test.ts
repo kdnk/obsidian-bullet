@@ -1,5 +1,41 @@
 import { Settings, SettingsChange, SettingsObject } from "../Settings";
 
+describe("leaf zoom child creation", () => {
+  test.each([null, {}])(
+    "defaults to enabled when saved data is %p",
+    async (saved) => {
+      const settings = new Settings({
+        loadData: async () => saved,
+        saveData: async () => undefined,
+      });
+
+      await settings.load();
+
+      expect(settings.createChildOnLeafZoom).toBe(true);
+    },
+  );
+
+  test("persists a disabled preference across reloads and resets to enabled", async () => {
+    let saved: SettingsObject | null = null;
+    const storage = {
+      loadData: async () => saved,
+      saveData: async (values: SettingsObject) => {
+        saved = { ...values };
+      },
+    };
+    const settings = new Settings(storage);
+    settings.createChildOnLeafZoom = false;
+    await settings.save();
+    const reloaded = new Settings(storage);
+
+    await reloaded.load();
+
+    expect(reloaded.createChildOnLeafZoom).toBe(false);
+    reloaded.reset();
+    expect(reloaded.createChildOnLeafZoom).toBe(true);
+  });
+});
+
 describe("bullet threading", () => {
   test.each([null, {}])(
     "defaults to off when saved data is %p",

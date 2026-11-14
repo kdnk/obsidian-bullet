@@ -19,6 +19,7 @@ export interface SettingsObject {
   debug: boolean;
   stickCursor: KeepCursorWithinContent | boolean;
   keepBodyTextInBullets: boolean;
+  createChildOnLeafZoom: boolean;
   betterEnter: boolean;
   betterVimO: boolean;
   betterTab: boolean;
@@ -44,6 +45,7 @@ const DEFAULT_SETTINGS: SettingsObject = {
   debug: false,
   stickCursor: "bullet-and-checkbox",
   keepBodyTextInBullets: true,
+  createChildOnLeafZoom: true,
   betterEnter: true,
   betterVimO: true,
   betterTab: true,
@@ -116,6 +118,14 @@ export class Settings {
 
   set keepBodyTextInBullets(value: boolean) {
     this.update({ keepBodyTextInBullets: value });
+  }
+
+  get createChildOnLeafZoom() {
+    return this.values.createChildOnLeafZoom;
+  }
+
+  set createChildOnLeafZoom(value: boolean) {
+    this.update({ createChildOnLeafZoom: value });
   }
 
   get overrideTabBehaviour() {

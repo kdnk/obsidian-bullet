@@ -11,7 +11,7 @@ import {
   TransactionSpec,
   countColumn,
 } from "@codemirror/state";
-import { EditorView, showPanel } from "@codemirror/view";
+import { EditorView, keymap, showPanel } from "@codemirror/view";
 
 import { makeLogger, makeSettings } from "../../__mocks__";
 import { MyEditor, MyEditorPosition, MyEditorSelection } from "../../editor";
@@ -489,6 +489,120 @@ test("the zoom command accepts an empty bare marker at EOF", async () => {
   view.state = view.state.update({ selection: { anchor: 1 } }).state;
   command.editorCheckCallback!(false, { cm: view } as never, {} as never);
   expect(view.state.doc.toString()).toBe("-\n\t- ");
+});
+
+describe("automatic leaf child creation", () => {
+  async function editor(text: string, createChildOnLeafZoom?: () => boolean) {
+    const commands: Command[] = [];
+    const extensions: Extension[] = [];
+    const feature = new ListZoom(
+      {
+        addCommand: (command: Command) => commands.push(command),
+        registerEditorExtension: (extension: Extension) =>
+          extensions.push(extension),
+      } as never,
+      new Parser(makeLogger(), makeSettings()),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      createChildOnLeafZoom,
+    );
+    await feature.load();
+    const view = {
+      plugin: () => null,
+      state: EditorState.create({ doc: text, extensions }),
+      scrollSnapshot: () => StateEffect.define<void>().of(),
+      dispatch: (spec: TransactionSpec) => {
+        view.state = view.state.update(spec).state;
+      },
+      focus: () => undefined,
+    };
+    const run = (id: string) =>
+      commands.find((command) => command.id === id)!.editorCheckCallback!(
+        false,
+        { cm: view } as never,
+        {} as never,
+      );
+    return { feature, view, run };
+  }
+
+  test.each([
+    { text: "- leaf", body: 2, child: "\t- " },
+    { text: "12. leaf", body: 4, child: "\t1. " },
+    { text: "- [x] leaf", body: 6, child: "\t- [ ] " },
+    { text: "-", body: 1, child: "\t- " },
+  ])("respects the preference for $text", async ({ text, body, child }) => {
+    for (const enabled of [true, false]) {
+      const { feature, view, run } = await editor(text, () => enabled);
+      view.dispatch({ selection: { anchor: text.length } });
+
+      expect(run("zoom-in")).toBe(true);
+
+      const expected = enabled ? `${text}\n${child}` : text;
+      expect(view.state.doc.toString()).toBe(expected);
+      expect(feature.range(view.state)).toMatchObject({ from: 0 });
+      expect(view.state.selection.main.head).toBe(
+        enabled ? expected.length : body,
+      );
+      const input = !enabled && text === "-" ? " X" : "X";
+      view.dispatch({
+        ...view.state.replaceSelection(input),
+        userEvent: "input.type",
+      });
+      expect(view.state.doc.toString()).toBe(
+        enabled
+          ? `${expected}${input}`
+          : `${text.slice(0, body)}${input}${text.slice(body)}`,
+      );
+      expect(run("zoom-reset")).toBe(true);
+      expect(feature.range(view.state)).toBeNull();
+    }
+  });
+
+  test("reads a changed preference on the next navigation without reloading", async () => {
+    let enabled = false;
+    const { view, run } = await editor("- leaf\n- after", () => enabled);
+
+    run("zoom-in");
+    expect(view.state.doc.toString()).toBe("- leaf\n- after");
+    run("zoom-reset");
+    enabled = true;
+    run("zoom-in");
+    expect(view.state.doc.toString()).toBe("- leaf\n\t- \n- after");
+  });
+
+  test("Enter creates a child while automatic creation is disabled", async () => {
+    const { feature, view, run } = await editor(
+      "- before\n\t- leaf\n\t- sibling\n- after",
+      () => false,
+    );
+    view.dispatch({ selection: { anchor: view.state.doc.line(2).to } });
+    run("zoom-in");
+    expect(view.state.doc.toString()).toBe(
+      "- before\n\t- leaf\n\t- sibling\n- after",
+    );
+    view.dispatch({ selection: { anchor: view.state.doc.line(2).to } });
+    const enter = view.state
+      .facet(keymap)
+      .flat()
+      .find((binding) => binding.key === "Enter");
+
+    expect(enter?.run?.(view as never)).toBe(true);
+
+    expect(view.state.doc.toString()).toBe(
+      "- before\n\t- leaf\n\t\t- \n\t- sibling\n- after",
+    );
+    expect(view.state.selection.main.head).toBe(view.state.doc.line(3).to);
+    view.dispatch({
+      ...view.state.replaceSelection("child"),
+      userEvent: "input.type",
+    });
+    expect(view.state.doc.toString()).toBe(
+      "- before\n\t- leaf\n\t\t- child\n\t- sibling\n- after",
+    );
+    expect(feature.range(view.state)?.from).toBe(9);
+  });
 });
 
 describe.each(["never", "bullet-only", "bullet-and-checkbox"] as const)(

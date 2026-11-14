@@ -48,6 +48,7 @@ function makeSettings() {
     formatting: defaultFormattingSettings(),
     keepCursorWithinContent: "bullet-and-checkbox",
     keepBodyTextInBullets: false,
+    createChildOnLeafZoom: true,
     overrideTabBehaviour: true,
     overrideEnterBehaviour: true,
     overrideVimOBehaviour: true,
@@ -161,6 +162,7 @@ describe("SettingsTab", () => {
         "Enhance the Enter key",
         "Vim-mode o/O inserts bullets",
         "Enhance the Ctrl+A or Cmd+A behavior",
+        "Create a child when zooming into a leaf item",
         "Drag-and-Drop",
       ],
       [
@@ -199,6 +201,10 @@ describe("SettingsTab", () => {
       desc: "Use Bullet's list-marker spacing, larger dots, and parent-item hover feedback. Colors follow the active Obsidian theme.",
       control: { type: "toggle", key: "betterListsStyles" },
     });
+    expect(groups[0]?.items[6]).toMatchObject({
+      name: "Create a child when zooming into a leaf item",
+      control: { type: "toggle", key: "createChildOnLeafZoom" },
+    });
     expect(groups[2]?.items[0]?.control).toEqual({
       type: "toggle",
       key: "outerVerticalLines",
@@ -234,6 +240,7 @@ describe("SettingsTab", () => {
       "bullet-and-checkbox",
     );
     expect(tab.getControlValue("keepBodyTextInBullets")).toBe(false);
+    expect(tab.getControlValue("createChildOnLeafZoom")).toBe(true);
     expect(tab.getControlValue("enhancedVerticalLineHover")).toBe(true);
     expect(tab.getControlValue("bulletThreading")).toBe(false);
     expect(tab.getControlValue("bulletThreadingColor")).toBe("#8b5cf6");
@@ -241,6 +248,7 @@ describe("SettingsTab", () => {
     await tab.setControlValue("verticalLinesActionEnabled", false);
     await tab.setControlValue("keepCursorWithinContent", "bullet-only");
     await tab.setControlValue("keepBodyTextInBullets", true);
+    await tab.setControlValue("createChildOnLeafZoom", false);
     await tab.setControlValue("enhancedVerticalLineHover", false);
     await tab.setControlValue("bulletThreading", true);
     await tab.setControlValue("bulletThreadingColor", "#123456");
@@ -248,10 +256,11 @@ describe("SettingsTab", () => {
     expect(settings.verticalLinesAction).toBe("none");
     expect(settings.keepCursorWithinContent).toBe("bullet-only");
     expect(settings.keepBodyTextInBullets).toBe(true);
+    expect(settings.createChildOnLeafZoom).toBe(false);
     expect(settings.enhancedVerticalLineHover).toBe(false);
     expect(settings.bulletThreading).toBe(true);
     expect(settings.bulletThreadingColor).toBe("#123456");
-    expect(settings.save).toHaveBeenCalledTimes(6);
+    expect(settings.save).toHaveBeenCalledTimes(7);
   });
 
   test("rejects invalid declarative control values", async () => {
@@ -264,6 +273,9 @@ describe("SettingsTab", () => {
     await expect(
       tab.setControlValue("bulletThreading", "true"),
     ).rejects.toThrow("bulletThreading");
+    await expect(
+      tab.setControlValue("createChildOnLeafZoom", "false"),
+    ).rejects.toThrow("createChildOnLeafZoom");
     for (const color of ["red", "#abc", "#12345678", "#12345g", 42, null]) {
       await expect(
         tab.setControlValue("bulletThreadingColor", color),

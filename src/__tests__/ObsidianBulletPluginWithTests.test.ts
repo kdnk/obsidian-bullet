@@ -643,6 +643,7 @@ describe("ObsidianBulletPluginWithTests", () => {
     ["setSetting", { k: "listLineAction", v: true }],
     ["setSetting", { k: "mobileRightFoldControls", v: "true" }],
     ["setSetting", { k: "keepBodyTextInBullets", v: "true" }],
+    ["setSetting", { k: "createChildOnLeafZoom", v: "false" }],
     ["clickGuide", { line: 0, kind: "middle", prefix: "" }],
   ])("rejects malformed %s command data", async (type, data) => {
     const plugin = Object.create(

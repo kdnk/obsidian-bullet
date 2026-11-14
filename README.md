@@ -90,7 +90,9 @@ Zoom applies only to the current editor pane, so another pane can show the whole
 
 Selections and direct edits stay within the visible branch. If Undo, Redo, or synchronization from another pane changes hidden content, Bullet reveals the whole note so you can see the change.
 
-When you zoom into an item without children, Bullet adds an empty child and places the caret there. Enter in the focused item's body creates its first child; Enter within descendants continues editing that subtree. The focused item stays at the same level, and outdenting or pasting cannot create its siblings. Return to the parent or the full note to edit those siblings.
+By default, zooming into an item without children adds an empty child and places the caret there. Turn off **Create a child when zooming into a leaf item** under **Settings → Bullet → Editing** to zoom without changing the note. The caret then moves to the focused item's body.
+
+Enter in the focused item's body creates its first child, even when automatic child creation is disabled. Enter within descendants continues editing that subtree. The focused item stays at the same level, and outdenting or pasting cannot create its siblings. Return to the parent or the full note to edit those siblings.
 
 ### Drag and drop across files
 
@@ -193,6 +195,7 @@ All settings are under **Settings → Bullet**.
 | **Enhance the Enter key**                |                 On                 | Create and outdent items with outliner-style behavior.                              |
 | **Vim-mode o/O inserts bullets**         |                 On                 | Create list items from Vim's `o` and `O` actions.                                   |
 | **Enhance the Ctrl+A or Cmd+A behavior** |                 On                 | Expand selection through list scopes.                                               |
+| **Create a child when zooming into a leaf item** |             On             | Add an empty child and place the caret inside it when zooming into an item without children. |
 | **Drag-and-Drop**                        |                 On                 | Drag complete branches within a list or between notes open side by side on desktop. |
 
 ### Appearance

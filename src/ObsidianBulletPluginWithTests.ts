@@ -128,6 +128,10 @@ const settingCommandDecoders = {
     k: "keepBodyTextInBullets",
     v: decodeBooleanSetting("keepBodyTextInBullets", value),
   }),
+  createChildOnLeafZoom: (value) => ({
+    k: "createChildOnLeafZoom",
+    v: decodeBooleanSetting("createChildOnLeafZoom", value),
+  }),
   betterEnter: (value) => ({
     k: "betterEnter",
     v: decodeBooleanSetting("betterEnter", value),
